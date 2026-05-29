@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="bgD" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#163252"/>
+      <stop offset="55%" stop-color="#496889"/>
+      <stop offset="100%" stop-color="#dfe7ef"/>
+    </linearGradient>
+    <linearGradient id="groundD" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6f7d76"/>
+      <stop offset="100%" stop-color="#394740"/>
+    </linearGradient>
+    <linearGradient id="batteryD" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#edf4fb"/>
+      <stop offset="100%" stop-color="#cad7e6"/>
+    </linearGradient>
+    <filter id="shadowD">
+      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#233447" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bgD)"/>
+  <path d="M0 590 C260 544 528 532 790 560 C1008 584 1268 594 1600 554 L1600 900 L0 900 Z" fill="#8799a7" opacity="0.48"/>
+  <path d="M0 650 C228 620 502 634 754 662 C1030 692 1276 704 1600 676 L1600 900 L0 900 Z" fill="url(#groundD)"/>
+
+  <g opacity="0.7" stroke="#eef5ff" stroke-width="8" stroke-linecap="round" fill="none">
+    <path d="M228 754 L266 430"/>
+    <path d="M264 434 L212 470"/>
+    <path d="M264 434 L318 468"/>
+    <path d="M264 434 L264 368"/>
+    <path d="M1370 754 L1408 310"/>
+    <path d="M1406 314 L1350 352"/>
+    <path d="M1406 314 L1462 350"/>
+    <path d="M1406 314 L1406 244"/>
+    <path d="M318 464 C618 474 1010 458 1358 340"/>
+    <path d="M316 552 C642 562 1014 550 1388 414"/>
+  </g>
+
+  <g filter="url(#shadowD)">
+    <rect x="404" y="520" width="182" height="124" rx="14" fill="url(#batteryD)" stroke="#5c7896" stroke-width="3"/>
+    <rect x="612" y="500" width="182" height="144" rx="14" fill="url(#batteryD)" stroke="#5c7896" stroke-width="3"/>
+    <rect x="820" y="514" width="182" height="130" rx="14" fill="url(#batteryD)" stroke="#5c7896" stroke-width="3"/>
+    <rect x="1030" y="494" width="182" height="150" rx="14" fill="url(#batteryD)" stroke="#5c7896" stroke-width="3"/>
+  </g>
+
+  <g fill="#395a7b">
+    <rect x="430" y="546" width="130" height="20" rx="10"/>
+    <rect x="638" y="526" width="130" height="20" rx="10"/>
+    <rect x="846" y="540" width="130" height="20" rx="10"/>
+    <rect x="1056" y="520" width="130" height="20" rx="10"/>
+  </g>
+  <g fill="#72c6ff">
+    <rect x="434" y="588" width="108" height="18" rx="9"/>
+    <rect x="642" y="588" width="120" height="18" rx="9"/>
+    <rect x="850" y="588" width="96" height="18" rx="9"/>
+    <rect x="1060" y="588" width="128" height="18" rx="9"/>
+  </g>
+
+  <g opacity="0.9" fill="#36567a">
+    <polygon points="176,690 306,640 414,692 282,744"/>
+    <polygon points="308,706 438,656 546,708 414,760"/>
+  </g>
+  <g stroke="#dbe9f8" stroke-width="4" opacity="0.45">
+    <path d="M210 696 L336 646"/>
+    <path d="M340 712 L466 662"/>
+  </g>
+</svg>

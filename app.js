@@ -1,0 +1,11511 @@
+"use strict";
+
+const config = window.NE_CONFIG;
+const runtime = window.NE_RUNTIME;
+
+if (!config || !runtime || !runtime.appState || !runtime.refs) {
+  throw new Error("应用初始化失败：缺少 config.js 或 runtime.js");
+}
+
+const {
+  PAGE_TITLES,
+  PAGE_GROUPS,
+  PAGE_HELP_TEXTS,
+  WORKFLOW_PAGES,
+  REQUIRES_PROJECT,
+  REQUIRES_LOGIN,
+  AUTH_STORAGE_KEY,
+  SIDEBAR_GROUP_STORAGE_KEY_GUEST,
+  SIDEBAR_GROUP_STORAGE_KEY_AUTH,
+  THEME_SEQUENCE,
+  THEME_LABELS,
+  PROVINCES,
+  POLICY_REGIONS,
+  PROVINCE_BENCHMARKS,
+  POLICY_CARDS,
+  QUALITY_GATE,
+  PROVINCE_DEFAULT_PARAMS,
+  BATCH_PARAM_SPECS
+} = config;
+const PAGE_HELP_MAP = PAGE_HELP_TEXTS || {};
+
+const { appState, refs } = runtime;
+
+const APP_DATA_STORAGE_KEY = "ne_app_data_v1";
+const APP_DATA_VERSION = 1;
+const APP_DATA_DB_NAME = "ne_app_data_db_v1";
+const APP_DATA_DB_VERSION = 1;
+const APP_DATA_DB_STORE = "snapshots";
+const APP_DATA_DB_KEY = "app_data";
+const OVERVIEW_AUTO_SWITCH_MS = 10000;
+const PAGE_ID_SET = new Set(Object.keys(PAGE_TITLES));
+const PROJECT_STATUS_SET = new Set(["not_started", "in_progress", "completed", "stale"]);
+const PROJECT_WORKSPACE_BUCKET_SET = new Set(["new", "history"]);
+const COMPARE_VIEW_SET = new Set(["scenario", "sensitivity"]);
+const ENERGY_STEP2_CHOICE_SET = new Set(["typical", "province"]);
+const PROVINCE_KEY_SET = new Set(PROVINCES.map((item) => item.key));
+const POLICY_REGION_KEY_SET = new Set((POLICY_REGIONS || []).map((item) => item.key));
+const ASSET_TYPE_SET = new Set(["wind", "photovoltaic"]);
+const SITE_TYPE_SET = new Set(["onshore", "offshore"]);
+const ENERGY_MODE_SET = new Set(["hourly_8760", "annual_hours", "typical_curve_8760", "province_typical_curve"]);
+const LT_PRICING_MODE_SET = new Set(["auto", "manual"]);
+const ENV_VALUE_MODE_SET = new Set(["global", "manual"]);
+const FEE_CONFIG_MODE_SET = new Set(["global", "manual"]);
+const RESULT_REPORT_VIEW_SET = new Set(["annual", "price", "detail"]);
+const ENV_VALUE_RATIO_KEYS = new Set(["greenCertRealizeRatio", "greenPremiumRealizeRatio", "carbonRealizeRatio"]);
+const MAP_LEVEL_SET = new Set(["nation", "province"]);
+const HISTORY_MONTH_LABELS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+const HISTORY_HEAT_HOUR_LABELS = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}时`);
+const HISTORY_QUARTER_LABELS = Array.from({ length: 96 }, (_, index) => {
+  const hour = Math.floor(index / 4);
+  const minute = (index % 4) * 15;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+});
+const ENERGY_MONTH_DAY_COUNTS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const ENERGY_HOUR_LABELS = Array.from({ length: 24 }, (_, hour) => `${hour}时`);
+const ECHARTS_MAP_BASE_URLS = [
+  "https://fastly.jsdelivr.net/npm/echarts/map/json",
+  "https://unpkg.com/echarts@5.5.0/map/json"
+];
+const PROVINCE_GEO_FILE_MAP = {
+  beijing: "beijing",
+  tianjin: "tianjin",
+  hebei: "hebei",
+  shanxi: "shanxi",
+  inner_mongolia: "neimenggu",
+  liaoning: "liaoning",
+  jilin: "jilin",
+  heilongjiang: "heilongjiang",
+  shanghai: "shanghai",
+  jiangsu: "jiangsu",
+  zhejiang: "zhejiang",
+  anhui: "anhui",
+  fujian: "fujian",
+  jiangxi: "jiangxi",
+  shandong: "shandong",
+  henan: "henan",
+  hubei: "hubei",
+  hunan: "hunan",
+  guangdong: "guangdong",
+  guangxi: "guangxi",
+  hainan: "hainan",
+  chongqing: "chongqing",
+  sichuan: "sichuan",
+  guizhou: "guizhou",
+  yunnan: "yunnan",
+  tibet: "xizang",
+  shaanxi: "shanxi1",
+  gansu: "gansu",
+  qinghai: "qinghai",
+  ningxia: "ningxia",
+  xinjiang: "xinjiang"
+};
+const PROVINCE_NAME_KEY_MAP = {
+  北京: "beijing",
+  天津: "tianjin",
+  河北: "hebei",
+  山西: "shanxi",
+  内蒙古: "inner_mongolia",
+  辽宁: "liaoning",
+  吉林: "jilin",
+  黑龙江: "heilongjiang",
+  上海: "shanghai",
+  江苏: "jiangsu",
+  浙江: "zhejiang",
+  安徽: "anhui",
+  福建: "fujian",
+  江西: "jiangxi",
+  山东: "shandong",
+  河南: "henan",
+  湖北: "hubei",
+  湖南: "hunan",
+  广东: "guangdong",
+  广西: "guangxi",
+  海南: "hainan",
+  重庆: "chongqing",
+  四川: "sichuan",
+  贵州: "guizhou",
+  云南: "yunnan",
+  西藏: "tibet",
+  陕西: "shaanxi",
+  甘肃: "gansu",
+  青海: "qinghai",
+  宁夏: "ningxia",
+  新疆: "xinjiang"
+};
+
+let persistAppDataTimer = null;
+let suppressNextRenderPersist = false;
+let storageWarningShown = false;
+let appDataStorageMode = "hybrid";
+let appDataDbPromise = null;
+let persistSequence = 0;
+let lastLocalStoragePersistAt = 0;
+let topMetaHideTimer = null;
+let overviewAutoTimer = null;
+let benchmarkMapChart = null;
+let benchmarkMapRenderToken = 0;
+let benchmarkMapResizeBound = false;
+let benchmarkRangeSliderBounds = { min: 0, max: 100 };
+let benchmarkRangeDragHandle = null;
+let echartsLoaderPromise = null;
+let createFormSyncedProjectId = null;
+let energyAnnualChart = null;
+let energyCurveChart = null;
+let energyCurveResizeBound = false;
+let activeResultReportView = "annual";
+let activeSensitivityFactorKey = "";
+let activeCompareScenarioId = "";
+const compareSensitivitySettings = {
+  rangePercent: 20,
+  stepPercent: 5,
+  responseScalePercent: 100,
+  topN: 8,
+  selectedKeys: []
+};
+const scenarioVisualCharts = {};
+let scenarioVisualResizeBound = false;
+let resultChartsResizeBound = false;
+let compareChartsResizeBound = false;
+let historyChartsResizeBound = false;
+let historyChartsRefreshTimer = null;
+const historyAnalysisCache = new Map();
+const provinceTypicalCurveDbCache = new Map();
+let lastSyncedProjectProvinceContextKey = "";
+const expandedProvinceDefaultKeys = new Set();
+let selectedProvinceDefaultKey = "";
+let selectedProvinceDefaultContextKey = "";
+const compareChartInstances = {
+  sensitivityTornado: null,
+  sensitivityResponse: null,
+  scenarioRanking: null,
+  scenarioBridge: null,
+  scenarioTrend: null
+};
+const FORECAST_MODEL_DEFINITIONS = [
+  {
+    family: "lstm",
+    name: "LSTM",
+    label: "LSTM 序列模型",
+    versionSuffix: "lstm",
+    seedOffset: 101,
+    levelBias: 0.99,
+    volatility: 0.82,
+    peakScale: 0.92,
+    spikeScale: 0.7,
+    negativeScale: 0.75,
+    mapeBase: 0.118,
+    smapeBase: 0.138,
+    maeBase: 42,
+    rmseBase: 66
+  },
+  {
+    family: "xgboost",
+    name: "XGBoost",
+    label: "XGBoost 特征树模型",
+    versionSuffix: "xgb",
+    seedOffset: 211,
+    levelBias: 1.015,
+    volatility: 1.18,
+    peakScale: 1.13,
+    spikeScale: 1.28,
+    negativeScale: 1.05,
+    mapeBase: 0.132,
+    smapeBase: 0.151,
+    maeBase: 50,
+    rmseBase: 76
+  },
+  {
+    family: "ensemble",
+    name: "Ensemble",
+    label: "Ensemble 融合模型",
+    versionSuffix: "ens",
+    seedOffset: 307,
+    levelBias: 1.005,
+    volatility: 0.95,
+    peakScale: 1.02,
+    spikeScale: 0.88,
+    negativeScale: 0.82,
+    mapeBase: 0.104,
+    smapeBase: 0.124,
+    maeBase: 36,
+    rmseBase: 58
+  }
+];
+const resultChartInstances = {
+  annualStack: null,
+  pricePath: null,
+  waterfall: null,
+  contribution: null
+};
+const historyChartInstances = {
+  monthTrend: null,
+  typicalDay: null,
+  distribution: null,
+  heatmap: null,
+  boxplot: null
+};
+const historyChartExportPayloads = {
+  monthTrend: null,
+  typicalDay: null,
+  distribution: null,
+  heatmap: null,
+  boxplot: null
+};
+const benchmarkGeoCache = new Map();
+const LOCAL_STORAGE_PERSIST_INTERVAL_MS = 4000;
+const BENCHMARK_MAP_ZOOM_MIN = 0.8;
+const BENCHMARK_MAP_ZOOM_MAX = 4;
+const BENCHMARK_MAP_ZOOM_STEP = 0.18;
+const BENCHMARK_RANGE_MIN = 120;
+const BENCHMARK_RANGE_MAX = 520;
+const DEMO_AUTH_USERS = [
+  { accountName: "陈静", account: "chenjing", password: "demo123" },
+  { accountName: "王磊", account: "wanglei", password: "demo123" },
+  { accountName: "李娜", account: "lina", password: "demo123" },
+  { accountName: "赵晨", account: "zhaochen", password: "demo123" },
+  { accountName: "周颖", account: "zhouying", password: "demo123" }
+];
+const ENERGY_MODE_META = {
+  hourly_8760: {
+    label: "完整8760小时曲线（旧版）",
+    header: "year,hour_index,equivalent_hours_h",
+    placeholder: "year,hour_index,equivalent_hours_h"
+  },
+  annual_hours: {
+    label: "逐年总量模板",
+    header: "year,annual_hours_h",
+    placeholder: "year,annual_hours_h"
+  },
+  typical_curve_8760: {
+    label: "典型年8760模板",
+    header: "hour_index,equivalent_hours_h",
+    placeholder: "hour_index,equivalent_hours_h"
+  },
+  province_typical_curve: {
+    label: "省份典型曲线",
+    header: "",
+    placeholder: ""
+  }
+};
+const PAGE_COMPLETION_STANDARD_MAP = {
+  "create-page": "项目基础信息填写完整并成功创建。",
+  "energy-page": "逐年总量覆盖全部测算年度，并完成典型年曲线来源二选一。",
+  "history-page": "已按项目省份自动展示历史现货图表。",
+  "forecast-page": "存在已生效且可发布的电价预测版本。",
+  "scenario-page": "当前全口径收入配置已保存。",
+  "results-page": "当前场景已成功生成一版基准结果。",
+  "compare-page": "至少两个场景存在可对比结果。"
+};
+const PAGE_VIEW_ALIAS = {
+  "energy-page": "create-page",
+  "province-page": "scenario-page"
+};
+const OVERVIEW_POLICY_DETAILS = [
+  {
+    title: "政策卡1：新一轮电改顶层设计",
+    policyName: "关于进一步深化电力体制改革的若干意见",
+    docNo: "中发〔2015〕9号",
+    position: "新一轮电力市场化改革总纲领、根本遵循。",
+    highlights: [
+      "确立“管住中间、放开两头”总体思路。",
+      "放开竞争性环节电价、放开发用电计划。",
+      "推进配售电业务放开、交易机构独立规范运行。",
+      "还原电力商品属性，构建有效竞争市场结构。"
+    ],
+    meaning: "打破统购统销模式，开启电力市场化全新时代。"
+  },
+  {
+    title: "政策卡2：全国统一电力市场体系建设",
+    policyName: "关于加快建设全国统一电力市场体系的指导意见",
+    docNo: "发改体改〔2022〕118号",
+    position: "从分散试点走向全国一体化的里程碑文件。",
+    highlights: [
+      "构建国家—区域—省三级电力市场体系。",
+      "破除省间壁垒，推进跨省跨区优化配置。",
+      "统一交易规则、计量标准、技术支撑。",
+      "明确2025/2030年市场化电量占比目标。"
+    ],
+    meaning: "实现大范围资源优化，支撑新能源跨省消纳。"
+  },
+  {
+    title: "政策卡3：电力现货市场顶层规则",
+    policyName: "电力现货市场基本规则（试行）",
+    docNo: "发改能源规〔2023〕1217号",
+    position: "电力市场价格发现与实时平衡核心制度。",
+    highlights: [
+      "统一全国现货市场模式、出清与结算机制。",
+      "规范中长期与现货衔接、新能源入市方式。",
+      "明确储能、虚拟电厂等主体参与规则。",
+      "推动2025年底前现货市场全覆盖连续运行。"
+    ],
+    meaning: "实现分时电价、精准供需匹配，市场进入精细化运行。"
+  },
+  {
+    title: "政策卡4：新型电力系统调节保障",
+    policyName: "电力辅助服务市场基本规则",
+    docNo: "发改能源规〔2024〕XX号（通用权威版）",
+    position: "高比例新能源下电网安全稳定的市场化支撑。",
+    highlights: [
+      "统一调频、备用、调压、爬坡等服务品种。",
+      "落实“谁受益、谁承担，谁提供、谁获利”。",
+      "支持储能、负荷聚合商、虚拟电厂广泛参与。",
+      "推动电能量与辅助服务联合优化出清。"
+    ],
+    meaning: "激活灵活性资源，保障新型电力系统安全运行。"
+  },
+  {
+    title: "政策卡5：绿色转型与市场深化实施",
+    policyName: "关于完善全国统一电力市场体系的实施意见",
+    docNo: "国办发〔2026〕4号",
+    position: "面向新型电力系统的市场机制升级版施工图。",
+    highlights: [
+      "明确2030年基本建成、2035年全面建成统一市场。",
+      "完善容量成本回收、用户侧响应机制。",
+      "强化跨省互济、新能源全额保障消纳。",
+      "统筹能源安全、绿色转型与市场化改革。"
+    ],
+    meaning: "适配高比例新能源格局，完善市场化长效机制。"
+  }
+];
+const OVERVIEW_IMAGE_FALLBACK = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#10243b"/><stop offset="100%" stop-color="#1f4f7d"/></linearGradient></defs><rect width="1600" height="900" fill="url(#g)"/><circle cx="1300" cy="180" r="120" fill="#f9c55d" opacity=".85"/><path d="M0 760 L420 620 L740 690 L1080 610 L1600 760 L1600 900 L0 900Z" fill="#1a3f63" opacity=".72"/><path d="M220 760 L300 420 L380 760 M255 580 L345 580 M760 760 L840 360 L920 760 M795 540 L885 540 M1180 760 L1240 470 L1300 760 M1210 620 L1270 620" stroke="#f2e3c0" stroke-width="12" stroke-linecap="round" fill="none"/><text x="80" y="150" fill="#ffffff" font-family="Arial,sans-serif" font-size="68" font-weight="700">NEW ENERGY</text></svg>')}`;
+
+function getProvinceName(key) {
+  return PROVINCES.find((item) => item.key === key)?.name || key;
+}
+
+function getAssetTypeLabel(key) {
+  if (key === "wind") return "风电";
+  if (key === "photovoltaic") return "光伏";
+  return "待选";
+}
+
+function getSiteTypeLabel(key) {
+  if (key === "offshore") return "海上";
+  if (key === "onshore") return "陆上";
+  return "待选";
+}
+
+function describeProvinceTypicalCurve(project) {
+  return `${getProvinceName(project?.province)} / ${getAssetTypeLabel(project?.assetType)} / ${getSiteTypeLabel(project?.siteType)}`;
+}
+
+function formatExportStatusTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).replace(/\//g, "-");
+}
+
+function getCompleteEnergyYears(project) {
+  if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears)) return [];
+  const energyData = ensureProjectEnergyDataDerivedState(project);
+  const years = [];
+  for (let i = 0; i < project.forecastYears; i += 1) {
+    const year = project.startYear + i;
+    if (
+      energyData?.annualSummary?.[year]?.status === "完整"
+      && Array.isArray(energyData?.hourlyByYear?.[year])
+      && energyData.hourlyByYear[year].length === 8760
+    ) {
+      years.push(year);
+    }
+  }
+  return years;
+}
+
+function getForecastPeriodDisplayRange(project) {
+  if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears < 1) {
+    return "-";
+  }
+  return `${project.startYear}-${project.startYear + project.forecastYears - 1}`;
+}
+
+function createEmptyEnergyDataState(mode = "annual_hours") {
+  return {
+    mode: normalizeEnergyMode(mode),
+    annualInputByYear: {},
+    typicalCurveSource: "",
+    typicalCurveProfile: [],
+    hourlyByYear: {},
+    annualSummary: {}
+  };
+}
+
+function normalizeTypicalCurveProfile(values) {
+  if (!Array.isArray(values) || values.length !== 8760) return [];
+  const parsed = values.map((value) => Number(value));
+  const valid = parsed.every((value) => Number.isFinite(value) && value >= 0);
+  if (!valid) return [];
+  const total = parsed.reduce((sum, value) => sum + value, 0);
+  if (!(total > 0)) return [];
+  return parsed.map((value) => value / total);
+}
+
+function ensureProjectEnergyDataState(project) {
+  if (!project || !isPlainObject(project)) return createEmptyEnergyDataState();
+  const raw = isPlainObject(project.energyData) ? project.energyData : {};
+  const normalized = createEmptyEnergyDataState(raw.mode || project.energyMode || "annual_hours");
+  normalized.mode = normalizeEnergyMode(raw.mode || project.energyMode || "annual_hours");
+  normalized.hourlyByYear = isPlainObject(raw.hourlyByYear) ? raw.hourlyByYear : {};
+  normalized.annualSummary = isPlainObject(raw.annualSummary) ? raw.annualSummary : {};
+  normalized.annualInputByYear = isPlainObject(raw.annualInputByYear)
+    ? raw.annualInputByYear
+    : Object.fromEntries(
+      Object.entries(normalized.annualSummary)
+        .map(([year, item]) => [year, Number(item?.annualHours)])
+        .filter(([, value]) => Number.isFinite(value) && value > 0)
+    );
+  normalized.typicalCurveSource = ["typical_curve_8760", "province_typical_curve"].includes(raw.typicalCurveSource)
+    ? raw.typicalCurveSource
+    : (normalized.mode === "typical_curve_8760" || normalized.mode === "province_typical_curve" ? normalized.mode : "");
+  normalized.typicalCurveProfile = normalizeTypicalCurveProfile(raw.typicalCurveProfile);
+  project.energyData = normalized;
+  project.energyMode = normalized.mode;
+  return normalized;
+}
+
+function hasStoredEnergyTypicalCurve(energyData) {
+  return normalizeTypicalCurveProfile(energyData?.typicalCurveProfile).length === 8760
+    && ["typical_curve_8760", "province_typical_curve"].includes(energyData?.typicalCurveSource);
+}
+
+function ensureProjectEnergyDataDerivedState(project) {
+  const energyData = ensureProjectEnergyDataState(project);
+  if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears <= 0) {
+    return energyData;
+  }
+
+  const hasCurve = hasStoredEnergyTypicalCurve(energyData);
+  let needsRebuild = false;
+
+  for (let i = 0; i < project.forecastYears; i += 1) {
+    const year = project.startYear + i;
+    const annualHours = Number(energyData.annualInputByYear?.[year]);
+    const summary = energyData.annualSummary?.[year];
+    const hourlyValues = energyData.hourlyByYear?.[year];
+
+    if (!Number.isFinite(annualHours) || annualHours <= 0) {
+      if (summary?.status && summary.status !== "缺失") {
+        needsRebuild = true;
+        break;
+      }
+      continue;
+    }
+
+    if (!hasCurve) {
+      if (
+        summary?.status !== "待典型曲线"
+        || !Number.isFinite(Number(summary?.annualHours))
+        || Math.abs(Number(summary?.annualHours) - annualHours) > 1e-6
+      ) {
+        needsRebuild = true;
+        break;
+      }
+      continue;
+    }
+
+    if (
+      summary?.status !== "完整"
+      || !Array.isArray(hourlyValues)
+      || hourlyValues.length !== 8760
+      || !Number.isFinite(Number(summary?.annualHours))
+      || Math.abs(Number(summary?.annualHours) - annualHours) > 1e-6
+    ) {
+      needsRebuild = true;
+      break;
+    }
+  }
+
+  if (needsRebuild) {
+    rebuildProjectEnergyData(project);
+    return ensureProjectEnergyDataState(project);
+  }
+  return energyData;
+}
+
+function getAnnualInputYearCount(project) {
+  const energyData = ensureProjectEnergyDataDerivedState(project);
+  const rangeYears = Number.isInteger(project?.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
+  if (!rangeYears) return 0;
+  let count = 0;
+  for (let i = 0; i < project.forecastYears; i += 1) {
+    const year = project.startYear + i;
+    const annual = Number(energyData.annualInputByYear?.[year]);
+    if (Number.isFinite(annual) && annual > 0) count += 1;
+  }
+  return count;
+}
+
+function getContiguousAnnualInputPeriod(annualInputByYear) {
+  if (!isPlainObject(annualInputByYear)) return null;
+  const years = Object.keys(annualInputByYear)
+    .map((year) => Number(year))
+    .filter((year) => Number.isInteger(year))
+    .sort((a, b) => a - b);
+  if (!years.length) return null;
+  for (let index = 1; index < years.length; index += 1) {
+    if (years[index] !== years[index - 1] + 1) return null;
+  }
+  return {
+    startYear: years[0],
+    endYear: years[years.length - 1],
+    count: years.length
+  };
+}
+
+function parseYearRangeFromLabel(label) {
+  const match = String(label || "").match(/(?:^|[^0-9])(\d{4})-(\d{4})(?:[^0-9]|$)/);
+  if (!match) return null;
+  const startYear = Number(match[1]);
+  const endYear = Number(match[2]);
+  if (!Number.isInteger(startYear) || !Number.isInteger(endYear) || endYear < startYear) return null;
+  return {
+    startYear,
+    endYear,
+    count: endYear - startYear + 1
+  };
+}
+
+function alignDefaultForecastYearsToAnnualTemplate(project, annualInputByYear, sourceLabel = "") {
+  if (!project || project.forecastYears !== 30) return false;
+  const annualPeriod = getContiguousAnnualInputPeriod(annualInputByYear);
+  const labelPeriod = parseYearRangeFromLabel(sourceLabel);
+  if (!annualPeriod || !labelPeriod) return false;
+  const samePeriod = annualPeriod.startYear === labelPeriod.startYear
+    && annualPeriod.endYear === labelPeriod.endYear
+    && annualPeriod.count === labelPeriod.count;
+  if (!samePeriod) return false;
+  if (annualPeriod.startYear !== project.startYear) return false;
+  if (annualPeriod.count < 1 || annualPeriod.count > 30 || annualPeriod.count === project.forecastYears) return false;
+  project.forecastYears = annualPeriod.count;
+  project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
+  return true;
+}
+
+function alignDefaultForecastYearsToStoredAnnualInput(project) {
+  if (!project || project.forecastYears !== 30) return false;
+  const annualPeriod = getContiguousAnnualInputPeriod(project.energyData?.annualInputByYear);
+  if (!annualPeriod) return false;
+  if (annualPeriod.startYear !== project.startYear) return false;
+  if (annualPeriod.count < 20 || annualPeriod.count >= project.forecastYears) return false;
+  project.forecastYears = annualPeriod.count;
+  project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
+  return true;
+}
+
+function hasEnergyTypicalCurve(project) {
+  const energyData = ensureProjectEnergyDataState(project);
+  return normalizeTypicalCurveProfile(energyData.typicalCurveProfile).length === 8760
+    && ["typical_curve_8760", "province_typical_curve"].includes(energyData.typicalCurveSource);
+}
+
+function buildEnergyMonthHourlyShareCurves(hourlyValues) {
+  if (!Array.isArray(hourlyValues) || hourlyValues.length < 8760) return null;
+  const curves = [];
+  let offset = 0;
+  for (const days of ENERGY_MONTH_DAY_COUNTS) {
+    const monthHours = days * 24;
+    const sums = Array(24).fill(0);
+    let total = 0;
+    for (let index = 0; index < monthHours; index += 1) {
+      const value = Number(hourlyValues[offset + index]);
+      if (!Number.isFinite(value) || value < 0) continue;
+      const hour = index % 24;
+      sums[hour] += value;
+      total += value;
+    }
+    curves.push(sums.map((sum) => (total > 0 ? sum / total * 100 : 0)));
+    offset += monthHours;
+  }
+  return curves;
+}
+
+function getEnergyCurvePreviewProfile(project) {
+  if (!project || !project.province || !project.assetType) return null;
+  const energyData = ensureProjectEnergyDataState(project);
+  const storedProfile = normalizeTypicalCurveProfile(energyData.typicalCurveProfile);
+  if (storedProfile.length === 8760) {
+    return {
+      profile: storedProfile,
+      sourceLabel: energyData.typicalCurveSource === "typical_curve_8760"
+        ? "已导入典型年8760小时模板"
+        : `已调用${describeProvinceTypicalCurve(project)}典型曲线`
+    };
+  }
+  const provinceCurveRecord = getProvinceTypicalCurveRecord(project);
+  return {
+    profile: provinceCurveRecord?.profile || buildProvinceTypicalCurveProfile(project),
+    sourceLabel: provinceCurveRecord?.sourceLabel || `${describeProvinceTypicalCurve(project)}典型曲线示意`
+  };
+}
+
+function getPolicyRegionKeyByProvince(provinceKey) {
+  if (!provinceKey) return null;
+  return POLICY_CARDS.find((card) => card.provinceKey === provinceKey)?.regionKey || null;
+}
+
+function normalizeTheme(theme) {
+  return THEME_SEQUENCE.includes(theme) ? theme : "light";
+}
+
+function getNextTheme(theme) {
+  const current = normalizeTheme(theme);
+  const index = THEME_SEQUENCE.indexOf(current);
+  return THEME_SEQUENCE[(index + 1) % THEME_SEQUENCE.length];
+}
+
+function applyTheme(theme) {
+  const targetTheme = normalizeTheme(theme);
+  appState.theme = targetTheme;
+  document.body.setAttribute("data-theme", targetTheme);
+  if (refs.themeToggleButton) {
+    refs.themeToggleButton.textContent = `切换${THEME_LABELS[getNextTheme(targetTheme)]}`;
+  }
+  if (refs.themeCurrentLabel) {
+    refs.themeCurrentLabel.textContent = `当前：${THEME_LABELS[targetTheme]}`;
+  }
+}
+
+function normalizeOverviewIndex(index, total) {
+  if (total <= 0) return 0;
+  if (!Number.isFinite(index)) return 0;
+  const raw = Math.floor(index);
+  return ((raw % total) + total) % total;
+}
+
+function restartOverviewProgressBar() {
+  if (!refs.overviewProgressBar) return;
+  refs.overviewProgressBar.style.transition = "none";
+  refs.overviewProgressBar.style.width = "0%";
+  if (typeof window === "undefined") return;
+  void refs.overviewProgressBar.offsetWidth;
+  refs.overviewProgressBar.style.transition = `width ${OVERVIEW_AUTO_SWITCH_MS}ms linear`;
+  refs.overviewProgressBar.style.width = "100%";
+}
+
+function renderOverviewCarousel() {
+  const total = refs.overviewSlides.length;
+  if (!refs.overviewTrack || total <= 0) return;
+  const nextIndex = normalizeOverviewIndex(appState.overviewSlideIndex, total);
+  appState.overviewSlideIndex = nextIndex;
+  refs.overviewTrack.style.transform = `translateX(-${nextIndex * 100}%)`;
+  refs.overviewDots.forEach((dot, dotIndex) => {
+    dot.classList.toggle("active", dotIndex === nextIndex);
+    dot.setAttribute("aria-current", dotIndex === nextIndex ? "true" : "false");
+  });
+  if (refs.overviewDetailTrigger) {
+    refs.overviewDetailTrigger.textContent = `查看详情（${nextIndex + 1}/${total}）`;
+  }
+}
+
+function bindOverviewImageFallbacks() {
+  if (!Array.isArray(refs.overviewSlides) || !refs.overviewSlides.length) return;
+  refs.overviewSlides.forEach((slide, index) => {
+    const image = slide.querySelector(".overview-image");
+    if (!image) return;
+    const applyFallback = () => {
+      if (image.dataset.fallbackApplied === "1") return;
+      image.dataset.fallbackApplied = "1";
+      image.src = OVERVIEW_IMAGE_FALLBACK;
+      image.alt = `轮播配图${index + 1}`;
+      image.classList.add("overview-image-fallback");
+    };
+    image.addEventListener("error", applyFallback);
+    if (image.complete && image.naturalWidth === 0) {
+      applyFallback();
+    }
+  });
+}
+
+function stopOverviewAutoplay() {
+  if (typeof window === "undefined") return;
+  if (overviewAutoTimer) {
+    window.clearInterval(overviewAutoTimer);
+    overviewAutoTimer = null;
+  }
+  if (!refs.overviewProgressBar) return;
+  refs.overviewProgressBar.style.transition = "none";
+  refs.overviewProgressBar.style.width = "0%";
+}
+
+function startOverviewAutoplay() {
+  if (typeof window === "undefined") return;
+  const total = refs.overviewSlides.length;
+  if (total <= 1 || !refs.overviewTrack) {
+    stopOverviewAutoplay();
+    return;
+  }
+  if (overviewAutoTimer) {
+    window.clearInterval(overviewAutoTimer);
+  }
+  restartOverviewProgressBar();
+  overviewAutoTimer = window.setInterval(() => {
+    appState.overviewSlideIndex = normalizeOverviewIndex(appState.overviewSlideIndex + 1, total);
+    renderOverviewCarousel();
+    restartOverviewProgressBar();
+  }, OVERVIEW_AUTO_SWITCH_MS);
+}
+
+function goToOverviewSlide(index) {
+  const total = refs.overviewSlides.length;
+  appState.overviewSlideIndex = normalizeOverviewIndex(index, total);
+  renderOverviewCarousel();
+  if (appState.activePage === "home-page") {
+    startOverviewAutoplay();
+  }
+}
+
+function openOverviewPolicyDetail(index = appState.overviewSlideIndex) {
+  if (!refs.policyDetailModal) return;
+  const total = OVERVIEW_POLICY_DETAILS.length;
+  if (total <= 0) return;
+  const nextIndex = normalizeOverviewIndex(index, total);
+  const detail = OVERVIEW_POLICY_DETAILS[nextIndex];
+  if (!detail) return;
+
+  if (refs.policyDetailTitle) refs.policyDetailTitle.textContent = detail.title;
+  if (refs.policyDetailDocNo) refs.policyDetailDocNo.textContent = `文号：${detail.docNo}`;
+  if (refs.policyDetailName) refs.policyDetailName.textContent = detail.policyName;
+  if (refs.policyDetailPosition) refs.policyDetailPosition.textContent = detail.position;
+  if (refs.policyDetailMeaning) refs.policyDetailMeaning.textContent = detail.meaning;
+  if (refs.policyDetailHighlights) {
+    refs.policyDetailHighlights.innerHTML = "";
+    detail.highlights.forEach((entry) => {
+      const item = document.createElement("li");
+      item.textContent = entry;
+      refs.policyDetailHighlights.appendChild(item);
+    });
+  }
+  refs.policyDetailModal.hidden = false;
+  if (refs.policyDetailCloseButton) refs.policyDetailCloseButton.focus();
+  stopOverviewAutoplay();
+}
+
+function closeOverviewPolicyDetail() {
+  if (!refs.policyDetailModal) return;
+  refs.policyDetailModal.hidden = true;
+  if (appState.activePage === "home-page") {
+    startOverviewAutoplay();
+  }
+}
+
+function persistAuthState() {
+  const payload = {
+    loggedIn: appState.auth.loggedIn,
+    accountName: appState.auth.accountName,
+    account: appState.auth.account,
+    lastLoginAt: appState.auth.lastLoginAt
+  };
+  const raw = JSON.stringify(payload);
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, raw);
+    } catch (error) {
+      console.warn("写入localStorage登录态失败。", error);
+    }
+  }
+  if (typeof sessionStorage !== "undefined") {
+    try {
+      sessionStorage.setItem(AUTH_STORAGE_KEY, raw);
+    } catch (error) {
+      console.warn("写入sessionStorage登录态失败。", error);
+    }
+  }
+}
+
+function initAuth() {
+  let raw = "";
+  if (typeof localStorage !== "undefined") {
+    try {
+      raw = localStorage.getItem(AUTH_STORAGE_KEY) || "";
+    } catch (error) {
+      console.warn("读取localStorage登录态失败。", error);
+    }
+  }
+  if (!raw && typeof sessionStorage !== "undefined") {
+    try {
+      raw = sessionStorage.getItem(AUTH_STORAGE_KEY) || "";
+    } catch (error) {
+      console.warn("读取sessionStorage登录态失败。", error);
+    }
+  }
+  if (!raw) return;
+  try {
+    applyAuthPayload(JSON.parse(raw));
+  } catch {
+    appState.auth.loggedIn = false;
+    appState.auth.accountName = "";
+    appState.auth.account = "";
+    appState.auth.lastLoginAt = "";
+  }
+}
+
+function applyAuthPayload(payload) {
+  if (!isPlainObject(payload)) return false;
+  appState.auth.loggedIn = Boolean(payload.loggedIn);
+  appState.auth.account = payload.account ? String(payload.account) : "";
+  appState.auth.accountName = payload.accountName ? String(payload.accountName) : appState.auth.account;
+  appState.auth.lastLoginAt = payload.lastLoginAt ? String(payload.lastLoginAt) : "";
+  return appState.auth.loggedIn;
+}
+
+function getSidebarGroupStorageKey() {
+  return appState.auth.loggedIn ? SIDEBAR_GROUP_STORAGE_KEY_AUTH : SIDEBAR_GROUP_STORAGE_KEY_GUEST;
+}
+
+function sidebarGroupDefaults() {
+  const defaults = {};
+  refs.groupToggles.forEach((toggle) => {
+    const key = toggle.dataset.group;
+    if (!key) return;
+    if (appState.auth.loggedIn) {
+      defaults[key] = true;
+    } else {
+      defaults[key] = false;
+    }
+  });
+  return defaults;
+}
+
+function persistSidebarGroups() {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(getSidebarGroupStorageKey(), JSON.stringify(appState.sidebarGroups));
+}
+
+function initSidebarGroups() {
+  appState.sidebarGroups = sidebarGroupDefaults();
+  if (!appState.auth.loggedIn) return;
+  if (typeof localStorage === "undefined") return;
+  const raw = localStorage.getItem(getSidebarGroupStorageKey());
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      for (const key of Object.keys(appState.sidebarGroups)) {
+        if (typeof parsed[key] === "boolean") {
+          appState.sidebarGroups[key] = parsed[key];
+        }
+      }
+    }
+  } catch {
+    appState.sidebarGroups = sidebarGroupDefaults();
+  }
+}
+
+function applySidebarGroups() {
+  refs.groupToggles.forEach((toggle) => {
+    const key = toggle.dataset.group;
+    if (!key) return;
+    const expanded = appState.sidebarGroups[key] !== false;
+    toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    refs.groupBodies
+      .filter((body) => body.dataset.groupBody === key)
+      .forEach((body) => {
+        body.hidden = !expanded;
+      });
+  });
+}
+
+function toggleSidebarGroup(groupKey) {
+  if (!groupKey) return;
+  const current = appState.sidebarGroups[groupKey] !== false;
+  appState.sidebarGroups[groupKey] = !current;
+  applySidebarGroups();
+  persistSidebarGroups();
+}
+
+function applyAuthLayout() {
+  const loggedIn = appState.auth.loggedIn;
+  refs.authOnlyNavBlocks.forEach((block) => {
+    if (!loggedIn) {
+      block.hidden = true;
+      return;
+    }
+    const selfGroup = block.dataset.groupBody;
+    const parentGroup = block.closest("[data-group-body]")?.dataset.groupBody;
+    const group = selfGroup || parentGroup;
+    if (group) {
+      block.hidden = appState.sidebarGroups[group] === false;
+    } else {
+      block.hidden = false;
+    }
+  });
+  if (refs.loginEntryButton) {
+    refs.loginEntryButton.hidden = loggedIn;
+  }
+  if (refs.accountModule) {
+    refs.accountModule.hidden = !loggedIn;
+  }
+  if (refs.accountTriggerButton) {
+    refs.accountTriggerButton.setAttribute("aria-expanded", "false");
+  }
+  if (refs.accountDropdown) {
+    refs.accountDropdown.hidden = true;
+  }
+  if (refs.accountNameDisplay) {
+    const accountDisplayName = (appState.auth.accountName || appState.auth.account || "").trim();
+    refs.accountNameDisplay.textContent = loggedIn ? (accountDisplayName || "当前账号") : "-";
+  }
+  if (refs.accountAvatar) {
+    const name = (appState.auth.accountName || appState.auth.account || "").trim();
+    refs.accountAvatar.textContent = loggedIn && name ? name.slice(0, 1).toUpperCase() : "-";
+  }
+}
+
+function formatAuthTime(isoText) {
+  if (!isoText) return "-";
+  const dt = new Date(isoText);
+  if (Number.isNaN(dt.getTime())) return "-";
+  return dt.toLocaleString("zh-CN", { hour12: false });
+}
+
+function openLoginModal() {
+  if (!refs.loginModal) return;
+  refs.loginModal.hidden = false;
+  if (refs.loginForm) refs.loginForm.reset();
+  if (refs.loginMessage) refs.loginMessage.textContent = "";
+  if (refs.loginSubmitButton) refs.loginSubmitButton.disabled = false;
+  if (refs.loginAccount) {
+    refs.loginAccount.focus();
+  }
+}
+
+window.__openLoginModal = openLoginModal;
+
+function closeLoginModal() {
+  if (!refs.loginModal) return;
+  refs.loginModal.hidden = true;
+}
+
+function closeAccountDropdown() {
+  if (refs.accountDropdown) {
+    refs.accountDropdown.hidden = true;
+  }
+  if (refs.accountTriggerButton) {
+    refs.accountTriggerButton.setAttribute("aria-expanded", "false");
+  }
+}
+
+function toggleAccountDropdown() {
+  if (!appState.auth.loggedIn || !refs.accountDropdown) return;
+  const nextHidden = !refs.accountDropdown.hidden;
+  refs.accountDropdown.hidden = nextHidden;
+  if (refs.accountTriggerButton) {
+    refs.accountTriggerButton.setAttribute("aria-expanded", nextHidden ? "false" : "true");
+  }
+}
+
+function getDemoUserByAccount(account) {
+  const normalizedAccount = String(account || "").trim().toLowerCase();
+  if (!normalizedAccount) return null;
+  return DEMO_AUTH_USERS.find((item) => item.account.toLowerCase() === normalizedAccount) || null;
+}
+
+function normalizeAccountKey(account) {
+  return String(account || "").trim().toLowerCase();
+}
+
+function getCurrentAccountKey() {
+  return normalizeAccountKey(appState.auth.account);
+}
+
+function getProjectOwnerKey(project) {
+  return normalizeAccountKey(project?.ownerAccount);
+}
+
+function projectBelongsToCurrentAccount(project) {
+  if (!project || !appState.auth.loggedIn) return false;
+  const currentAccountKey = getCurrentAccountKey();
+  if (!currentAccountKey) return false;
+  return getProjectOwnerKey(project) === currentAccountKey;
+}
+
+function getProjectWorkspaceBucket(project) {
+  const bucket = typeof project?.workspaceBucket === "string" ? project.workspaceBucket : "";
+  return PROJECT_WORKSPACE_BUCKET_SET.has(bucket) ? bucket : "history";
+}
+
+function isNewWorkspaceProject(project) {
+  return getProjectWorkspaceBucket(project) === "new";
+}
+
+function getProjectsForCurrentAccount() {
+  if (!appState.auth.loggedIn) return [];
+  return appState.projects.filter((project) => projectBelongsToCurrentAccount(project));
+}
+
+function claimLegacyProjectsForCurrentAccount() {
+  if (!appState.auth.loggedIn) return false;
+  const ownerAccount = String(appState.auth.account || "").trim();
+  if (!ownerAccount) return false;
+  let changed = false;
+  appState.projects.forEach((project) => {
+    if (!project || getProjectOwnerKey(project)) return;
+    project.ownerAccount = ownerAccount;
+    changed = true;
+  });
+  return changed;
+}
+
+function syncActiveProjectForCurrentAccount(options = {}) {
+  const allowNull = Boolean(options.allowNull);
+  if (!appState.auth.loggedIn) return;
+  if (getActiveProject()) return;
+  const accountProjects = getProjectsForCurrentAccount();
+  appState.activeProjectId = allowNull ? null : (accountProjects[0]?.id || null);
+}
+
+function ensureMockHistoryProjectForCurrentAccount() {
+  if (!appState.auth.loggedIn) return false;
+  const ownerAccount = String(appState.auth.account || "").trim();
+  if (!ownerAccount) return false;
+  const accountProjects = getProjectsForCurrentAccount();
+  if (accountProjects.some((project) => !isNewWorkspaceProject(project))) {
+    return false;
+  }
+
+  const now = new Date();
+  const year = Math.max(2026, now.getFullYear());
+  const project = {
+    id: makeId("proj"),
+    ownerAccount,
+    workspaceBucket: "history",
+    name: resolveUniqueProjectName("江苏海上风电示例项目"),
+    province: "jiangsu",
+    assetType: "wind",
+    siteType: "offshore",
+    hasStorage: true,
+    storagePowerMw: 64,
+    storageDurationH: 2,
+    storageNote: "按装机容量20% / 2h生成的示例配储口径",
+    capacityMw: 320,
+    startYear: year,
+    forecastYears: 30,
+    energyMode: "annual_hours",
+    note: "系统自动生成的历史项目示例",
+    createdAt: now.toISOString(),
+    statuses: statusMapTemplate(),
+    energyData: createEmptyEnergyDataState("annual_hours"),
+    energyTemplateExports: {
+      hourly_8760: "",
+      annual_hours: "",
+      typical_curve_8760: "",
+      province_typical_curve: ""
+    },
+    historySpotImport: createEmptyHistorySpotImport(),
+    priceRuns: [],
+    activeRunId: null,
+    activationLogs: [],
+    spotMarketConfig: createDefaultSpotMarketConfig(),
+    scenarios: [],
+    activeScenarioId: null,
+    resultsByScenario: {}
+  };
+
+  project.statuses["create-page"] = "completed";
+
+  const baselineScenario = {
+    id: makeId("scn"),
+    name: "基准场景",
+    isBaseline: true,
+    locked: false,
+    config: defaultScenarioConfig(project),
+    updatedAt: now.toISOString()
+  };
+  project.scenarios.push(baselineScenario);
+  project.activeScenarioId = baselineScenario.id;
+
+  appState.projects.unshift(project);
+  if (!getActiveProject()) {
+    appState.activeProjectId = project.id;
+  }
+  return true;
+}
+
+function getCurrentResultContext() {
+  const project = getActiveProject();
+  if (!project) return null;
+  const scenario = getActiveScenario(project);
+  if (!scenario) return null;
+  const result = project.resultsByScenario?.[scenario.id];
+  if (!result) return null;
+  return {
+    projectName: project.name || "当前项目",
+    scenarioName: scenario.name || "当前场景",
+    years: Array.isArray(result.annualRows) ? result.annualRows.length : 0
+  };
+}
+
+function resolveLogoutPersistChoice() {
+  const context = getCurrentResultContext();
+  if (!context || typeof window === "undefined") {
+    return "direct";
+  }
+  const shouldSave = window.confirm(
+    `当前项目“${context.projectName}”场景“${context.scenarioName}”已有测算结果。\n是否在退出前立即保存当前结果？\n\n选择“确定”= 保存并退出\n选择“取消”= 继续选择`
+  );
+  if (shouldSave) return "save";
+  const shouldDirectExit = window.confirm("将直接退出（不执行额外保存动作）。是否继续？");
+  if (shouldDirectExit) return "direct";
+  return "cancel";
+}
+
+async function requestAuthLogin(account, password) {
+  const normalizedAccount = account.trim();
+  if (!normalizedAccount || !password) {
+    return { ok: false, message: "请输入账号和密码。" };
+  }
+  const demoUser = getDemoUserByAccount(normalizedAccount);
+  if (demoUser) {
+    if (password !== demoUser.password) {
+      return { ok: false, message: "账号或密码错误，请重试。" };
+    }
+    return { ok: true, accountName: demoUser.accountName, account: demoUser.account };
+  }
+  // 预留真实鉴权接口：后续可替换为 fetch('/api/auth/login', ...)
+  return { ok: true, accountName: normalizedAccount, account: normalizedAccount };
+}
+
+async function handleLoginSubmit(event) {
+  if (event.__loginHandled) return false;
+  event.__loginHandled = true;
+  event.preventDefault();
+  const account = refs.loginAccount?.value || "";
+  const password = refs.loginPassword?.value || "";
+  if (refs.loginSubmitButton) refs.loginSubmitButton.disabled = true;
+  if (refs.loginMessage) refs.loginMessage.textContent = "登录中...";
+
+  const authResult = await requestAuthLogin(account, password);
+  if (!authResult.ok) {
+    if (refs.loginMessage) refs.loginMessage.textContent = authResult.message || "登录失败，请重试。";
+    if (refs.loginSubmitButton) refs.loginSubmitButton.disabled = false;
+    return;
+  }
+
+  appState.auth.loggedIn = true;
+  appState.auth.accountName = authResult.accountName || account.trim();
+  appState.auth.account = authResult.account || account.trim();
+  appState.auth.lastLoginAt = new Date().toISOString();
+  const claimedLegacy = claimLegacyProjectsForCurrentAccount();
+  const seededHistoryDemo = ensureMockHistoryProjectForCurrentAccount();
+  syncActiveProjectForCurrentAccount();
+  resetProjectProvinceContextSync();
+  resetPolicyFiltersToDefault();
+  persistAuthState();
+  persistAppDataNow({ forceLocal: true });
+  if (claimedLegacy || seededHistoryDemo) {
+    persistAppDataNow({ forceLocal: true });
+  }
+  initSidebarGroups();
+  closeLoginModal();
+  closeAccountDropdown();
+  setActivePage("projects-page");
+  return false;
+}
+
+window.__submitLoginForm = handleLoginSubmit;
+
+function handleAccountManage() {
+  if (!appState.auth.loggedIn) return;
+  closeAccountDropdown();
+  setActivePage("settings-page");
+}
+
+function handleAccountPassword() {
+  if (!appState.auth.loggedIn) return;
+  closeAccountDropdown();
+  setActivePage("settings-page");
+  if (typeof window !== "undefined") {
+    window.setTimeout(() => {
+      if (refs.passwordCurrent) refs.passwordCurrent.focus();
+    }, 0);
+  }
+}
+
+function handleLogout() {
+  const persistChoice = resolveLogoutPersistChoice();
+  if (persistChoice === "cancel") {
+    return;
+  }
+  if (persistChoice === "save") {
+    persistAppDataNow({ forceLocal: true });
+  } else {
+    cancelScheduledPersistAppData();
+    suppressNextRenderPersist = true;
+  }
+  appState.auth.loggedIn = false;
+  appState.auth.accountName = "";
+  appState.auth.account = "";
+  appState.auth.lastLoginAt = "";
+  resetProjectProvinceContextSync();
+  resetPolicyFiltersToDefault();
+  persistAuthState();
+  initSidebarGroups();
+  closeLoginModal();
+  closeAccountDropdown();
+  setAccountManageMessage("");
+  setActivePage("home-page");
+}
+
+function setAccountManageMessage(text, tone = "default") {
+  if (!refs.accountManageMessage) return;
+  refs.accountManageMessage.textContent = text;
+  if (tone === "error") {
+    refs.accountManageMessage.style.color = "#c54d4d";
+  } else if (tone === "success") {
+    refs.accountManageMessage.style.color = "#1a8f5f";
+  } else {
+    refs.accountManageMessage.style.color = "";
+  }
+}
+
+async function handleChangePassword(event) {
+  event.preventDefault();
+  if (!appState.auth.loggedIn) {
+    setAccountManageMessage("请先登录后再修改密码。", "error");
+    return;
+  }
+  const current = refs.passwordCurrent?.value || "";
+  const next = refs.passwordNext?.value || "";
+  const confirm = refs.passwordConfirm?.value || "";
+  if (!current || !next || !confirm) {
+    setAccountManageMessage("请完整填写密码信息。", "error");
+    return;
+  }
+  if (next.length < 6) {
+    setAccountManageMessage("新密码长度至少 6 位。", "error");
+    return;
+  }
+  if (next !== confirm) {
+    setAccountManageMessage("两次输入的新密码不一致。", "error");
+    return;
+  }
+  // 预留真实接口：后续可替换为 fetch('/api/auth/change-password', ...)
+  if (refs.changePasswordForm) {
+    refs.changePasswordForm.reset();
+  }
+  setAccountManageMessage("密码修改成功。", "success");
+}
+
+function initTheme() {
+  const saved = typeof localStorage !== "undefined" ? localStorage.getItem("ne_ui_theme") : null;
+  applyTheme(normalizeTheme(saved));
+}
+
+function toggleTheme() {
+  const next = getNextTheme(appState.theme);
+  applyTheme(next);
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem("ne_ui_theme", next);
+  }
+}
+
+function makeId(prefix) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function cloneData(value) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function asMoney(value) {
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    maximumFractionDigits: 0
+  }).format(value);
+}
+
+function asCompactMoney(value) {
+  const abs = Math.abs(value);
+  if (abs >= 100000000) return `${(value / 100000000).toFixed(2)} 亿元`;
+  if (abs >= 10000) return `${(value / 10000).toFixed(1)} 万元`;
+  return asMoney(value);
+}
+
+function asNum(value, digits = 1) {
+  return Number(value).toFixed(digits);
+}
+
+function asPercent(value) {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function dayOfYearToMonthDay(dayOfYear) {
+  const monthLengths = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let day = dayOfYear;
+  let month = 1;
+  for (const monthLength of monthLengths) {
+    if (day <= monthLength) break;
+    day -= monthLength;
+    month += 1;
+  }
+  return { month, day };
+}
+
+function hourIndexToTimestamp(year, hourIndex) {
+  const dayOfYear = Math.floor(hourIndex / 24) + 1;
+  const hour = hourIndex % 24;
+  const monthDay = dayOfYearToMonthDay(dayOfYear);
+  return `${year}-${String(monthDay.month).padStart(2, "0")}-${String(monthDay.day).padStart(2, "0")} ${String(hour).padStart(2, "0")}:00`;
+}
+
+function statusMapTemplate() {
+  return {
+    "create-page": "not_started",
+    "energy-page": "not_started",
+    "history-page": "not_started",
+    "forecast-page": "not_started",
+    "scenario-page": "not_started",
+    "results-page": "not_started",
+    "compare-page": "not_started"
+  };
+}
+
+function createEmptyHistorySpotImport() {
+  return {
+    sourceType: "mock",
+    importedAt: "",
+    sourceName: "",
+    dataset: null
+  };
+}
+
+function createDefaultSpotMarketConfig(project = null) {
+  const activeRun = project ? getActiveRun(project) : null;
+  return {
+    energyBasis: "settlement_generation_hourly",
+    priceSourceMode: "active_forecast_run",
+    captureMethod: "generation_weighted_spot",
+    settlementGranularity: "hourly",
+    linkedRunId: activeRun?.id || "",
+    note: "",
+    savedAt: ""
+  };
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasNonEmptyObject(value) {
+  if (!isPlainObject(value)) return false;
+  return Object.keys(value).some((key) => {
+    const item = value[key];
+    if (item === null || item === undefined) return false;
+    if (typeof item === "string") return item.trim() !== "";
+    if (typeof item === "number") return Number.isFinite(item);
+    if (Array.isArray(item)) return item.length > 0;
+    if (isPlainObject(item)) return Object.keys(item).length > 0;
+    return Boolean(item);
+  });
+}
+
+function isHistoryDatasetUsable(dataset) {
+  return Boolean(
+    isPlainObject(dataset)
+    && Array.isArray(dataset.years)
+    && dataset.years.length
+  );
+}
+
+function sanitizeHistorySpotImport(rawImport) {
+  const normalized = createEmptyHistorySpotImport();
+  if (!isPlainObject(rawImport)) return normalized;
+  if (rawImport.sourceType === "csv" && isHistoryDatasetUsable(rawImport.dataset)) {
+    normalized.sourceType = "csv";
+    normalized.dataset = rawImport.dataset;
+    normalized.importedAt = typeof rawImport.importedAt === "string" ? rawImport.importedAt : "";
+    normalized.sourceName = typeof rawImport.sourceName === "string" ? rawImport.sourceName : "";
+  }
+  return normalized;
+}
+
+function sanitizeSpotMarketConfig(project, rawConfig) {
+  const defaults = createDefaultSpotMarketConfig(project);
+  const config = isPlainObject(rawConfig) ? rawConfig : {};
+  return {
+    energyBasis: config.energyBasis === "settlement_generation_hourly" ? config.energyBasis : defaults.energyBasis,
+    priceSourceMode: config.priceSourceMode === "active_forecast_run" ? config.priceSourceMode : defaults.priceSourceMode,
+    captureMethod: config.captureMethod === "generation_weighted_spot" ? config.captureMethod : defaults.captureMethod,
+    settlementGranularity: config.settlementGranularity === "hourly" ? config.settlementGranularity : defaults.settlementGranularity,
+    linkedRunId: typeof config.linkedRunId === "string" ? config.linkedRunId : defaults.linkedRunId,
+    note: typeof config.note === "string" ? config.note : "",
+    savedAt: typeof config.savedAt === "string" ? config.savedAt : ""
+  };
+}
+
+function ensureProjectSpotMarketConfig(project) {
+  if (!project) return createDefaultSpotMarketConfig();
+  project.spotMarketConfig = sanitizeSpotMarketConfig(project, project.spotMarketConfig);
+  if (project.spotMarketConfig.priceSourceMode === "active_forecast_run") {
+    project.spotMarketConfig.linkedRunId = getActiveRun(project)?.id || "";
+  }
+  return project.spotMarketConfig;
+}
+
+function sanitizePolicyFilters(raw) {
+  const defaults = {
+    provinceKey: "shanghai",
+    regionKey: "east"
+  };
+  if (!isPlainObject(raw)) return defaults;
+  const next = { ...defaults };
+  const provinceKey = String(raw.provinceKey || "all");
+  if (provinceKey === "all" || PROVINCE_KEY_SET.has(provinceKey)) {
+    next.provinceKey = provinceKey;
+  }
+  const regionKey = String(raw.regionKey || "all");
+  if (regionKey === "all" || POLICY_REGION_KEY_SET.has(regionKey)) {
+    next.regionKey = regionKey;
+  }
+  return next;
+}
+
+function resetPolicyFiltersToDefault() {
+  appState.policyFilters.provinceKey = "shanghai";
+  appState.policyFilters.regionKey = "east";
+}
+
+function sanitizeHistoryAnalysis(raw) {
+  const defaults = {
+    startDate: "",
+    endDate: ""
+  };
+  if (!isPlainObject(raw)) return defaults;
+  return {
+    startDate: isIsoDateString(raw.startDate) ? raw.startDate : "",
+    endDate: isIsoDateString(raw.endDate) ? raw.endDate : ""
+  };
+}
+
+function isIsoDateString(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function makeIsoDate(year, month = 1, day = 1) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function compareIsoDate(a, b) {
+  return String(a || "").localeCompare(String(b || ""));
+}
+
+function clampIsoDate(value, minDate, maxDate) {
+  if (!isIsoDateString(value)) return "";
+  if (compareIsoDate(value, minDate) < 0) return minDate;
+  if (compareIsoDate(value, maxDate) > 0) return maxDate;
+  return value;
+}
+
+function noLeapDayOfYear(isoDate) {
+  if (!isIsoDateString(isoDate)) return 1;
+  const monthLengths = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const month = clamp(Number(isoDate.slice(5, 7)), 1, 12);
+  const rawDay = Number(isoDate.slice(8, 10));
+  const day = clamp(rawDay, 1, monthLengths[month - 1]);
+  return monthLengths.slice(0, month - 1).reduce((sum, length) => sum + length, 0) + day;
+}
+
+function resolveHistoryDateRange(controls, dataset) {
+  const minDate = makeIsoDate(dataset.startYear, 1, 1);
+  const maxDate = makeIsoDate(dataset.endYear, 12, 31);
+  const defaultStartYear = Math.max(dataset.startYear, dataset.endYear - 1);
+  const defaultStartDate = makeIsoDate(defaultStartYear, 1, 1);
+  let startDate = clampIsoDate(controls.startDate || defaultStartDate, minDate, maxDate) || defaultStartDate;
+  let endDate = clampIsoDate(controls.endDate || maxDate, minDate, maxDate) || maxDate;
+  if (compareIsoDate(startDate, endDate) > 0) {
+    [startDate, endDate] = [endDate, startDate];
+  }
+  return {
+    startDate,
+    endDate,
+    minDate,
+    maxDate
+  };
+}
+
+function buildHistoryYearSlice(yearData, range) {
+  const yearStartDate = makeIsoDate(yearData.year, 1, 1);
+  const yearEndDate = makeIsoDate(yearData.year, 12, 31);
+  if (compareIsoDate(yearEndDate, range.startDate) < 0 || compareIsoDate(yearStartDate, range.endDate) > 0) {
+    return null;
+  }
+  const startDay = yearData.year === Number(range.startDate.slice(0, 4)) ? noLeapDayOfYear(range.startDate) : 1;
+  const endDay = yearData.year === Number(range.endDate.slice(0, 4)) ? noLeapDayOfYear(range.endDate) : 365;
+  const monthValues = Array.from({ length: 12 }, () => []);
+  const hourlySumsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
+  const hourlyCountsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
+  const monthlySums = Array(12).fill(0);
+  const monthlyCounts = Array(12).fill(0);
+  const typical = createHistoryTypicalAccumulator();
+  const values = [];
+
+  for (let day = startDay; day <= endDay; day += 1) {
+    const { month, day: dayOfMonth } = dayOfYearToMonthDay(day);
+    const monthIndex = month - 1;
+    const dayOfWeek = new Date(Date.UTC(yearData.year, monthIndex, dayOfMonth)).getUTCDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    for (let quarter = 0; quarter < 96; quarter += 1) {
+      const value = yearData.values[(day - 1) * 96 + quarter];
+      if (!Number.isFinite(value)) continue;
+      const hourSlot = Math.floor(quarter / 4);
+      values.push(value);
+      monthlySums[monthIndex] += value;
+      monthlyCounts[monthIndex] += 1;
+      monthValues[monthIndex].push(value);
+      hourlySumsByMonth[monthIndex][hourSlot] += value;
+      hourlyCountsByMonth[monthIndex][hourSlot] += 1;
+      pushHistoryTypical(typical, isWeekend, quarter, value);
+    }
+  }
+
+  return {
+    year: yearData.year,
+    values,
+    monthValues,
+    monthlyAvg: monthlySums.map((sum, idx) => (monthlyCounts[idx] ? sum / monthlyCounts[idx] : null)),
+    hourlySumsByMonth,
+    hourlyCountsByMonth,
+    typical
+  };
+}
+
+function selectHistoryYearsByDateRange(dataset, range) {
+  return dataset.years
+    .map((yearData) => buildHistoryYearSlice(yearData, range))
+    .filter((yearData) => yearData && yearData.values.length);
+}
+
+function sanitizeBenchmarkMap(raw) {
+  const defaults = {
+    level: "nation",
+    provinceKey: null,
+    zoom: null,
+    rangeMin: null,
+    rangeMax: null
+  };
+  if (!isPlainObject(raw)) return defaults;
+  const next = { ...defaults };
+  if (MAP_LEVEL_SET.has(raw.level)) {
+    next.level = raw.level;
+  }
+  if (typeof raw.provinceKey === "string" && PROVINCE_KEY_SET.has(raw.provinceKey)) {
+    next.provinceKey = raw.provinceKey;
+  }
+  if (next.level === "nation") {
+    next.provinceKey = null;
+  }
+  if (next.level === "province" && !next.provinceKey) {
+    next.level = "nation";
+  }
+  const zoom = Number(raw.zoom);
+  if (Number.isFinite(zoom)) {
+    next.zoom = clamp(zoom, BENCHMARK_MAP_ZOOM_MIN, BENCHMARK_MAP_ZOOM_MAX);
+  }
+  const rangeMin = Number(raw.rangeMin);
+  const rangeMax = Number(raw.rangeMax);
+  if (Number.isFinite(rangeMin)) {
+    next.rangeMin = rangeMin;
+  }
+  if (Number.isFinite(rangeMax)) {
+    next.rangeMax = rangeMax;
+  }
+  if (Number.isFinite(next.rangeMin) && Number.isFinite(next.rangeMax) && next.rangeMin > next.rangeMax) {
+    const swap = next.rangeMin;
+    next.rangeMin = next.rangeMax;
+    next.rangeMax = swap;
+  }
+  return next;
+}
+
+function sanitizeStatuses(rawStatuses) {
+  const statuses = statusMapTemplate();
+  if (!isPlainObject(rawStatuses)) return statuses;
+  for (const pageId of WORKFLOW_PAGES) {
+    const value = rawStatuses[pageId];
+    if (PROJECT_STATUS_SET.has(value)) {
+      statuses[pageId] = value;
+    }
+  }
+  return statuses;
+}
+
+function sanitizeLtManualPricesByYear(rawPrices, project) {
+  const next = {};
+  if (!isPlainObject(rawPrices)) return next;
+  const startYear = Number.isInteger(project?.startYear) ? project.startYear : null;
+  const forecastYears = Number.isInteger(project?.forecastYears) ? project.forecastYears : null;
+  const minYear = startYear;
+  const maxYear = startYear !== null && forecastYears !== null ? startYear + forecastYears - 1 : null;
+  Object.entries(rawPrices).forEach(([yearKey, rawValue]) => {
+    const year = Number(yearKey);
+    const value = Number(rawValue);
+    if (!Number.isInteger(year) || !Number.isFinite(value)) return;
+    if (minYear !== null && maxYear !== null && (year < minYear || year > maxYear)) return;
+    next[year] = value;
+  });
+  return next;
+}
+
+function parseBooleanLike(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["yes", "y", "true", "1", "是", "启用"].includes(normalized)) return true;
+  if (["no", "n", "false", "0", "否", "不启用"].includes(normalized)) return false;
+  return fallback;
+}
+
+function sanitizeEnvManualValuesByYear(rawValues, project) {
+  const next = {};
+  if (!isPlainObject(rawValues)) return next;
+  const startYear = Number.isInteger(project?.startYear) ? project.startYear : null;
+  const forecastYears = Number.isInteger(project?.forecastYears) ? project.forecastYears : null;
+  const minYear = startYear;
+  const maxYear = startYear !== null && forecastYears !== null ? startYear + forecastYears - 1 : null;
+  Object.entries(rawValues).forEach(([yearKey, rawValue]) => {
+    const year = Number(yearKey);
+    if (!Number.isInteger(year) || !isPlainObject(rawValue)) return;
+    if (minYear !== null && maxYear !== null && (year < minYear || year > maxYear)) return;
+    const carbonEnabled = project?.siteType === "offshore" && parseBooleanLike(rawValue.carbonEnabled, Boolean(rawValue.carbonEnabled));
+    const entry = {
+      greenCertPrice: Number(rawValue.greenCertPrice) || 0,
+      greenCertRealizeRatio: clamp(Number(rawValue.greenCertRealizeRatio) || 0, 0, 1),
+      greenPremiumPrice: Number(rawValue.greenPremiumPrice) || 0,
+      greenPremiumRealizeRatio: clamp(Number(rawValue.greenPremiumRealizeRatio) || 0, 0, 1),
+      carbonEnabled,
+      carbonPrice: carbonEnabled ? Number(rawValue.carbonPrice) || 0 : 0,
+      carbonRealizeRatio: carbonEnabled ? clamp(Number(rawValue.carbonRealizeRatio) || 0, 0, 1) : 0
+    };
+    if (entry.greenCertRealizeRatio + entry.greenPremiumRealizeRatio + entry.carbonRealizeRatio > 1 + 0.000001) return;
+    next[year] = entry;
+  });
+  return next;
+}
+
+function sanitizeFeeManualValuesByYear(rawValues, project) {
+  const next = {};
+  if (!isPlainObject(rawValues)) return next;
+  const startYear = Number.isInteger(project?.startYear) ? project.startYear : null;
+  const forecastYears = Number.isInteger(project?.forecastYears) ? project.forecastYears : null;
+  const minYear = startYear;
+  const maxYear = startYear !== null && forecastYears !== null ? startYear + forecastYears - 1 : null;
+  Object.entries(rawValues).forEach(([yearKey, rawValue]) => {
+    const year = Number(yearKey);
+    if (!Number.isInteger(year) || !isPlainObject(rawValue)) return;
+    if (minYear !== null && maxYear !== null && (year < minYear || year > maxYear)) return;
+    const entry = {
+      marketOpFee: Number(rawValue.marketOpFee) || 0,
+      gridAssessFee: Number(rawValue.gridAssessFee) || 0,
+      ancillaryFee: Number(rawValue.ancillaryFee) || 0,
+      otherFee: Number(rawValue.otherFee) || 0,
+      otherIncome: Number(rawValue.otherIncome) || 0
+    };
+    if (Object.values(entry).some((value) => value < 0)) return;
+    next[year] = entry;
+  });
+  return next;
+}
+
+function normalizeLtConvergeStep(rawValue, rawYear1, rawTarget, fallback = 2, isFixedStep = false) {
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || value < 0) return fallback;
+  if (!isFixedStep && value > 0 && value <= 1) {
+    const year1 = Number(rawYear1);
+    const target = Number(rawTarget);
+    const delta = Number.isFinite(year1) && Number.isFinite(target) ? Math.abs(year1 - target) : 0;
+    if (delta > 0) {
+      return Number((delta * value).toFixed(4));
+    }
+  }
+  return value;
+}
+
+function sanitizeScenario(project, rawScenario, index) {
+  const scenario = isPlainObject(rawScenario) ? rawScenario : {};
+  const baseConfig = defaultScenarioConfig(project);
+  const srcConfig = isPlainObject(scenario.config) ? scenario.config : {};
+  const merged = { ...baseConfig, ...srcConfig };
+  const next = {
+    id: typeof scenario.id === "string" && scenario.id ? scenario.id : makeId("scn"),
+    name: typeof scenario.name === "string" && scenario.name.trim() ? scenario.name.trim() : `场景${index + 1}`,
+    isBaseline: Boolean(scenario.isBaseline),
+    locked: Boolean(scenario.locked),
+    config: {
+      mechanismEnabled: Boolean(merged.mechanismEnabled),
+      mechanismRatio: clamp(Number(merged.mechanismRatio) || 0, 0, 1),
+      mechanismPrice: Number.isFinite(Number(merged.mechanismPrice)) ? Number(merged.mechanismPrice) : baseConfig.mechanismPrice,
+      mechanismStartYm: typeof merged.mechanismStartYm === "string" && merged.mechanismStartYm ? merged.mechanismStartYm : baseConfig.mechanismStartYm,
+      mechanismEndYm: typeof merged.mechanismEndYm === "string" && merged.mechanismEndYm ? merged.mechanismEndYm : baseConfig.mechanismEndYm,
+      ltPricingMode: LT_PRICING_MODE_SET.has(merged.ltPricingMode) ? merged.ltPricingMode : baseConfig.ltPricingMode,
+      ltManualPricesByYear: sanitizeLtManualPricesByYear(merged.ltManualPricesByYear, project),
+      ltYear1Pnl: Number.isFinite(Number(merged.ltYear1Pnl)) ? Number(merged.ltYear1Pnl) : baseConfig.ltYear1Pnl,
+      ltTargetPnl: Number.isFinite(Number(merged.ltTargetPnl)) ? Number(merged.ltTargetPnl) : baseConfig.ltTargetPnl,
+      ltConvergeSpeedUnit: "fixed_step",
+      ltConvergeSpeed: normalizeLtConvergeStep(
+        merged.ltConvergeSpeed,
+        merged.ltYear1Pnl,
+        merged.ltTargetPnl,
+        baseConfig.ltConvergeSpeed,
+        srcConfig.ltConvergeSpeedUnit === "fixed_step"
+      ),
+      greenCertPrice: Number.isFinite(Number(merged.greenCertPrice)) ? Number(merged.greenCertPrice) : baseConfig.greenCertPrice,
+      greenCertRealizeRatio: Number.isFinite(Number(merged.greenCertRealizeRatio)) ? clamp(Number(merged.greenCertRealizeRatio), 0, 1) : baseConfig.greenCertRealizeRatio,
+      greenPremiumPrice: Number.isFinite(Number(merged.greenPremiumPrice)) ? Number(merged.greenPremiumPrice) : baseConfig.greenPremiumPrice,
+      greenPremiumRealizeRatio: Number.isFinite(Number(merged.greenPremiumRealizeRatio)) ? clamp(Number(merged.greenPremiumRealizeRatio), 0, 1) : baseConfig.greenPremiumRealizeRatio,
+      envValueMode: ENV_VALUE_MODE_SET.has(merged.envValueMode) ? merged.envValueMode : baseConfig.envValueMode,
+      envManualValuesByYear: sanitizeEnvManualValuesByYear(merged.envManualValuesByYear, project),
+      carbonEnabled: Boolean(merged.carbonEnabled),
+      carbonPrice: Number.isFinite(Number(merged.carbonPrice)) ? Number(merged.carbonPrice) : baseConfig.carbonPrice,
+      carbonRealizeRatio: Number.isFinite(Number(merged.carbonRealizeRatio)) ? clamp(Number(merged.carbonRealizeRatio), 0, 1) : baseConfig.carbonRealizeRatio,
+      feeConfigMode: FEE_CONFIG_MODE_SET.has(merged.feeConfigMode) ? merged.feeConfigMode : baseConfig.feeConfigMode,
+      feeManualValuesByYear: sanitizeFeeManualValuesByYear(merged.feeManualValuesByYear, project),
+      marketOpFee: Number.isFinite(Number(merged.marketOpFee)) ? Number(merged.marketOpFee) : baseConfig.marketOpFee,
+      gridAssessFee: Number.isFinite(Number(merged.gridAssessFee)) ? Number(merged.gridAssessFee) : baseConfig.gridAssessFee,
+      ancillaryFee: Number.isFinite(Number(merged.ancillaryFee)) ? Number(merged.ancillaryFee) : baseConfig.ancillaryFee,
+      otherFee: Number.isFinite(Number(merged.otherFee)) ? Number(merged.otherFee) : baseConfig.otherFee,
+      otherIncome: Number.isFinite(Number(merged.otherIncome)) ? Number(merged.otherIncome) : baseConfig.otherIncome,
+      storageArbitragePrice: Number.isFinite(Number(merged.storageArbitragePrice)) ? Number(merged.storageArbitragePrice) : baseConfig.storageArbitragePrice,
+      storageCapacityCompPrice: Number.isFinite(Number(merged.storageCapacityCompPrice)) ? Number(merged.storageCapacityCompPrice) : baseConfig.storageCapacityCompPrice,
+      storageAncillaryRevenuePrice: Number.isFinite(Number(merged.storageAncillaryRevenuePrice)) ? Number(merged.storageAncillaryRevenuePrice) : baseConfig.storageAncillaryRevenuePrice,
+      storageOtherRevenuePrice: Number.isFinite(Number(merged.storageOtherRevenuePrice)) ? Number(merged.storageOtherRevenuePrice) : baseConfig.storageOtherRevenuePrice
+    },
+    updatedAt: typeof scenario.updatedAt === "string" && scenario.updatedAt ? scenario.updatedAt : new Date().toISOString()
+  };
+  if (project.siteType !== "offshore") {
+    next.config.carbonEnabled = false;
+    next.config.carbonPrice = 0;
+    next.config.carbonRealizeRatio = 0;
+  }
+  if (!project.hasStorage) {
+    next.config.storageArbitragePrice = 0;
+    next.config.storageCapacityCompPrice = 0;
+    next.config.storageAncillaryRevenuePrice = 0;
+    next.config.storageOtherRevenuePrice = 0;
+  }
+  return next;
+}
+
+function sanitizeProject(rawProject, index) {
+  if (!isPlainObject(rawProject)) return null;
+  const currentYear = new Date().getFullYear();
+  const isNewDraft = rawProject.workspaceBucket === "new";
+  const rawName = typeof rawProject.name === "string" ? rawProject.name.trim() : "";
+  const rawCapacity = Number(rawProject.capacityMw);
+  const rawStoragePower = Number(rawProject.storagePowerMw);
+  const rawStorageDuration = Number(rawProject.storageDurationH);
+  const hasStorage = Boolean(rawProject.hasStorage);
+  const migratedStoragePower = hasStorage && (!Number.isFinite(rawStoragePower) || rawStoragePower <= 0) && Number.isFinite(rawCapacity) && rawCapacity > 0
+    ? Number((rawCapacity * 0.2).toFixed(1))
+    : null;
+  const migratedStorageDuration = hasStorage && (!Number.isFinite(rawStorageDuration) || rawStorageDuration <= 0)
+    ? 2
+    : null;
+  const rawStartYear = Number(rawProject.startYear);
+  const rawForecastYears = Number(rawProject.forecastYears);
+  const project = {
+    id: typeof rawProject.id === "string" && rawProject.id ? rawProject.id : makeId("proj"),
+    ownerAccount: typeof rawProject.ownerAccount === "string"
+      ? rawProject.ownerAccount.trim()
+      : (typeof rawProject.account === "string" ? rawProject.account.trim() : ""),
+    workspaceBucket: PROJECT_WORKSPACE_BUCKET_SET.has(rawProject.workspaceBucket) ? rawProject.workspaceBucket : "history",
+    name: rawName || (isNewDraft ? resolveUniqueProjectName("新建项目") : `项目${index + 1}`),
+    province: PROVINCE_KEY_SET.has(rawProject.province) ? rawProject.province : (isNewDraft ? "" : "shandong"),
+    assetType: ASSET_TYPE_SET.has(rawProject.assetType) ? rawProject.assetType : (isNewDraft ? "" : "wind"),
+    siteType: SITE_TYPE_SET.has(rawProject.siteType) ? rawProject.siteType : (isNewDraft ? "" : "onshore"),
+    hasStorage,
+    storagePowerMw: Number.isFinite(rawStoragePower) && rawStoragePower > 0 ? rawStoragePower : migratedStoragePower,
+    storageDurationH: Number.isFinite(rawStorageDuration) && rawStorageDuration > 0 ? rawStorageDuration : migratedStorageDuration,
+    storageNote: typeof rawProject.storageNote === "string" ? rawProject.storageNote : "",
+    capacityMw: Number.isFinite(rawCapacity) ? rawCapacity : (isNewDraft ? null : 0),
+    startYear: Number.isFinite(rawStartYear) ? Math.floor(rawStartYear) : (isNewDraft ? null : currentYear),
+    forecastYears: Number.isFinite(rawForecastYears) ? clamp(Math.floor(rawForecastYears), 1, 30) : (isNewDraft ? null : 30),
+    energyMode: ENERGY_MODE_SET.has(rawProject.energyMode) ? rawProject.energyMode : "annual_hours",
+    note: typeof rawProject.note === "string" ? rawProject.note : "",
+    createdAt: typeof rawProject.createdAt === "string" && rawProject.createdAt ? rawProject.createdAt : new Date().toISOString(),
+    statuses: sanitizeStatuses(rawProject.statuses),
+    energyData: createEmptyEnergyDataState("annual_hours"),
+    energyTemplateExports: {
+      hourly_8760: "",
+      annual_hours: "",
+      typical_curve_8760: "",
+      province_typical_curve: ""
+    },
+    historySpotImport: createEmptyHistorySpotImport(),
+    priceRuns: [],
+    activeRunId: null,
+    activationLogs: [],
+    spotMarketConfig: createDefaultSpotMarketConfig(),
+    scenarios: [],
+    activeScenarioId: null,
+    resultsByScenario: {}
+  };
+
+  project.energyData = isPlainObject(rawProject.energyData)
+    ? { ...createEmptyEnergyDataState(project.energyMode), ...rawProject.energyData }
+    : createEmptyEnergyDataState(project.energyMode);
+  ensureProjectEnergyDataState(project);
+  alignDefaultForecastYearsToStoredAnnualInput(project);
+  ensureProjectEnergyTemplateExports(project);
+  project.historySpotImport = sanitizeHistorySpotImport(rawProject.historySpotImport);
+
+  if (Array.isArray(rawProject.priceRuns)) {
+    project.priceRuns = rawProject.priceRuns
+      .filter(isPlainObject)
+      .map((run) => ({
+        ...run,
+        id: typeof run.id === "string" && run.id ? run.id : makeId("run"),
+        createdAt: typeof run.createdAt === "string" && run.createdAt ? run.createdAt : new Date().toISOString(),
+        pricesByYear: isPlainObject(run.pricesByYear) ? run.pricesByYear : {}
+      }));
+  }
+  project.activeRunId = project.priceRuns.some((run) => run.id === rawProject.activeRunId) ? rawProject.activeRunId : null;
+  project.spotMarketConfig = sanitizeSpotMarketConfig(project, rawProject.spotMarketConfig);
+
+  if (Array.isArray(rawProject.activationLogs)) {
+    project.activationLogs = rawProject.activationLogs
+      .filter(isPlainObject)
+      .map((item) => ({
+        id: typeof item.id === "string" && item.id ? item.id : makeId("act"),
+        fromRunId: typeof item.fromRunId === "string" ? item.fromRunId : "-",
+        toRunId: typeof item.toRunId === "string" ? item.toRunId : "-",
+        reason: typeof item.reason === "string" ? item.reason : "",
+        changedAt: typeof item.changedAt === "string" && item.changedAt ? item.changedAt : new Date().toISOString()
+      }));
+  }
+
+  const rawScenarios = Array.isArray(rawProject.scenarios) ? rawProject.scenarios : [];
+  project.scenarios = rawScenarios.map((scenario, i) => sanitizeScenario(project, scenario, i));
+  if (!project.scenarios.length) {
+    project.scenarios = [{
+      id: makeId("scn"),
+      name: "基准场景",
+      isBaseline: true,
+      locked: false,
+      config: defaultScenarioConfig(project),
+      updatedAt: new Date().toISOString()
+    }];
+  }
+  const firstBaselineIndex = project.scenarios.findIndex((scenario) => scenario.isBaseline);
+  if (firstBaselineIndex < 0) {
+    project.scenarios[0].isBaseline = true;
+  } else {
+    project.scenarios = project.scenarios.map((scenario, idx) => ({
+      ...scenario,
+      isBaseline: idx === firstBaselineIndex
+    }));
+  }
+  project.activeScenarioId = project.scenarios.some((scenario) => scenario.id === rawProject.activeScenarioId)
+    ? rawProject.activeScenarioId
+    : project.scenarios[0].id;
+
+  project.resultsByScenario = isPlainObject(rawProject.resultsByScenario) ? rawProject.resultsByScenario : {};
+
+  return project;
+}
+
+function migrateAppDataSnapshot(snapshot) {
+  if (!isPlainObject(snapshot)) return null;
+  if (snapshot.version === APP_DATA_VERSION && isPlainObject(snapshot.payload)) {
+    return snapshot.payload;
+  }
+  if (snapshot.version === 0 && isPlainObject(snapshot.payload)) {
+    return snapshot.payload;
+  }
+  if (isPlainObject(snapshot.data)) {
+    return snapshot.data;
+  }
+  return null;
+}
+
+function applyAppDataPayload(payload) {
+  if (!isPlainObject(payload)) return false;
+  if (!appState.auth.loggedIn && isPlainObject(payload.auth)) {
+    applyAuthPayload(payload.auth);
+  }
+  const projects = Array.isArray(payload.projects) ? payload.projects : [];
+  appState.projects = projects
+    .map((project, index) => sanitizeProject(project, index))
+    .filter(Boolean);
+  reconcileAllProjectStatuses();
+  const activeProjectId = typeof payload.activeProjectId === "string" ? payload.activeProjectId : "";
+  appState.activeProjectId = appState.projects.some((project) => project.id === activeProjectId)
+    ? activeProjectId
+    : appState.projects[0]?.id || null;
+  appState.activePage = (typeof payload.activePage === "string" && PAGE_ID_SET.has(payload.activePage))
+    ? payload.activePage
+    : "home-page";
+  appState.compareView = sanitizeCompareView(payload.compareView);
+  appState.energyStep2Choice = sanitizeEnergyStep2Choice(payload.energyStep2Choice);
+  appState.policyFilters = sanitizePolicyFilters(payload.policyFilters);
+  appState.historyAnalysis = sanitizeHistoryAnalysis(payload.historyAnalysis);
+  appState.benchmarkMap = sanitizeBenchmarkMap(payload.benchmarkMap);
+  return true;
+}
+
+function sanitizeCompareView(value) {
+  return typeof value === "string" && COMPARE_VIEW_SET.has(value) ? value : "scenario";
+}
+
+function sanitizeEnergyStep2Choice(value) {
+  return typeof value === "string" && ENERGY_STEP2_CHOICE_SET.has(value) ? value : "typical";
+}
+
+function supportsIndexedDb() {
+  return typeof indexedDB !== "undefined";
+}
+
+function openAppDataDb() {
+  if (!supportsIndexedDb()) {
+    return Promise.resolve(null);
+  }
+  if (appDataDbPromise) return appDataDbPromise;
+  appDataDbPromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(APP_DATA_DB_NAME, APP_DATA_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(APP_DATA_DB_STORE)) {
+        db.createObjectStore(APP_DATA_DB_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("打开IndexedDB失败"));
+  }).catch((error) => {
+    appDataDbPromise = null;
+    throw error;
+  });
+  return appDataDbPromise;
+}
+
+async function readAppDataSnapshotFromDb() {
+  const db = await openAppDataDb();
+  if (!db) return null;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(APP_DATA_DB_STORE, "readonly");
+    const store = tx.objectStore(APP_DATA_DB_STORE);
+    const request = store.get(APP_DATA_DB_KEY);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error || new Error("读取IndexedDB快照失败"));
+  });
+}
+
+async function writeAppDataSnapshotToDb(snapshot) {
+  const db = await openAppDataDb();
+  if (!db) return false;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(APP_DATA_DB_STORE, "readwrite");
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error || new Error("写入IndexedDB快照失败"));
+    tx.objectStore(APP_DATA_DB_STORE).put(snapshot, APP_DATA_DB_KEY);
+  });
+}
+
+function snapshotTime(snapshot) {
+  if (!isPlainObject(snapshot)) return 0;
+  const time = Date.parse(snapshot.savedAt || "");
+  return Number.isFinite(time) ? time : 0;
+}
+
+async function loadAppDataFromStorage() {
+  let localSnapshot = null;
+  if (typeof localStorage !== "undefined") {
+    const raw = localStorage.getItem(APP_DATA_STORAGE_KEY);
+    if (raw) {
+      try {
+        localSnapshot = JSON.parse(raw);
+      } catch (error) {
+        console.warn("读取localStorage业务快照失败。", error);
+      }
+    }
+  }
+
+  let dbSnapshot = null;
+  try {
+    dbSnapshot = await readAppDataSnapshotFromDb();
+  } catch (error) {
+    console.warn("读取IndexedDB业务快照失败。", error);
+  }
+
+  const selected = snapshotTime(dbSnapshot) > snapshotTime(localSnapshot) ? dbSnapshot : localSnapshot;
+  if (!selected) return;
+  const payload = migrateAppDataSnapshot(selected);
+  applyAppDataPayload(payload);
+}
+
+function buildAppDataSnapshot() {
+  return {
+    version: APP_DATA_VERSION,
+    savedAt: new Date().toISOString(),
+    payload: {
+      activePage: appState.activePage,
+      compareView: sanitizeCompareView(appState.compareView),
+      energyStep2Choice: sanitizeEnergyStep2Choice(appState.energyStep2Choice),
+      activeProjectId: appState.activeProjectId,
+      projects: appState.projects,
+      auth: {
+        loggedIn: appState.auth.loggedIn,
+        accountName: appState.auth.accountName,
+        account: appState.auth.account,
+        lastLoginAt: appState.auth.lastLoginAt
+      },
+      policyFilters: appState.policyFilters,
+      historyAnalysis: sanitizeHistoryAnalysis(appState.historyAnalysis),
+      benchmarkMap: sanitizeBenchmarkMap(appState.benchmarkMap)
+    }
+  };
+}
+
+function renderCompareWorkspaceState() {
+  const activeView = sanitizeCompareView(appState.compareView);
+  appState.compareView = activeView;
+  if (Array.isArray(refs.compareTabButtons)) {
+    refs.compareTabButtons.forEach((button) => {
+      const isActive = button.dataset.compareView === activeView;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+      button.tabIndex = isActive ? 0 : -1;
+    });
+  }
+  if (Array.isArray(refs.comparePanes)) {
+    refs.comparePanes.forEach((pane) => {
+      pane.hidden = pane.dataset.comparePane !== activeView;
+    });
+  }
+}
+
+function renderEnergyStep2ChoiceState() {
+  const activeChoice = sanitizeEnergyStep2Choice(appState.energyStep2Choice);
+  appState.energyStep2Choice = activeChoice;
+  if (Array.isArray(refs.energyStep2ChoiceButtons)) {
+    refs.energyStep2ChoiceButtons.forEach((button) => {
+      const isActive = button.dataset.energyStep2Choice === activeChoice;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+      button.tabIndex = isActive ? 0 : -1;
+    });
+  }
+  if (refs.energyStep2TypicalPane) {
+    refs.energyStep2TypicalPane.hidden = activeChoice !== "typical";
+  }
+  if (refs.energyStep2ProvincePane) {
+    refs.energyStep2ProvincePane.hidden = activeChoice !== "province";
+  }
+}
+
+function renderEnergyStep2ChoiceSummary(project) {
+  if (!refs.energyStep2ChoiceSummary || !refs.energyStep2ChoiceDetail) return;
+  const activeChoice = sanitizeEnergyStep2Choice(appState.energyStep2Choice);
+  if (!project) {
+    refs.energyStep2ChoiceSummary.textContent = "当前选择：待进入项目";
+    refs.energyStep2ChoiceDetail.textContent = "请先进入项目并完成基础信息保存，再从两种典型年曲线来源中二选一。";
+    return;
+  }
+  if (!isProjectCreateCompleted(project)) {
+    refs.energyStep2ChoiceSummary.textContent = "当前选择：待基础信息保存";
+    refs.energyStep2ChoiceDetail.textContent = "基础信息保存完成后，才能上传典型年8760小时模板或调用所选省份典型曲线。";
+    return;
+  }
+  const totalYears = Number.isInteger(project.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
+  const annualInputYears = getAnnualInputYearCount(project);
+  const annualReady = totalYears > 0 && annualInputYears === totalYears;
+  if (!annualInputYears) {
+    refs.energyStep2ChoiceSummary.textContent = "当前选择：待完成第一步";
+    refs.energyStep2ChoiceDetail.textContent = "请先导入逐年总量模板，录入测算周期内各年度总小时数，再开始第二步二选一。";
+    return;
+  }
+  if (!annualReady) {
+    refs.energyStep2ChoiceSummary.textContent = `当前选择：待补齐逐年总量（${annualInputYears}/${totalYears}）`;
+    refs.energyStep2ChoiceDetail.textContent = "第二步必须在逐年总量覆盖全部测算年度后再进行。";
+    return;
+  }
+  if (project.energyData?.typicalCurveSource === "province_typical_curve") {
+    refs.energyStep2ChoiceSummary.textContent = "当前选择：调用所选省份典型曲线";
+    refs.energyStep2ChoiceDetail.textContent = `当前生效来源为 ${describeProvinceTypicalCurve(project)} 典型曲线；如切换为模板导入，将以新来源覆盖当前典型年曲线。`;
+    return;
+  }
+  if (project.energyData?.typicalCurveSource === "typical_curve_8760") {
+    refs.energyStep2ChoiceSummary.textContent = "当前选择：上传典型年8760小时模板";
+    refs.energyStep2ChoiceDetail.textContent = "当前生效来源为典型年8760小时模板；如切换为省份典型曲线，将以新来源覆盖当前典型年曲线。";
+    return;
+  }
+  refs.energyStep2ChoiceSummary.textContent = activeChoice === "province"
+    ? "当前选择：准备调用所选省份典型曲线"
+    : "当前选择：准备上传典型年8760小时模板";
+  refs.energyStep2ChoiceDetail.textContent = "第二步二选一：确认任一来源完成后，系统将据此生成测算周期内各年上网电量。";
+}
+
+function setEnergyButtonVariant(button, variant = "ghost") {
+  if (!button) return;
+  button.classList.toggle("primary-button", variant === "primary");
+  button.classList.toggle("ghost-button", variant !== "primary");
+}
+
+function setEnergyPaneCurrentState(pane, statusElement, message = "") {
+  if (pane) {
+    pane.classList.toggle("is-current-source", Boolean(message));
+  }
+  if (!statusElement) return;
+  if (message) {
+    statusElement.hidden = false;
+    statusElement.textContent = message;
+  } else {
+    statusElement.hidden = true;
+    statusElement.textContent = "";
+  }
+}
+
+function persistAppDataNow(options = {}) {
+  const snapshot = buildAppDataSnapshot();
+  const forceLocal = Boolean(options.forceLocal);
+  let localSucceeded = false;
+  let localAttempted = false;
+
+  const shouldTryLocal = typeof localStorage !== "undefined"
+    && appDataStorageMode !== "idb_only"
+    && (forceLocal || Date.now() - lastLocalStoragePersistAt >= LOCAL_STORAGE_PERSIST_INTERVAL_MS);
+
+  if (shouldTryLocal) {
+    localAttempted = true;
+    try {
+      localStorage.setItem(APP_DATA_STORAGE_KEY, JSON.stringify(snapshot));
+      localSucceeded = true;
+      lastLocalStoragePersistAt = Date.now();
+    } catch (error) {
+      appDataStorageMode = "idb_only";
+      console.warn("localStorage容量不足，已切换IndexedDB持久化。", error);
+    }
+  }
+
+  const currentSeq = ++persistSequence;
+  void writeAppDataSnapshotToDb(snapshot)
+    .then(() => {
+      if (currentSeq !== persistSequence) return;
+      storageWarningShown = false;
+    })
+    .catch((error) => {
+      if (currentSeq !== persistSequence) return;
+      console.warn("写入IndexedDB业务快照失败。", error);
+      if (!localSucceeded && !storageWarningShown) {
+        storageWarningShown = true;
+        setTopMeta("本地存储不可用，当前改动可能在刷新后丢失。");
+      }
+    });
+
+  if (localSucceeded || !localAttempted) {
+    storageWarningShown = false;
+  } else if (!supportsIndexedDb() && !storageWarningShown) {
+    storageWarningShown = true;
+    setTopMeta("浏览器不支持大容量本地存储，当前改动可能在刷新后丢失。");
+  }
+}
+
+function schedulePersistAppData() {
+  if (typeof window === "undefined") {
+    persistAppDataNow();
+    return;
+  }
+  if (persistAppDataTimer) {
+    window.clearTimeout(persistAppDataTimer);
+  }
+  persistAppDataTimer = window.setTimeout(() => {
+    persistAppDataTimer = null;
+    persistAppDataNow();
+  }, 120);
+}
+
+function cancelScheduledPersistAppData() {
+  if (persistAppDataTimer && typeof window !== "undefined") {
+    window.clearTimeout(persistAppDataTimer);
+  }
+  persistAppDataTimer = null;
+}
+
+function getActiveProject() {
+  const project = appState.projects.find((item) => item.id === appState.activeProjectId) || null;
+  if (!project) return null;
+  if (!appState.auth.loggedIn) return null;
+  return projectBelongsToCurrentAccount(project) ? project : null;
+}
+
+function getActiveScenario(project) {
+  return project.scenarios.find((scenario) => scenario.id === project.activeScenarioId) || null;
+}
+
+function getActiveRun(project) {
+  return project.priceRuns.find((run) => run.id === project.activeRunId) || null;
+}
+
+function getProvinceDefaults(provinceKey) {
+  if (PROVINCE_DEFAULT_PARAMS[provinceKey]) return { ...PROVINCE_DEFAULT_PARAMS[provinceKey] };
+  const benchmark = PROVINCE_BENCHMARKS[provinceKey];
+  if (!benchmark) {
+    return {
+      mechanismEnabled: true,
+      mechanismRatio: 0.3,
+      mechanismPrice: 340,
+      marketOpFee: 6,
+      gridAssessFee: 8,
+      ancillaryFee: 16,
+      otherFee: 3,
+      greenCertPrice: 18,
+      greenPremiumPrice: 10,
+      storageArbitragePrice: 14,
+      storageCapacityCompPrice: 8,
+      storageAncillaryRevenuePrice: 10,
+      storageOtherRevenuePrice: 3
+    };
+  }
+  const mechanismEnabled = benchmark.mechanismState !== "逐步退出";
+  return {
+    mechanismEnabled,
+    mechanismRatio: mechanismEnabled ? 0.32 : 0.12,
+    mechanismPrice: benchmark.capturePrice + 6,
+    marketOpFee: 6,
+    gridAssessFee: 8,
+    ancillaryFee: benchmark.ancillaryFee,
+    otherFee: 3,
+    greenCertPrice: 18,
+    greenPremiumPrice: 10,
+    storageArbitragePrice: 14,
+    storageCapacityCompPrice: 8,
+    storageAncillaryRevenuePrice: 10,
+    storageOtherRevenuePrice: 3
+  };
+}
+
+function resetProjectProvinceContextSync() {
+  lastSyncedProjectProvinceContextKey = "";
+}
+
+function getProjectProvinceContext(project = getActiveProject()) {
+  if (!project || !PROVINCE_KEY_SET.has(project.province)) return null;
+  return {
+    projectId: project.id,
+    provinceKey: project.province,
+    regionKey: getPolicyRegionKeyByProvince(project.province) || "all"
+  };
+}
+
+function syncProjectProvinceScopedState(project = getActiveProject(), options = {}) {
+  const context = getProjectProvinceContext(project);
+  if (!context) {
+    resetProjectProvinceContextSync();
+    return false;
+  }
+  const contextKey = `${context.projectId}|${context.provinceKey}`;
+  if (!options.force && contextKey === lastSyncedProjectProvinceContextKey) {
+    return false;
+  }
+  appState.policyFilters.provinceKey = context.provinceKey;
+  appState.policyFilters.regionKey = context.regionKey;
+  if (appState.benchmarkMap.level === "province") {
+    appState.benchmarkMap = {
+      ...appState.benchmarkMap,
+      provinceKey: context.provinceKey,
+      zoom: null,
+      rangeMin: null,
+      rangeMax: null
+    };
+  }
+  lastSyncedProjectProvinceContextKey = contextKey;
+  return true;
+}
+
+function shouldAutoSyncProvinceDefaults(project) {
+  if (!project || !PROVINCE_KEY_SET.has(project.province)) return false;
+  ensureScenarioMetadata(project);
+  const baseline = getBaselineScenario(project);
+  if (!baseline || baseline.locked) return false;
+  if (project.scenarios.length !== 1) return false;
+  if (project.statuses["scenario-page"] === "completed") return false;
+  if (Object.keys(project.resultsByScenario || {}).length) return false;
+  return true;
+}
+
+function syncProjectProvinceDefaultsToBaseline(project, options = {}) {
+  if (!project || !PROVINCE_KEY_SET.has(project.province)) return false;
+  ensureScenarioMetadata(project);
+  const baseline = getBaselineScenario(project);
+  if (!baseline) return false;
+  if (!options.force && !shouldAutoSyncProvinceDefaults(project)) {
+    return false;
+  }
+  baseline.config = defaultScenarioConfig(project);
+  baseline.updatedAt = new Date().toISOString();
+  project.activeScenarioId = baseline.id;
+  return true;
+}
+
+function ensureScenarioMetadata(project) {
+  if (!project.scenarios?.length) return;
+  const baselineId = project.scenarios.find((scenario) => scenario.isBaseline)?.id || project.scenarios[0].id;
+  project.scenarios.forEach((scenario) => {
+    scenario.isBaseline = scenario.id === baselineId;
+    if (typeof scenario.locked !== "boolean") {
+      scenario.locked = false;
+    }
+  });
+  if (!project.scenarios.some((scenario) => scenario.id === project.activeScenarioId)) {
+    project.activeScenarioId = project.scenarios[0].id;
+  }
+}
+
+function getBaselineScenario(project) {
+  ensureScenarioMetadata(project);
+  return project.scenarios.find((scenario) => scenario.isBaseline) || project.scenarios[0] || null;
+}
+
+function countScenariosForCompare(project) {
+  return project.scenarios.filter((scenario) => project.resultsByScenario[scenario.id]).length;
+}
+
+function isProjectCreateCompleted(project) {
+  if (!project) return false;
+  const nameReady = typeof project.name === "string" && project.name.trim().length > 0;
+  const provinceReady = PROVINCE_KEY_SET.has(project.province);
+  const assetReady = ASSET_TYPE_SET.has(project.assetType);
+  const siteReady = SITE_TYPE_SET.has(project.siteType);
+  const storageReady = !project.hasStorage
+    || (
+      Number.isFinite(project.storagePowerMw)
+      && project.storagePowerMw > 0
+      && Number.isFinite(project.storageDurationH)
+      && project.storageDurationH > 0
+    );
+  const capacityReady = Number.isFinite(project.capacityMw) && project.capacityMw > 0;
+  const startReady = Number.isInteger(project.startYear) && project.startYear >= 2026;
+  const periodReady = Number.isInteger(project.forecastYears) && project.forecastYears >= 1;
+  return nameReady && provinceReady && assetReady && siteReady && storageReady && capacityReady && startReady && periodReady;
+}
+
+function countCompleteEnergyYears(project) {
+  const energyData = ensureProjectEnergyDataDerivedState(project);
+  if (!project || !energyData?.annualSummary) return 0;
+  if (!Number.isInteger(project.forecastYears) || project.forecastYears <= 0) return 0;
+  let count = 0;
+  for (let i = 0; i < project.forecastYears; i += 1) {
+    const year = project.startYear + i;
+    if (
+      energyData.annualSummary?.[year]?.status === "完整"
+      && Array.isArray(energyData.hourlyByYear?.[year])
+      && energyData.hourlyByYear[year].length === 8760
+    ) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function hasEnergyHistoryEntryReadiness(project) {
+  if (!project || !Number.isInteger(project.forecastYears) || project.forecastYears <= 0) {
+    return false;
+  }
+  if (!isProjectCreateCompleted(project)) return false;
+  const annualInputYears = getAnnualInputYearCount(project);
+  if (annualInputYears !== project.forecastYears) return false;
+  if (!hasEnergyTypicalCurve(project)) return false;
+  return true;
+}
+
+function listMissingEnergyYears(project, limit = 6) {
+  const energyData = ensureProjectEnergyDataDerivedState(project);
+  if (!project || !energyData?.annualSummary) return [];
+  if (!Number.isInteger(project.forecastYears) || project.forecastYears <= 0) return [];
+  const years = [];
+  for (let i = 0; i < project.forecastYears; i += 1) {
+    const year = project.startYear + i;
+    if (
+      energyData.annualSummary?.[year]?.status !== "完整"
+      || !Array.isArray(energyData.hourlyByYear?.[year])
+      || energyData.hourlyByYear[year].length !== 8760
+    ) {
+      years.push(year);
+    }
+  }
+  if (years.length <= limit) return years;
+  return [...years.slice(0, limit), `...共${years.length}年`];
+}
+
+function getEnergyCompletionState(project) {
+  const createReady = Boolean(project && isProjectCreateCompleted(project));
+  const totalYears = Number.isInteger(project?.forecastYears) && project.forecastYears > 0
+    ? project.forecastYears
+    : 0;
+  const energyData = project ? ensureProjectEnergyDataDerivedState(project) : createEmptyEnergyDataState("annual_hours");
+  const annualInputYears = project ? getAnnualInputYearCount(project) : 0;
+  const hasTypicalCurve = project ? hasEnergyTypicalCurve(project) : false;
+  const completeYears = project ? countCompleteEnergyYears(project) : 0;
+  const totalEnergyMwh = Object.values(energyData.annualSummary || {}).reduce((sum, item) => {
+    const value = Number(item?.energyMwh);
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0);
+  const ready = createReady && hasEnergyHistoryEntryReadiness(project);
+
+  return {
+    createReady,
+    totalYears,
+    annualInputYears,
+    hasTypicalCurve,
+    completeYears,
+    totalEnergyMwh,
+    energyData,
+    ready
+  };
+}
+
+function hasActiveActivatableRun(project) {
+  const run = getActiveRun(project);
+  return Boolean(run && canActivateRun(run));
+}
+
+
+function hasResultForScenario(project, scenarioId) {
+  if (!project || !scenarioId) return false;
+  const result = project.resultsByScenario?.[scenarioId];
+  return Boolean(result && Array.isArray(result.annualRows) && result.annualRows.length);
+}
+
+function hasActiveScenarioResult(project) {
+  const scenario = getActiveScenario(project);
+  return hasResultForScenario(project, scenario?.id || "");
+}
+
+function buildWorkflowCompletionSnapshot(project) {
+  const energyState = getEnergyCompletionState(project);
+  const completeEnergyYears = energyState.completeYears;
+  const energyCompleted = energyState.ready;
+  const historyReady = isProjectCreateCompleted(project) && Boolean(project.province);
+  const historyCompleted = historyReady && project.statuses["history-page"] === "completed";
+  const forecastCompleted = hasActiveActivatableRun(project);
+  const scenarioCompleted = project.statuses["scenario-page"] === "completed";
+  const resultsCompleted = hasActiveScenarioResult(project);
+  const compareReadyCount = countScenariosForCompare(project);
+  const compareCompleted = compareReadyCount >= 2;
+  return {
+    createCompleted: isProjectCreateCompleted(project),
+    energyCompleted,
+    historyReady,
+    historyCompleted,
+    forecastCompleted,
+    scenarioCompleted,
+    resultsCompleted,
+    compareCompleted,
+    completeEnergyYears,
+    compareReadyCount
+  };
+}
+
+function reconcileProjectStatuses(project) {
+  if (!project) return;
+  project.statuses = sanitizeStatuses(project.statuses);
+  const snapshot = buildWorkflowCompletionSnapshot(project);
+  const inProgressMap = {
+    "create-page": !snapshot.createCompleted && Boolean(project.name?.trim?.()),
+    "energy-page": snapshot.createCompleted,
+    "history-page": snapshot.historyReady,
+    "forecast-page": snapshot.historyCompleted || (project.priceRuns?.length || 0) > 0,
+    "scenario-page": snapshot.forecastCompleted || project.statuses["scenario-page"] === "in_progress",
+    "results-page": snapshot.scenarioCompleted && snapshot.forecastCompleted,
+    "compare-page": snapshot.resultsCompleted && snapshot.compareReadyCount >= 1
+  };
+  const completedMap = {
+    "create-page": snapshot.createCompleted,
+    "energy-page": snapshot.energyCompleted,
+    "history-page": snapshot.historyCompleted,
+    "forecast-page": snapshot.forecastCompleted,
+    "scenario-page": snapshot.scenarioCompleted,
+    "results-page": snapshot.resultsCompleted,
+    "compare-page": snapshot.compareCompleted
+  };
+  for (const pageId of WORKFLOW_PAGES) {
+    const current = project.statuses[pageId] || "not_started";
+    if (completedMap[pageId]) {
+      project.statuses[pageId] = "completed";
+      continue;
+    }
+    if (current === "stale") {
+      continue;
+    }
+    project.statuses[pageId] = inProgressMap[pageId] ? "in_progress" : "not_started";
+  }
+}
+
+function reconcileAllProjectStatuses() {
+  appState.projects.forEach((project) => reconcileProjectStatuses(project));
+}
+
+function setPageStatus(project, pageId, state) {
+  if (!project || !project.statuses[pageId]) return;
+  project.statuses[pageId] = state;
+}
+
+function closePageHelp() {
+  if (refs.pageHelp) {
+    refs.pageHelp.classList.remove("open");
+  }
+  if (refs.pageHelpButton) {
+    refs.pageHelpButton.setAttribute("aria-expanded", "false");
+  }
+}
+
+function togglePageHelp(event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  if (!refs.pageHelp || !refs.pageHelpButton) return;
+  const opening = !refs.pageHelp.classList.contains("open");
+  refs.pageHelp.classList.toggle("open", opening);
+  refs.pageHelpButton.setAttribute("aria-expanded", opening ? "true" : "false");
+}
+
+function getPageHelpContent(pageId, title, group) {
+  const preset = PAGE_HELP_MAP[pageId];
+  if (preset) return preset;
+  return {
+    purpose: `用于处理“${title}”相关设置与输入。`,
+    meaning: `${group}页面用于承接当前流程节点的业务操作。`,
+    guide: "建议先完成当前页关键输入，再进入下一流程页。"
+  };
+}
+
+function statusText(state) {
+  if (state === "completed") return "已完成";
+  if (state === "in_progress") return "进行中";
+  if (state === "stale") return "需复核";
+  return "未开始";
+}
+
+function markDownstreamStale(project, fromPage) {
+  if (!project) return;
+  const chain = {
+    "energy-page": ["forecast-page", "scenario-page", "results-page", "compare-page"],
+    "history-page": ["forecast-page", "scenario-page", "results-page", "compare-page"],
+    "forecast-page": ["scenario-page", "results-page", "compare-page"],
+    "scenario-page": ["results-page", "compare-page"]
+  };
+  const targets = chain[fromPage] || [];
+  for (const pageId of targets) {
+    if (project.statuses[pageId] !== "not_started") {
+      project.statuses[pageId] = "stale";
+    }
+  }
+}
+
+function setTopMeta(text, tone = "info") {
+  const message = typeof text === "string" ? text.trim() : "";
+  if (!refs.globalToast) return;
+  if (topMetaHideTimer && typeof window !== "undefined") {
+    window.clearTimeout(topMetaHideTimer);
+    topMetaHideTimer = null;
+  }
+  if (!message) {
+    refs.globalToast.hidden = true;
+    refs.globalToast.textContent = "";
+    refs.globalToast.removeAttribute("data-tone");
+    return;
+  }
+  refs.globalToast.textContent = message;
+  refs.globalToast.dataset.tone = tone;
+  refs.globalToast.hidden = false;
+  if (typeof window !== "undefined") {
+    topMetaHideTimer = window.setTimeout(() => {
+      refs.globalToast.hidden = true;
+      refs.globalToast.textContent = "";
+      refs.globalToast.removeAttribute("data-tone");
+      topMetaHideTimer = null;
+    }, 5600);
+  }
+}
+
+function normalizeUserFacingError(errorLike) {
+  const rawMessage = typeof errorLike === "string"
+    ? errorLike
+    : typeof errorLike?.message === "string"
+      ? errorLike.message
+      : "";
+  const message = rawMessage.trim();
+  if (!message) return "系统出现异常，请刷新页面后重试。";
+  const referenceMatch = message.match(/Can't find variable:\s*([A-Za-z0-9_$]+)/i);
+  if (referenceMatch) {
+    return `系统脚本异常：缺少变量“${referenceMatch[1]}”，请刷新页面后重试。`;
+  }
+  if (/is not defined/i.test(message)) {
+    const variableName = message.split(/\s+/)[0] || "未知变量";
+    return `系统脚本异常：变量“${variableName}”未定义，请刷新页面后重试。`;
+  }
+  if (/Unexpected token/i.test(message)) {
+    return "系统脚本解析失败，请刷新页面后重试。";
+  }
+  if (/NetworkError|Failed to fetch|Load failed|Script error/i.test(message)) {
+    return "资源加载失败，请检查网络或刷新页面后重试。";
+  }
+  return message.replace(/^Uncaught\s+/i, "").trim() || "系统出现异常，请刷新页面后重试。";
+}
+
+function updatePrintReportHeader(project, scenario) {
+  if (!refs.printProjectName || !refs.printScenarioName || !refs.printPeriodRange || !refs.printGeneratedTime) {
+    return;
+  }
+  const period = getForecastPeriodDisplayRange(project);
+  refs.printProjectName.textContent = project?.name || "-";
+  refs.printScenarioName.textContent = scenario?.name || "-";
+  refs.printPeriodRange.textContent = period;
+  refs.printGeneratedTime.textContent = new Date().toLocaleString("zh-CN", { hour12: false });
+}
+
+function resolveVisiblePageId(pageId) {
+  return PAGE_VIEW_ALIAS[pageId] || pageId;
+}
+
+function scrollCreateWorkspaceToStep(pageId) {
+  if (typeof window === "undefined") return;
+  const target = pageId === "energy-page" ? refs.createStepEnergy : refs.createStepForm;
+  if (!target) return;
+  window.requestAnimationFrame(() => {
+    target.scrollIntoView({ block: "start", behavior: "smooth" });
+  });
+}
+
+function scrollCreateWorkspaceToBottom() {
+  if (typeof window === "undefined") return;
+  const scrollContainer = refs.mainArea;
+  const target = refs.createToEnergyButton || refs.createSaveMessage || refs.createStepForm;
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      if (scrollContainer) {
+        scrollContainer.scrollTo({
+          top: scrollContainer.scrollHeight,
+          behavior: "smooth"
+        });
+        return;
+      }
+      if (target?.scrollIntoView) {
+        target.scrollIntoView({ block: "end", behavior: "smooth" });
+      }
+    });
+  });
+}
+
+function syncCreateWorkspaceStepVisibility(pageId) {
+  if (!refs.createStepForm || !refs.createStepEnergy) return;
+  if (pageId === "create-page") {
+    refs.createStepForm.hidden = false;
+    refs.createStepEnergy.hidden = true;
+    return;
+  }
+  if (pageId === "energy-page") {
+    refs.createStepForm.hidden = true;
+    refs.createStepEnergy.hidden = false;
+    return;
+  }
+  refs.createStepForm.hidden = false;
+  refs.createStepEnergy.hidden = false;
+}
+
+function setActivePage(pageId) {
+  if (pageId === "province-page" || pageId === "spot-page") {
+    pageId = "scenario-page";
+  }
+  if (REQUIRES_LOGIN.has(pageId) && !appState.auth.loggedIn) {
+    pageId = "home-page";
+  }
+  if (REQUIRES_PROJECT.has(pageId) && !getActiveProject()) {
+    setTopMeta("请先创建项目或在“我的项目”里选择一个项目");
+    pageId = "projects-page";
+  }
+  closeOverviewPolicyDetail();
+
+  appState.activePage = pageId;
+  const visiblePageId = resolveVisiblePageId(pageId);
+  refs.topTitle.textContent = PAGE_TITLES[pageId] || "新能源平台";
+
+  refs.navItems.forEach((item) => {
+    item.classList.toggle("active", item.dataset.page === pageId);
+  });
+
+  refs.pages.forEach((page) => {
+    page.classList.toggle("active", page.id === visiblePageId);
+  });
+
+  syncCreateWorkspaceStepVisibility(pageId);
+
+  if (pageId === "home-page") {
+    renderOverviewCarousel();
+    startOverviewAutoplay();
+    queueBenchmarkMapRefresh();
+  } else {
+    stopOverviewAutoplay();
+  }
+
+  if (pageId === "create-page" || pageId === "energy-page") {
+    scrollCreateWorkspaceToStep(pageId);
+  }
+
+  renderAll();
+  if (pageId === "scenario-page") {
+    queueScenarioVisualResize();
+  }
+  if (pageId === "history-page") {
+    queueHistoryChartsResize();
+    queueHistoryChartsRefresh();
+  }
+  if (pageId === "compare-page") {
+    queueCompareChartsResize();
+  }
+}
+
+function refreshNavigationAvailability() {
+  const hasProject = Boolean(getActiveProject());
+  const loggedIn = appState.auth.loggedIn;
+  refs.navItems.forEach((item) => {
+    const page = item.dataset.page;
+    const disabled = (REQUIRES_LOGIN.has(page) && !loggedIn) || (REQUIRES_PROJECT.has(page) && !hasProject);
+    item.disabled = disabled;
+    item.classList.toggle("disabled", disabled);
+  });
+}
+
+function renderStatuses() {
+  const project = getActiveProject();
+  for (const pageId of WORKFLOW_PAGES) {
+    const dot = document.querySelector(`#status-${pageId}`);
+    if (!dot) continue;
+    const pageTitle = PAGE_TITLES[pageId] || pageId;
+    const standard = PAGE_COMPLETION_STANDARD_MAP[pageId] || "按当前页核心输入与结果校验通过后完成。";
+    if (!project) {
+      dot.removeAttribute("data-state");
+      dot.title = `${pageTitle}：未绑定项目；完成标准：${standard}`;
+      dot.setAttribute("aria-label", `${pageTitle}：未绑定项目；完成标准：${standard}`);
+      continue;
+    }
+    const state = project.statuses[pageId];
+    if (state === "completed") dot.dataset.state = "completed";
+    else if (state === "in_progress") dot.dataset.state = "in_progress";
+    else if (state === "stale") dot.dataset.state = "stale";
+    else dot.removeAttribute("data-state");
+    const label = statusText(state);
+    dot.title = `${pageTitle}：${label}；完成标准：${standard}`;
+    dot.setAttribute("aria-label", `${pageTitle}：${label}；完成标准：${standard}`);
+  }
+}
+
+function renderTopbar() {
+  const pageId = appState.activePage;
+  const title = PAGE_TITLES[pageId] || "新能源平台";
+  const group = PAGE_GROUPS[pageId] || "平台概览";
+  const help = getPageHelpContent(pageId, title, group);
+  if (refs.topTitle) {
+    refs.topTitle.textContent = title;
+  }
+  if (refs.topSectionPath) {
+    refs.topSectionPath.textContent = `${group} / ${title}`;
+  }
+  if (refs.pageHelpTitle) {
+    refs.pageHelpTitle.textContent = `${title}说明`;
+  }
+  if (refs.pageHelpPurpose) {
+    refs.pageHelpPurpose.textContent = `设置目的：${help.purpose}`;
+  }
+  if (refs.pageHelpMeaning) {
+    refs.pageHelpMeaning.textContent = `页面意义：${help.meaning}`;
+  }
+  if (refs.pageHelpGuide) {
+    refs.pageHelpGuide.textContent = `操作指导：${help.guide}`;
+  }
+  closePageHelp();
+}
+
+function renderSettings() {
+  if (!refs.settingsAccountName || !refs.settingsAccountId || !refs.settingsLastLogin) return;
+  const accountControls = [
+    refs.passwordCurrent,
+    refs.passwordNext,
+    refs.passwordConfirm,
+    refs.settingsLogoutButton
+  ].filter(Boolean);
+  if (!appState.auth.loggedIn) {
+    refs.settingsAccountName.value = "-";
+    refs.settingsAccountId.value = "-";
+    refs.settingsLastLogin.value = "-";
+    if (refs.changePasswordForm) refs.changePasswordForm.reset();
+    accountControls.forEach((control) => {
+      control.disabled = true;
+    });
+    setAccountManageMessage("");
+    return;
+  }
+  accountControls.forEach((control) => {
+    control.disabled = false;
+  });
+  refs.settingsAccountName.value = appState.auth.accountName || appState.auth.account || "-";
+  refs.settingsAccountId.value = appState.auth.account || "-";
+  refs.settingsLastLogin.value = formatAuthTime(appState.auth.lastLoginAt);
+}
+
+function hashSeed(text) {
+  let hash = 2166136261;
+  const raw = String(text || "");
+  for (let i = 0; i < raw.length; i += 1) {
+    hash ^= raw.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function seededNumber(seed, min, max) {
+  if (max <= min) return min;
+  const span = max - min;
+  return min + (hashSeed(seed) % (span + 1));
+}
+
+function getProvinceBenchmarkValue(provinceKey) {
+  const benchmark = PROVINCE_BENCHMARKS[provinceKey];
+  if (benchmark && Number.isFinite(benchmark.capturePrice)) {
+    return Number(benchmark.capturePrice);
+  }
+  const seeded = seededNumber(`province:${provinceKey}`, 258, 468);
+  return Math.round(seeded);
+}
+
+function normalizeRegionName(name) {
+  return String(name || "")
+    .replace(/\s+/g, "")
+    .replace(/特别行政区|维吾尔自治区|壮族自治区|回族自治区|自治区|省|市/g, "");
+}
+
+function resolveProvinceKeyFromGeoName(name) {
+  const normalized = normalizeRegionName(name);
+  return PROVINCE_NAME_KEY_MAP[normalized] || null;
+}
+
+function loadScriptResourceOnce(src, key) {
+  if (typeof document === "undefined") {
+    return Promise.reject(new Error("当前环境不支持动态加载脚本"));
+  }
+  const loadedTag = `data-loaded-${key}`;
+  const existingLoaded = document.querySelector(`script[${loadedTag}="1"]`);
+  if (existingLoaded) {
+    return Promise.resolve();
+  }
+  const existingLoading = document.querySelector(`script[data-loading-key="${key}"]`);
+  if (existingLoading) {
+    return new Promise((resolve, reject) => {
+      existingLoading.addEventListener("load", () => resolve(), { once: true });
+      existingLoading.addEventListener("error", () => reject(new Error(`脚本加载失败：${src}`)), { once: true });
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = src;
+    script.dataset.loadingKey = key;
+    script.addEventListener("load", () => {
+      script.setAttribute(loadedTag, "1");
+      resolve();
+    }, { once: true });
+    script.addEventListener("error", () => {
+      reject(new Error(`脚本加载失败：${src}`));
+    }, { once: true });
+    document.head.appendChild(script);
+  });
+}
+
+async function ensureMapRuntimeReady() {
+  if (typeof window === "undefined") return false;
+  if (!window.echarts) {
+    if (!echartsLoaderPromise) {
+      echartsLoaderPromise = loadScriptResourceOnce("./vendor/echarts.min.js?v=20260427b", "echarts-local")
+        .catch(() => loadScriptResourceOnce("https://fastly.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js", "echarts-cdn-fastly"))
+        .catch(() => loadScriptResourceOnce("https://unpkg.com/echarts@5.5.0/dist/echarts.min.js", "echarts-cdn-unpkg"));
+    }
+    try {
+      await echartsLoaderPromise;
+    } catch (error) {
+      return false;
+    }
+  }
+  return Boolean(window.echarts);
+}
+
+function ensureBenchmarkChart() {
+  if (!refs.benchmarkMapCanvas) return null;
+  if (typeof window === "undefined" || !window.echarts) return null;
+  if (benchmarkMapChart && !benchmarkMapChart.isDisposed()) {
+    benchmarkMapChart.resize();
+    return benchmarkMapChart;
+  }
+  benchmarkMapChart = window.echarts.init(refs.benchmarkMapCanvas, null, { renderer: "canvas" });
+  if (!benchmarkMapResizeBound && typeof window !== "undefined") {
+    window.addEventListener("resize", () => {
+      if (benchmarkMapChart && !benchmarkMapChart.isDisposed()) {
+        benchmarkMapChart.resize();
+      }
+    });
+    benchmarkMapResizeBound = true;
+  }
+  return benchmarkMapChart;
+}
+
+function queueBenchmarkMapRefresh() {
+  if (typeof window === "undefined") return;
+  const refresh = () => {
+    if (appState.activePage !== "home-page") return;
+    if (benchmarkMapChart && !benchmarkMapChart.isDisposed()) {
+      benchmarkMapChart.resize();
+    }
+    void renderBenchmarkMap();
+  };
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(refresh));
+  }
+  window.setTimeout(refresh, 180);
+  window.setTimeout(() => {
+    if (appState.activePage !== "home-page") return;
+    if (benchmarkMapChart && !benchmarkMapChart.isDisposed()) {
+      benchmarkMapChart.resize();
+    }
+  }, 420);
+}
+
+function setBenchmarkMapMessage(text) {
+  if (!refs.benchmarkMapCanvas) return;
+  if (benchmarkMapChart && !benchmarkMapChart.isDisposed()) {
+    benchmarkMapChart.dispose();
+    benchmarkMapChart = null;
+  }
+  refs.benchmarkMapCanvas.innerHTML = `<div class="map-empty">${escapeHtml(text)}</div>`;
+}
+
+function mapSourceOf(view) {
+  if (view.level === "province" && view.provinceKey) {
+    const fileName = PROVINCE_GEO_FILE_MAP[view.provinceKey];
+    if (!fileName) return null;
+    const provinceName = getProvinceName(view.provinceKey);
+    return {
+      mapName: provinceName || fileName,
+      embeddedKey: `ne-map-${view.provinceKey}`,
+      localScriptPath: `./vendor/echarts-map/province/${fileName}.js?v=20260427b`,
+      urls: ECHARTS_MAP_BASE_URLS.map((baseUrl) => `${baseUrl}/province/${fileName}.json`)
+    };
+  }
+  return {
+    mapName: "china",
+    embeddedKey: "ne-map-china",
+    localScriptPath: "./vendor/echarts-map/china.js?v=20260427b",
+    urls: ECHARTS_MAP_BASE_URLS.map((baseUrl) => `${baseUrl}/china.json`)
+  };
+}
+
+function decodeMapCoordinate(encoded, encodeOffsets) {
+  if (typeof encoded !== "string" || !Array.isArray(encodeOffsets) || encodeOffsets.length < 2) {
+    return encoded;
+  }
+  let prevX = Number(encodeOffsets[0]);
+  let prevY = Number(encodeOffsets[1]);
+  if (!Number.isFinite(prevX) || !Number.isFinite(prevY)) {
+    return encoded;
+  }
+  const result = [];
+  for (let index = 0; index < encoded.length; index += 2) {
+    const xCode = encoded.charCodeAt(index);
+    const yCode = encoded.charCodeAt(index + 1);
+    if (!Number.isFinite(xCode) || !Number.isFinite(yCode)) break;
+    let x = xCode - 64;
+    let y = yCode - 64;
+    x = (x >> 1) ^ (-(x & 1));
+    y = (y >> 1) ^ (-(y & 1));
+    x += prevX;
+    y += prevY;
+    prevX = x;
+    prevY = y;
+    result.push([x / 1024, y / 1024]);
+  }
+  return result;
+}
+
+function decodePolygonRings(coordinates, encodeOffsets) {
+  if (!Array.isArray(coordinates) || !Array.isArray(encodeOffsets)) {
+    return coordinates;
+  }
+  return coordinates.map((ring, index) => {
+    const ringOffsets = encodeOffsets[index];
+    return decodeMapCoordinate(ring, ringOffsets);
+  });
+}
+
+function cloneGeoJsonSafe(geoJson) {
+  try {
+    return JSON.parse(JSON.stringify(geoJson));
+  } catch (error) {
+    return geoJson;
+  }
+}
+
+function decodeMapGeoIfNeeded(geoJson) {
+  if (!geoJson || geoJson.UTF8Encoding !== true || !Array.isArray(geoJson.features)) {
+    return geoJson;
+  }
+  const decodedGeo = cloneGeoJsonSafe(geoJson);
+  if (!decodedGeo || !Array.isArray(decodedGeo.features)) {
+    return geoJson;
+  }
+  decodedGeo.features.forEach((feature) => {
+    const geometry = feature?.geometry;
+    if (!geometry) return;
+    if (geometry.type === "Polygon") {
+      geometry.coordinates = decodePolygonRings(geometry.coordinates, geometry.encodeOffsets || []);
+    } else if (geometry.type === "MultiPolygon" && Array.isArray(geometry.coordinates)) {
+      const offsets = Array.isArray(geometry.encodeOffsets) ? geometry.encodeOffsets : [];
+      geometry.coordinates = geometry.coordinates.map((polygon, index) => decodePolygonRings(polygon, offsets[index] || []));
+    }
+    if (Object.prototype.hasOwnProperty.call(geometry, "encodeOffsets")) {
+      delete geometry.encodeOffsets;
+    }
+  });
+  decodedGeo.UTF8Encoding = false;
+  return decodedGeo;
+}
+
+function extractGeoFromRegisteredMap(registered) {
+  const geoJson = registered?.geoJSON || registered?.geoJson || null;
+  if (geoJson && Array.isArray(geoJson.features)) {
+    return geoJson;
+  }
+  return null;
+}
+
+function tryGetRegisteredGeo(mapName) {
+  if (typeof window === "undefined" || !window.echarts || !mapName) return null;
+  const registered = window.echarts.getMap(mapName);
+  return extractGeoFromRegisteredMap(registered);
+}
+
+async function loadMapGeo(source) {
+  const directGeo = tryGetRegisteredGeo(source.mapName);
+  if (directGeo) {
+    const decodedDirectGeo = decodeMapGeoIfNeeded(directGeo);
+    if (typeof window !== "undefined" && window.echarts && decodedDirectGeo && decodedDirectGeo !== directGeo) {
+      window.echarts.registerMap(source.mapName, decodedDirectGeo);
+    }
+    return decodedDirectGeo;
+  }
+
+  const embeddedGeoKey = source.embeddedKey || source.mapName;
+  const embeddedGeo = (typeof window !== "undefined" && window.NE_MAP_GEO && window.NE_MAP_GEO[embeddedGeoKey]) || null;
+  if (embeddedGeo) {
+    const decodedEmbeddedGeo = decodeMapGeoIfNeeded(embeddedGeo);
+    if (typeof window !== "undefined" && window.echarts && !window.echarts.getMap(source.mapName)) {
+      window.echarts.registerMap(source.mapName, decodedEmbeddedGeo);
+    }
+    return decodedEmbeddedGeo;
+  }
+
+  if (source.localScriptPath) {
+    await loadScriptResourceOnce(source.localScriptPath, `emap-${source.mapName}`);
+    const localDirectGeo = tryGetRegisteredGeo(source.mapName);
+    if (localDirectGeo) {
+      const decodedLocalGeo = decodeMapGeoIfNeeded(localDirectGeo);
+      if (typeof window !== "undefined" && window.echarts && decodedLocalGeo && decodedLocalGeo !== localDirectGeo) {
+        window.echarts.registerMap(source.mapName, decodedLocalGeo);
+      }
+      return decodedLocalGeo;
+    }
+  }
+  const urls = Array.isArray(source.urls) ? source.urls.filter(Boolean) : [];
+  if (!urls.length) {
+    throw new Error("地图数据源为空");
+  }
+  const cacheKey = `${source.mapName}:${urls[0]}`;
+  if (benchmarkGeoCache.has(cacheKey)) {
+    return benchmarkGeoCache.get(cacheKey);
+  }
+  const loading = (async () => {
+    let lastError = null;
+    for (const url of urls) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          lastError = new Error(`HTTP ${response.status}`);
+          continue;
+        }
+        const geoJson = decodeMapGeoIfNeeded(await response.json());
+        if (typeof window !== "undefined" && window.echarts && !window.echarts.getMap(source.mapName)) {
+          window.echarts.registerMap(source.mapName, geoJson);
+        }
+        return geoJson;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error("地图数据加载失败");
+  })().catch((error) => {
+    benchmarkGeoCache.delete(cacheKey);
+    throw error;
+  });
+  benchmarkGeoCache.set(cacheKey, loading);
+  return loading;
+}
+
+function mapValueRange(data) {
+  if (!Array.isArray(data) || !data.length) {
+    return { min: 0, max: 0 };
+  }
+  const values = data
+    .map((item) => Number(item?.value))
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) {
+    return { min: 0, max: 0 };
+  }
+  return {
+    min: Math.min(...values),
+    max: Math.max(...values)
+  };
+}
+
+function benchmarkFallbackRange(view) {
+  const isProvinceLevel = view.level === "province" && Boolean(view.provinceKey);
+  if (isProvinceLevel) {
+    const base = getProvinceBenchmarkValue(view.provinceKey);
+    return {
+      min: clamp(Math.floor(base - 45), BENCHMARK_RANGE_MIN, BENCHMARK_RANGE_MAX),
+      max: clamp(Math.ceil(base + 45), BENCHMARK_RANGE_MIN, BENCHMARK_RANGE_MAX)
+    };
+  }
+  const values = PROVINCES.map((item) => getProvinceBenchmarkValue(item.key)).filter((value) => Number.isFinite(value));
+  if (!values.length) {
+    return { min: BENCHMARK_RANGE_MIN, max: BENCHMARK_RANGE_MAX };
+  }
+  return {
+    min: Math.floor(Math.min(...values)),
+    max: Math.ceil(Math.max(...values))
+  };
+}
+
+function buildNationMapSeries(geoJson) {
+  const features = Array.isArray(geoJson?.features) ? geoJson.features : [];
+  return features.map((feature) => {
+    const name = String(feature?.properties?.name || "");
+    if (!name) return null;
+    const provinceKey = resolveProvinceKeyFromGeoName(name);
+    const value = provinceKey
+      ? getProvinceBenchmarkValue(provinceKey)
+      : seededNumber(`province-name:${name}`, 258, 468);
+    return {
+      name,
+      value,
+      provinceKey
+    };
+  }).filter(Boolean);
+}
+
+function buildCityMapSeries(provinceKey, geoJson) {
+  const features = Array.isArray(geoJson?.features) ? geoJson.features : [];
+  const provinceBase = getProvinceBenchmarkValue(provinceKey);
+  return features.map((feature) => {
+    const name = String(feature?.properties?.name || "");
+    if (!name) return null;
+    const offset = seededNumber(`city:${provinceKey}:${name}`, -48, 46);
+    return {
+      name,
+      value: clamp(Math.round(provinceBase + offset), 120, 520)
+    };
+  }).filter(Boolean);
+}
+
+function benchmarkMapPalette(theme) {
+  const normalizedTheme = normalizeTheme(theme);
+  if (normalizedTheme === "dark") {
+    return {
+      text: "#c9d8eb",
+      border: "#1a2433",
+      shadow: "rgba(5, 11, 20, 0.55)"
+    };
+  }
+  if (normalizedTheme === "eye") {
+    return {
+      text: "#294a35",
+      border: "#edf5ea",
+      shadow: "rgba(35, 71, 47, 0.2)"
+    };
+  }
+  return {
+    text: "#223a58",
+    border: "#f4f7fb",
+    shadow: "rgba(20, 36, 57, 0.2)"
+  };
+}
+
+function benchmarkMapDefaultZoom(level) {
+  return level === "province" ? 1.12 : 1.25;
+}
+
+function getBenchmarkMapCurrentZoom(chart, fallbackZoom) {
+  const option = chart?.getOption?.();
+  const rawSeries = Array.isArray(option?.series) ? option.series[0] : null;
+  const rawZoom = Array.isArray(rawSeries?.zoom) ? Number(rawSeries.zoom[0]) : Number(rawSeries?.zoom);
+  if (Number.isFinite(rawZoom)) {
+    return clamp(rawZoom, BENCHMARK_MAP_ZOOM_MIN, BENCHMARK_MAP_ZOOM_MAX);
+  }
+  return clamp(fallbackZoom, BENCHMARK_MAP_ZOOM_MIN, BENCHMARK_MAP_ZOOM_MAX);
+}
+
+function adjustBenchmarkMapZoom(step) {
+  const chart = ensureBenchmarkChart();
+  if (!chart) return;
+  const view = sanitizeBenchmarkMap(appState.benchmarkMap);
+  const fallbackZoom = Number.isFinite(view.zoom)
+    ? view.zoom
+    : benchmarkMapDefaultZoom(view.level);
+  const currentZoom = getBenchmarkMapCurrentZoom(chart, fallbackZoom);
+  const nextZoom = clamp(currentZoom + step, BENCHMARK_MAP_ZOOM_MIN, BENCHMARK_MAP_ZOOM_MAX);
+  appState.benchmarkMap.zoom = nextZoom;
+  chart.setOption({
+    series: [{ zoom: nextZoom }]
+  });
+  schedulePersistAppData();
+}
+
+function resetBenchmarkMapZoom() {
+  appState.benchmarkMap.zoom = null;
+  void renderBenchmarkMap();
+  schedulePersistAppData();
+}
+
+function benchmarkRangeToTop(value) {
+  const { min, max } = benchmarkRangeSliderBounds;
+  const span = Math.max(max - min, 1);
+  const raw = ((max - value) / span) * 100;
+  return clamp(raw, 2, 98);
+}
+
+function syncBenchmarkRangeSlider(min, max, rangeMin, rangeMax) {
+  benchmarkRangeSliderBounds = {
+    min: Math.floor(min),
+    max: Math.ceil(max)
+  };
+  const normalizedMin = clamp(Math.round(rangeMin), benchmarkRangeSliderBounds.min, benchmarkRangeSliderBounds.max);
+  const normalizedMax = clamp(Math.round(rangeMax), benchmarkRangeSliderBounds.min, benchmarkRangeSliderBounds.max);
+  if (refs.benchmarkRangeSlider) {
+    refs.benchmarkRangeSlider.style.setProperty("--handle-max-pos", `${benchmarkRangeToTop(normalizedMax).toFixed(2)}%`);
+    refs.benchmarkRangeSlider.style.setProperty("--handle-min-pos", `${benchmarkRangeToTop(normalizedMin).toFixed(2)}%`);
+  }
+}
+
+function benchmarkValueFromClientY(clientY) {
+  if (!refs.benchmarkRangeSlider) return null;
+  const rect = refs.benchmarkRangeSlider.getBoundingClientRect();
+  const ratio = clamp((clientY - rect.top) / Math.max(rect.height, 1), 0, 1);
+  const { min, max } = benchmarkRangeSliderBounds;
+  return Math.round(max - ratio * (max - min));
+}
+
+function applyBenchmarkRangeFilter(nextMin, nextMax, persist = false) {
+  const { min, max } = benchmarkRangeSliderBounds;
+  let rangeMin = clamp(Math.round(nextMin), min, max);
+  let rangeMax = clamp(Math.round(nextMax), min, max);
+  if (rangeMin > rangeMax) {
+    const swap = rangeMin;
+    rangeMin = rangeMax;
+    rangeMax = swap;
+  }
+  appState.benchmarkMap.rangeMin = rangeMin;
+  appState.benchmarkMap.rangeMax = rangeMax;
+  if (refs.benchmarkMapLegendMin) {
+    refs.benchmarkMapLegendMin.textContent = `${rangeMin.toFixed(0)} 元`;
+  }
+  if (refs.benchmarkMapLegendMax) {
+    refs.benchmarkMapLegendMax.textContent = `${rangeMax.toFixed(0)} 元`;
+  }
+  syncBenchmarkRangeSlider(min, max, rangeMin, rangeMax);
+  if (benchmarkMapChart && !benchmarkMapChart.isDisposed()) {
+    benchmarkMapChart.setOption({
+      visualMap: {
+        range: [rangeMin, rangeMax]
+      }
+    });
+  }
+  if (persist) {
+    schedulePersistAppData();
+  }
+}
+
+function startBenchmarkRangeDrag(handleType, clientY) {
+  benchmarkRangeDragHandle = handleType;
+  if (refs.benchmarkRangeHandleMax) {
+    refs.benchmarkRangeHandleMax.classList.toggle("active", handleType === "max");
+  }
+  if (refs.benchmarkRangeHandleMin) {
+    refs.benchmarkRangeHandleMin.classList.toggle("active", handleType === "min");
+  }
+  updateBenchmarkRangeDrag(clientY, true);
+}
+
+function updateBenchmarkRangeDrag(clientY, persist) {
+  if (!benchmarkRangeDragHandle) return;
+  const value = benchmarkValueFromClientY(clientY);
+  if (!Number.isFinite(value)) return;
+  const { min, max } = benchmarkRangeSliderBounds;
+  const currentMin = Number.isFinite(appState.benchmarkMap.rangeMin) ? appState.benchmarkMap.rangeMin : min;
+  const currentMax = Number.isFinite(appState.benchmarkMap.rangeMax) ? appState.benchmarkMap.rangeMax : max;
+  if (benchmarkRangeDragHandle === "max") {
+    applyBenchmarkRangeFilter(currentMin, Math.max(value, currentMin), persist);
+  } else {
+    applyBenchmarkRangeFilter(Math.min(value, currentMax), currentMax, persist);
+  }
+}
+
+function stopBenchmarkRangeDrag() {
+  benchmarkRangeDragHandle = null;
+  if (refs.benchmarkRangeHandleMax) {
+    refs.benchmarkRangeHandleMax.classList.remove("active");
+  }
+  if (refs.benchmarkRangeHandleMin) {
+    refs.benchmarkRangeHandleMin.classList.remove("active");
+  }
+}
+
+async function renderBenchmarkMap() {
+  if (!refs.benchmarkMapCanvas) return;
+  const runtimeReady = await ensureMapRuntimeReady();
+  if (!runtimeReady) {
+    setBenchmarkMapMessage("地图组件加载失败，请刷新后重试。");
+    const fallbackRange = benchmarkFallbackRange(sanitizeBenchmarkMap(appState.benchmarkMap));
+    const fallbackMin = Number.isFinite(fallbackRange.min) ? fallbackRange.min : BENCHMARK_RANGE_MIN;
+    const fallbackMax = Number.isFinite(fallbackRange.max) ? Math.max(fallbackRange.max, fallbackMin + 1) : BENCHMARK_RANGE_MAX;
+    if (refs.benchmarkMapLegendMin) refs.benchmarkMapLegendMin.textContent = `${fallbackMin.toFixed(0)} 元`;
+    if (refs.benchmarkMapLegendMax) refs.benchmarkMapLegendMax.textContent = `${fallbackMax.toFixed(0)} 元`;
+    syncBenchmarkRangeSlider(fallbackMin, fallbackMax, fallbackMin, fallbackMax);
+    return;
+  }
+  const view = sanitizeBenchmarkMap(appState.benchmarkMap);
+  appState.benchmarkMap = view;
+  const isProvinceLevel = view.level === "province" && Boolean(view.provinceKey);
+  if (refs.benchmarkBackButton) {
+    refs.benchmarkBackButton.hidden = !isProvinceLevel;
+    refs.benchmarkBackButton.textContent = isProvinceLevel ? `返回全国（${getProvinceName(view.provinceKey)}）` : "返回全国";
+  }
+  if (refs.benchmarkMapSubtitle) {
+    refs.benchmarkMapSubtitle.textContent = isProvinceLevel
+      ? `${getProvinceName(view.provinceKey)}地州电价分布（虚拟样例）`
+      : "点击省份查看地州详情";
+  }
+  if (refs.benchmarkMapTip) {
+    refs.benchmarkMapTip.innerHTML = isProvinceLevel
+      ? "提示：当前地州数据为虚拟样例，<br>可拖动左侧图例游标筛选电价区间。"
+      : "提示：鼠标悬停查看详细电价数据，点击省份可查看地州详情，<br>可拖动左侧图例游标筛选电价区间。";
+  }
+  if (refs.benchmarkMapUpdated) {
+    refs.benchmarkMapUpdated.textContent = "数据更新时间：2026-04-13";
+  }
+
+  const chart = ensureBenchmarkChart();
+  if (!chart) {
+    setBenchmarkMapMessage("地图组件加载失败，请检查网络后刷新。");
+    return;
+  }
+  chart.resize();
+
+  const source = mapSourceOf(view);
+  if (!source) {
+    setBenchmarkMapMessage("暂不支持该省份地州地图。");
+    return;
+  }
+  const renderToken = ++benchmarkMapRenderToken;
+  try {
+    const geoJson = await loadMapGeo(source);
+    if (renderToken !== benchmarkMapRenderToken) return;
+    const seriesData = isProvinceLevel
+      ? buildCityMapSeries(view.provinceKey, geoJson)
+      : buildNationMapSeries(geoJson);
+    const valueRange = mapValueRange(seriesData);
+    let min = Number.isFinite(valueRange.min) ? Math.floor(valueRange.min) : BENCHMARK_RANGE_MIN;
+    let max = Number.isFinite(valueRange.max) ? Math.ceil(valueRange.max) : BENCHMARK_RANGE_MAX;
+    if (max < min) {
+      const swap = min;
+      min = max;
+      max = swap;
+    }
+    if (max === min) {
+      max = min + 1;
+    }
+    const selectedMin = clamp(
+      Number.isFinite(view.rangeMin) ? view.rangeMin : min,
+      min,
+      max
+    );
+    const selectedMax = clamp(
+      Number.isFinite(view.rangeMax) ? view.rangeMax : max,
+      min,
+      max
+    );
+    let rangeMin = Math.min(selectedMin, selectedMax);
+    let rangeMax = Math.max(selectedMin, selectedMax);
+    // 兼容历史持久化里“单点区间”导致地图几乎全灰的情况：自动回到全量区间
+    if (max > min && (rangeMax - rangeMin) < 1) {
+      rangeMin = min;
+      rangeMax = max;
+    }
+    appState.benchmarkMap.rangeMin = rangeMin;
+    appState.benchmarkMap.rangeMax = rangeMax;
+    if (refs.benchmarkMapLegendMin) {
+      refs.benchmarkMapLegendMin.textContent = `${rangeMin.toFixed(0)} 元`;
+    }
+    if (refs.benchmarkMapLegendMax) {
+      refs.benchmarkMapLegendMax.textContent = `${rangeMax.toFixed(0)} 元`;
+    }
+    syncBenchmarkRangeSlider(min, max, rangeMin, rangeMax);
+    const defaultZoom = benchmarkMapDefaultZoom(view.level);
+    const resolvedZoom = Number.isFinite(view.zoom)
+      ? clamp(view.zoom, BENCHMARK_MAP_ZOOM_MIN, BENCHMARK_MAP_ZOOM_MAX)
+      : defaultZoom;
+    appState.benchmarkMap.zoom = resolvedZoom;
+
+    const palette = benchmarkMapPalette(appState.theme);
+    chart.off("click");
+    chart.setOption({
+      tooltip: {
+        trigger: "item",
+        formatter: (params) => {
+          const value = Number(params?.value);
+          const valueText = Number.isFinite(value) ? `${value.toFixed(1)} 元/MWh` : "暂无数据";
+          return `${escapeHtml(params.name)}<br/>${valueText}`;
+        }
+      },
+      visualMap: {
+        show: false,
+        min,
+        max,
+        range: [rangeMin, rangeMax],
+        orient: "vertical",
+        left: 6,
+        bottom: 8,
+        itemWidth: 12,
+        itemHeight: 150,
+        text: ["高价", "低价"],
+        textStyle: {
+          color: palette.text
+        },
+        calculable: false,
+        inRange: {
+          color: ["#18a74c", "#f1c882", "#e85d4e"]
+        },
+        outOfRange: {
+          color: ["#c9d3e1"]
+        }
+      },
+      series: [{
+        type: "map",
+        map: source.mapName,
+        roam: true,
+        zoom: resolvedZoom,
+        label: {
+          show: true,
+          color: palette.text,
+          fontSize: isProvinceLevel ? 11 : 10
+        },
+        emphasis: {
+          label: {
+            show: true,
+            color: "#ffffff",
+            fontWeight: 700
+          },
+          itemStyle: {
+            areaColor: "#2f7be6"
+          }
+        },
+        itemStyle: {
+          borderColor: palette.border,
+          borderWidth: 1.1,
+          shadowColor: palette.shadow,
+          shadowBlur: 2
+        },
+        data: seriesData
+      }]
+    }, true);
+    const resizeBenchmarkMap = () => {
+      if (benchmarkMapChart && !benchmarkMapChart.isDisposed()) {
+        benchmarkMapChart.resize();
+      }
+    };
+    resizeBenchmarkMap();
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(resizeBenchmarkMap);
+      window.setTimeout(resizeBenchmarkMap, 120);
+      window.setTimeout(resizeBenchmarkMap, 360);
+    }
+
+    chart.on("click", (params) => {
+      const areaName = String(params?.name || "");
+      if (!areaName) return;
+      const value = Number(params?.value);
+      if (!isProvinceLevel) {
+        const provinceKey = resolveProvinceKeyFromGeoName(areaName);
+        if (!provinceKey || !PROVINCE_GEO_FILE_MAP[provinceKey]) return;
+        const regionKey = getPolicyRegionKeyByProvince(provinceKey);
+        appState.benchmarkMap = {
+          level: "province",
+          provinceKey,
+          zoom: null,
+          rangeMin: null,
+          rangeMax: null
+        };
+        appState.policyFilters.provinceKey = provinceKey;
+        if (regionKey) {
+          appState.policyFilters.regionKey = regionKey;
+        }
+        void renderBenchmarkMap();
+        renderPolicyPanel();
+        schedulePersistAppData();
+        return;
+      }
+      const valueText = Number.isFinite(value) ? `${value.toFixed(1)} 元/MWh` : "暂无数据";
+      setTopMeta(`${areaName}：${valueText}`);
+    });
+  } catch (error) {
+    if (renderToken !== benchmarkMapRenderToken) return;
+    const fallbackRange = benchmarkFallbackRange(view);
+    const fallbackMin = Number.isFinite(fallbackRange.min) ? fallbackRange.min : BENCHMARK_RANGE_MIN;
+    const fallbackMax = Number.isFinite(fallbackRange.max) ? Math.max(fallbackRange.max, fallbackMin + 1) : BENCHMARK_RANGE_MAX;
+    appState.benchmarkMap.rangeMin = fallbackMin;
+    appState.benchmarkMap.rangeMax = fallbackMax;
+    if (refs.benchmarkMapLegendMin) {
+      refs.benchmarkMapLegendMin.textContent = `${fallbackMin.toFixed(0)} 元`;
+    }
+    if (refs.benchmarkMapLegendMax) {
+      refs.benchmarkMapLegendMax.textContent = `${fallbackMax.toFixed(0)} 元`;
+    }
+    syncBenchmarkRangeSlider(fallbackMin, fallbackMax, fallbackMin, fallbackMax);
+    chart.clear();
+    chart.setOption({
+      graphic: {
+        type: "text",
+        left: "center",
+        top: "middle",
+        style: {
+          text: "地图数据加载失败，请检查网络后重试",
+          fill: normalizeTheme(appState.theme) === "dark" ? "#c7d6ea" : "#355176",
+          fontSize: 14,
+          fontWeight: 700
+        }
+      }
+    }, true);
+  }
+}
+
+function renderPolicyPanel() {
+  if (!PROVINCE_KEY_SET.has(appState.policyFilters.provinceKey) && appState.policyFilters.provinceKey !== "all") {
+    appState.policyFilters.provinceKey = "all";
+  }
+  if (!POLICY_REGION_KEY_SET.has(appState.policyFilters.regionKey) && appState.policyFilters.regionKey !== "all") {
+    appState.policyFilters.regionKey = "all";
+  }
+  if (appState.policyFilters.regionKey === "all" && appState.policyFilters.provinceKey === "all") {
+    appState.policyFilters.regionKey = "east";
+    appState.policyFilters.provinceKey = "shanghai";
+  }
+  const regionOptions = [
+    `<option value="all">全部区域</option>`,
+    ...POLICY_REGIONS.map((region) => `<option value="${region.key}">${region.name}</option>`)
+  ];
+  refs.policyFilterRegion.innerHTML = regionOptions.join("");
+  if (!regionOptions.some((option) => option.includes(`value="${appState.policyFilters.regionKey}"`))) {
+    appState.policyFilters.regionKey = "all";
+  }
+  refs.policyFilterRegion.value = appState.policyFilters.regionKey;
+
+  const targetRegion = appState.policyFilters.regionKey;
+  const availableProvinceKeySet = new Set(
+    POLICY_CARDS
+      .filter((card) => targetRegion === "all" || card.regionKey === targetRegion)
+      .map((card) => card.provinceKey)
+  );
+  const provinceOptions = [
+    `<option value="all">全部省份</option>`,
+    ...PROVINCES
+      .filter((province) => availableProvinceKeySet.has(province.key))
+      .map((province) => `<option value="${province.key}">${province.name}</option>`)
+  ];
+  refs.policyFilterProvince.innerHTML = provinceOptions.join("");
+  if (!provinceOptions.some((option) => option.includes(`value="${appState.policyFilters.provinceKey}"`))) {
+    appState.policyFilters.provinceKey = "all";
+  }
+  refs.policyFilterProvince.value = appState.policyFilters.provinceKey;
+
+  const targetProvince = appState.policyFilters.provinceKey;
+  const filtered = POLICY_CARDS
+    .filter((card) => {
+      const byRegion = targetRegion === "all" || card.regionKey === targetRegion;
+      const byProvince = targetProvince === "all" || card.provinceKey === targetProvince;
+      return byProvince && byRegion;
+    });
+
+  if (!filtered.length) {
+    refs.policyCardList.innerHTML = `<div class="info-box">未检索到匹配地区政策，请调整省份或区域筛选。</div>`;
+    return;
+  }
+
+  refs.policyCardList.innerHTML = filtered.map((card) => `
+    <article class="policy-card">
+      <div class="label">${card.regionName} · 地区政策</div>
+      <div class="title">${card.title}</div>
+      <div class="desc">围绕省级市场建设进程、规则口径与价格运行进行统一盘点。</div>
+      <div class="policy-meta-grid">
+        <div class="meta-item">
+          <span class="meta-key">省份</span>
+          <span class="meta-value">${getProvinceName(card.provinceKey)}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-key">区域</span>
+          <span class="meta-value">${card.regionName}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-key">更新时间</span>
+          <span class="meta-value">${card.updatedAt}</span>
+        </div>
+      </div>
+      <div class="policy-section-grid">
+        <div class="meta-item">
+          <span class="meta-key">电力市场建设里程碑盘点</span>
+          <span class="meta-value policy-section-value">${card.milestoneReview}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-key">最新规则体系解读</span>
+          <span class="meta-value policy-section-value">${card.ruleSystemReview}</span>
+        </div>
+        <div class="meta-item full">
+          <span class="meta-key">供需及电价情况简述</span>
+          <span class="meta-value policy-section-value">${card.supplyPriceBrief}</span>
+        </div>
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderHome() {
+  renderPolicyPanel();
+  if (appState.activePage === "home-page") {
+    void renderBenchmarkMap();
+  }
+}
+
+function renderProjects() {
+  const accountProjects = getProjectsForCurrentAccount();
+  const newWorkspaceProjects = accountProjects.filter((project) => isNewWorkspaceProject(project));
+  const historyProjects = accountProjects.filter((project) => !isNewWorkspaceProject(project));
+  refs.projectCountBadge.textContent = String(historyProjects.length);
+
+  const buildStepStatusHtml = (statusMap) => WORKFLOW_PAGES.map((pageId) => {
+    const state = statusMap[pageId] || "not_started";
+    return `<span class="project-step-chip ${state}">${PAGE_TITLES[pageId]}：${statusText(state)}</span>`;
+  }).join("");
+
+  const buildProjectCardHtml = (project, options = {}) => {
+    const {
+      showDuplicate = true,
+      showDelete = true,
+      useNewStyle = false
+    } = options;
+    const activeRun = getActiveRun(project);
+    const scenario = getActiveScenario(project);
+    const statusMap = project.statuses || statusMapTemplate();
+    const completedCount = WORKFLOW_PAGES.filter((pageId) => statusMap[pageId] === "completed").length;
+    const createReady = isProjectCreateCompleted(project);
+    const period = createReady ? getForecastPeriodDisplayRange(project) : "待创建";
+    const metaLine = createReady
+      ? `${getProvinceName(project.province)} / ${project.assetType === "wind" ? "风电" : "光伏"} / ${project.siteType === "offshore" ? "海上" : "陆上"} / ${getStorageConfigText(project)}`
+      : "基础信息待填写 / 风光类型待选 / 陆海类型待选";
+    const runtimeLine = createReady
+      ? `场景：${scenario?.name || "未配置"} | 电价版本：${activeRun?.algorithmVersion || "未生成"}`
+      : "场景：未配置 | 电价版本：未生成";
+    const duplicateButton = showDuplicate
+      ? `<button class="ghost-button" data-duplicate-project="${project.id}">复制项目</button>`
+      : "";
+    const deleteButton = showDelete
+      ? `<button class="ghost-button danger-ghost" data-delete-project="${project.id}">删除项目</button>`
+      : "";
+    return `
+      <article class="project-item${useNewStyle ? " project-item-new" : ""}">
+        <div class="head">
+          <strong>${escapeHtml(project.name)}</strong>
+          <span class="hint">${period}</span>
+        </div>
+        <div class="meta">${metaLine}</div>
+        <div class="meta">${runtimeLine}</div>
+        <div class="project-progress">
+          <div class="project-progress-head">流程进度：${completedCount}/${WORKFLOW_PAGES.length} 已完成</div>
+          <div class="project-step-grid">${buildStepStatusHtml(statusMap)}</div>
+        </div>
+        <div class="project-actions">
+          <button class="ghost-button" data-open-project="${project.id}">进入项目</button>
+          ${duplicateButton}
+          ${deleteButton}
+        </div>
+      </article>
+    `;
+  };
+
+  const newWorkspaceHtml = newWorkspaceProjects.length
+    ? newWorkspaceProjects.map((project) => buildProjectCardHtml(project, {
+      showDuplicate: false,
+      showDelete: true
+    })).join("")
+    : `<div class="project-empty">当前暂无待建项目，请点击“新建项目”。</div>`;
+
+  const historyHtml = historyProjects.length
+    ? historyProjects.map((project) => buildProjectCardHtml(project, { showDuplicate: true, showDelete: true })).join("")
+    : `<div class="project-empty">当前账号暂无历史项目。</div>`;
+
+  refs.projectList.innerHTML = `
+    <section class="project-workspace">
+      <div class="project-workspace-head">
+        <h4 class="project-workspace-title">新建项目工作区</h4>
+        <button class="ghost-button" type="button" data-create-new-project>新建项目</button>
+      </div>
+      <div class="project-list">
+        ${newWorkspaceHtml}
+      </div>
+    </section>
+    <section class="project-workspace">
+      <div class="project-workspace-head">
+        <h4 class="project-workspace-title">历史项目工作区</h4>
+      </div>
+      <div class="project-list">${historyHtml}</div>
+    </section>
+  `;
+
+  document.querySelectorAll("[data-create-new-project]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const created = createEmptyWorkspaceProject();
+      if (created) {
+        setTopMeta("新项目已生成，可进入项目继续配置。");
+        renderAll();
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-open-project]").forEach((button) => {
+    button.addEventListener("click", () => {
+      appState.activeProjectId = button.dataset.openProject;
+      setActivePage("create-page");
+    });
+  });
+
+  document.querySelectorAll("[data-duplicate-project]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const source = appState.projects.find((item) => item.id === button.dataset.duplicateProject);
+      if (!source || !projectBelongsToCurrentAccount(source)) return;
+      const clone = cloneData(source);
+      clone.id = makeId("proj");
+      clone.ownerAccount = String(appState.auth.account || "").trim();
+      clone.name = resolveUniqueProjectName(`${source.name}-副本`);
+      clone.createdAt = new Date().toISOString();
+      appState.projects.unshift(clone);
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll("[data-delete-project]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const targetId = button.dataset.deleteProject;
+      const target = appState.projects.find((item) => item.id === targetId);
+      if (!target || !projectBelongsToCurrentAccount(target)) return;
+      const confirmed = typeof window === "undefined"
+        ? true
+        : window.confirm(`确定删除项目“${target.name}”吗？删除后不可恢复。`);
+      if (!confirmed) return;
+      appState.projects = appState.projects.filter((item) => item.id !== targetId);
+      if (appState.activeProjectId === targetId) {
+        appState.activeProjectId = getProjectsForCurrentAccount()[0]?.id || null;
+      }
+      renderAll();
+    });
+  });
+}
+
+function initProvinceSelect() {
+  refs.createProvince.innerHTML = [
+    '<option value="">请选择省份</option>',
+    ...PROVINCES.map((province) => `
+    <option value="${province.key}">${province.name}</option>
+  `)
+  ].join("");
+  refs.createProvince.value = "";
+}
+
+function syncCreateStorageFieldsUi() {
+  const storageEnabled = refs.createHasStorage?.value === "yes";
+  if (refs.createStoragePowerField) {
+    refs.createStoragePowerField.hidden = !storageEnabled;
+  }
+  if (refs.createStorageDurationField) {
+    refs.createStorageDurationField.hidden = !storageEnabled;
+  }
+  if (refs.createStorageNoteField) {
+    refs.createStorageNoteField.hidden = !storageEnabled;
+  }
+  if (refs.createStoragePowerMw) {
+    refs.createStoragePowerMw.disabled = !storageEnabled;
+  }
+  if (refs.createStorageDurationH) {
+    refs.createStorageDurationH.disabled = !storageEnabled;
+  }
+  if (refs.createStorageNote) {
+    refs.createStorageNote.disabled = !storageEnabled;
+  }
+}
+
+function resetCreateProjectFormForNew() {
+  if (!refs.createProjectForm) return;
+  createFormSyncedProjectId = null;
+  refs.createProjectForm.reset();
+  const projectName = document.querySelector("#create-project-name");
+  const assetType = document.querySelector("#create-asset-type");
+  const siteType = document.querySelector("#create-site-type");
+  const hasStorage = document.querySelector("#create-has-storage");
+  const storagePower = refs.createStoragePowerMw;
+  const storageDuration = refs.createStorageDurationH;
+  const storageNote = refs.createStorageNote;
+  const capacity = document.querySelector("#create-capacity-mw");
+  const startYear = document.querySelector("#create-start-year");
+  const forecastYears = document.querySelector("#create-forecast-years");
+  const note = document.querySelector("#create-note");
+  if (projectName) projectName.value = "";
+  if (refs.createProvince) refs.createProvince.value = "";
+  if (assetType) assetType.value = "";
+  if (siteType) siteType.value = "";
+  if (hasStorage) hasStorage.value = "";
+  if (storagePower) storagePower.value = "";
+  if (storageDuration) storageDuration.value = "";
+  if (storageNote) storageNote.value = "";
+  if (capacity) capacity.value = "";
+  if (startYear) startYear.value = "";
+  if (forecastYears) forecastYears.value = "";
+  applyEnergyModeUi("annual_hours");
+  syncCreateStorageFieldsUi();
+  if (note) note.value = "";
+  setCreateSaveMessage("当前为新建模板，填写后点击保存。", "info");
+}
+
+function createEmptyWorkspaceProject() {
+  const now = new Date();
+  const project = {
+    id: makeId("proj"),
+    ownerAccount: String(appState.auth.account || "").trim(),
+    workspaceBucket: "new",
+    name: resolveUniqueProjectName("新建项目"),
+    province: "",
+    assetType: "",
+    siteType: "",
+    hasStorage: false,
+    storagePowerMw: null,
+    storageDurationH: null,
+    storageNote: "",
+    capacityMw: null,
+    startYear: null,
+    forecastYears: null,
+    energyMode: "annual_hours",
+    note: "",
+    createdAt: now.toISOString(),
+    statuses: statusMapTemplate(),
+    energyData: createEmptyEnergyDataState("annual_hours"),
+    energyTemplateExports: {
+      hourly_8760: "",
+      annual_hours: "",
+      typical_curve_8760: "",
+      province_typical_curve: ""
+    },
+    historySpotImport: createEmptyHistorySpotImport(),
+    priceRuns: [],
+    activeRunId: null,
+    activationLogs: [],
+    spotMarketConfig: createDefaultSpotMarketConfig(),
+    scenarios: [],
+    activeScenarioId: null,
+    resultsByScenario: {}
+  };
+  const baselineScenario = {
+    id: makeId("scn"),
+    name: "基准场景",
+    isBaseline: true,
+    locked: false,
+    config: defaultScenarioConfig({
+      province: "",
+      siteType: "onshore",
+      startYear: Math.max(2026, now.getFullYear()),
+      forecastYears: 30
+    }),
+    updatedAt: now.toISOString()
+  };
+  project.scenarios.push(baselineScenario);
+  project.activeScenarioId = baselineScenario.id;
+  appState.projects.unshift(project);
+  createFormSyncedProjectId = null;
+  appState.activeProjectId = project.id;
+  syncProjectProvinceScopedState(project, { force: true });
+  return project;
+}
+
+function syncCreateProjectFormWithActiveProject() {
+  if (!refs.createProjectForm) return;
+  const project = getActiveProject();
+  if (!project) {
+    if (createFormSyncedProjectId !== null) {
+      resetCreateProjectFormForNew();
+    }
+    return;
+  }
+  if (createFormSyncedProjectId === project.id) return;
+  const projectName = document.querySelector("#create-project-name");
+  const assetType = document.querySelector("#create-asset-type");
+  const siteType = document.querySelector("#create-site-type");
+  const hasStorage = document.querySelector("#create-has-storage");
+  const storagePower = refs.createStoragePowerMw;
+  const storageDuration = refs.createStorageDurationH;
+  const storageNote = refs.createStorageNote;
+  const capacity = document.querySelector("#create-capacity-mw");
+  const startYear = document.querySelector("#create-start-year");
+  const forecastYears = document.querySelector("#create-forecast-years");
+  const note = document.querySelector("#create-note");
+  if (projectName) projectName.value = project.name || "";
+  if (refs.createProvince) refs.createProvince.value = PROVINCE_KEY_SET.has(project.province) ? project.province : "";
+  if (assetType) assetType.value = ASSET_TYPE_SET.has(project.assetType) ? project.assetType : "";
+  if (siteType) siteType.value = SITE_TYPE_SET.has(project.siteType) ? project.siteType : "";
+  const hasStorageChosen = typeof project.hasStorage === "boolean" && (
+    isProjectCreateCompleted(project)
+    || PROVINCE_KEY_SET.has(project.province)
+    || ASSET_TYPE_SET.has(project.assetType)
+    || SITE_TYPE_SET.has(project.siteType)
+    || Number.isFinite(project.capacityMw)
+    || Number.isFinite(project.startYear)
+    || Number.isFinite(project.forecastYears)
+    || Number.isFinite(project.storagePowerMw)
+    || Number.isFinite(project.storageDurationH)
+    || Boolean(String(project.storageNote || "").trim())
+  );
+  if (hasStorage) hasStorage.value = hasStorageChosen
+    ? (project.hasStorage ? "yes" : "no")
+    : "";
+  if (storagePower) storagePower.value = Number.isFinite(project.storagePowerMw) && project.storagePowerMw > 0 ? String(project.storagePowerMw) : "";
+  if (storageDuration) storageDuration.value = Number.isFinite(project.storageDurationH) && project.storageDurationH > 0 ? String(project.storageDurationH) : "";
+  if (storageNote) storageNote.value = project.storageNote || "";
+  if (capacity) capacity.value = Number.isFinite(project.capacityMw) && project.capacityMw > 0 ? String(project.capacityMw) : "";
+  if (startYear) startYear.value = Number.isFinite(project.startYear) ? String(project.startYear) : "";
+  if (forecastYears) forecastYears.value = Number.isFinite(project.forecastYears) ? String(project.forecastYears) : "";
+  if (note) note.value = project.note || "";
+  const mode = project.energyData?.mode || project.energyMode || "hourly_8760";
+  applyEnergyModeUi(mode);
+  syncCreateStorageFieldsUi();
+  setCreateSaveMessage(`正在编辑当前项目：${project.name}（保存后更新此项目）`, "info");
+  createFormSyncedProjectId = project.id;
+}
+
+function renderCreateWorkspaceState() {
+  if (!refs.createToEnergyButton) return;
+  const project = getActiveProject();
+  const ready = Boolean(project) && isProjectCreateCompleted(project);
+  refs.createToEnergyButton.disabled = !ready;
+  if (ready) {
+    refs.createToEnergyButton.removeAttribute("title");
+  } else {
+    refs.createToEnergyButton.title = "请先保存并完成项目基础信息。";
+  }
+}
+
+function setCreateSaveMessage(text, tone = "info") {
+  if (!refs.createSaveMessage) return;
+  refs.createSaveMessage.textContent = text;
+  if (tone === "success") {
+    refs.createSaveMessage.style.borderColor = "#8fb48d";
+    refs.createSaveMessage.style.background = "#f1fbf1";
+    return;
+  }
+  if (tone === "warn") {
+    refs.createSaveMessage.style.borderColor = "#d6bb90";
+    refs.createSaveMessage.style.background = "#fff8ed";
+    return;
+  }
+  refs.createSaveMessage.style.borderColor = "#97b5d8";
+  refs.createSaveMessage.style.background = "#f6faff";
+}
+
+function initBatchParamSelect() {
+  refs.batchParamKey.innerHTML = Object.entries(BATCH_PARAM_SPECS).map(([key, spec]) => `
+    <option value="${key}">${spec.label}</option>
+  `).join("");
+  refs.batchParamKey.value = "marketOpFee";
+}
+
+function defaultScenarioConfig(project) {
+  const provinceDefaults = getProvinceDefaults(project.province);
+  const currentYear = new Date().getFullYear();
+  const startYear = Number.isInteger(project?.startYear) && project.startYear >= 2026
+    ? project.startYear
+    : Math.max(2026, currentYear);
+  const forecastYears = Number.isInteger(project?.forecastYears) && project.forecastYears > 0
+    ? project.forecastYears
+    : 30;
+  const siteType = SITE_TYPE_SET.has(project?.siteType) ? project.siteType : "onshore";
+  return {
+    mechanismEnabled: provinceDefaults.mechanismEnabled,
+    mechanismRatio: provinceDefaults.mechanismRatio,
+    mechanismPrice: provinceDefaults.mechanismPrice,
+    mechanismStartYm: `${startYear}-01`,
+    mechanismEndYm: `${Math.min(startYear + 3, startYear + forecastYears - 1)}-12`,
+    ltPricingMode: "auto",
+    ltManualPricesByYear: {},
+    ltYear1Pnl: 8,
+    ltTargetPnl: 2,
+    ltConvergeSpeedUnit: "fixed_step",
+    ltConvergeSpeed: 2,
+    envValueMode: "global",
+    envManualValuesByYear: {},
+    greenCertPrice: provinceDefaults.greenCertPrice,
+    greenCertRealizeRatio: 1,
+    greenPremiumPrice: provinceDefaults.greenPremiumPrice,
+    greenPremiumRealizeRatio: 0,
+    carbonEnabled: siteType === "offshore",
+    carbonPrice: siteType === "offshore" ? 4 : 0,
+    carbonRealizeRatio: 0,
+    feeConfigMode: "global",
+    feeManualValuesByYear: {},
+    marketOpFee: provinceDefaults.marketOpFee,
+    gridAssessFee: provinceDefaults.gridAssessFee,
+    ancillaryFee: provinceDefaults.ancillaryFee,
+    otherFee: provinceDefaults.otherFee,
+    otherIncome: 2,
+    storageArbitragePrice: project?.hasStorage ? provinceDefaults.storageArbitragePrice : 0,
+    storageCapacityCompPrice: project?.hasStorage ? provinceDefaults.storageCapacityCompPrice : 0,
+    storageAncillaryRevenuePrice: project?.hasStorage ? provinceDefaults.storageAncillaryRevenuePrice : 0,
+    storageOtherRevenuePrice: project?.hasStorage ? provinceDefaults.storageOtherRevenuePrice : 0
+  };
+}
+
+function resolveUniqueProjectName(baseName) {
+  const normalized = baseName || "新建项目";
+  const scopeProjects = appState.auth.loggedIn ? getProjectsForCurrentAccount() : appState.projects;
+  if (!scopeProjects.some((project) => project.name === normalized)) {
+    return normalized;
+  }
+  let suffix = 2;
+  let candidate = `${normalized}-${suffix}`;
+  while (scopeProjects.some((project) => project.name === candidate)) {
+    suffix += 1;
+    candidate = `${normalized}-${suffix}`;
+  }
+  return candidate;
+}
+
+function getStorageConfigText(project) {
+  if (!project?.hasStorage) return "无配储";
+  const powerReady = Number.isFinite(project.storagePowerMw) && project.storagePowerMw > 0;
+  const durationReady = Number.isFinite(project.storageDurationH) && project.storageDurationH > 0;
+  if (powerReady && durationReady) {
+    return `配储（${project.storagePowerMw}MW / ${project.storageDurationH}h）`;
+  }
+  return "配储";
+}
+
+function createProjectFromForm(options = {}) {
+  const {
+    targetPage = "create-page",
+    appendToBottom = false,
+    autoUniqueName = false,
+    workspaceBucket = "history",
+    forceCreate = false
+  } = options;
+  const resolvedWorkspaceBucket = PROJECT_WORKSPACE_BUCKET_SET.has(workspaceBucket) ? workspaceBucket : "history";
+  const existingProject = forceCreate ? null : getActiveProject();
+  let name = document.querySelector("#create-project-name").value.trim();
+  const province = refs.createProvince.value;
+  const assetType = document.querySelector("#create-asset-type").value;
+  const siteType = document.querySelector("#create-site-type").value;
+  const hasStorage = document.querySelector("#create-has-storage").value === "yes";
+  const storagePowerRaw = String(refs.createStoragePowerMw?.value || "").trim();
+  const storageDurationRaw = String(refs.createStorageDurationH?.value || "").trim();
+  const storageNoteRaw = String(refs.createStorageNote?.value || "").trim();
+  const capacityRaw = document.querySelector("#create-capacity-mw").value.trim();
+  const startYearRaw = document.querySelector("#create-start-year").value.trim();
+  const forecastYearsRaw = document.querySelector("#create-forecast-years").value.trim();
+  const storagePowerInput = Number(storagePowerRaw);
+  const storageDurationInput = Number(storageDurationRaw);
+  const capacityInput = Number(capacityRaw);
+  const startYearInput = Number(startYearRaw);
+  const forecastYearsInput = Number(forecastYearsRaw);
+  const currentYear = new Date().getFullYear();
+  const storagePowerMw = hasStorage && Number.isFinite(storagePowerInput) && storagePowerInput > 0 ? storagePowerInput : null;
+  const storageDurationH = hasStorage && Number.isFinite(storageDurationInput) && storageDurationInput > 0 ? storageDurationInput : null;
+  const storageNote = hasStorage ? storageNoteRaw : "";
+  const capacityMw = Number.isFinite(capacityInput) && capacityInput > 0 ? capacityInput : 0;
+  const startYear = Number.isFinite(startYearInput) && startYearInput >= 2026 ? Math.floor(startYearInput) : currentYear;
+  const forecastYears = clamp(
+    Number.isFinite(forecastYearsInput) && forecastYearsInput > 0 ? Math.floor(forecastYearsInput) : 30,
+    1,
+    30
+  );
+  const defaultEnergyMode = normalizeEnergyMode(existingProject?.energyData?.mode || existingProject?.energyMode || "annual_hours");
+  const energyMode = defaultEnergyMode;
+  const note = document.querySelector("#create-note").value.trim();
+
+  if (!name && autoUniqueName) {
+    name = "新建项目";
+  }
+  if (!name) {
+    setTopMeta("项目名称不能为空");
+    setCreateSaveMessage("保存失败：请先填写项目名称。", "warn");
+    return null;
+  }
+  if (!forceCreate) {
+    if (!PROVINCE_KEY_SET.has(province)) {
+      setTopMeta("请选择省份。");
+      setCreateSaveMessage("保存失败：请选择省份。", "warn");
+      return null;
+    }
+    if (!ASSET_TYPE_SET.has(assetType)) {
+      setTopMeta("请选择风/光类型。");
+      setCreateSaveMessage("保存失败：请选择风/光类型。", "warn");
+      return null;
+    }
+    if (!SITE_TYPE_SET.has(siteType)) {
+      setTopMeta("请选择陆/海类型。");
+      setCreateSaveMessage("保存失败：请选择陆/海类型。", "warn");
+      return null;
+    }
+    if (!["yes", "no"].includes(document.querySelector("#create-has-storage").value)) {
+      setTopMeta("请选择是否配建储能。");
+      setCreateSaveMessage("保存失败：请选择是否配建储能。", "warn");
+      return null;
+    }
+    if (hasStorage && (!Number.isFinite(storagePowerInput) || storagePowerInput <= 0)) {
+      setTopMeta("请填写有效的储能功率（MW）。");
+      setCreateSaveMessage("保存失败：储能功率未填写或格式无效。", "warn");
+      return null;
+    }
+    if (hasStorage && (!Number.isFinite(storageDurationInput) || storageDurationInput <= 0)) {
+      setTopMeta("请填写有效的储能时长（h）。");
+      setCreateSaveMessage("保存失败：储能时长未填写或格式无效。", "warn");
+      return null;
+    }
+    if (!Number.isFinite(capacityInput) || capacityInput <= 0) {
+      setTopMeta("请填写有效的装机容量（MW）。");
+      setCreateSaveMessage("保存失败：装机容量未填写或格式无效。", "warn");
+      return null;
+    }
+    if (!Number.isFinite(startYearInput) || startYearInput < 2026) {
+      setTopMeta("开始年份需为2026及以后。");
+      setCreateSaveMessage("保存失败：请填写有效的开始年份（>=2026）。", "warn");
+      return null;
+    }
+    if (!Number.isFinite(forecastYearsInput) || forecastYearsInput < 1) {
+      setTopMeta("预测周期需为1-30年。");
+      setCreateSaveMessage("保存失败：请填写有效的预测周期（1-30年）。", "warn");
+      return null;
+    }
+  }
+  if (!existingProject && autoUniqueName) {
+    name = resolveUniqueProjectName(name);
+  }
+
+  if (existingProject) {
+    const project = existingProject;
+    const oldProvince = project.province;
+    const baseChanged = project.province !== province
+      || project.assetType !== assetType
+      || project.siteType !== siteType
+      || project.hasStorage !== hasStorage
+      || project.storagePowerMw !== storagePowerMw
+      || project.storageDurationH !== storageDurationH
+      || project.storageNote !== storageNote
+      || project.capacityMw !== capacityMw
+      || project.startYear !== startYear
+      || project.forecastYears !== forecastYears;
+
+    project.name = name;
+    project.province = province;
+    project.assetType = assetType;
+    project.siteType = siteType;
+    project.hasStorage = hasStorage;
+    project.storagePowerMw = storagePowerMw;
+    project.storageDurationH = storageDurationH;
+    project.storageNote = storageNote;
+    project.capacityMw = capacityMw;
+    project.startYear = startYear;
+    project.forecastYears = forecastYears;
+    project.energyMode = energyMode;
+    project.note = note;
+    project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
+    const provinceDefaultsAutoSynced = syncProjectProvinceDefaultsToBaseline(project, {
+      force: shouldAutoSyncProvinceDefaults(project)
+    });
+    syncProjectProvinceScopedState(project, { force: true });
+
+    if (baseChanged) {
+      project.energyData = createEmptyEnergyDataState(energyMode);
+      project.historySpotImport = createEmptyHistorySpotImport();
+      clearHistoryAnalysisCacheForProject(project.id);
+      const exports = ensureProjectEnergyTemplateExports(project);
+      exports.hourly_8760 = "";
+      exports.annual_hours = "";
+      exports.typical_curve_8760 = "";
+      exports.province_typical_curve = "";
+      project.statuses["energy-page"] = "in_progress";
+      project.statuses["history-page"] = "not_started";
+      markDownstreamStale(project, "energy-page");
+      setTopMeta("当前项目已更新，请在步骤2重新导入电量。");
+      if (provinceDefaultsAutoSynced) {
+        setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量；${getProvinceName(project.province)}默认参数已同步到基准场景。`, "warn");
+      } else if (oldProvince !== province) {
+        setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量，并在全口径收入配置页复核${getProvinceName(project.province)}默认参数。`, "warn");
+      } else {
+        setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量。`, "warn");
+      }
+    } else {
+      if (!project.energyData || typeof project.energyData !== "object") {
+        project.energyData = createEmptyEnergyDataState(energyMode);
+      } else {
+        ensureProjectEnergyDataState(project).mode = energyMode;
+      }
+      if (project.statuses["energy-page"] === "not_started") {
+        project.statuses["energy-page"] = "in_progress";
+      }
+      setTopMeta("当前项目已保存。");
+      if (provinceDefaultsAutoSynced) {
+        setCreateSaveMessage(`已更新当前项目：${project.name}。${getProvinceName(project.province)}默认参数已同步到基准场景。`, "success");
+      } else {
+        setCreateSaveMessage(`已更新当前项目：${project.name}。`, "success");
+      }
+    }
+
+    ensureProjectEnergyTemplateExports(project);
+    const movedToHistory = moveProjectToHistoryWorkspaceIfReady(project);
+    createFormSyncedProjectId = project.id;
+    appState.activeProjectId = project.id;
+    applyEnergyModeUi(energyMode);
+    if (movedToHistory) {
+      setTopMeta("当前项目已完成基础信息校准，已转入历史项目工作区。");
+      setCreateSaveMessage(`已更新当前项目：${project.name}。已转入历史项目工作区。`, "success");
+    }
+    setActivePage(targetPage);
+    if (targetPage === "create-page") {
+      scrollCreateWorkspaceToBottom();
+    }
+    return project;
+  }
+
+  const project = {
+    id: makeId("proj"),
+    ownerAccount: String(appState.auth.account || "").trim(),
+    workspaceBucket: resolvedWorkspaceBucket,
+    name,
+    province,
+    assetType,
+    siteType,
+    hasStorage,
+    storagePowerMw,
+    storageDurationH,
+    storageNote,
+    capacityMw,
+    startYear,
+    forecastYears,
+    energyMode,
+    note,
+    createdAt: new Date().toISOString(),
+    statuses: statusMapTemplate(),
+    energyData: createEmptyEnergyDataState(energyMode),
+    energyTemplateExports: {
+      hourly_8760: "",
+      annual_hours: "",
+      typical_curve_8760: "",
+      province_typical_curve: ""
+    },
+    historySpotImport: createEmptyHistorySpotImport(),
+    priceRuns: [],
+    activeRunId: null,
+    activationLogs: [],
+    spotMarketConfig: createDefaultSpotMarketConfig(),
+    scenarios: [],
+    activeScenarioId: null,
+    resultsByScenario: {}
+  };
+
+  project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
+  project.statuses["energy-page"] = project.statuses["create-page"] === "completed" ? "in_progress" : "not_started";
+
+  const baselineScenario = {
+    id: makeId("scn"),
+    name: "基准场景",
+    isBaseline: true,
+    locked: false,
+    config: defaultScenarioConfig(project),
+    updatedAt: new Date().toISOString()
+  };
+  project.scenarios.push(baselineScenario);
+  project.activeScenarioId = baselineScenario.id;
+
+  if (appendToBottom) {
+    appState.projects.push(project);
+  } else {
+    appState.projects.unshift(project);
+  }
+  createFormSyncedProjectId = project.id;
+  appState.activeProjectId = project.id;
+  syncProjectProvinceScopedState(project, { force: true });
+  applyEnergyModeUi(energyMode);
+  moveProjectToHistoryWorkspaceIfReady(project);
+  setCreateSaveMessage(`已创建新项目：${project.name}。`, "success");
+  setActivePage(targetPage);
+  if (targetPage === "create-page") {
+    scrollCreateWorkspaceToBottom();
+  }
+  return project;
+}
+
+function normalizeCsvHeaderToken(value) {
+  return String(value || "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeCsvHeaderRow(row) {
+  if (!Array.isArray(row)) return "";
+  return row.map((cell) => normalizeCsvHeaderToken(cell)).join(",");
+}
+
+function normalizeEnergyMode(mode) {
+  return ENERGY_MODE_SET.has(mode) ? mode : "annual_hours";
+}
+
+function ensureProjectEnergyTemplateExports(project) {
+  if (!project || !isPlainObject(project)) {
+    return { hourly_8760: "", annual_hours: "", typical_curve_8760: "", province_typical_curve: "" };
+  }
+  const raw = isPlainObject(project.energyTemplateExports) ? project.energyTemplateExports : {};
+  project.energyTemplateExports = {
+    hourly_8760: typeof raw.hourly_8760 === "string" ? raw.hourly_8760 : "",
+    annual_hours: typeof raw.annual_hours === "string" ? raw.annual_hours : "",
+    typical_curve_8760: typeof raw.typical_curve_8760 === "string" ? raw.typical_curve_8760 : "",
+    province_typical_curve: typeof raw.province_typical_curve === "string" ? raw.province_typical_curve : ""
+  };
+  return project.energyTemplateExports;
+}
+
+function ensureProjectHistorySpotImport(project) {
+  if (!project || !isPlainObject(project)) return createEmptyHistorySpotImport();
+  project.historySpotImport = sanitizeHistorySpotImport(project.historySpotImport);
+  return project.historySpotImport;
+}
+
+function hasImportedHistoryDataset(project) {
+  const state = ensureProjectHistorySpotImport(project);
+  return state.sourceType === "csv" && isHistoryDatasetUsable(state.dataset);
+}
+
+function clearHistoryAnalysisCacheForProject(projectId) {
+  const prefix = `${String(projectId || "")}|`;
+  if (!prefix) return;
+  for (const cacheKey of historyAnalysisCache.keys()) {
+    if (cacheKey.startsWith(prefix)) {
+      historyAnalysisCache.delete(cacheKey);
+    }
+  }
+}
+
+function getEnergyModeMeta(mode) {
+  const key = normalizeEnergyMode(mode);
+  return ENERGY_MODE_META[key] || ENERGY_MODE_META.hourly_8760;
+}
+
+function detectEnergyModeByHeader(headerRow) {
+  const actualHeader = normalizeCsvHeaderRow(headerRow);
+  if (!actualHeader) return null;
+  for (const mode of ENERGY_MODE_SET) {
+    const expectedHeader = normalizeCsvHeaderRow(getEnergyModeMeta(mode).header.split(","));
+    if (actualHeader === expectedHeader) {
+      return mode;
+    }
+  }
+  return null;
+}
+
+function applyEnergyModeUi(mode) {
+  normalizeEnergyMode(mode);
+}
+
+function setEnergyImportMessage(text, tone = "info", options = {}) {
+  const { toast = true } = options;
+  if (toast) {
+    setTopMeta(text, tone);
+  }
+  if (!refs.energyImportMessage) return;
+  refs.energyImportMessage.textContent = text;
+  refs.energyImportMessage.dataset.tone = tone;
+}
+
+function buildEnergyTemplateFilename(project, mode) {
+  const safeProjectName = String(project?.name || "项目").replace(/[\\/:*?"<>|]/g, "_");
+  const provinceName = getProvinceName(project?.province || "") || "省份";
+  const safeProvinceName = String(provinceName).replace(/[\\/:*?"<>|]/g, "_");
+  const startYear = Number.isInteger(project?.startYear) ? project.startYear : "-";
+  const endYear = Number.isInteger(project?.startYear) && Number.isInteger(project?.forecastYears)
+    ? project.startYear + project.forecastYears - 1
+    : "-";
+  const modeTagMap = {
+    annual_hours: "逐年总量模板",
+    typical_curve_8760: "典型年8760模板",
+    province_typical_curve: "省份典型曲线模板",
+    hourly_8760: "完整8760小时曲线模板"
+  };
+  const modeTag = modeTagMap[mode] || "上网电量模板";
+  return `${safeProjectName}-${safeProvinceName}-${startYear}-${endYear}-${modeTag}.csv`;
+}
+
+function moveProjectToHistoryWorkspaceIfReady(project) {
+  if (!project || !isNewWorkspaceProject(project)) return false;
+  if (!isProjectCreateCompleted(project)) return false;
+  project.workspaceBucket = "history";
+  return true;
+}
+
+function parseCsvRows(text) {
+  const parseCell = (cell) => {
+    const trimmed = String(cell || "").trim();
+    if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+      return trimmed.slice(1, -1).replaceAll("\"\"", "\"").trim();
+    }
+    return trimmed;
+  };
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const normalized = line.replaceAll("，", ",");
+      const separator = normalized.includes(",") ? "," : "\t";
+      return normalized.split(separator).map((value) => parseCell(value));
+    });
+}
+
+function readTextFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("文件读取失败"));
+    reader.readAsText(file, "utf-8");
+  });
+}
+
+async function readSpreadsheetToCsv(file) {
+  const filename = file.name.toLowerCase();
+  if (filename.endsWith(".csv") || filename.endsWith(".txt")) {
+    const text = await readTextFile(file);
+    return { text, source: "text" };
+  }
+  if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+    if (typeof window === "undefined" || typeof window.XLSX === "undefined") {
+      throw new Error("当前环境未加载XLSX解析器。请检查网络后重试，或先导出CSV。");
+    }
+    const workbook = window.XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const firstSheetName = workbook.SheetNames?.[0];
+    if (!firstSheetName) {
+      throw new Error("Excel文件不包含可读取工作表。");
+    }
+    const worksheet = workbook.Sheets[firstSheetName];
+    const csv = window.XLSX.utils.sheet_to_csv(worksheet, { FS: ",", RS: "\n", blankrows: false });
+    return { text: csv, source: `excel:${firstSheetName}` };
+  }
+  throw new Error("当前仅支持CSV/TXT/XLSX/XLS文件。");
+}
+
+function monthSerial(ym) {
+  const [year, month] = String(ym).split("-").map((item) => Number(item));
+  if (!year || !month) return null;
+  return year * 12 + (month - 1);
+}
+
+function mechanismActiveMonthsForYear(year, startYm, endYm) {
+  const start = monthSerial(startYm);
+  const end = monthSerial(endYm);
+  if (start === null || end === null || end < start) return 0;
+  const yearStart = year * 12;
+  const yearEnd = year * 12 + 11;
+  const overlapStart = Math.max(start, yearStart);
+  const overlapEnd = Math.min(end, yearEnd);
+  return Math.max(0, overlapEnd - overlapStart + 1);
+}
+
+function pseudoNoise(index, seed) {
+  const raw = Math.sin(index * 12.9898 + seed * 78.233) * 43758.5453;
+  return raw - Math.floor(raw);
+}
+
+function generationWeight(assetType, hourIndex, seed) {
+  const day = Math.floor(hourIndex / 24);
+  const hour = hourIndex % 24;
+  if (assetType === "photovoltaic") {
+    if (hour < 6 || hour > 18) return 0;
+    const daylight = Math.sin(((hour - 6) / 12) * Math.PI);
+    const seasonal = 0.82 + 0.22 * Math.sin(((day - 85) / 365) * 2 * Math.PI);
+    const weather = 0.8 + 0.28 * pseudoNoise(day, seed + 3);
+    return Math.max(0, daylight * seasonal * weather);
+  }
+  const seasonal = 1 + 0.16 * Math.cos(((day - 30) / 365) * 2 * Math.PI);
+  const diurnal = 0.96 + 0.08 * Math.sin(((hour + 5) / 24) * 2 * Math.PI);
+  const weather = 0.72 + 0.44 * pseudoNoise(hourIndex, seed + 9);
+  return Math.max(0.05, seasonal * diurnal * weather);
+}
+
+function generateHourlyHoursFromAnnual(annualHours, assetType, seed) {
+  const weights = [];
+  let total = 0;
+  for (let i = 0; i < 8760; i += 1) {
+    const w = generationWeight(assetType, i, seed);
+    weights.push(w);
+    total += w;
+  }
+  return weights.map((w) => annualHours * w / total);
+}
+
+function getProvinceTypicalCurveRecordKey(project) {
+  if (!project?.province || !project?.assetType) return "";
+  const siteType = SITE_TYPE_SET.has(project.siteType) ? project.siteType : "onshore";
+  return `${project.province}:${project.assetType}:${siteType}`;
+}
+
+function createProvinceTypicalCurveMockRecord(project) {
+  const benchmark = PROVINCE_BENCHMARKS?.[project?.province] || {};
+  const provinceSeed = Number(benchmark.historyPrice || 360);
+  const siteType = SITE_TYPE_SET.has(project?.siteType) ? project.siteType : "onshore";
+  const assetType = project?.assetType;
+  const coastalSet = new Set(["liaoning", "tianjin", "shanghai", "jiangsu", "zhejiang", "fujian", "shandong", "guangdong", "guangxi", "hainan"]);
+  const northernSet = new Set(["heilongjiang", "jilin", "liaoning", "inner_mongolia", "gansu", "ningxia", "xinjiang", "qinghai"]);
+  const raw = [];
+
+  for (let hourIndex = 0; hourIndex < 8760; hourIndex += 1) {
+    const dayOfYear = Math.floor(hourIndex / 24) + 1;
+    const hour = hourIndex % 24;
+    const { month } = dayOfYearToMonthDay(dayOfYear);
+    let value = generationWeight(assetType, hourIndex, provinceSeed + 17);
+
+    if (assetType === "wind") {
+      const winterBoost = (month === 12 || month <= 2) ? (northernSet.has(project?.province) ? 1.18 : 1.06) : 1;
+      const nightBoost = hour <= 6 || hour >= 19 ? (siteType === "offshore" ? 1.14 : 1.08) : 0.97;
+      const coastalBoost = siteType === "offshore" || coastalSet.has(project?.province) ? 1.05 : 0.99;
+      value *= winterBoost * nightBoost * coastalBoost;
+    } else if (assetType === "photovoltaic") {
+      const summerBoost = month >= 4 && month <= 9 ? 1.12 : 0.88;
+      const noonBoost = hour >= 10 && hour <= 15 ? 1.14 : (hour >= 7 && hour <= 17 ? 0.98 : 1);
+      const cloudFactor = coastalSet.has(project?.province) ? 0.97 : 1.02;
+      const offshoreBoost = siteType === "offshore" ? 1.03 : 1;
+      value *= summerBoost * noonBoost * cloudFactor * offshoreBoost;
+    }
+
+    value *= 0.94 + (provinceSeed % 23) / 100;
+    raw.push(value);
+  }
+
+  return {
+    key: getProvinceTypicalCurveRecordKey(project),
+    profile: normalizeTypicalCurveProfile(raw),
+    sourceLabel: `模拟库：${describeProvinceTypicalCurve(project)} 典型8760曲线`
+  };
+}
+
+function getProvinceTypicalCurveRecord(project) {
+  const cacheKey = getProvinceTypicalCurveRecordKey(project);
+  if (!cacheKey) return null;
+  if (!provinceTypicalCurveDbCache.has(cacheKey)) {
+    provinceTypicalCurveDbCache.set(cacheKey, createProvinceTypicalCurveMockRecord(project));
+  }
+  return provinceTypicalCurveDbCache.get(cacheKey) || null;
+}
+
+function buildProvinceTypicalCurveProfile(project) {
+  return getProvinceTypicalCurveRecord(project)?.profile || [];
+}
+
+function deriveEnergyModeFromInputs(energyData) {
+  if (energyData.typicalCurveSource === "province_typical_curve" && hasNonEmptyObject(energyData.annualInputByYear)) {
+    return "province_typical_curve";
+  }
+  if (energyData.typicalCurveSource === "typical_curve_8760" && hasNonEmptyObject(energyData.annualInputByYear)) {
+    return "typical_curve_8760";
+  }
+  if (hasNonEmptyObject(energyData.annualInputByYear)) {
+    return "annual_hours";
+  }
+  return normalizeEnergyMode(energyData.mode);
+}
+
+function rebuildProjectEnergyData(project) {
+  const energyData = ensureProjectEnergyDataState(project);
+  const hourlyByYear = {};
+  const annualSummary = {};
+  const forecastYears = Number.isInteger(project?.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
+  const typicalCurveReady = hasEnergyTypicalCurve(project);
+
+  for (let offset = 0; offset < forecastYears; offset += 1) {
+    const year = project.startYear + offset;
+    const annualHours = Number(energyData.annualInputByYear?.[year]);
+    if (!Number.isFinite(annualHours) || annualHours <= 0) {
+      annualSummary[year] = { annualHours: 0, energyMwh: 0, status: "缺失" };
+      continue;
+    }
+    if (!typicalCurveReady) {
+      annualSummary[year] = {
+        annualHours,
+        energyMwh: annualHours * project.capacityMw,
+        status: "待典型曲线"
+      };
+      continue;
+    }
+    const hourlyValues = energyData.typicalCurveProfile.map((weight) => annualHours * weight);
+    hourlyByYear[year] = hourlyValues;
+    annualSummary[year] = {
+      annualHours,
+      energyMwh: annualHours * project.capacityMw,
+      status: "完整"
+    };
+  }
+
+  energyData.hourlyByYear = hourlyByYear;
+  energyData.annualSummary = annualSummary;
+  energyData.mode = deriveEnergyModeFromInputs(energyData);
+  project.energyMode = energyData.mode;
+}
+
+function validateAndBuildEnergyData(project, csvText, expectedMode = null) {
+  const rows = parseCsvRows(csvText);
+  const yearRange = `${project.startYear}-${project.startYear + project.forecastYears - 1}`;
+  if (!rows.length) return { ok: false, message: "没有检测到文件内容，请上传模板文件后重试。" };
+  const normalizedMode = detectEnergyModeByHeader(rows[0]);
+  if (!normalizedMode) {
+    const actualHeader = Array.isArray(rows[0]) ? rows[0].join(",") : "";
+    return {
+      ok: false,
+      message: `表头不匹配。识别到：${actualHeader || "(空)"}；请使用：${getEnergyModeMeta("annual_hours").header} 或 ${getEnergyModeMeta("typical_curve_8760").header}`
+    };
+  }
+  if (expectedMode && normalizedMode !== expectedMode) {
+    return {
+      ok: false,
+      message: `当前上传文件与本行模板不匹配。请上传「${getEnergyModeMeta(expectedMode).label}」对应文件。`
+    };
+  }
+
+  const rangeYears = new Set(
+    Array.from({ length: project.forecastYears }, (_, idx) => project.startYear + idx)
+  );
+  const hourlyByYear = {};
+  const annualInputByYear = {};
+
+  if (normalizedMode === "hourly_8760") {
+    for (let i = 1; i < rows.length; i += 1) {
+      const [yearRaw, hourRaw, hoursRaw] = rows[i];
+      const year = Number(yearRaw);
+      const hourIndex = Number(hourRaw);
+      const hours = Number(hoursRaw);
+      if (!Number.isInteger(year) || !rangeYears.has(year)) {
+        return { ok: false, message: `第 ${i + 1} 行第1列（year）无效：${yearRaw || "(空)"}。要求范围 ${yearRange}。` };
+      }
+      if (!Number.isInteger(hourIndex) || hourIndex < 1 || hourIndex > 8760) {
+        return { ok: false, message: `第 ${i + 1} 行第2列（hour_index）无效：${hourRaw || "(空)"}。要求 1-8760。` };
+      }
+      if (!Number.isFinite(hours) || hours < 0) {
+        return { ok: false, message: `第 ${i + 1} 行第3列（equivalent_hours_h）无效：${hoursRaw || "(空)"}。要求 >=0 数值。` };
+      }
+      if (!hourlyByYear[year]) hourlyByYear[year] = Array(8760).fill(null);
+      if (hourlyByYear[year][hourIndex - 1] !== null) {
+        return { ok: false, message: `第 ${i + 1} 行第2列（hour_index）重复：${hourIndex}。` };
+      }
+      hourlyByYear[year][hourIndex - 1] = hours;
+    }
+    for (const [yearText, arr] of Object.entries(hourlyByYear)) {
+      const missingIndex = arr.findIndex((value) => value === null);
+      if (missingIndex >= 0) {
+        return { ok: false, message: `${yearText} 年缺少第 ${missingIndex + 1} 小时数据（需完整8760点）。` };
+      }
+      annualInputByYear[yearText] = arr.reduce((sum, value) => sum + value, 0);
+    }
+  } else if (normalizedMode === "annual_hours") {
+    const seen = new Set();
+    for (let i = 1; i < rows.length; i += 1) {
+      const [yearRaw, annualHoursRaw] = rows[i];
+      const year = Number(yearRaw);
+      const annualHours = Number(annualHoursRaw);
+      if (!Number.isInteger(year) || !rangeYears.has(year)) {
+        return { ok: false, message: `第 ${i + 1} 行第1列（year）无效：${yearRaw || "(空)"}。要求范围 ${yearRange}。` };
+      }
+      if (seen.has(year)) {
+        return { ok: false, message: `第 ${i + 1} 行第1列（year）重复：${year}。` };
+      }
+      if (!Number.isFinite(annualHours) || annualHours <= 0) {
+        return { ok: false, message: `第 ${i + 1} 行第2列（annual_hours_h）无效：${annualHoursRaw || "(空)"}。要求 >0 数值。` };
+      }
+      seen.add(year);
+      annualInputByYear[year] = annualHours;
+    }
+    return {
+      ok: true,
+      mode: normalizedMode,
+      annualInputByYear
+    };
+  } else if (normalizedMode === "typical_curve_8760") {
+    const values = Array(8760).fill(null);
+    for (let i = 1; i < rows.length; i += 1) {
+      const [hourRaw, hoursRaw] = rows[i];
+      const hourIndex = Number(hourRaw);
+      const hours = Number(hoursRaw);
+      if (!Number.isInteger(hourIndex) || hourIndex < 1 || hourIndex > 8760) {
+        return { ok: false, message: `第 ${i + 1} 行第1列（hour_index）无效：${hourRaw || "(空)"}。要求 1-8760。` };
+      }
+      if (!Number.isFinite(hours) || hours < 0) {
+        return { ok: false, message: `第 ${i + 1} 行第2列（equivalent_hours_h）无效：${hoursRaw || "(空)"}。要求 >=0 数值。` };
+      }
+      if (values[hourIndex - 1] !== null) {
+        return { ok: false, message: `第 ${i + 1} 行第1列（hour_index）重复：${hourIndex}。` };
+      }
+      values[hourIndex - 1] = hours;
+    }
+    const missingIndex = values.findIndex((value) => value === null);
+    if (missingIndex >= 0) {
+      return { ok: false, message: `典型年8760模板缺少第 ${missingIndex + 1} 小时数据（需完整8760点）。` };
+    }
+    const typicalCurveProfile = normalizeTypicalCurveProfile(values);
+    if (!typicalCurveProfile.length) {
+      return { ok: false, message: "典型年8760模板无有效小时曲线，请检查数据是否均为非负数且总量大于0。" };
+    }
+    return {
+      ok: true,
+      mode: normalizedMode,
+      typicalCurveProfile
+    };
+  }
+
+  const annualSummary = {};
+  let completeYears = 0;
+  const missingYears = [];
+  for (let i = 0; i < project.forecastYears; i += 1) {
+    const year = project.startYear + i;
+    const values = hourlyByYear[year];
+    if (!values) {
+      annualSummary[year] = { annualHours: 0, energyMwh: 0, status: "缺失" };
+      missingYears.push(year);
+      continue;
+    }
+    const annualHours = values.reduce((sum, value) => sum + value, 0);
+    annualSummary[year] = {
+      annualHours,
+      energyMwh: annualHours * project.capacityMw,
+      status: "完整"
+    };
+    completeYears += 1;
+  }
+
+  return {
+    ok: true,
+    mode: normalizedMode,
+    hourlyByYear,
+    annualSummary,
+    annualInputByYear,
+    completeYears,
+    missingYears
+  };
+}
+
+function importEnergyDataFromText(mode, csvText, sourceLabel = "") {
+  const project = getActiveProject();
+  if (!project) {
+    setEnergyImportMessage("请先创建项目。", "error");
+    return false;
+  }
+  if (!isProjectCreateCompleted(project)) {
+    setEnergyImportMessage("请先完成步骤1基础信息保存，再进行结算电量配置。", "warn");
+    return false;
+  }
+  const normalizedMode = normalizeEnergyMode(mode);
+  const parsed = validateAndBuildEnergyData(project, csvText, normalizedMode);
+
+  if (!parsed.ok) {
+    setEnergyImportMessage(parsed.message, "error");
+    return false;
+  }
+
+  const periodAligned = normalizedMode === "annual_hours"
+    ? alignDefaultForecastYearsToAnnualTemplate(project, parsed.annualInputByYear, sourceLabel)
+    : false;
+  const exportMarks = ensureProjectEnergyTemplateExports(project);
+  // 以文件校验结果为准，避免导出状态丢失时误拦截已准备好的模板导入。
+  if (!exportMarks[normalizedMode]) {
+    exportMarks[normalizedMode] = new Date().toISOString();
+  }
+  const energyData = ensureProjectEnergyDataState(project);
+
+  if (normalizedMode === "annual_hours") {
+    energyData.annualInputByYear = parsed.annualInputByYear;
+    if (!hasEnergyTypicalCurve(project)) {
+      energyData.typicalCurveSource = "";
+      energyData.typicalCurveProfile = [];
+    }
+    rebuildProjectEnergyData(project);
+  } else if (normalizedMode === "typical_curve_8760") {
+    energyData.typicalCurveProfile = parsed.typicalCurveProfile;
+    energyData.typicalCurveSource = "typical_curve_8760";
+    appState.energyStep2Choice = "typical";
+    rebuildProjectEnergyData(project);
+  } else {
+    energyData.mode = normalizedMode;
+    energyData.hourlyByYear = parsed.hourlyByYear;
+    energyData.annualSummary = parsed.annualSummary;
+    energyData.annualInputByYear = parsed.annualInputByYear || {};
+  }
+
+  const completeYears = countCompleteEnergyYears(project);
+  const allComplete = completeYears === project.forecastYears;
+  project.statuses["energy-page"] = allComplete ? "completed" : "in_progress";
+  if (isProjectCreateCompleted(project) && project.statuses["history-page"] === "not_started") {
+    project.statuses["history-page"] = "in_progress";
+  }
+  markDownstreamStale(project, "energy-page");
+
+  const annualCount = getAnnualInputYearCount(project);
+  if (normalizedMode === "annual_hours") {
+    const annualReady = annualCount === project.forecastYears;
+    const periodText = periodAligned ? `已按模板年份识别当前测算周期为 ${project.forecastYears} 年。` : "";
+    setEnergyImportMessage(
+      annualReady
+        ? `逐年总量导入成功：已录入 ${annualCount}/${project.forecastYears} 年${sourceLabel ? `（来源：${sourceLabel}）` : ""}。${periodText}请继续第二步：导入典型年8760模板，或调用所选省份典型曲线。`
+        : `逐年总量部分导入成功：已录入 ${annualCount}/${project.forecastYears} 年${sourceLabel ? `（来源：${sourceLabel}）` : ""}。${periodText}请先补齐测算周期内全部年度总小时数。`,
+      annualReady ? "success" : "warn"
+    );
+  } else {
+    const missingYears = listMissingEnergyYears(project, 6);
+    const missingText = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "";
+    const curveSourceText = energyData.typicalCurveSource === "province_typical_curve" ? "所选省份典型曲线" : "典型年8760模板";
+    setEnergyImportMessage(
+      allComplete
+        ? `上网电量配置完成：逐年总量 + ${curveSourceText} 已生成 ${completeYears}/${project.forecastYears} 年上网电量${sourceLabel ? `（来源：${sourceLabel}）` : ""}。`
+        : `已导入 ${curveSourceText}，当前完成 ${completeYears}/${project.forecastYears} 年上网电量${missingText}${sourceLabel ? `（来源：${sourceLabel}）` : ""}。`,
+      allComplete ? "success" : "warn"
+    );
+  }
+  renderAll();
+  return true;
+}
+
+function exportEnergyTemplate(mode = "hourly_8760") {
+  const project = getActiveProject();
+  if (!project) {
+    setEnergyImportMessage("请先创建或进入项目，再导出模板。", "error");
+    return;
+  }
+  if (!isProjectCreateCompleted(project)) {
+    setEnergyImportMessage("请先完成步骤1基础信息保存，再导出模板。", "warn");
+    return;
+  }
+  const normalizedMode = normalizeEnergyMode(mode);
+  const rows = [];
+
+  if (normalizedMode === "annual_hours") {
+    rows.push(["year", "annual_hours_h"]);
+    for (let i = 0; i < project.forecastYears; i += 1) {
+      const year = project.startYear + i;
+      rows.push([year, ""]);
+    }
+  } else if (normalizedMode === "typical_curve_8760") {
+    rows.push(["hour_index", "equivalent_hours_h"]);
+    for (let hour = 1; hour <= 8760; hour += 1) {
+      rows.push([hour, ""]);
+    }
+  } else {
+    rows.push(["year", "hour_index", "equivalent_hours_h"]);
+    for (let i = 0; i < project.forecastYears; i += 1) {
+      const year = project.startYear + i;
+      for (let hour = 1; hour <= 8760; hour += 1) {
+        rows.push([year, hour, ""]);
+      }
+    }
+  }
+
+  downloadCsv(buildEnergyTemplateFilename(project, normalizedMode), rows);
+  const exports = ensureProjectEnergyTemplateExports(project);
+  exports[normalizedMode] = new Date().toISOString();
+  setEnergyImportMessage(
+    `模板已导出（${getEnergyModeMeta(normalizedMode).label}）：${getEnergyModeMeta(normalizedMode).header}（${project.startYear}-${project.startYear + project.forecastYears - 1}）`,
+    "success"
+  );
+}
+
+async function importEnergyFromFile(mode, inputElement) {
+  const file = inputElement?.files?.[0];
+  if (!file) {
+    setEnergyImportMessage("请先选择CSV或Excel文件。", "error");
+    return false;
+  }
+
+  try {
+    const output = await readSpreadsheetToCsv(file);
+    const text = output.text.trim();
+    if (!text) {
+      setEnergyImportMessage("文件内容为空，请检查模板后重试。", "error");
+      return false;
+    }
+    const sourceLabel = output.source.startsWith("excel:") ? output.source.slice(6) : file.name;
+    const imported = importEnergyDataFromText(mode, text.trim(), sourceLabel);
+    if (imported && inputElement) {
+      inputElement.value = "";
+    }
+    return imported;
+  } catch (error) {
+    setEnergyImportMessage(error?.message || "文件读取失败，请检查格式后重试。", "error");
+    return false;
+  }
+}
+
+function downloadEnergySampleFile(mode = "annual_hours") {
+  const project = getActiveProject();
+  if (!project) return;
+  const normalizedMode = normalizeEnergyMode(mode);
+  const rows = [];
+  if (normalizedMode === "annual_hours") {
+    rows.push(["year", "annual_hours_h"]);
+    for (let i = 0; i < project.forecastYears; i += 1) {
+      const year = project.startYear + i;
+      const annual = (project.assetType === "wind" ? 2400 : 1300) * Math.pow(0.997, i);
+      rows.push([year, annual.toFixed(2)]);
+    }
+    downloadCsv(buildEnergyTemplateFilename(project, "annual_hours").replace(".csv", "-示例.csv"), rows);
+    return;
+  }
+  if (normalizedMode === "typical_curve_8760") {
+    rows.push(["hour_index", "equivalent_hours_h"]);
+    const values = generateHourlyHoursFromAnnual(project.assetType === "wind" ? 2400 : 1300, project.assetType, project.startYear);
+    for (let hour = 1; hour <= 8760; hour += 1) {
+      rows.push([hour, values[hour - 1].toFixed(6)]);
+    }
+    downloadCsv(buildEnergyTemplateFilename(project, "typical_curve_8760").replace(".csv", "-示例.csv"), rows);
+    return;
+  }
+  const year = project.startYear;
+  rows.push(["year", "hour_index", "equivalent_hours_h"]);
+  const values = generateHourlyHoursFromAnnual(project.assetType === "wind" ? 2400 : 1300, project.assetType, year);
+  for (let hour = 1; hour <= 8760; hour += 1) {
+    rows.push([year, hour, values[hour - 1].toFixed(6)]);
+  }
+  downloadCsv(buildEnergyTemplateFilename(project, "hourly_8760").replace(".csv", "-示例.csv"), rows);
+}
+
+function applyProvinceTypicalCurve() {
+  const project = getActiveProject();
+  if (!project) {
+    setEnergyImportMessage("请先进入项目。", "error");
+    return;
+  }
+  if (!isProjectCreateCompleted(project)) {
+    setEnergyImportMessage("请先完成步骤1基础信息保存，再调用所选省份典型曲线。", "warn");
+    return;
+  }
+  const annualCount = getAnnualInputYearCount(project);
+  if (annualCount !== project.forecastYears) {
+    setEnergyImportMessage(`请先完成逐年总量模板导入。当前仅录入 ${annualCount}/${project.forecastYears} 年。`, "warn");
+    return;
+  }
+  const energyData = ensureProjectEnergyDataState(project);
+  const curveRecord = getProvinceTypicalCurveRecord(project);
+  if (!curveRecord?.profile?.length) {
+    setEnergyImportMessage("当前项目未匹配到可调用的省份典型曲线，请检查省份、风/光类型和陆/海类型。", "error");
+    return;
+  }
+  energyData.typicalCurveProfile = curveRecord.profile;
+  energyData.typicalCurveSource = "province_typical_curve";
+  appState.energyStep2Choice = "province";
+  rebuildProjectEnergyData(project);
+  const exports = ensureProjectEnergyTemplateExports(project);
+  exports.province_typical_curve = new Date().toISOString();
+  const completeYears = countCompleteEnergyYears(project);
+  project.statuses["energy-page"] = completeYears === project.forecastYears ? "completed" : "in_progress";
+  if (isProjectCreateCompleted(project) && project.statuses["history-page"] === "not_started") {
+    project.statuses["history-page"] = "in_progress";
+  }
+  markDownstreamStale(project, "energy-page");
+  setEnergyImportMessage(
+    `已调用 ${curveRecord.sourceLabel}，已生成 ${completeYears}/${project.forecastYears} 年上网电量。`,
+    completeYears === project.forecastYears ? "success" : "warn"
+  );
+  renderAll();
+}
+
+function defaultAnnualEquivalentHours(project, offset = 0) {
+  const assetType = ASSET_TYPE_SET.has(project?.assetType) ? project.assetType : "wind";
+  const siteType = SITE_TYPE_SET.has(project?.siteType) ? project.siteType : "onshore";
+  let base = assetType === "photovoltaic" ? 1350 : 2450;
+  if (assetType === "wind" && siteType === "offshore") base = 3300;
+  if (assetType === "photovoltaic" && siteType === "offshore") base = 1450;
+  const provinceShift = ((getPriceBaseForProvince(project?.province) || 360) % 37) - 18;
+  const annualDrift = Math.pow(0.997, Math.max(0, offset));
+  return Number(Math.max(800, base + provinceShift * 4).toFixed(2)) * annualDrift;
+}
+
+function ensureAnnualEnergyInputsForCalculation(project) {
+  const energyData = ensureProjectEnergyDataState(project);
+  let changed = false;
+  for (let i = 0; i < project.forecastYears; i += 1) {
+    const year = project.startYear + i;
+    const value = Number(energyData.annualInputByYear?.[year]);
+    if (Number.isFinite(value) && value > 0) continue;
+    energyData.annualInputByYear[year] = Number(defaultAnnualEquivalentHours(project, i).toFixed(2));
+    changed = true;
+  }
+  return changed;
+}
+
+function ensureHourlyEnergyForCalculation(project) {
+  if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears < 1) {
+    return { changed: false, completed: 0, total: 0, defaultAnnualFilled: false };
+  }
+  const before = countCompleteEnergyYears(project);
+  const total = project.forecastYears;
+  if (before === total) {
+    return { changed: false, completed: before, total, defaultAnnualFilled: false };
+  }
+
+  const defaultAnnualFilled = ensureAnnualEnergyInputsForCalculation(project);
+
+  const energyData = ensureProjectEnergyDataState(project);
+  if (!hasEnergyTypicalCurve(project)) {
+    const curveRecord = getProvinceTypicalCurveRecord(project);
+    if (!curveRecord?.profile?.length) {
+      return { changed: defaultAnnualFilled, completed: before, total, defaultAnnualFilled };
+    }
+    energyData.typicalCurveProfile = curveRecord.profile;
+    energyData.typicalCurveSource = "province_typical_curve";
+    appState.energyStep2Choice = "province";
+  }
+
+  rebuildProjectEnergyData(project);
+  const completed = countCompleteEnergyYears(project);
+  project.statuses["energy-page"] = completed === total ? "completed" : "in_progress";
+  return { changed: completed !== before || defaultAnnualFilled, completed, total, defaultAnnualFilled };
+}
+
+function getHourlyEnergyForCalculation(project, year, yearIndex) {
+  const energyData = ensureProjectEnergyDataState(project);
+  const existing = energyData.hourlyByYear?.[year];
+  if (Array.isArray(existing) && existing.length === 8760) {
+    return existing;
+  }
+
+  const annualFromInput = Number(energyData.annualInputByYear?.[year]);
+  const annualFromSummary = Number(energyData.annualSummary?.[year]?.annualHours);
+  const annualHours = Number.isFinite(annualFromInput) && annualFromInput > 0
+    ? annualFromInput
+    : (Number.isFinite(annualFromSummary) && annualFromSummary > 0
+      ? annualFromSummary
+      : defaultAnnualEquivalentHours(project, yearIndex - 1));
+
+  let hourlyValues = [];
+  const profile = normalizeTypicalCurveProfile(energyData.typicalCurveProfile);
+  if (profile.length === 8760) {
+    hourlyValues = profile.map((weight) => annualHours * weight);
+  } else {
+    hourlyValues = generateHourlyHoursFromAnnual(annualHours, project.assetType, project.startYear + yearIndex);
+  }
+
+  if (hourlyValues.length !== 8760) return [];
+  energyData.annualInputByYear[year] = Number(annualHours.toFixed(2));
+  energyData.hourlyByYear[year] = hourlyValues;
+  energyData.annualSummary[year] = {
+    annualHours,
+    energyMwh: annualHours * project.capacityMw,
+    status: "完整"
+  };
+  project.energyMode = energyData.mode;
+  return hourlyValues;
+}
+
+function getPriceBaseForProvince(province) {
+  return PROVINCE_BENCHMARKS[province]?.historyPrice || 360;
+}
+
+function priceShape(hourIndex, seed) {
+  const day = Math.floor(hourIndex / 24);
+  const hour = hourIndex % 24;
+  const dayFactor = hour <= 6 ? 0.82 : hour <= 10 ? 1.02 : hour <= 16 ? 0.95 : hour <= 21 ? 1.18 : 0.97;
+  const season = 1 + 0.08 * Math.sin(((day - 160) / 365) * 2 * Math.PI);
+  const noise = 0.95 + 0.1 * pseudoNoise(hourIndex, seed + 13);
+  return dayFactor * season * noise;
+}
+
+function buildForecastDayMeta(year) {
+  return Array.from({ length: 365 }, (_, dayIndex) => {
+    const { month, day } = dayOfYearToMonthDay(dayIndex + 1, false);
+    const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    return {
+      month,
+      dayOfWeek,
+      isWeekend: dayOfWeek === 0 || dayOfWeek === 6
+    };
+  });
+}
+
+function hourlyPricesFromQuarterPrices(quarterPrices) {
+  if (!Array.isArray(quarterPrices) || quarterPrices.length !== 35040) return [];
+  const hourly = [];
+  for (let hour = 0; hour < 8760; hour += 1) {
+    const start = hour * 4;
+    hourly.push(Number(((quarterPrices[start] + quarterPrices[start + 1] + quarterPrices[start + 2] + quarterPrices[start + 3]) / 4).toFixed(4)));
+  }
+  return hourly;
+}
+
+function forecastQuarterPrice(project, model, context) {
+  const {
+    year,
+    dayIndex,
+    quarterOfDay,
+    baseLevel,
+    dayMeta,
+    factors,
+    seed
+  } = context;
+  const hour = quarterOfDay / 4;
+  const { month, isWeekend } = dayMeta;
+  const winterLoad = 0.18 * Math.cos(((dayIndex - 12) / 365) * 2 * Math.PI) * factors.winterScale;
+  const summerLoad = 0.16 * Math.cos(((dayIndex - 196) / 365) * 2 * Math.PI) * factors.summerScale;
+  const seasonal = 1 + winterLoad + summerLoad;
+  const morningPeak = Math.exp(-Math.pow((hour - 8.5) / 2.2, 2));
+  const eveningPeak = 1.22 * Math.exp(-Math.pow((hour - 18.4) / 2.9, 2));
+  const noonValley = 0.13 * Math.exp(-Math.pow((hour - 13.2) / 2.4, 2));
+  const nightValley = 0.07 * Math.exp(-Math.pow((hour - 3.2) / 2.8, 2));
+  const storageShift = factors.storageScale;
+  const diurnal = 0.9
+    + factors.morningPeakWeight * model.peakScale * morningPeak
+    + factors.eveningPeakWeight * model.peakScale * eveningPeak
+    - (factors.noonValleyWeight - storageShift * 0.05) * noonValley
+    - factors.nightValleyWeight * nightValley;
+  const weekendFactor = isWeekend ? factors.weekendLevel : 1;
+  const quarterIndex = dayIndex * 96 + quarterOfDay;
+  const intradayRipple = 1 + 0.012 * model.volatility * Math.sin((quarterOfDay / 96) * 8 * Math.PI + model.seedOffset / 100);
+  const randomFactor = 1 + (pseudoNoise(quarterIndex * 97 + year, seed + model.seedOffset) - 0.5) * factors.noiseAmplitude * model.volatility;
+  let price = baseLevel * model.levelBias * seasonal * diurnal * weekendFactor * intradayRipple * randomFactor;
+
+  const spikeThreshold = clamp(factors.spikeThreshold + (1 - model.spikeScale) * 0.0015, 0.99, 0.9998);
+  const spikeSeed = pseudoNoise(quarterIndex * 53 + year, seed + model.seedOffset + 37);
+  if (spikeSeed > spikeThreshold) {
+    price *= 1.32 + (spikeSeed - spikeThreshold) * 28 * model.spikeScale;
+  }
+
+  const negativeThreshold = clamp(factors.negativeThreshold + (1 - model.negativeScale) * 0.002, 0.985, 0.9995);
+  const negativeSeed = pseudoNoise(quarterIndex * 31 + year, seed + model.seedOffset + 73);
+  if (
+    hour >= 10.5 && hour <= 15.5
+    && (month === 4 || month === 5 || month === 10 || (project.assetType === "photovoltaic" && month === 9))
+    && negativeSeed > negativeThreshold
+  ) {
+    price = -5 - 90 * pseudoNoise(quarterIndex * 43 + year, seed + model.seedOffset + 91) * model.negativeScale;
+  }
+
+  return Number(clamp(price, -150, 950).toFixed(2));
+}
+
+function buildForecastPriceSeries(project, model, seed, growth) {
+  const factors = getHistoryMockShapeFactors(project);
+  const base = getPriceBaseForProvince(project.province) + factors.baseShift;
+  const quarterPricesByYear = {};
+  const pricesByYear = {};
+
+  for (let i = 0; i < project.forecastYears; i += 1) {
+    const year = project.startYear + i;
+    const yearEscalator = Math.pow(1 + growth, i);
+    const baseLevel = base * yearEscalator;
+    const dayMeta = buildForecastDayMeta(year);
+    const quarterPrices = [];
+    for (let dayIndex = 0; dayIndex < 365; dayIndex += 1) {
+      for (let quarterOfDay = 0; quarterOfDay < 96; quarterOfDay += 1) {
+        quarterPrices.push(forecastQuarterPrice(project, model, {
+          year,
+          dayIndex,
+          quarterOfDay,
+          baseLevel,
+          dayMeta: dayMeta[dayIndex],
+          factors,
+          seed
+        }));
+      }
+    }
+    quarterPricesByYear[year] = quarterPrices;
+    pricesByYear[year] = hourlyPricesFromQuarterPrices(quarterPrices);
+  }
+
+  return { quarterPricesByYear, pricesByYear };
+}
+
+function createForecastRunForModel(project, model, options) {
+  const {
+    algorithmVersion,
+    featureVersion,
+    dataSnapshotId,
+    trainStart,
+    trainEnd,
+    seed,
+    growth
+  } = options;
+  const modelSeed = seed + model.seedOffset;
+  const { quarterPricesByYear, pricesByYear } = buildForecastPriceSeries(project, model, modelSeed, growth);
+  const run = {
+    id: makeId("run"),
+    algorithmFamily: model.family,
+    algorithmName: model.name,
+    algorithmLabel: model.label,
+    algorithmVersion: `${algorithmVersion}-${model.versionSuffix}`,
+    featureVersion,
+    dataSnapshotId,
+    trainStart,
+    trainEnd,
+    seed: modelSeed,
+    growth,
+    status: "validated",
+    createdAt: new Date().toISOString(),
+    granularityMinutes: 15,
+    pointsPerYear: 35040,
+    pricesByYear,
+    quarterPricesByYear,
+    mape: model.mapeBase + pseudoNoise(modelSeed, trainStart) * 0.01,
+    smape: model.smapeBase + pseudoNoise(modelSeed, trainEnd) * 0.012,
+    mae: model.maeBase + pseudoNoise(modelSeed, 8) * 7,
+    rmse: model.rmseBase + pseudoNoise(modelSeed, 10) * 8
+  };
+  evaluateRunQuality(project, run);
+  return run;
+}
+
+function formatForecastGranularity(run) {
+  if (run?.granularityMinutes === 15) {
+    return `15分钟 / ${run.pointsPerYear || 35040}点/年`;
+  }
+  return "小时 / 8760点/年";
+}
+
+function countForecastPriceMissing(project, run) {
+  let missing = 0;
+  const pricesByYear = run?.pricesByYear || {};
+  const quarterPricesByYear = run?.quarterPricesByYear || {};
+  for (let i = 0; i < project.forecastYears; i += 1) {
+    const year = project.startYear + i;
+    const price = pricesByYear[year];
+    if (!price || price.length !== 8760) {
+      missing += 8760;
+    }
+    if (run?.granularityMinutes === 15) {
+      const quarterPrice = quarterPricesByYear[year];
+      if (!quarterPrice || quarterPrice.length !== 35040) {
+        missing += 35040;
+      }
+    }
+  }
+  return missing;
+}
+
+function evaluateRunQuality(project, run) {
+  const missingPoints = countForecastPriceMissing(project, run);
+  const hardPass = run.mape <= QUALITY_GATE.hard.mape
+    && run.smape <= QUALITY_GATE.hard.smape
+    && missingPoints <= QUALITY_GATE.hard.missingPoints;
+  const softPass = run.mae <= QUALITY_GATE.soft.mae
+    && run.rmse <= QUALITY_GATE.soft.rmse;
+
+  run.qualityGatePassed = hardPass;
+  run.softGatePassed = softPass;
+  run.missingPoints = missingPoints;
+  if (!hardPass) {
+    run.status = "validated";
+  } else if (softPass) {
+    run.status = "publishable";
+  } else {
+    run.status = "publishable_warn";
+  }
+}
+
+function canActivateRun(run) {
+  return ["publishable", "publishable_warn", "publishable_forced"].includes(run.status);
+}
+
+function statusLabel(run) {
+  const labels = {
+    validated: "未过硬门槛",
+    publishable: "可发布",
+    publishable_warn: "可发布(软门槛预警)",
+    publishable_forced: "强制发布"
+  };
+  return labels[run.status] || run.status;
+}
+
+function addActivationLog(project, fromRunId, toRunId, reason) {
+  project.activationLogs.unshift({
+    id: makeId("act"),
+    fromRunId: fromRunId || "-",
+    toRunId,
+    reason: reason || "手动切换",
+    changedAt: new Date().toISOString()
+  });
+}
+
+function generateForecastRun() {
+  const project = getActiveProject();
+  if (!project) return;
+
+  if (!Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears < 1) {
+    setTopMeta("请先保存项目测算起始年份和测算周期，再生成电价预测。");
+    return;
+  }
+
+  const algorithmVersion = document.querySelector("#algo-version").value.trim() || "1.0.0";
+  const featureVersion = document.querySelector("#feature-version").value.trim() || "1.0.0";
+  const dataSnapshotId = document.querySelector("#data-snapshot-id").value.trim() || `snapshot-${new Date().toISOString().slice(0, 10)}`;
+  const trainStartInput = Number(document.querySelector("#train-start").value);
+  const trainEndInput = Number(document.querySelector("#train-end").value);
+  const trainStart = Number.isFinite(trainStartInput) ? trainStartInput : Math.max(2010, project.startYear - 8);
+  const trainEnd = Number.isFinite(trainEndInput) ? trainEndInput : Math.max(trainStart, project.startYear - 1);
+  const seed = Number(document.querySelector("#algo-seed").value) || 2027;
+  const growthInput = Number(document.querySelector("#algo-growth").value);
+  const growth = Number.isFinite(growthInput) ? growthInput / 100 : 0;
+
+  const generatedRuns = FORECAST_MODEL_DEFINITIONS.map((model) => createForecastRunForModel(project, model, {
+    algorithmVersion,
+    featureVersion,
+    dataSnapshotId,
+    trainStart,
+    trainEnd,
+    seed,
+    growth
+  }));
+  project.priceRuns.unshift(...generatedRuns.slice().reverse());
+
+  const preferredRun = generatedRuns.find((run) => run.algorithmFamily === "ensemble" && canActivateRun(run))
+    || generatedRuns.find((run) => canActivateRun(run));
+  if (preferredRun) {
+    const old = project.activeRunId;
+    project.activeRunId = preferredRun.id;
+    addActivationLog(project, old, preferredRun.id, "三模型15分钟模拟完成，融合模型自动生效");
+  }
+  project.statuses["forecast-page"] = hasActiveActivatableRun(project) ? "completed" : "in_progress";
+  if (project.statuses["scenario-page"] === "not_started") {
+    project.statuses["scenario-page"] = "in_progress";
+  }
+  setTopMeta(`已生成 LSTM、XGBoost、Ensemble 三套 ${project.startYear}-${project.startYear + project.forecastYears - 1} 年15分钟现货电价模拟曲线。`);
+  markDownstreamStale(project, "forecast-page");
+  renderAll();
+}
+
+function setActiveRun(runId) {
+  const project = getActiveProject();
+  if (!project) return;
+  const target = project.priceRuns.find((run) => run.id === runId);
+  if (!target) return;
+  if (!canActivateRun(target)) {
+    setTopMeta("该版本未通过硬门槛，不能直接生效。");
+    return;
+  }
+  if (project.activeRunId === target.id) return;
+  const old = project.activeRunId;
+  project.activeRunId = target.id;
+  addActivationLog(project, old, target.id, "设置为生效版本");
+  project.statuses["forecast-page"] = "completed";
+  if (project.statuses["scenario-page"] === "not_started") {
+    project.statuses["scenario-page"] = "in_progress";
+  }
+  markDownstreamStale(project, "forecast-page");
+  renderAll();
+}
+
+function forceActivateRun(runId) {
+  const project = getActiveProject();
+  if (!project) return;
+  const target = project.priceRuns.find((run) => run.id === runId);
+  if (!target) return;
+  const reason = typeof window !== "undefined" && typeof window.prompt === "function"
+    ? window.prompt("请输入强制发布原因：", "初版阶段人工放行")
+    : "初版阶段人工放行";
+  if (reason === null) return;
+  target.status = "publishable_forced";
+  const old = project.activeRunId;
+  project.activeRunId = target.id;
+  addActivationLog(project, old, target.id, reason || "初版阶段人工放行");
+  project.statuses["forecast-page"] = "completed";
+  if (project.statuses["scenario-page"] === "not_started") {
+    project.statuses["scenario-page"] = "in_progress";
+  }
+  markDownstreamStale(project, "forecast-page");
+  renderAll();
+}
+
+
+function renderForecastRuns() {
+  const project = getActiveProject();
+  if (!project) {
+    refs.forecastRunBody.innerHTML = "";
+    refs.forecastActivationBody.innerHTML = "";
+    refs.forecastGateMessage.textContent = "质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。";
+    return;
+  }
+  if (!project.priceRuns.length) {
+    refs.forecastRunBody.innerHTML = `<tr><td colspan="12">还没有电价预测版本，请先生成。</td></tr>`;
+    refs.forecastActivationBody.innerHTML = `<tr><td colspan="4">暂无激活日志。</td></tr>`;
+    refs.forecastGateMessage.textContent = "质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。";
+    return;
+  }
+  const latest = project.priceRuns[0];
+  refs.forecastGateMessage.textContent =
+    `硬门槛：MAPE ≤ 15%，sMAPE ≤ 18%，缺失点=0。软门槛：MAE ≤ ${QUALITY_GATE.soft.mae}，RMSE ≤ ${QUALITY_GATE.soft.rmse}。最新运行 ${latest.id} 状态：${statusLabel(latest)}。`;
+
+  refs.forecastRunBody.innerHTML = project.priceRuns.map((run) => `
+    <tr>
+      <td>${run.id}</td>
+      <td>${run.algorithmLabel || run.algorithmName || run.algorithmFamily}</td>
+      <td>${run.algorithmVersion}</td>
+      <td>${run.featureVersion}</td>
+      <td>${formatForecastGranularity(run)}</td>
+      <td>${run.trainStart}-${run.trainEnd}</td>
+      <td>${(run.mape * 100).toFixed(2)}%</td>
+      <td>${(run.smape * 100).toFixed(2)}%</td>
+      <td>${run.mae.toFixed(2)}</td>
+      <td>${run.rmse.toFixed(2)}</td>
+      <td>${statusLabel(run)}${project.activeRunId === run.id ? " / 生效中" : ""}</td>
+      <td>
+        ${canActivateRun(run)
+          ? `<button class="ghost-button" data-active-run="${run.id}">设为生效</button>`
+          : `<button class="ghost-button" data-force-run="${run.id}">强制发布</button>`
+        }
+      </td>
+    </tr>
+  `).join("");
+
+  document.querySelectorAll("[data-active-run]").forEach((button) => {
+    button.addEventListener("click", () => setActiveRun(button.dataset.activeRun));
+  });
+  document.querySelectorAll("[data-force-run]").forEach((button) => {
+    button.addEventListener("click", () => forceActivateRun(button.dataset.forceRun));
+  });
+
+  refs.forecastActivationBody.innerHTML = project.activationLogs.length
+    ? project.activationLogs.map((log) => `
+      <tr>
+        <td>${new Date(log.changedAt).toLocaleString("zh-CN", { hour12: false })}</td>
+        <td>${log.fromRunId}</td>
+        <td>${log.toRunId}</td>
+        <td>${escapeHtml(log.reason)}</td>
+      </tr>
+    `).join("")
+    : `<tr><td colspan="4">暂无激活日志。</td></tr>`;
+}
+
+function removeLegacyEnergySummaryTable() {
+  if (typeof document === "undefined") return;
+  const legacySummaryBody = document.querySelector("#energy-year-summary-body");
+  if (!legacySummaryBody) return;
+  const legacyWrap = legacySummaryBody.closest(".table-scroll");
+  if (legacyWrap) {
+    legacyWrap.remove();
+    return;
+  }
+  const legacyTable = legacySummaryBody.closest("table");
+  if (legacyTable) {
+    legacyTable.remove();
+  }
+}
+
+function renderEnergySummary() {
+  removeLegacyEnergySummaryTable();
+  const project = getActiveProject();
+  if (!refs.energySummaryNote) return;
+  if (!project) {
+    refs.energySummaryNote.textContent = "请先在“我的项目”中进入一个项目，再查看结算电量配置摘要。";
+    return;
+  }
+  if (!isProjectCreateCompleted(project)) {
+    refs.energySummaryNote.textContent = "请先完成步骤1基础信息保存，再查看结算电量配置摘要。";
+    return;
+  }
+  const energyState = getEnergyCompletionState(project);
+  const { completeYears, totalYears, annualInputYears, hasTypicalCurve, energyData } = energyState;
+  if (!totalYears) {
+    refs.energySummaryNote.textContent = "当前预测周期未设定，暂无法生成结算电量配置摘要。";
+    return;
+  }
+  if (!annualInputYears) {
+    refs.energySummaryNote.textContent = "当前尚未导入逐年总量模板数据。请先完成步骤1逐年总量导入。";
+    return;
+  }
+  if (!hasTypicalCurve) {
+    refs.energySummaryNote.textContent =
+      `已录入 ${annualInputYears}/${totalYears} 年逐年总量；第二步待完成，当前尚未选择典型曲线来源。` +
+      "请上传典型年8760小时模板，或调用所选省份典型曲线。";
+    return;
+  }
+  const annualRows = [];
+  for (let i = 0; i < project.forecastYears; i += 1) {
+    const year = project.startYear + i;
+    const item = energyData.annualSummary?.[year];
+    if (item?.status === "完整" && Array.isArray(energyData.hourlyByYear?.[year]) && energyData.hourlyByYear[year].length === 8760) {
+      annualRows.push({
+        year,
+        annualHours: Number(item.annualHours) || 0,
+        energyMwh: Number(item.energyMwh) || 0
+      });
+    }
+  }
+  if (!annualRows.length) {
+    refs.energySummaryNote.textContent = "逐年总量与典型曲线已识别，但尚未生成完整年度曲线，请重新导入逐年总量或重新调用典型曲线。";
+    return;
+  }
+  const sourceText = energyData.typicalCurveSource === "province_typical_curve"
+    ? `来源：已调用 ${describeProvinceTypicalCurve(project)} 典型曲线`
+    : "来源：已导入典型年8760小时模板";
+  const hoursValues = annualRows.map((item) => item.annualHours);
+  const energyValues = annualRows.map((item) => item.energyMwh);
+  const missingYears = listMissingEnergyYears(project, 8);
+  const missingText = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "；预测周期内年份已全部覆盖";
+  refs.energySummaryNote.textContent =
+    `${sourceText}；已完成 ${completeYears}/${totalYears} 年电量导入；年度小时范围 ${Math.min(...hoursValues).toFixed(2)}-${Math.max(...hoursValues).toFixed(2)} h；` +
+    `年度上网电量范围 ${Math.min(...energyValues).toFixed(2)}-${Math.max(...energyValues).toFixed(2)} MWh${missingText}。`;
+}
+
+function renderEnergyWorkspaceState() {
+  const project = getActiveProject();
+  const hasProject = Boolean(project);
+  const createReady = hasProject && isProjectCreateCompleted(project);
+  const blockedMessage = "请先完成步骤1基础信息保存，再执行结算电量配置。";
+  const setTemplateStatus = (element, stateText, stateClass, titleText = "") => {
+    if (!element) return;
+    element.textContent = stateText;
+    element.classList.remove("ready", "pending", "blocked");
+    if (stateClass) {
+      element.classList.add(stateClass);
+    }
+    if (titleText) {
+      element.title = titleText;
+    } else {
+      element.removeAttribute("title");
+    }
+  };
+  const setEnergyMetricValue = (element, text) => {
+    if (!element) return;
+    element.textContent = text;
+  };
+  const setHistoryEntryButtonState = (enabled, hint = "") => {
+    if (!refs.energyToHistoryButton) return;
+    refs.energyToHistoryButton.disabled = !enabled;
+    if (hint) {
+      refs.energyToHistoryButton.title = hint;
+    } else {
+      refs.energyToHistoryButton.removeAttribute("title");
+    }
+  };
+  const setControlDisabled = (element, disabled) => {
+    if (element) {
+      element.disabled = disabled;
+    }
+  };
+  const setEnergyControlState = ({
+    annualExport = true,
+    annualFile = true,
+    annualImport = true,
+    typicalExport = true,
+    typicalFile = true,
+    typicalImport = true,
+    provinceApply = true
+  }) => {
+    setControlDisabled(refs.exportEnergyAnnualTemplateButton, annualExport);
+    setControlDisabled(refs.energyAnnualFileInput, annualFile);
+    setControlDisabled(refs.importEnergyAnnualFileButton, annualImport);
+    setControlDisabled(refs.exportEnergyTypicalTemplateButton, typicalExport);
+    setControlDisabled(refs.energyTypicalFileInput, typicalFile);
+    setControlDisabled(refs.importEnergyTypicalFileButton, typicalImport);
+    setControlDisabled(refs.applyEnergyProvinceCurveButton, provinceApply);
+  };
+  const resetStep2ActionPresentation = () => {
+    if (refs.exportEnergyTypicalTemplateButton) {
+      refs.exportEnergyTypicalTemplateButton.textContent = "导出典型年8760模板";
+    }
+    if (refs.importEnergyTypicalFileButton) {
+      refs.importEnergyTypicalFileButton.textContent = "读取文件并导入";
+      setEnergyButtonVariant(refs.importEnergyTypicalFileButton, "primary");
+    }
+    if (refs.applyEnergyProvinceCurveButton) {
+      refs.applyEnergyProvinceCurveButton.textContent = "调用所选省份典型曲线";
+      setEnergyButtonVariant(refs.applyEnergyProvinceCurveButton, "ghost");
+    }
+    setEnergyPaneCurrentState(refs.energyStep2TypicalPane, refs.energyStep2TypicalPaneStatus, "");
+    setEnergyPaneCurrentState(refs.energyStep2ProvincePane, refs.energyStep2ProvincePaneStatus, "");
+  };
+
+  if (!refs.energyImportMessage) return;
+
+  if (!hasProject) {
+    resetStep2ActionPresentation();
+    appState.energyStep2Choice = sanitizeEnergyStep2Choice(appState.energyStep2Choice);
+    renderEnergyStep2ChoiceState();
+    renderEnergyStep2ChoiceSummary(null);
+    refs.energyImportMessage.removeAttribute("data-project-id");
+    if (refs.energyProjectContext) {
+      refs.energyProjectContext.textContent = "请选择项目并完成基础信息保存后，再执行上网电量配置。";
+    }
+    setTemplateStatus(refs.energyTemplateAnnualStatus, "待进入项目", "blocked");
+    setTemplateStatus(refs.energyTemplateTypicalStatus, "待进入项目", "blocked");
+    setTemplateStatus(refs.energyTemplateProvinceStatus, "待进入项目", "blocked");
+    setEnergyMetricValue(refs.energyPeriodLabel, "-");
+    setEnergyMetricValue(refs.energyModeLabel, "-");
+    setEnergyMetricValue(refs.energyCompleteYearsLabel, "0/0");
+    setEnergyMetricValue(refs.energyTotalMwhLabel, "0.00");
+    setHistoryEntryButtonState(false, "请先进入项目并完成上网电量配置。");
+    setEnergyImportMessage("请先在“我的项目”进入一个项目，再执行模板导出与文件导入。", "info", { toast: false });
+    setEnergyControlState({});
+    applyEnergyModeUi("annual_hours");
+    return;
+  }
+
+  const energyData = ensureProjectEnergyDataState(project);
+  const exports = ensureProjectEnergyTemplateExports(project);
+  const energyState = getEnergyCompletionState(project);
+  resetStep2ActionPresentation();
+  const isProjectSwitched = refs.energyImportMessage.dataset.projectId !== project.id;
+  if (isProjectSwitched) {
+    if (energyData.typicalCurveSource === "province_typical_curve") {
+      appState.energyStep2Choice = "province";
+    } else {
+      appState.energyStep2Choice = "typical";
+    }
+  }
+  renderEnergyStep2ChoiceState();
+  renderEnergyStep2ChoiceSummary(project);
+  const { completeYears, totalYears, annualInputYears, totalEnergyMwh } = energyState;
+  const periodText = createReady ? getForecastPeriodDisplayRange(project) : "待保存";
+  const projectContextText = createReady
+    ? `当前项目：${project.name} | ${getProvinceName(project.province)} / ${getAssetTypeLabel(project.assetType)} / ${getSiteTypeLabel(project.siteType)} / ${getStorageConfigText(project)} | 预测周期 ${periodText}`
+    : `当前项目：${project.name}。基础信息尚未完成，请先补齐省份、风/光类型、陆/海类型、配储信息、装机容量、开始年份和预测周期。`;
+  let modeLabel = "待配置";
+  if (annualInputYears > 0) {
+    if (energyData.typicalCurveSource === "province_typical_curve") {
+      modeLabel = "逐年总量 + 省份典型曲线";
+    } else if (energyData.typicalCurveSource === "typical_curve_8760") {
+      modeLabel = "逐年总量 + 典型年8760小时模板";
+    } else {
+      modeLabel = "仅逐年总量";
+    }
+  }
+  applyEnergyModeUi(energyData.mode);
+  refs.energyImportMessage.dataset.projectId = project.id;
+  if (refs.energyProjectContext) {
+    refs.energyProjectContext.textContent = projectContextText;
+  }
+  setEnergyMetricValue(refs.energyPeriodLabel, periodText);
+  setEnergyMetricValue(refs.energyModeLabel, modeLabel);
+  setEnergyMetricValue(refs.energyCompleteYearsLabel, `${completeYears}/${totalYears || 0}`);
+  setEnergyMetricValue(refs.energyTotalMwhLabel, totalEnergyMwh.toFixed(2));
+  const energyReadyForHistory = energyState.ready;
+  setHistoryEntryButtonState(
+    energyReadyForHistory,
+    energyReadyForHistory ? "进入下一步，查看历史现货电价分析。" : "请先完成全部预测年份的结算电量配置。"
+  );
+
+  if (!createReady) {
+    setTemplateStatus(refs.energyTemplateAnnualStatus, "待基础信息保存", "blocked");
+    setTemplateStatus(refs.energyTemplateTypicalStatus, "待基础信息保存", "blocked");
+    setTemplateStatus(refs.energyTemplateProvinceStatus, "待基础信息保存", "blocked");
+    setEnergyControlState({});
+    setEnergyImportMessage(blockedMessage, "warn", { toast: false });
+    return;
+  }
+
+  const annualReady = totalYears > 0 && annualInputYears === totalYears;
+  const hasTypicalCurve = energyState.hasTypicalCurve;
+  setTemplateStatus(
+    refs.energyTemplateAnnualStatus,
+    annualInputYears > 0 ? `已录入 ${annualInputYears}/${totalYears} 年` : (exports.annual_hours ? `已导出 ${formatExportStatusTime(exports.annual_hours)}` : "未导出"),
+    annualReady ? "ready" : ((annualInputYears > 0 || exports.annual_hours) ? "pending" : "pending"),
+    exports.annual_hours || ""
+  );
+  setTemplateStatus(
+    refs.energyTemplateTypicalStatus,
+    energyData.typicalCurveSource === "typical_curve_8760"
+      ? "已导入典型年8760小时模板"
+      : (exports.typical_curve_8760 ? `已导出 ${formatExportStatusTime(exports.typical_curve_8760)}` : "待导出"),
+    energyData.typicalCurveSource === "typical_curve_8760" ? "ready" : (exports.typical_curve_8760 ? "pending" : "pending"),
+    exports.typical_curve_8760 || ""
+  );
+  setTemplateStatus(
+    refs.energyTemplateProvinceStatus,
+    energyData.typicalCurveSource === "province_typical_curve"
+      ? `已调用 ${describeProvinceTypicalCurve(project)} 典型曲线`
+      : (exports.province_typical_curve ? `最近调用 ${formatExportStatusTime(exports.province_typical_curve)}` : "待调用"),
+    energyData.typicalCurveSource === "province_typical_curve" ? "ready" : "pending",
+    exports.province_typical_curve || ""
+  );
+
+  if (annualReady) {
+    if (energyData.typicalCurveSource === "typical_curve_8760") {
+      if (refs.exportEnergyTypicalTemplateButton) {
+        refs.exportEnergyTypicalTemplateButton.textContent = "重新导出模板";
+      }
+      if (refs.importEnergyTypicalFileButton) {
+        refs.importEnergyTypicalFileButton.textContent = "读取文件并更新典型曲线";
+        setEnergyButtonVariant(refs.importEnergyTypicalFileButton, "ghost");
+      }
+      setEnergyPaneCurrentState(
+        refs.energyStep2TypicalPane,
+        refs.energyStep2TypicalPaneStatus,
+        "当前正在使用这套典型年8760模板；如需替换，可重新上传覆盖。"
+      );
+    } else if (energyData.typicalCurveSource === "province_typical_curve") {
+      if (refs.applyEnergyProvinceCurveButton) {
+        refs.applyEnergyProvinceCurveButton.textContent = "重新调用当前省份曲线";
+      }
+      setEnergyPaneCurrentState(
+        refs.energyStep2ProvincePane,
+        refs.energyStep2ProvincePaneStatus,
+        `当前正在使用 ${describeProvinceTypicalCurve(project)} 典型曲线；如需刷新，可重新调用。`
+      );
+    }
+  }
+
+    setEnergyControlState({
+      annualExport: false,
+      annualFile: false,
+      annualImport: false,
+      typicalExport: false,
+      typicalFile: !annualReady,
+      typicalImport: !annualReady,
+      provinceApply: !annualReady
+    });
+
+  const currentMessage = String(refs.energyImportMessage.textContent || "").trim();
+  if (
+    isProjectSwitched
+    || !currentMessage
+    || currentMessage === blockedMessage
+    || currentMessage.includes("请先在“我的项目”进入一个项目")
+    || currentMessage.includes("请先创建")
+    || currentMessage.includes("支持自动识别")
+    || currentMessage.includes("当前识别模式")
+    || currentMessage.includes("当前已生成")
+    || currentMessage.includes("当前生成")
+  ) {
+    if (!annualInputYears) {
+      setEnergyImportMessage("步骤1必做：请先导出并上传逐年总量模板，填写测算周期内各年的总小时数。", "info", { toast: false });
+    } else if (!annualReady) {
+      setEnergyImportMessage(`逐年总量已录入 ${annualInputYears}/${totalYears} 年，请先补齐全部年度总小时数。`, "warn", { toast: false });
+    } else if (!hasTypicalCurve) {
+      setEnergyImportMessage("步骤2二选一：请上传典型年8760小时模板，或直接调用所选省份典型曲线。", "info", { toast: false });
+    } else if (energyReadyForHistory) {
+      setEnergyImportMessage(`逐年总量与典型曲线来源已配置完成，可进入历史电价分析。当前已生成 ${completeYears}/${totalYears} 年上网电量。`, "success", { toast: false });
+    } else {
+      const missingYears = listMissingEnergyYears(project, 6);
+      const missingHint = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "";
+      setEnergyImportMessage(`已完成逐年总量与典型曲线配置，当前生成 ${completeYears}/${totalYears} 年上网电量${missingHint}。`, "warn", { toast: false });
+    }
+  }
+}
+
+function ensureEnergyCurveChart() {
+  if (!refs.energyCurveChart || typeof window === "undefined" || !window.echarts) return null;
+  if (energyCurveChart && !energyCurveChart.isDisposed()) {
+    return energyCurveChart;
+  }
+  energyCurveChart = window.echarts.init(refs.energyCurveChart, null, { renderer: "canvas" });
+  if (!energyCurveResizeBound) {
+    window.addEventListener("resize", () => {
+      if (energyAnnualChart && !energyAnnualChart.isDisposed()) {
+        energyAnnualChart.resize();
+      }
+      if (energyCurveChart && !energyCurveChart.isDisposed()) {
+        energyCurveChart.resize();
+      }
+    });
+    energyCurveResizeBound = true;
+  }
+  return energyCurveChart;
+}
+
+function ensureEnergyAnnualChart() {
+  if (!refs.energyAnnualChart || typeof window === "undefined" || !window.echarts) return null;
+  if (energyAnnualChart && !energyAnnualChart.isDisposed()) {
+    return energyAnnualChart;
+  }
+  energyAnnualChart = window.echarts.init(refs.energyAnnualChart, null, { renderer: "canvas" });
+  if (!energyCurveResizeBound) {
+    window.addEventListener("resize", () => {
+      if (energyAnnualChart && !energyAnnualChart.isDisposed()) {
+        energyAnnualChart.resize();
+      }
+      if (energyCurveChart && !energyCurveChart.isDisposed()) {
+        energyCurveChart.resize();
+      }
+    });
+    energyCurveResizeBound = true;
+  }
+  return energyAnnualChart;
+}
+
+function setEnergyChartEmpty(chart, message) {
+  if (!chart) return;
+  const tokens = historyThemeTokens();
+  chart.clear();
+  chart.setOption({
+    animation: false,
+    xAxis: { show: false, type: "category", data: [] },
+    yAxis: { show: false, type: "value" },
+    series: [],
+    graphic: [{
+      type: "text",
+      left: "center",
+      top: "middle",
+      style: {
+        text: message,
+        fill: tokens.axisText,
+        fontWeight: 700,
+        fontSize: 14
+      }
+    }]
+  }, true);
+}
+
+function setEnergyChartsNoData(noteMessage, annualMessage = noteMessage, typicalMessage = noteMessage) {
+  if (refs.energyCurveNote) {
+    refs.energyCurveNote.textContent = noteMessage;
+  }
+  if (refs.energyCurveSubtitle) {
+    refs.energyCurveSubtitle.textContent = "按月份拆解典型年24小时曲线，支持后续替换为正式数据库结果。";
+  }
+  setEnergyChartEmpty(ensureEnergyAnnualChart(), annualMessage);
+  setEnergyChartEmpty(ensureEnergyCurveChart(), typicalMessage);
+}
+
+function renderEnergyCurveChart() {
+  if (appState.activePage !== "energy-page") return;
+  if (!refs.energyCurveChart || !refs.energyAnnualChart) return;
+  if (typeof window === "undefined" || !window.echarts) return;
+  const project = getActiveProject();
+  if (!project) {
+    setEnergyChartsNoData(
+      "请先进入项目，再查看上网电量图形展示。",
+      "请先进入项目，再查看逐年上网电量小时数。",
+      "请先进入项目，再查看典型年日内曲线（月度）。"
+    );
+    return;
+  }
+  if (!isProjectCreateCompleted(project)) {
+    setEnergyChartsNoData(
+      "请先完成步骤1基础信息保存，再查看上网电量图形展示。",
+      "请先完成步骤1基础信息保存，再查看逐年上网电量小时数。",
+      "请先完成步骤1基础信息保存，再查看典型年日内曲线（月度）。"
+    );
+    return;
+  }
+  const energyState = getEnergyCompletionState(project);
+  const energyData = energyState.energyData;
+  const forecastYears = Number.isInteger(project.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
+  const annualRows = Array.from({ length: forecastYears }, (_, index) => {
+    const year = project.startYear + index;
+    const annualHours = Number(
+      energyData.annualSummary?.[year]?.annualHours
+      ?? energyData.annualInputByYear?.[year]
+      ?? 0
+    );
+    return {
+      year,
+      annualHours: Number.isFinite(annualHours) ? annualHours : 0
+    };
+  });
+  const hasAnnualValues = annualRows.some((item) => item.annualHours > 0);
+  const hasConfiguredTypicalCurve = energyState.hasTypicalCurve;
+  const previewMeta = hasConfiguredTypicalCurve ? getEnergyCurvePreviewProfile(project) : null;
+  const typicalProfile = previewMeta?.profile || null;
+  const chart = ensureEnergyCurveChart();
+  const annualChart = ensureEnergyAnnualChart();
+  if (!chart || !annualChart) return;
+  const tokens = historyThemeTokens();
+
+  if (hasAnnualValues) {
+    annualChart.setOption({
+      animationDuration: 320,
+      color: ["#2d7dd2"],
+      grid: { left: 72, right: 24, top: 36, bottom: 62, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: tokens.tooltipBg,
+        borderColor: tokens.tooltipBorder,
+        textStyle: { color: tokens.axisText },
+        valueFormatter: (value) => `${Number(value || 0).toFixed(2)} h`
+      },
+      xAxis: {
+        type: "category",
+        data: annualRows.map((item) => `${item.year}`),
+        axisLabel: { color: tokens.axisText, margin: 12 },
+        axisLine: { lineStyle: { color: tokens.axisLine } }
+      },
+      yAxis: {
+        type: "value",
+        name: "小时数 h",
+        nameLocation: "middle",
+        nameGap: 52,
+        nameRotate: 90,
+        nameTextStyle: {
+          color: tokens.axisText,
+          fontWeight: 600,
+          fontSize: 13,
+          padding: [0, 0, 10, 0]
+        },
+        axisLabel: {
+          color: tokens.axisText,
+          formatter: (value) => `${Number(value).toFixed(0)}`,
+          margin: 12
+        },
+        splitLine: { lineStyle: { color: tokens.splitLine } }
+      },
+      series: [{
+        type: "bar",
+        barMaxWidth: 36,
+        itemStyle: { borderRadius: [6, 6, 0, 0] },
+        data: annualRows.map((item) => Number(item.annualHours.toFixed(2)))
+      }]
+    }, true);
+  } else {
+    setEnergyChartEmpty(annualChart, "请先导出逐年总量模板并上传结果。");
+  }
+
+  if (Array.isArray(typicalProfile) && typicalProfile.length === 8760) {
+    const totalWeight = typicalProfile.reduce((sum, value) => {
+      const numericValue = Number(value);
+      return Number.isFinite(numericValue) && numericValue >= 0 ? sum + numericValue : sum;
+    }, 0);
+    const hoursScale = totalWeight > 0 ? 8760 / totalWeight : 0;
+    const monthHourlyHours = Array.from({ length: 12 }, () => Array(24).fill(0));
+    typicalProfile.forEach((value, index) => {
+      const numericValue = Number(value);
+      if (!Number.isFinite(numericValue) || numericValue < 0) return;
+      const dayOfYear = Math.floor(index / 24) + 1;
+      const hourIndex = index % 24;
+      const { month } = dayOfYearToMonthDay(dayOfYear);
+      monthHourlyHours[month - 1][hourIndex] += numericValue * hoursScale;
+    });
+    const monthLabels = Array.from({ length: 12 }, (_, index) => `${index + 1}月`);
+    const hourLabels = Array.from({ length: 24 }, (_, index) => `${index + 1}`);
+    const monthColors = [
+      "#4f8ff7",
+      "#66b5ff",
+      "#44c3b6",
+      "#6ed28a",
+      "#f2b24f",
+      "#f58c4c",
+      "#ec6e5b",
+      "#d7658d",
+      "#9a6af0",
+      "#7f8cff",
+      "#4ec0f1",
+      "#42a86b"
+    ];
+    chart.setOption({
+      animationDuration: 320,
+      color: monthColors,
+      legend: {
+        type: "plain",
+        top: 4,
+        left: "center",
+        width: "92%",
+        itemWidth: 18,
+        itemHeight: 10,
+        itemGap: 12,
+        textStyle: {
+          color: tokens.axisText,
+          fontSize: 12
+        }
+      },
+      grid: { left: 72, right: 30, top: 76, bottom: 70, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: tokens.tooltipBg,
+        borderColor: tokens.tooltipBorder,
+        textStyle: { color: tokens.axisText },
+        valueFormatter: (value) => `${Number(value || 0).toFixed(2)} h`
+      },
+      xAxis: {
+        type: "category",
+        name: "小时",
+        nameLocation: "middle",
+        nameGap: 38,
+        nameTextStyle: {
+          color: tokens.axisText,
+          fontWeight: 600,
+          fontSize: 13
+        },
+        data: hourLabels,
+        axisLabel: { color: tokens.axisText, margin: 12 },
+        axisLine: { lineStyle: { color: tokens.axisLine } },
+        splitLine: { show: false }
+      },
+      yAxis: {
+        type: "value",
+        name: "小时数 h",
+        nameLocation: "middle",
+        nameGap: 56,
+        nameRotate: 90,
+        nameTextStyle: {
+          color: tokens.axisText,
+          fontWeight: 600,
+          fontSize: 13,
+          padding: [0, 0, 10, 0]
+        },
+        axisLabel: {
+          color: tokens.axisText,
+          formatter: (value) => `${Number(value).toFixed(0)}`,
+          margin: 12
+        },
+        splitLine: { lineStyle: { color: tokens.splitLine } }
+      },
+      series: monthLabels.map((label, monthIndex) => ({
+        name: label,
+        type: "line",
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 2 },
+        data: monthHourlyHours[monthIndex].map((value) => Number(value.toFixed(2)))
+      }))
+    }, true);
+  } else {
+    setEnergyChartEmpty(chart, "第二步未完成：请导入典型年8760模板，或调用所选省份典型曲线。");
+  }
+
+  if (refs.energyCurveSubtitle) {
+    refs.energyCurveSubtitle.textContent = previewMeta?.sourceLabel
+      ? `当前来源：${previewMeta.sourceLabel}；横轴为1-24时，图例区分1-12月。`
+      : "横轴为1-24时，纵轴为小时数，图例区分1-12月。";
+  }
+  if (refs.energyCurveNote) {
+    if (!hasAnnualValues) {
+      refs.energyCurveNote.textContent = "请先完成逐年总量模板导入；完成后左图展示年度小时数。";
+    } else if (!hasConfiguredTypicalCurve) {
+      refs.energyCurveNote.textContent = "逐年总量已导入；第二步完成后，右图将展示生效典型年24小时曲线。";
+    } else {
+      refs.energyCurveNote.textContent = `左图展示测算周期内逐年总小时数；右图展示${previewMeta?.sourceLabel || "典型年按月份拆解的24小时曲线"}。`;
+    }
+  }
+}
+
+function dayModeMatchesMonth(mode, month) {
+  if (mode === "summer") return month >= 6 && month <= 8;
+  if (mode === "winter") return month === 12 || month <= 2;
+  return true;
+}
+
+function createHistoryTypicalAccumulator() {
+  return {
+    workdaySum: Array(96).fill(0),
+    workdayCount: Array(96).fill(0),
+    weekendSum: Array(96).fill(0),
+    weekendCount: Array(96).fill(0)
+  };
+}
+
+function pushHistoryTypical(acc, isWeekend, quarterIndex, price) {
+  if (isWeekend) {
+    acc.weekendSum[quarterIndex] += price;
+    acc.weekendCount[quarterIndex] += 1;
+  } else {
+    acc.workdaySum[quarterIndex] += price;
+    acc.workdayCount[quarterIndex] += 1;
+  }
+}
+
+function mergeHistoryTypical(target, source) {
+  for (let i = 0; i < 96; i += 1) {
+    target.workdaySum[i] += source.workdaySum[i];
+    target.workdayCount[i] += source.workdayCount[i];
+    target.weekendSum[i] += source.weekendSum[i];
+    target.weekendCount[i] += source.weekendCount[i];
+  }
+}
+
+function percentileSorted(sortedValues, p) {
+  if (!sortedValues.length) return null;
+  const rank = (sortedValues.length - 1) * p;
+  const lower = Math.floor(rank);
+  const upper = Math.ceil(rank);
+  if (lower === upper) return sortedValues[lower];
+  const weight = rank - lower;
+  return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
+}
+
+function stddev(values) {
+  if (!values.length) return 0;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length;
+  return Math.sqrt(Math.max(variance, 0));
+}
+
+function historyCacheKey(project) {
+  return [
+    project.id,
+    project.province,
+    project.capacityMw,
+    project.startYear,
+    project.assetType,
+    project.siteType,
+    project.hasStorage ? "storage" : "plain",
+    project.storagePowerMw || 0,
+    project.storageDurationH || 0
+  ].join("|");
+}
+
+function getHistoryMockShapeFactors(project) {
+  const isPhotovoltaic = project.assetType === "photovoltaic";
+  const isOffshore = project.siteType === "offshore";
+  const hasStorage = Boolean(project.hasStorage);
+  const storageScale = hasStorage
+    ? clamp(((project.storagePowerMw || 0) * (project.storageDurationH || 0)) / Math.max(project.capacityMw || 1, 1), 0.05, 0.3)
+    : 0;
+
+  return {
+    baseShift: isPhotovoltaic ? -14 : 10,
+    yearVolatility: isPhotovoltaic ? 0.96 : 1.07,
+    winterScale: isOffshore ? 1.2 : (isPhotovoltaic ? 0.72 : 1),
+    summerScale: isPhotovoltaic ? 1.22 : 0.92,
+    morningPeakWeight: isPhotovoltaic ? 0.17 : 0.24,
+    eveningPeakWeight: hasStorage ? 0.26 : (isPhotovoltaic ? 0.37 : 0.42),
+    noonValleyWeight: hasStorage ? (isPhotovoltaic ? 0.11 : 0.08) : (isPhotovoltaic ? 0.21 : 0.13),
+    nightValleyWeight: isOffshore ? 0.03 : 0.07,
+    weekendLevel: isPhotovoltaic ? 0.94 : 0.91,
+    noiseAmplitude: isOffshore ? 0.16 : (isPhotovoltaic ? 0.2 : 0.22),
+    spikeThreshold: hasStorage ? 0.9978 : (isPhotovoltaic ? 0.9968 : 0.9962),
+    spikeScale: hasStorage ? 0.78 : 1,
+    negativeThreshold: hasStorage ? 0.9968 : (isPhotovoltaic ? 0.9918 : 0.9946),
+    negativeScale: hasStorage ? 0.55 : (isPhotovoltaic ? 1 : 0.78),
+    storageScale
+  };
+}
+
+function buildMockHistorySpotAnalysisDataset(project) {
+  const cacheKey = historyCacheKey(project);
+  if (historyAnalysisCache.has(cacheKey)) {
+    return historyAnalysisCache.get(cacheKey);
+  }
+  const factors = getHistoryMockShapeFactors(project);
+  const base = getPriceBaseForProvince(project.province) + factors.baseShift;
+  const endYear = project.startYear - 1;
+  const startYear = endYear - 7;
+  const seedBase = Math.round((project.capacityMw || 0) * 10)
+    + project.startYear * 7
+    + (project.siteType === "offshore" ? 211 : 109)
+    + (project.assetType === "photovoltaic" ? 307 : 173)
+    + (project.hasStorage ? 419 : 0);
+  const years = [];
+
+  for (let year = startYear; year <= endYear; year += 1) {
+    const monthlySums = Array(12).fill(0);
+    const monthlyCounts = Array(12).fill(0);
+    const monthValues = Array.from({ length: 12 }, () => []);
+    const hourlySumsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
+    const hourlyCountsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
+    const typical = {
+      annual: createHistoryTypicalAccumulator(),
+      summer: createHistoryTypicalAccumulator(),
+      winter: createHistoryTypicalAccumulator()
+    };
+    const values = [];
+
+    for (let day = 1; day <= 365; day += 1) {
+      const { month, day: dayOfMonth } = dayOfYearToMonthDay(day, false);
+      const monthIndex = month - 1;
+      const dayIndex = day - 1;
+      const dayOfWeek = new Date(Date.UTC(year, monthIndex, dayOfMonth)).getUTCDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const winterLoad = 0.18 * Math.cos(((dayIndex - 12) / 365) * 2 * Math.PI) * factors.winterScale;
+      const summerLoad = 0.16 * Math.cos(((dayIndex - 196) / 365) * 2 * Math.PI) * factors.summerScale;
+      const seasonal = 1 + winterLoad + summerLoad;
+      const yearFactor = 0.92 + ((year - startYear) / 7) * (0.16 * factors.yearVolatility);
+
+      for (let quarter = 0; quarter < 96; quarter += 1) {
+        const hour = quarter / 4;
+        const morningPeak = Math.exp(-Math.pow((hour - 8.5) / 2.2, 2));
+        const eveningPeak = 1.22 * Math.exp(-Math.pow((hour - 18.4) / 2.9, 2));
+        const noonValley = 0.13 * Math.exp(-Math.pow((hour - 13.2) / 2.4, 2));
+        const nightValley = 0.07 * Math.exp(-Math.pow((hour - 3.2) / 2.8, 2));
+        const storageShift = factors.storageScale;
+        const diurnal = 0.9
+          + factors.morningPeakWeight * morningPeak
+          + factors.eveningPeakWeight * eveningPeak
+          - (factors.noonValleyWeight - storageShift * 0.05) * noonValley
+          - factors.nightValleyWeight * nightValley;
+        const weekendFactor = isWeekend ? factors.weekendLevel : 1;
+        const randomFactor = 1 + (pseudoNoise(dayIndex * 97 + quarter, seedBase + year) - 0.5) * factors.noiseAmplitude;
+        let price = base * yearFactor * seasonal * diurnal * weekendFactor * randomFactor;
+
+        const spikeSeed = pseudoNoise(dayIndex * 53 + quarter, seedBase + year + 37);
+        if (spikeSeed > factors.spikeThreshold) {
+          price *= 1.38 + (spikeSeed - factors.spikeThreshold) * 26 * factors.spikeScale;
+        }
+        const negativeSeed = pseudoNoise(dayIndex * 31 + quarter, seedBase + year + 73);
+        if (
+          hour >= 10.5 && hour <= 15.5
+          && (month === 4 || month === 5 || month === 10 || (project.assetType === "photovoltaic" && month === 9))
+          && negativeSeed > factors.negativeThreshold
+        ) {
+          price = -5 - 85 * pseudoNoise(dayIndex * 43 + quarter, seedBase + year + 91) * factors.negativeScale;
+        }
+        price = clamp(price, -120, 880);
+
+        const hourSlot = Math.floor(quarter / 4);
+        values.push(price);
+        monthlySums[monthIndex] += price;
+        monthlyCounts[monthIndex] += 1;
+        monthValues[monthIndex].push(price);
+        hourlySumsByMonth[monthIndex][hourSlot] += price;
+        hourlyCountsByMonth[monthIndex][hourSlot] += 1;
+
+        pushHistoryTypical(typical.annual, isWeekend, quarter, price);
+        if (dayModeMatchesMonth("summer", month)) {
+          pushHistoryTypical(typical.summer, isWeekend, quarter, price);
+        }
+        if (dayModeMatchesMonth("winter", month)) {
+          pushHistoryTypical(typical.winter, isWeekend, quarter, price);
+        }
+      }
+    }
+
+    years.push({
+      year,
+      values,
+      monthValues,
+      monthlyAvg: monthlySums.map((sum, idx) => (monthlyCounts[idx] ? sum / monthlyCounts[idx] : null)),
+      hourlySumsByMonth,
+      hourlyCountsByMonth,
+      typical
+    });
+  }
+
+  const payload = {
+    sourceType: "database",
+    mock: true,
+    startYear,
+    endYear,
+    years
+  };
+  historyAnalysisCache.set(cacheKey, payload);
+  if (historyAnalysisCache.size > 24) {
+    const firstKey = historyAnalysisCache.keys().next().value;
+    if (firstKey) historyAnalysisCache.delete(firstKey);
+  }
+  return payload;
+}
+
+function buildHistorySpotAnalysisDataset(project) {
+  return buildMockHistorySpotAnalysisDataset(project);
+}
+
+function historyThemeTokens() {
+  if (appState.theme === "dark") {
+    return {
+      axisText: "#c7d4e6",
+      axisLine: "#476081",
+      splitLine: "rgba(116, 142, 177, 0.22)",
+      legendText: "#c7d4e6",
+      tooltipBg: "rgba(19, 31, 46, 0.95)",
+      tooltipBorder: "#4e6790"
+    };
+  }
+  if (appState.theme === "eye") {
+    return {
+      axisText: "#4d6658",
+      axisLine: "#a2bb9f",
+      splitLine: "rgba(129, 156, 120, 0.22)",
+      legendText: "#435d4d",
+      tooltipBg: "rgba(243, 249, 237, 0.95)",
+      tooltipBorder: "#9db79a"
+    };
+  }
+  return {
+    axisText: "#5b6f89",
+    axisLine: "#bfd0e4",
+    splitLine: "rgba(151, 170, 196, 0.24)",
+    legendText: "#5b6f89",
+    tooltipBg: "rgba(255, 255, 255, 0.96)",
+    tooltipBorder: "#c9d8eb"
+  };
+}
+
+function ensureHistoryChart(chartKey, node) {
+  if (!node || !window.echarts) return null;
+  const existed = historyChartInstances[chartKey];
+  if (existed && !existed.isDisposed()) {
+    return existed;
+  }
+  const chart = window.echarts.init(node, null, { renderer: "canvas" });
+  historyChartInstances[chartKey] = chart;
+  return chart;
+}
+
+function ensureHistoryCharts() {
+  const charts = {
+    monthTrend: ensureHistoryChart("monthTrend", refs.historyMonthTrendChart),
+    typicalDay: ensureHistoryChart("typicalDay", refs.historyTypicalDayChart),
+    distribution: ensureHistoryChart("distribution", refs.historyDistributionChart),
+    heatmap: ensureHistoryChart("heatmap", refs.historyHeatmapChart),
+    boxplot: ensureHistoryChart("boxplot", refs.historyBoxplotChart)
+  };
+  if (!historyChartsResizeBound && typeof window !== "undefined") {
+    window.addEventListener("resize", () => {
+      Object.values(historyChartInstances).forEach((chart) => {
+        if (chart && !chart.isDisposed()) chart.resize();
+      });
+    });
+    historyChartsResizeBound = true;
+  }
+  return charts;
+}
+
+function queueHistoryChartsResize() {
+  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      Object.values(historyChartInstances).forEach((chart) => {
+        if (chart && !chart.isDisposed()) {
+          chart.resize();
+        }
+      });
+    });
+  });
+}
+
+function queueHistoryChartsRefresh() {
+  if (typeof window === "undefined") return;
+  if (historyChartsRefreshTimer) {
+    window.clearTimeout(historyChartsRefreshTimer);
+  }
+  historyChartsRefreshTimer = window.setTimeout(() => {
+    historyChartsRefreshTimer = null;
+    if (resolveVisiblePageId(appState.activePage) !== "history-page") return;
+    renderHistoryPrices();
+  }, 90);
+}
+
+function scenarioVisualThemeTokens() {
+  if (appState.theme === "dark") {
+    return {
+      axisText: "#b8cae1",
+      axisLine: "#4b617d",
+      splitLine: "rgba(118, 145, 176, 0.22)",
+      tooltipBg: "rgba(28, 40, 58, 0.96)",
+      tooltipBorder: "#4a6180",
+      positive: "#6aa8ff",
+      positiveSoft: "#8cc5ff",
+      negative: "#ef9b63",
+      negativeSoft: "#d7b083",
+      mechanism: "#4e90ff",
+      market: "#6fb18b",
+      trade: "#8b8df4",
+      env: "#70c690",
+      carbon: "#a58cff",
+      storage: "#c294ef",
+      other: "#6ec9c1"
+    };
+  }
+  if (appState.theme === "eye") {
+    return {
+      axisText: "#47604e",
+      axisLine: "#adc3af",
+      splitLine: "rgba(139, 168, 141, 0.24)",
+      tooltipBg: "rgba(245, 250, 239, 0.96)",
+      tooltipBorder: "#acc4ad",
+      positive: "#4a8e74",
+      positiveSoft: "#7eb79d",
+      negative: "#d58e4d",
+      negativeSoft: "#c7b06a",
+      mechanism: "#3f7cb0",
+      market: "#78a86e",
+      trade: "#8174b4",
+      env: "#5f9d79",
+      carbon: "#9a7fca",
+      storage: "#a27ab9",
+      other: "#5b988e"
+    };
+  }
+  return {
+    axisText: "#5b6f89",
+    axisLine: "#bfd0e4",
+    splitLine: "rgba(151, 170, 196, 0.24)",
+    tooltipBg: "rgba(255, 255, 255, 0.96)",
+    tooltipBorder: "#c9d8eb",
+    positive: "#56a36f",
+    positiveSoft: "#79b592",
+    negative: "#e08a4a",
+    negativeSoft: "#d9b07a",
+    mechanism: "#3d7ce0",
+    market: "#79b592",
+    trade: "#6f6bd9",
+    env: "#56a36f",
+    carbon: "#8a69c8",
+    storage: "#a36cc1",
+    other: "#3fa096"
+  };
+}
+
+function getScenarioVisualChartNode(key) {
+  const nodeMap = {
+    energy: refs.scenarioVisualEnergyChart,
+    unit: refs.scenarioVisualUnitChart,
+    trend: refs.scenarioVisualTrendChart
+  };
+  return nodeMap[key] || null;
+}
+
+function ensureScenarioVisualChart(key) {
+  const node = getScenarioVisualChartNode(key);
+  if (!node || !window.echarts) return null;
+  const existing = scenarioVisualCharts[key];
+  if (existing && !existing.isDisposed()) {
+    return existing;
+  }
+  scenarioVisualCharts[key] = window.echarts.init(node, null, { renderer: "canvas" });
+  if (!scenarioVisualResizeBound && typeof window !== "undefined") {
+    window.addEventListener("resize", () => {
+      Object.values(scenarioVisualCharts).forEach((chart) => {
+        if (chart && !chart.isDisposed()) {
+          chart.resize();
+        }
+      });
+    });
+    scenarioVisualResizeBound = true;
+  }
+  return scenarioVisualCharts[key];
+}
+
+function getScenarioVisualCharts() {
+  return ["energy", "trend", "unit"]
+    .map((key) => ensureScenarioVisualChart(key))
+    .filter(Boolean);
+}
+
+function getScenarioVisualYears(project) {
+  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears) || project.forecastYears < 1) {
+    return [];
+  }
+  const count = clamp(Number(project.forecastYears), 1, 30);
+  return Array.from({ length: count }, (_, index) => project.startYear + index);
+}
+
+function getScenarioVisualEnergyMwh(project, year, energyData, resultRow = null) {
+  const resultEnergy = Number(resultRow?.energyMwh);
+  if (Number.isFinite(resultEnergy) && resultEnergy > 0) return resultEnergy;
+  const summaryEnergy = Number(energyData?.annualSummary?.[year]?.energyMwh);
+  if (Number.isFinite(summaryEnergy) && summaryEnergy > 0) return summaryEnergy;
+  const summaryAnnualHours = Number(energyData?.annualSummary?.[year]?.annualHours);
+  if (Number.isFinite(summaryAnnualHours) && summaryAnnualHours > 0 && Number.isFinite(project?.capacityMw)) {
+    return summaryAnnualHours * project.capacityMw;
+  }
+  const annualInputHours = Number(energyData?.annualInputByYear?.[year]);
+  if (Number.isFinite(annualInputHours) && annualInputHours > 0 && Number.isFinite(project?.capacityMw)) {
+    return annualInputHours * project.capacityMw;
+  }
+  const hourlyHours = energyData?.hourlyByYear?.[year];
+  if (!Array.isArray(hourlyHours) || hourlyHours.length !== 8760 || !Number.isFinite(project?.capacityMw)) return 0;
+  return hourlyHours.reduce((sum, value) => sum + (Number(value) || 0), 0) * project.capacityMw;
+}
+
+function buildScenarioVisualRows(project, scenario) {
+  const cfg = scenario?.config || {};
+  const years = getScenarioVisualYears(project);
+  const energyData = ensureProjectEnergyDataDerivedState(project);
+  const resultRowsByYear = new Map(
+    (project?.resultsByScenario?.[scenario?.id]?.annualRows || [])
+      .map((row) => [Number(row.year), row])
+      .filter(([year]) => Number.isInteger(year))
+  );
+  const storageSupplementPerMwh = project?.hasStorage
+    ? Number(cfg.storageArbitragePrice || 0)
+      + Number(cfg.storageCapacityCompPrice || 0)
+      + Number(cfg.storageAncillaryRevenuePrice || 0)
+      + Number(cfg.storageOtherRevenuePrice || 0)
+    : 0;
+
+  return years.map((year, index) => {
+    const resultRow = resultRowsByYear.get(year) || null;
+    const energyMwh = getScenarioVisualEnergyMwh(project, year, energyData, resultRow);
+    const activeMonths = cfg.mechanismEnabled
+      ? mechanismActiveMonthsForYear(year, cfg.mechanismStartYm, cfg.mechanismEndYm)
+      : 0;
+    const calculatedMechanismRatio = cfg.mechanismEnabled
+      ? clamp(Number(cfg.mechanismRatio || 0), 0, 1) * (activeMonths / 12)
+      : 0;
+    const resultMechanismRatio = Number(resultRow?.mechanismRatio);
+    const mechanismRatio = Number.isFinite(resultMechanismRatio)
+      ? clamp(resultMechanismRatio, 0, 1)
+      : calculatedMechanismRatio;
+    const marketRatio = clamp(1 - mechanismRatio, 0, 1);
+    const resultMarketEnergy = Number(resultRow?.nonMechanismEnergy);
+    const marketEnergy = Number.isFinite(resultMarketEnergy) && resultMarketEnergy >= 0
+      ? resultMarketEnergy
+      : Math.max(0, energyMwh * marketRatio);
+    const mechanismEnergy = Math.max(0, energyMwh - marketEnergy);
+    const ltPnlPrice = tradeStrategyPnlPriceForYear(cfg, index + 1, year);
+    const envAllocation = getEnvValueAllocation(project, cfg, year);
+    const envTotalRatio = Math.min(1, Math.max(0, envAllocation.totalRatio));
+    const greenCertEnergy = marketEnergy * envAllocation.greenCertRatio;
+    const greenPremiumEnergy = marketEnergy * envAllocation.greenPremiumRatio;
+    const carbonEnergy = marketEnergy * envAllocation.carbonRatio;
+    const unredeemedMarketEnergy = Math.max(0, marketEnergy * (1 - envTotalRatio));
+    const feeConfig = getFeeConfigForYear(project, cfg, year);
+    const feeTotal = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
+    const envUnitValue = envAllocation.unitValuePerMarketMwh;
+    const tradeImpact = marketRatio * ltPnlPrice;
+    const envImpact = marketRatio * envUnitValue;
+    const storageImpact = storageSupplementPerMwh;
+    const otherIncomeImpact = feeConfig.otherIncome;
+    const feeImpact = -feeTotal;
+
+    return {
+      year,
+      yearLabel: String(year),
+      energyMwh,
+      activeMonths,
+      mechanismActive: cfg.mechanismEnabled && activeMonths > 0,
+      mechanismRatio,
+      marketRatio,
+      mechanismEnergy,
+      marketEnergy,
+      greenCertEnergy,
+      greenPremiumEnergy,
+      carbonEnergy,
+      unredeemedMarketEnergy,
+      mechanismPrice: cfg.mechanismEnabled ? Number(cfg.mechanismPrice || 0) : 0,
+      ltPnlPrice,
+      envAllocation,
+      envUnitValue,
+      feeConfig,
+      feeTotal,
+      storageSupplementPerMwh,
+      tradeImpact,
+      envImpact,
+      storageImpact,
+      otherIncomeImpact,
+      feeImpact,
+      netImpact: tradeImpact + envImpact + storageImpact + otherIncomeImpact + feeImpact
+    };
+  });
+}
+
+function scenarioVisualYearInterval(rows, targetTicks = 8) {
+  return Math.max(0, Math.ceil((rows?.length || 0) / targetTicks) - 1);
+}
+
+function queueScenarioVisualResize() {
+  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      Object.values(scenarioVisualCharts).forEach((chart) => {
+        if (chart && !chart.isDisposed()) {
+          chart.resize();
+        }
+      });
+    });
+  });
+}
+
+function renderScenarioVisualPlaceholder(message) {
+  if (refs.scenarioVisualMessage) {
+    refs.scenarioVisualMessage.textContent = message;
+  }
+
+  if (resolveVisiblePageId(appState.activePage) !== "scenario-page") return;
+  const tokens = scenarioVisualThemeTokens();
+  getScenarioVisualCharts().forEach((chart) => {
+    chart.clear();
+    chart.setOption({
+      animation: false,
+      xAxis: { show: false, type: "value" },
+      yAxis: { show: false, type: "category", data: [] },
+      series: [],
+      graphic: [{
+        type: "text",
+        left: "center",
+        top: "middle",
+        style: {
+          text: message,
+          fill: tokens.axisText,
+          fontSize: 14,
+          fontWeight: 600
+        }
+      }]
+    }, true);
+  });
+}
+
+function scenarioVisualEmptyOption(message, tokens) {
+  return {
+    animation: false,
+    xAxis: { show: false, type: "value" },
+    yAxis: { show: false, type: "category", data: [] },
+    series: [],
+    graphic: [{
+      type: "text",
+      left: "center",
+      top: "middle",
+      style: {
+        text: message,
+        fill: tokens.axisText,
+        fontSize: 14,
+        fontWeight: 700
+      }
+    }]
+  };
+}
+
+function renderScenarioVisualization() {
+  if (!refs.scenarioVisualMessage) return;
+  const project = getActiveProject();
+  if (!project) {
+    renderScenarioVisualPlaceholder("请选择项目后查看参数结构。");
+    return;
+  }
+  ensureScenarioMetadata(project);
+  const scenario = getActiveScenario(project);
+  if (!scenario) {
+    renderScenarioVisualPlaceholder("请选择方案后查看参数结构。");
+    return;
+  }
+
+  const provinceName = getProvinceName(project.province || "");
+
+  refs.scenarioVisualMessage.textContent = `当前展示：${scenario.name} | ${provinceName || "未选省份"} / ${getAssetTypeLabel(project.assetType)} / ${getSiteTypeLabel(project.siteType)} / ${getStorageConfigText(project)}`;
+
+  if (resolveVisiblePageId(appState.activePage) !== "scenario-page") return;
+  const tokens = scenarioVisualThemeTokens();
+  const tooltipBase = {
+    backgroundColor: tokens.tooltipBg,
+    borderColor: tokens.tooltipBorder,
+    borderWidth: 1,
+    textStyle: { color: tokens.axisText }
+  };
+  const valueAxis = (name = "") => ({
+    type: "value",
+    name,
+    nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
+    axisLabel: { color: tokens.axisText },
+    axisLine: { lineStyle: { color: tokens.axisLine } },
+    splitLine: { lineStyle: { color: tokens.splitLine } }
+  });
+  const categoryAxis = (data) => ({
+    type: "category",
+    data,
+    axisLabel: { color: tokens.axisText },
+    axisLine: { lineStyle: { color: tokens.axisLine } },
+    axisTick: { show: false }
+  });
+  const visualRows = buildScenarioVisualRows(project, scenario);
+  const yearLabels = visualRows.map((row) => row.yearLabel);
+  const yearInterval = scenarioVisualYearInterval(visualRows);
+  const categoryYearAxis = {
+    ...categoryAxis(yearLabels),
+    axisLabel: { color: tokens.axisText, interval: yearInterval, hideOverlap: true, fontSize: 11 }
+  };
+  const legendBase = {
+    top: 0,
+    itemWidth: 10,
+    itemHeight: 10,
+    textStyle: { color: tokens.axisText, fontWeight: 700 }
+  };
+  const axisTooltip = {
+    ...tooltipBase,
+    trigger: "axis",
+    axisPointer: { type: "shadow" }
+  };
+  const lineTooltip = {
+    ...tooltipBase,
+    trigger: "axis"
+  };
+
+  const energyChart = ensureScenarioVisualChart("energy");
+  if (energyChart) {
+    if (!visualRows.some((row) => row.energyMwh > 0)) {
+      energyChart.setOption(scenarioVisualEmptyOption("请先完成上网电量配置", tokens), true);
+    } else {
+      const hasActiveMechanismPrice = visualRows.some((row) => row.mechanismActive);
+      const mechanismYAxis = [
+        valueAxis("万MWh")
+      ];
+      if (hasActiveMechanismPrice) {
+        mechanismYAxis.push({
+          ...valueAxis("元/MWh"),
+          position: "right"
+        });
+      }
+      const mechanismSeries = [
+        {
+          name: "机制电量",
+          type: "bar",
+          stack: "energy",
+          barWidth: 18,
+          data: visualRows.map((row) => Number((row.mechanismEnergy / 10000).toFixed(4)))
+        },
+        {
+          name: "绿证电量",
+          type: "bar",
+          stack: "energy",
+          barWidth: 18,
+          data: visualRows.map((row) => Number((row.greenCertEnergy / 10000).toFixed(4)))
+        },
+        {
+          name: "绿电溢价电量",
+          type: "bar",
+          stack: "energy",
+          barWidth: 18,
+          data: visualRows.map((row) => Number((row.greenPremiumEnergy / 10000).toFixed(4)))
+        },
+        {
+          name: "碳收益电量",
+          type: "bar",
+          stack: "energy",
+          barWidth: 18,
+          data: visualRows.map((row) => Number((row.carbonEnergy / 10000).toFixed(4)))
+        },
+        {
+          name: "未兑现市场化电量",
+          type: "bar",
+          stack: "energy",
+          barWidth: 18,
+          data: visualRows.map((row) => Number((row.unredeemedMarketEnergy / 10000).toFixed(4)))
+        }
+      ];
+      if (hasActiveMechanismPrice) {
+        mechanismSeries.push({
+          name: "机制电价",
+          type: "line",
+          yAxisIndex: 1,
+          connectNulls: false,
+          smooth: false,
+          symbolSize: 6,
+          lineStyle: { width: 2.5, color: tokens.negative },
+          itemStyle: { color: tokens.negative },
+          data: visualRows.map((row) => (
+            row.mechanismActive ? Number(row.mechanismPrice.toFixed(4)) : null
+          ))
+        });
+      }
+      energyChart.setOption({
+        animationDuration: 360,
+        color: [tokens.mechanism, tokens.env, tokens.positiveSoft, tokens.carbon, tokens.market, tokens.negative],
+        grid: { top: 72, right: hasActiveMechanismPrice ? 72 : 28, bottom: 44, left: 58, containLabel: true },
+        legend: legendBase,
+        tooltip: {
+          ...axisTooltip,
+          formatter: (params) => {
+            const items = Array.isArray(params) ? params : [params];
+            const yearText = items[0]?.axisValueLabel || items[0]?.axisValue || "";
+            const lines = [`${escapeHtml(String(yearText))}年`];
+            const row = visualRows[Number(items[0]?.dataIndex)] || null;
+            if (row) {
+              lines.push(`市场化交易电量合计：${asNum(row.marketEnergy, 0)} MWh`);
+            }
+            items.forEach((item) => {
+              if (item.value === null || item.value === undefined || item.value === "-") return;
+              const value = Number(item.value);
+              if (!Number.isFinite(value)) return;
+              let unit = "万MWh";
+              let digits = 2;
+              if (item.seriesName === "机制电价") {
+                unit = "元/MWh";
+                digits = 1;
+              }
+              const displayValue = unit === "万MWh" ? value * 10000 : value;
+              const displayUnit = unit === "万MWh" ? "MWh" : unit;
+              const displayDigits = unit === "万MWh" ? 0 : digits;
+              lines.push(`${item.marker}${escapeHtml(item.seriesName)}：${asNum(displayValue, displayDigits)} ${displayUnit}`);
+            });
+            return lines.join("<br/>");
+          }
+        },
+        xAxis: categoryYearAxis,
+        yAxis: mechanismYAxis,
+        series: mechanismSeries
+      }, true);
+    }
+  }
+
+  const unitChart = ensureScenarioVisualChart("unit");
+  if (unitChart) {
+    const impactAreaSeries = [
+      {
+        name: "交易策略",
+        data: visualRows.map((row) => Number(row.tradeImpact.toFixed(4))),
+        color: tokens.trade
+      },
+      {
+        name: "环境价值",
+        data: visualRows.map((row) => Number(row.envImpact.toFixed(4))),
+        color: tokens.env
+      },
+      {
+        name: "配储收益",
+        data: visualRows.map((row) => Number(row.storageImpact.toFixed(4))),
+        color: tokens.storage
+      },
+      {
+        name: "其他收入",
+        data: visualRows.map((row) => Number(row.otherIncomeImpact.toFixed(4))),
+        color: tokens.other
+      },
+      {
+        name: "综合费用",
+        data: visualRows.map((row) => Number(row.feeImpact.toFixed(4))),
+        color: tokens.negative
+      }
+    ];
+    unitChart.setOption({
+      animationDuration: 360,
+      color: impactAreaSeries.map((item) => item.color).concat(tokens.mechanism),
+      grid: { top: 58, right: 28, bottom: 44, left: 56, containLabel: true },
+      legend: legendBase,
+      tooltip: {
+        ...lineTooltip,
+        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 元/MWh`
+      },
+      xAxis: categoryYearAxis,
+      yAxis: valueAxis("元/MWh"),
+      series: [
+        ...impactAreaSeries.map((item) => ({
+          name: item.name,
+          type: "line",
+          stack: "annualImpact",
+          smooth: true,
+          symbol: "none",
+          lineStyle: { width: 1.8, color: item.color },
+          itemStyle: { color: item.color },
+          areaStyle: { opacity: 0.5, color: item.color },
+          data: item.data
+        })),
+        {
+          name: "净影响",
+          type: "line",
+          smooth: true,
+          symbolSize: 5,
+          lineStyle: { width: 3, color: tokens.mechanism },
+          itemStyle: { color: tokens.mechanism },
+          data: visualRows.map((row) => Number(row.netImpact.toFixed(4)))
+        }
+      ]
+    }, true);
+  }
+
+  const trendChart = ensureScenarioVisualChart("trend");
+  if (trendChart) {
+    const trendSeries = [
+      {
+        name: "交易策略损益",
+        data: visualRows.map((row) => Number(row.ltPnlPrice.toFixed(4))),
+        color: tokens.trade
+      },
+      {
+        name: "环境价值度电收益",
+        data: visualRows.map((row) => Number(row.envUnitValue.toFixed(4))),
+        color: tokens.env
+      },
+      {
+        name: "综合费用",
+        data: visualRows.map((row) => Number(row.feeTotal.toFixed(4))),
+        color: tokens.negative
+      },
+      {
+        name: "配储补充收益",
+        data: visualRows.map((row) => Number(row.storageSupplementPerMwh.toFixed(4))),
+        color: tokens.storage
+      },
+      {
+        name: "其他收入",
+        data: visualRows.map((row) => Number(row.otherIncomeImpact.toFixed(4))),
+        color: tokens.other
+      }
+    ];
+    trendChart.setOption({
+      animationDuration: 360,
+      grid: { top: 54, right: 28, bottom: 44, left: 56, containLabel: true },
+      legend: legendBase,
+      tooltip: {
+        ...lineTooltip,
+        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 元/MWh`
+      },
+      xAxis: categoryYearAxis,
+      yAxis: valueAxis("元/MWh"),
+      series: trendSeries.map((item) => ({
+        name: item.name,
+        type: "line",
+        smooth: true,
+        symbolSize: 5,
+        lineStyle: { width: 2.5, color: item.color },
+        itemStyle: { color: item.color },
+        data: item.data
+      }))
+    }, true);
+  }
+  queueScenarioVisualResize();
+}
+
+function compareThemeTokens() {
+  if (appState.theme === "dark") {
+    return {
+      axisText: "#c0d0e5",
+      axisLine: "#4d637f",
+      splitLine: "rgba(111, 136, 170, 0.2)",
+      legendText: "#c0d0e5",
+      tooltipBg: "rgba(24, 36, 52, 0.96)",
+      tooltipBorder: "#48617d",
+      baseline: "#f29d52",
+      primary: "#6ca9ff",
+      secondary: "#7fd0c7",
+      tertiary: "#95d086",
+      negative: "#eb8b6e",
+      palette: ["#6ca9ff", "#68c9bc", "#95d086", "#f29d52", "#c995ff"]
+    };
+  }
+  if (appState.theme === "eye") {
+    return {
+      axisText: "#4a6250",
+      axisLine: "#aec1af",
+      splitLine: "rgba(140, 166, 141, 0.24)",
+      legendText: "#4a6250",
+      tooltipBg: "rgba(244, 249, 239, 0.96)",
+      tooltipBorder: "#abc0ad",
+      baseline: "#cf8f48",
+      primary: "#4f88bc",
+      secondary: "#5f9d79",
+      tertiary: "#7fa15c",
+      negative: "#d07f62",
+      palette: ["#4f88bc", "#5f9d79", "#7fa15c", "#cf8f48", "#9a7fca"]
+    };
+  }
+  return {
+    axisText: "#5b6f89",
+    axisLine: "#bfd0e4",
+    splitLine: "rgba(151, 170, 196, 0.24)",
+    legendText: "#5b6f89",
+    tooltipBg: "rgba(255, 255, 255, 0.96)",
+    tooltipBorder: "#c9d8eb",
+    baseline: "#ea9150",
+    primary: "#3f82e6",
+    secondary: "#3fa096",
+    tertiary: "#76aa57",
+    negative: "#d77762",
+    palette: ["#3f82e6", "#3fa096", "#76aa57", "#ea9150", "#9b79de"]
+  };
+}
+
+function ensureCompareChart(chartKey, node) {
+  if (!node || !window.echarts) return null;
+  const existed = compareChartInstances[chartKey];
+  if (existed && !existed.isDisposed()) {
+    return existed;
+  }
+  const chart = window.echarts.init(node, null, { renderer: "canvas" });
+  compareChartInstances[chartKey] = chart;
+  if (!compareChartsResizeBound && typeof window !== "undefined") {
+    window.addEventListener("resize", () => {
+      Object.values(compareChartInstances).forEach((instance) => {
+        if (instance && !instance.isDisposed()) {
+          instance.resize();
+        }
+      });
+    });
+    compareChartsResizeBound = true;
+  }
+  return chart;
+}
+
+function queueCompareChartsResize() {
+  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      Object.values(compareChartInstances).forEach((instance) => {
+        if (instance && !instance.isDisposed()) {
+          instance.resize();
+        }
+      });
+    });
+  });
+}
+
+function setCompareMetric(node, primaryText, secondaryText = "") {
+  if (!node) return;
+  node.innerHTML = secondaryText
+    ? `${escapeHtml(primaryText)}<small>${escapeHtml(secondaryText)}</small>`
+    : escapeHtml(primaryText);
+}
+
+function renderCompareChartPlaceholder(chartKey, node, message) {
+  if (resolveVisiblePageId(appState.activePage) !== "compare-page") return;
+  const chart = ensureCompareChart(chartKey, node);
+  if (!chart) return;
+  const tokens = compareThemeTokens();
+  chart.clear();
+  chart.setOption({
+    animation: false,
+    xAxis: { show: false, type: "value" },
+    yAxis: { show: false, type: "value" },
+    series: [],
+    graphic: [{
+      type: "text",
+      left: "center",
+      top: "middle",
+      style: {
+        text: message,
+        fill: tokens.axisText,
+        fontSize: 14,
+        fontWeight: 600
+      }
+    }]
+  }, true);
+}
+
+function sanitizeCompareSensitivitySettings() {
+  compareSensitivitySettings.rangePercent = clamp(Math.round(Number(compareSensitivitySettings.rangePercent) || 20), 5, 60);
+  compareSensitivitySettings.stepPercent = clamp(Math.round(Number(compareSensitivitySettings.stepPercent) || 5), 1, 20);
+  compareSensitivitySettings.responseScalePercent = clamp(Math.round(Number(compareSensitivitySettings.responseScalePercent) || 100), 25, 200);
+  const topN = compareSensitivitySettings.topN === "all" ? "all" : Math.round(Number(compareSensitivitySettings.topN) || 8);
+  compareSensitivitySettings.topN = topN === "all" ? "all" : clamp(topN, 3, 20);
+  compareSensitivitySettings.selectedKeys = Array.isArray(compareSensitivitySettings.selectedKeys)
+    ? compareSensitivitySettings.selectedKeys.filter(Boolean)
+    : [];
+  return compareSensitivitySettings;
+}
+
+function syncCompareSensitivityControls() {
+  const settings = sanitizeCompareSensitivitySettings();
+  if (refs.compareSensitivityRange) refs.compareSensitivityRange.value = String(settings.rangePercent);
+  if (refs.compareSensitivityStep) refs.compareSensitivityStep.value = String(settings.stepPercent);
+  if (refs.compareSensitivityScale) refs.compareSensitivityScale.value = String(settings.responseScalePercent);
+  if (refs.compareSensitivityTopn) refs.compareSensitivityTopn.value = settings.topN === "all" ? "all" : String(settings.topN);
+}
+
+function sensitivityAxisLabels(settings = compareSensitivitySettings) {
+  const safe = sanitizeCompareSensitivitySettings();
+  const range = Math.max(1, Number(settings.rangePercent || safe.rangePercent));
+  const step = Math.max(1, Number(settings.stepPercent || safe.stepPercent));
+  const values = new Set([0, -range, range]);
+  for (let value = 0; value <= range; value += step) {
+    values.add(value);
+    values.add(-value);
+  }
+  return Array.from(values)
+    .sort((a, b) => a - b)
+    .map((value) => `${value > 0 ? "+" : ""}${value}%`);
+}
+
+function buildSensitivitySeries(baseRevenueWan, impactWan, options = {}, settings = compareSensitivitySettings) {
+  const invert = Boolean(options.invert);
+  const factor = Number.isFinite(options.factor) ? options.factor : 1;
+  const responseScale = (Number(settings.responseScalePercent) || 100) / 100;
+  return sensitivityAxisLabels(settings).map((label) => {
+    const ratio = Number(label.replace("%", "").replace("+", "")) / 100;
+    const signedRatio = invert ? -ratio : ratio;
+    const value = Math.max(0, baseRevenueWan + impactWan * factor * responseScale * signedRatio);
+    return Number(value.toFixed(1));
+  });
+}
+
+function renderSensitivityChart(chartKey, node, values, baseRevenueWan, lineColor) {
+  if (resolveVisiblePageId(appState.activePage) !== "compare-page") return;
+  const chart = ensureCompareChart(chartKey, node);
+  if (!chart) return;
+  const tokens = compareThemeTokens();
+  chart.setOption({
+    animationDuration: 320,
+    grid: { top: 24, left: 52, right: 18, bottom: 38 },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: tokens.tooltipBg,
+      borderColor: tokens.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: tokens.axisText },
+      formatter: (params) => {
+        const current = params?.[0];
+        if (!current) return "";
+        return `${current.axisValue}<br/>首年总收益：${asNum(Number(current.value || 0), 1)} 万元`;
+      }
+    },
+    xAxis: {
+      type: "category",
+      data: sensitivityAxisLabels(),
+      axisLabel: { color: tokens.axisText },
+      axisLine: { lineStyle: { color: tokens.axisLine } }
+    },
+    yAxis: {
+      type: "value",
+      name: "万元",
+      nameTextStyle: { color: tokens.axisText },
+      axisLabel: {
+        color: tokens.axisText,
+        formatter: (value) => `${Number(value).toFixed(0)}`
+      },
+      axisLine: { lineStyle: { color: tokens.axisLine } },
+      splitLine: { lineStyle: { color: tokens.splitLine } }
+    },
+    series: [{
+      type: "line",
+      smooth: 0.32,
+      symbol: "circle",
+      symbolSize: 7,
+      data: values,
+      lineStyle: { width: 3, color: lineColor },
+      itemStyle: { color: lineColor, borderColor: "#ffffff", borderWidth: 1.5 },
+      areaStyle: {
+        color: new window.echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: `${lineColor}33` },
+          { offset: 1, color: `${lineColor}08` }
+        ])
+      },
+      markLine: {
+        symbol: ["none", "none"],
+        lineStyle: {
+          type: "dashed",
+          color: tokens.baseline
+        },
+        label: {
+          color: tokens.baseline,
+          formatter: `基准 ${asNum(baseRevenueWan, 1)} 万元`
+        },
+        data: [{ yAxis: Number(baseRevenueWan.toFixed(1)) }]
+      }
+    }]
+  }, true);
+}
+
+function buildCompareSensitivityFactors(baselineFirst, baselineRevenueWan, settings = compareSensitivitySettings) {
+  if (!baselineFirst) return [];
+  sanitizeCompareSensitivitySettings();
+  const safeBase = Math.max(1, Math.abs(baselineRevenueWan));
+  const mechanismEnergyRatio = Number(baselineFirst.mechanismRatio || 0);
+  const factorDefs = [
+    {
+      key: "spot",
+      name: "现货价格水平",
+      note: "影响现货收入和捕获价格",
+      impactWan: Math.max(Math.abs(baselineFirst.spotRevenue / 10000) * 0.2, safeBase * 0.16),
+      colorIndex: 0
+    },
+    {
+      key: "hours",
+      name: "年利用小时 / 上网电量",
+      note: "影响所有按电量结算的收入和费用",
+      impactWan: Math.max(safeBase * 0.72, Math.abs((baselineFirst.spotRevenue + baselineFirst.envRevenue - baselineFirst.comprehensiveFee) / 10000) * 0.18),
+      colorIndex: 1
+    },
+    {
+      key: "capture_spread",
+      name: "捕获价差",
+      note: "影响捕获电价相对现货均价表现",
+      impactWan: Math.max(Math.abs((baselineFirst.captureSpread * baselineFirst.energyMwh) / 10000) * 0.35, safeBase * 0.08),
+      colorIndex: 2
+    },
+    {
+      key: "mechanism_price",
+      name: "机制电价",
+      note: "影响纳入机制电量的差价结算",
+      impactWan: Math.max(Math.abs(baselineFirst.mechanismRevenue / 10000) * 0.45, safeBase * mechanismEnergyRatio * 0.08),
+      colorIndex: 3
+    },
+    {
+      key: "mechanism_ratio",
+      name: "机制电量占比",
+      note: "改变机制结算与市场化交易电量空间",
+      impactWan: Math.max(Math.abs(baselineFirst.mechanismRevenue / 10000) * 0.55, safeBase * mechanismEnergyRatio * 0.1),
+      colorIndex: 4
+    },
+    {
+      key: "trade_strategy",
+      name: "交易策略损益",
+      note: "作用于市场化交易电量部分",
+      impactWan: Math.max(Math.abs(baselineFirst.ltPnlRevenue / 10000) * 0.65, safeBase * 0.05),
+      colorIndex: 0
+    },
+    {
+      key: "env_value",
+      name: "环境价值单价",
+      note: "影响绿证、绿电溢价和碳收益度电收益",
+      impactWan: Math.max(Math.abs(baselineFirst.envRevenue / 10000) * 0.8, safeBase * 0.06),
+      colorIndex: 2
+    },
+    {
+      key: "env_ratio",
+      name: "环境价值兑现比例",
+      note: "影响市场化交易电量的兑现空间",
+      impactWan: Math.max(Math.abs(baselineFirst.envRevenue / 10000) * 0.55, safeBase * 0.04),
+      colorIndex: 1
+    },
+    {
+      key: "fee",
+      name: "综合费用",
+      note: "费用上升将压低全口径收益",
+      impactWan: Math.max(Math.abs(baselineFirst.comprehensiveFee / 10000) * 0.8, safeBase * 0.05),
+      invert: true,
+      colorIndex: 3
+    },
+    {
+      key: "storage",
+      name: "配储补充收益",
+      note: "影响含储能项目的补充收益项",
+      impactWan: Math.max(Math.abs(baselineFirst.storageSupplementRevenue / 10000) * 0.8, safeBase * 0.03),
+      colorIndex: 4
+    }
+  ];
+  return factorDefs
+    .map((factor) => {
+      const series = buildSensitivitySeries(baselineRevenueWan, factor.impactWan, { invert: factor.invert, factor: 1 }, settings);
+      const lowDelta = Number((series[0] - baselineRevenueWan).toFixed(2));
+      const highDelta = Number((series[series.length - 1] - baselineRevenueWan).toFixed(2));
+      return {
+        ...factor,
+        series,
+        lowDelta,
+        highDelta,
+        sensitivity: Math.max(Math.abs(lowDelta), Math.abs(highDelta))
+      };
+    })
+    .sort((a, b) => b.sensitivity - a.sensitivity);
+}
+
+function renderSensitivityTornadoChart(factors, baselineRevenueWan) {
+  const chart = ensureCompareChart("sensitivityTornado", refs.compareSensitivityTornadoChart);
+  if (!chart) return;
+  const tokens = compareThemeTokens();
+  const settings = sanitizeCompareSensitivitySettings();
+  if (refs.compareSensitivityTornadoNote) {
+    refs.compareSensitivityTornadoNote.textContent = `变量在 -${settings.rangePercent}% 与 +${settings.rangePercent}% 扰动下的首年收益变化区间`;
+  }
+  if (!factors.length) {
+    renderCompareChartPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, "基准方案未测算，暂无法展示。");
+    return;
+  }
+  const rangeLabel = `${settings.rangePercent}%`;
+  const displayCount = settings.topN === "all" ? factors.length : Math.min(Number(settings.topN) || 8, factors.length);
+  const topFactors = factors.slice(0, displayCount).reverse();
+  chart.setOption({
+    animationDuration: 340,
+    grid: { top: 30, left: 132, right: 28, bottom: 34, containLabel: true },
+    legend: {
+      top: 0,
+      textStyle: { color: tokens.legendText, fontWeight: 700 }
+    },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: tokens.tooltipBg,
+      borderColor: tokens.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: tokens.axisText },
+      formatter: (params) => {
+        if (!params?.length) return "";
+        const lines = [`${escapeHtml(params[0].axisValue)}`];
+        params.forEach((item) => {
+          const value = Number(item.value || 0);
+          lines.push(`${item.marker}${escapeHtml(item.seriesName)}：${value >= 0 ? "+" : ""}${asNum(value, 2)} 万元`);
+        });
+        lines.push(`基准首年收益：${asNum(baselineRevenueWan, 1)} 万元`);
+        return lines.join("<br/>");
+      }
+    },
+    xAxis: {
+      type: "value",
+      name: "相对基准变化 万元",
+      nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
+      axisLabel: { color: tokens.axisText },
+      axisLine: { lineStyle: { color: tokens.axisLine } },
+      splitLine: { lineStyle: { color: tokens.splitLine } }
+    },
+    yAxis: {
+      type: "category",
+      data: topFactors.map((factor) => factor.name),
+      axisLabel: { color: tokens.axisText },
+      axisLine: { lineStyle: { color: tokens.axisLine } },
+      axisTick: { show: false }
+    },
+    series: [
+      {
+        name: `-${rangeLabel}`,
+        type: "bar",
+        barWidth: 12,
+        itemStyle: { color: tokens.negative },
+        data: topFactors.map((factor) => factor.lowDelta)
+      },
+      {
+        name: `+${rangeLabel}`,
+        type: "bar",
+        barWidth: 12,
+        itemStyle: { color: tokens.primary },
+        data: topFactors.map((factor) => factor.highDelta)
+      }
+    ]
+  }, true);
+}
+
+function renderSensitivityFactorList(allFactors, enabledFactors) {
+  if (!refs.compareSensitivityFactorList) return;
+  const tokens = compareThemeTokens();
+  const enabledSet = new Set(enabledFactors.map((factor) => factor.key));
+  const enabledRankMap = new Map(enabledFactors.map((factor, index) => [factor.key, index + 1]));
+  const optionHtml = allFactors.map((factor) => {
+    const checked = enabledSet.has(factor.key);
+    return `
+      <label class="compare-variable-option ${checked ? "" : "muted"}">
+        <input type="checkbox" data-sensitivity-variable="${escapeHtml(factor.key)}" ${checked ? "checked" : ""}>
+        <span>
+          <strong>${escapeHtml(factor.name)}</strong>
+          <small>${escapeHtml(factor.note)}</small>
+        </span>
+      </label>
+    `;
+  }).join("");
+
+  const drillHtml = enabledFactors.map((factor) => {
+    const index = enabledRankMap.get(factor.key) || 0;
+    const isActive = factor.key === activeSensitivityFactorKey;
+    const color = tokens.palette[factor.colorIndex % tokens.palette.length] || tokens.primary;
+    return `
+      <button class="compare-factor-button ${isActive ? "active" : ""}" type="button" data-sensitivity-factor="${escapeHtml(factor.key)}">
+        <span class="compare-factor-rank" style="--factor-color:${color}">${index + 1}</span>
+        <span class="compare-factor-main">
+          <strong>${escapeHtml(factor.name)}</strong>
+          <small>${escapeHtml(factor.note)}</small>
+        </span>
+        <span class="compare-factor-value">${asNum(factor.sensitivity, 1)} 万元</span>
+      </button>
+    `;
+  }).join("");
+
+  refs.compareSensitivityFactorList.innerHTML = `
+    <div class="compare-variable-grid">${optionHtml}</div>
+    <div class="compare-factor-subhead">
+      <strong>响应曲线变量</strong>
+      <span>点击下方变量切换右侧曲线</span>
+    </div>
+    <div class="compare-factor-drill-list">
+      ${drillHtml || `<div class="hint">请至少启用一个变量。</div>`}
+    </div>
+  `;
+  if (refs.compareSensitivityVariableSummary) {
+    refs.compareSensitivityVariableSummary.textContent = `已启用 ${enabledFactors.length}/${allFactors.length} 项，排序按敏感度自动更新`;
+  }
+}
+
+function renderSensitivityResponseChart(factors, baselineRevenueWan) {
+  const chart = ensureCompareChart("sensitivityResponse", refs.compareSensitivityResponseChart);
+  if (!chart) return;
+  const tokens = compareThemeTokens();
+  const selected = factors.find((factor) => factor.key === activeSensitivityFactorKey) || factors[0] || null;
+  if (!selected) {
+    if (refs.compareSensitivityResponseLabel) refs.compareSensitivityResponseLabel.textContent = "等待变量选择";
+    renderCompareChartPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, "请选择变量查看响应曲线。");
+    return;
+  }
+  activeSensitivityFactorKey = selected.key;
+  if (refs.compareSensitivityResponseLabel) refs.compareSensitivityResponseLabel.textContent = selected.name;
+  chart.setOption({
+    animationDuration: 340,
+    grid: { top: 36, left: 56, right: 24, bottom: 44, containLabel: true },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: tokens.tooltipBg,
+      borderColor: tokens.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: tokens.axisText },
+      formatter: (params) => {
+        const item = params?.[0];
+        if (!item) return "";
+        return `${item.axisValue}<br/>首年收益：${asNum(Number(item.value || 0), 1)} 万元<br/>相对基准：${asNum(Number(item.value || 0) - baselineRevenueWan, 1)} 万元`;
+      }
+    },
+    xAxis: {
+      type: "category",
+      data: sensitivityAxisLabels(),
+      axisLabel: { color: tokens.axisText },
+      axisLine: { lineStyle: { color: tokens.axisLine } },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: "value",
+      name: "万元",
+      nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
+      axisLabel: { color: tokens.axisText },
+      axisLine: { lineStyle: { color: tokens.axisLine } },
+      splitLine: { lineStyle: { color: tokens.splitLine } }
+    },
+    series: [{
+      name: selected.name,
+      type: "line",
+      smooth: true,
+      symbolSize: 6,
+      lineStyle: { width: 3, color: tokens.primary },
+      itemStyle: { color: tokens.primary },
+      areaStyle: { color: `${tokens.primary}1f` },
+      data: selected.series,
+      markLine: {
+        symbol: ["none", "none"],
+        lineStyle: { type: "dashed", color: tokens.baseline },
+        label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineRevenueWan, 1)} 万元` },
+        data: [{ yAxis: Number(baselineRevenueWan.toFixed(1)) }]
+      }
+    }]
+  }, true);
+}
+
+function renderSensitivityTable(factors) {
+  if (!refs.compareSensitivityBody) return;
+  const settings = sanitizeCompareSensitivitySettings();
+  if (refs.compareSensitivityLowHead) refs.compareSensitivityLowHead.textContent = `-${settings.rangePercent}%影响`;
+  if (refs.compareSensitivityHighHead) refs.compareSensitivityHighHead.textContent = `+${settings.rangePercent}%影响`;
+  refs.compareSensitivityBody.innerHTML = factors.map((factor) => {
+    const direction = factor.highDelta >= factor.lowDelta ? "同向" : "反向";
+    return `
+      <tr>
+        <td>${escapeHtml(factor.name)}</td>
+        <td>${factor.lowDelta >= 0 ? "+" : ""}${asNum(factor.lowDelta, 2)} 万元</td>
+        <td>${factor.highDelta >= 0 ? "+" : ""}${asNum(factor.highDelta, 2)} 万元</td>
+        <td>${asNum(factor.sensitivity, 2)} 万元</td>
+        <td>${direction}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderCompareTrendChart(available) {
+  if (resolveVisiblePageId(appState.activePage) !== "compare-page") return;
+  const chart = ensureCompareChart("scenarioTrend", refs.compareTrendChart);
+  if (!chart) return;
+  const tokens = compareThemeTokens();
+  const years = available[0]?.result?.annualRows?.map((row) => String(row.year)) || [];
+  chart.setOption({
+    animationDuration: 340,
+    grid: { top: 28, left: 56, right: 28, bottom: 52 },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: tokens.tooltipBg,
+      borderColor: tokens.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: tokens.axisText },
+      formatter: (params) => {
+        if (!params?.length) return "";
+        const lines = [`${params[0].axisValue} 年`];
+        params.forEach((item) => {
+          lines.push(`${item.marker}${escapeHtml(item.seriesName)}：${asNum(Number(item.value || 0), 1)} 万元`);
+        });
+        return lines.join("<br/>");
+      }
+    },
+    legend: {
+      bottom: 0,
+      textStyle: { color: tokens.legendText }
+    },
+    xAxis: {
+      type: "category",
+      data: years,
+      axisLabel: { color: tokens.axisText },
+      axisLine: { lineStyle: { color: tokens.axisLine } }
+    },
+    yAxis: {
+      type: "value",
+      name: "万元",
+      nameTextStyle: { color: tokens.axisText },
+      axisLabel: {
+        color: tokens.axisText,
+        formatter: (value) => `${Number(value).toFixed(0)}`
+      },
+      axisLine: { lineStyle: { color: tokens.axisLine } },
+      splitLine: { lineStyle: { color: tokens.splitLine } }
+    },
+    series: available.map((item, index) => ({
+      name: item.scenario.name,
+      type: "line",
+      smooth: 0.24,
+      symbol: "circle",
+      symbolSize: 7,
+      data: item.result.annualRows.map((row) => Number((row.fullRevenue / 10000).toFixed(1))),
+      lineStyle: {
+        width: item.scenario.isBaseline ? 3.5 : 2.5,
+        color: tokens.palette[index % tokens.palette.length]
+      },
+      itemStyle: {
+        color: tokens.palette[index % tokens.palette.length]
+      }
+    }))
+  }, true);
+}
+
+function resultComponentTotals(result) {
+  const rows = result?.annualRows || [];
+  const sum = (key) => rows.reduce((total, row) => total + Number(row[key] || 0), 0);
+  return {
+    spotRevenue: sum("spotRevenue"),
+    mechanismRevenue: sum("mechanismRevenue"),
+    ltPnlRevenue: sum("ltPnlRevenue"),
+    envRevenue: sum("envRevenue"),
+    storageSupplementRevenue: sum("storageSupplementRevenue"),
+    comprehensiveFee: -sum("comprehensiveFee"),
+    otherIncome: sum("otherIncome")
+  };
+}
+
+function renderScenarioRankingChart(available, baseline) {
+  if (resolveVisiblePageId(appState.activePage) !== "compare-page") return;
+  const chart = ensureCompareChart("scenarioRanking", refs.compareRankingChart);
+  if (!chart) return;
+  const tokens = compareThemeTokens();
+  if (!available.length) {
+    renderCompareChartPlaceholder("scenarioRanking", refs.compareRankingChart, "暂无方案结果，无法生成收益排名。");
+    return;
+  }
+  const ranked = [...available]
+    .sort((a, b) => a.result.totalFullRevenue - b.result.totalFullRevenue);
+  const baselineWan = baseline?.result?.totalFullRevenue ? baseline.result.totalFullRevenue / 10000 : 0;
+  chart.setOption({
+    animationDuration: 340,
+    grid: { top: 24, left: 120, right: 34, bottom: 34, containLabel: true },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: tokens.tooltipBg,
+      borderColor: tokens.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: tokens.axisText },
+      formatter: (params) => {
+        const item = params?.[0];
+        if (!item) return "";
+        const scenarioName = item.axisValue;
+        const current = ranked.find((entry) => entry.scenario.name === scenarioName);
+        const deltaWan = current ? (current.result.totalFullRevenue - baseline.result.totalFullRevenue) / 10000 : 0;
+        return `${escapeHtml(scenarioName)}<br/>周期总收益：${asNum(Number(item.value || 0), 1)} 万元<br/>相对基准：${deltaWan >= 0 ? "+" : ""}${asNum(deltaWan, 1)} 万元`;
+      }
+    },
+    xAxis: {
+      type: "value",
+      name: "万元",
+      nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
+      axisLabel: { color: tokens.axisText },
+      axisLine: { lineStyle: { color: tokens.axisLine } },
+      splitLine: { lineStyle: { color: tokens.splitLine } }
+    },
+    yAxis: {
+      type: "category",
+      data: ranked.map((item) => item.scenario.name),
+      axisLabel: { color: tokens.axisText },
+      axisLine: { lineStyle: { color: tokens.axisLine } },
+      axisTick: { show: false }
+    },
+    series: [{
+      name: "周期总收益",
+      type: "bar",
+      barWidth: 16,
+      data: ranked.map((item) => ({
+        value: Number((item.result.totalFullRevenue / 10000).toFixed(2)),
+        itemStyle: {
+          color: item.scenario.isBaseline ? tokens.baseline : tokens.primary
+        }
+      })),
+      markLine: baseline
+        ? {
+            symbol: ["none", "none"],
+            lineStyle: { type: "dashed", color: tokens.baseline },
+            label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineWan, 1)} 万元` },
+            data: [{ xAxis: Number(baselineWan.toFixed(2)) }]
+          }
+        : undefined
+    }]
+  }, true);
+}
+
+function renderScenarioFocusList(available, baseline) {
+  if (!refs.compareScenarioFocusList) return;
+  refs.compareScenarioFocusList.innerHTML = available.map((item, index) => {
+    const firstRow = item.result.annualRows.find((row) => row.energyMwh > 0) || item.result.annualRows[0];
+    const deltaWan = baseline ? (item.result.totalFullRevenue - baseline.result.totalFullRevenue) / 10000 : 0;
+    const isActive = item.scenario.id === activeCompareScenarioId;
+    return `
+      <button class="compare-factor-button ${isActive ? "active" : ""}" type="button" data-compare-focus-scenario="${escapeHtml(item.scenario.id)}">
+        <span class="compare-factor-rank">${item.scenario.isBaseline ? "基" : index + 1}</span>
+        <span class="compare-factor-main">
+          <strong>${escapeHtml(item.scenario.name)}</strong>
+          <small>首年 ${asCompactMoney(firstRow?.fullRevenue || 0)} / 均价 ${asNum(item.result.avgFullRevenuePrice, 2)} 元/MWh</small>
+        </span>
+        <span class="compare-factor-value">${deltaWan >= 0 ? "+" : ""}${asNum(deltaWan, 1)} 万元</span>
+      </button>
+    `;
+  }).join("");
+}
+
+function renderScenarioBridgeChart(focusItem, baseline) {
+  if (resolveVisiblePageId(appState.activePage) !== "compare-page") return;
+  const chart = ensureCompareChart("scenarioBridge", refs.compareBridgeChart);
+  if (!chart) return;
+  const tokens = compareThemeTokens();
+  if (!focusItem || !baseline) {
+    if (refs.compareScenarioBridgeLabel) refs.compareScenarioBridgeLabel.textContent = "等待方案选择";
+    renderCompareChartPlaceholder("scenarioBridge", refs.compareBridgeChart, "请选择方案查看差异归因。");
+    return;
+  }
+  if (refs.compareScenarioBridgeLabel) {
+    refs.compareScenarioBridgeLabel.textContent = focusItem.scenario.isBaseline
+      ? "基准方案自身，无差异"
+      : `${focusItem.scenario.name} 相对 ${baseline.scenario.name}`;
+  }
+  const focusTotals = resultComponentTotals(focusItem.result);
+  const baseTotals = resultComponentTotals(baseline.result);
+  const items = [
+    { label: "现货收入", key: "spotRevenue", color: tokens.primary },
+    { label: "差价机制", key: "mechanismRevenue", color: tokens.baseline },
+    { label: "交易策略", key: "ltPnlRevenue", color: "#7569d8" },
+    { label: "环境价值", key: "envRevenue", color: tokens.tertiary },
+    { label: "配储补充", key: "storageSupplementRevenue", color: "#a36cc1" },
+    { label: "综合费用", key: "comprehensiveFee", color: tokens.negative },
+    { label: "其他收入", key: "otherIncome", color: tokens.secondary }
+  ].map((item) => ({
+    ...item,
+    value: Number(((focusTotals[item.key] - baseTotals[item.key]) / 10000).toFixed(2))
+  }));
+  chart.setOption({
+    animationDuration: 340,
+    grid: { top: 28, left: 54, right: 20, bottom: 76, containLabel: true },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: tokens.tooltipBg,
+      borderColor: tokens.tooltipBorder,
+      borderWidth: 1,
+      textStyle: { color: tokens.axisText },
+      valueFormatter: (value) => `${Number(value) >= 0 ? "+" : ""}${asNum(Number(value || 0), 2)} 万元`
+    },
+    xAxis: {
+      type: "category",
+      data: items.map((item) => item.label),
+      axisLabel: { color: tokens.axisText, interval: 0, rotate: 28 },
+      axisLine: { lineStyle: { color: tokens.axisLine } },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: "value",
+      name: "相对基准 万元",
+      nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
+      axisLabel: { color: tokens.axisText },
+      axisLine: { lineStyle: { color: tokens.axisLine } },
+      splitLine: { lineStyle: { color: tokens.splitLine } }
+    },
+    series: [{
+      name: "差异贡献",
+      type: "bar",
+      barWidth: 18,
+      data: items.map((item) => ({
+        value: item.value,
+        itemStyle: { color: item.value >= 0 ? item.color : tokens.negative }
+      }))
+    }]
+  }, true);
+}
+
+function disposeCompareCharts() {
+  Object.keys(compareChartInstances).forEach((key) => {
+    const chart = compareChartInstances[key];
+    if (chart && !chart.isDisposed()) {
+      chart.dispose();
+    }
+    compareChartInstances[key] = null;
+  });
+}
+
+function disposeResultCharts() {
+  Object.keys(resultChartInstances).forEach((key) => {
+    const chart = resultChartInstances[key];
+    if (chart && !chart.isDisposed()) {
+      chart.dispose();
+    }
+    resultChartInstances[key] = null;
+  });
+}
+
+function disposeHistoryCharts() {
+  Object.keys(historyChartInstances).forEach((key) => {
+    const chart = historyChartInstances[key];
+    if (chart && !chart.isDisposed()) {
+      chart.dispose();
+    }
+    historyChartInstances[key] = null;
+  });
+}
+
+function setHistoryNoData(message) {
+  resetHistoryExportPayloads();
+  const charts = ensureHistoryCharts();
+  if (!charts) return;
+  const tokens = historyThemeTokens();
+  Object.values(charts).forEach((chart) => {
+    if (!chart) return;
+    chart.clear();
+    chart.setOption({
+      animation: false,
+      graphic: [{
+        type: "text",
+        left: "center",
+        top: "middle",
+        style: {
+          text: message,
+          fill: tokens.axisText,
+          fontWeight: 700,
+          fontSize: 14
+        }
+      }]
+    }, true);
+  });
+  queueHistoryChartsResize();
+}
+
+function resetHistoryKpis() {
+  if (refs.historyKpiPoints) refs.historyKpiPoints.textContent = "-";
+  if (refs.historyKpiAvg) refs.historyKpiAvg.textContent = "-";
+  if (refs.historyKpiP50) refs.historyKpiP50.textContent = "-";
+  if (refs.historyKpiP90) refs.historyKpiP90.textContent = "-";
+  if (refs.historyKpiNegative) refs.historyKpiNegative.textContent = "-";
+}
+
+function renderHistoryImportState(project, dataset) {
+  const provinceLabel = project?.provinceLabel || getProvinceName(project?.province) || "-";
+  if (refs.historySourceProvince) {
+    refs.historySourceProvince.textContent = `当前省份：${provinceLabel}`;
+  }
+}
+
+function renderHistoryPrices() {
+  if (!refs.historyMonthTrendChart) return;
+  if (resolveVisiblePageId(appState.activePage) !== "history-page") return;
+
+  const controls = sanitizeHistoryAnalysis(appState.historyAnalysis);
+  appState.historyAnalysis = controls;
+  if (!window.echarts) {
+    setHistoryNoData("图表引擎未加载完成，请稍后重试。");
+    resetHistoryKpis();
+    if (refs.historyInsightBox) {
+      refs.historyInsightBox.textContent = "图表引擎未加载完成，请稍后重试。";
+    }
+    return;
+  }
+
+  const project = getActiveProject();
+  if (!project) {
+    renderHistoryImportState(null, null);
+    setHistoryNoData("请先在“我的项目”中进入一个项目，再查看当前省份历史现货展示。");
+    resetHistoryKpis();
+    if (refs.historyInsightBox) {
+      refs.historyInsightBox.textContent = "进入项目后，系统会自动按当前项目省份展示15分钟历史现货样本。";
+    }
+    return;
+  }
+  if (!isProjectCreateCompleted(project)) {
+    renderHistoryImportState(project, null);
+    setHistoryNoData("请先完成项目基础信息保存，系统才会按省份自动展示历史现货样本。");
+    resetHistoryKpis();
+    if (refs.historyInsightBox) {
+      refs.historyInsightBox.textContent = "完成项目基础信息保存后，本页会自动切换到对应省份的历史现货展示范围。";
+    }
+    return;
+  }
+
+  const dataset = buildHistorySpotAnalysisDataset(project);
+  renderHistoryImportState(project, dataset);
+  const range = resolveHistoryDateRange(controls, dataset);
+  if (controls.startDate !== range.startDate || controls.endDate !== range.endDate) {
+    appState.historyAnalysis = {
+      startDate: range.startDate,
+      endDate: range.endDate
+    };
+  }
+  if (refs.historyStartDate) {
+    refs.historyStartDate.min = range.minDate;
+    refs.historyStartDate.max = range.maxDate;
+    refs.historyStartDate.value = range.startDate;
+  }
+  if (refs.historyEndDate) {
+    refs.historyEndDate.min = range.minDate;
+    refs.historyEndDate.max = range.maxDate;
+    refs.historyEndDate.value = range.endDate;
+  }
+  const selectedYears = selectHistoryYearsByDateRange(dataset, range);
+  if (!selectedYears.length) {
+    setHistoryNoData("当前项目暂无可分析数据。");
+    resetHistoryKpis();
+    if (refs.historyInsightBox) refs.historyInsightBox.textContent = "当前项目暂无可分析数据。";
+    return;
+  }
+
+  const charts = ensureHistoryCharts();
+  const tokens = historyThemeTokens();
+  const lineColors = ["#2f78e8", "#6cb34f", "#ff8a1f", "#8b5cf6", "#0ea5a3"];
+  const allValues = [];
+  const monthMerged = Array.from({ length: 12 }, () => []);
+  const monthlyStd = [];
+  const heatSums = Array.from({ length: 12 }, () => Array(24).fill(0));
+  const heatCounts = Array.from({ length: 12 }, () => Array(24).fill(0));
+  const typicalMerged = createHistoryTypicalAccumulator();
+  const trendSeries = selectedYears.map((yearData, idx) => {
+    allValues.push(...yearData.values);
+    for (let m = 0; m < 12; m += 1) {
+      monthMerged[m].push(...yearData.monthValues[m]);
+      for (let h = 0; h < 24; h += 1) {
+        heatSums[m][h] += yearData.hourlySumsByMonth[m][h];
+        heatCounts[m][h] += yearData.hourlyCountsByMonth[m][h];
+      }
+    }
+    mergeHistoryTypical(typicalMerged, yearData.typical);
+    return {
+      name: `${yearData.year}年`,
+      type: "line",
+      smooth: true,
+      symbol: "none",
+      lineStyle: { width: 2 },
+      data: yearData.monthlyAvg.map((value) => (Number.isFinite(value) ? Number(value.toFixed(1)) : null)),
+      color: lineColors[idx % lineColors.length]
+    };
+  });
+
+  const sortedValues = [...allValues].sort((a, b) => a - b);
+  let valueMin = Number.POSITIVE_INFINITY;
+  let valueMax = Number.NEGATIVE_INFINITY;
+  let valueSum = 0;
+  let negativeCount = 0;
+  allValues.forEach((value) => {
+    valueMin = Math.min(valueMin, value);
+    valueMax = Math.max(valueMax, value);
+    valueSum += value;
+    if (value < 0) negativeCount += 1;
+  });
+  const valueAvg = allValues.length ? valueSum / allValues.length : 0;
+  const p50 = percentileSorted(sortedValues, 0.5) ?? 0;
+  const p90 = percentileSorted(sortedValues, 0.9) ?? 0;
+  const negativeRatio = allValues.length ? (negativeCount / allValues.length) * 100 : 0;
+
+  const histogramBins = 12;
+  const histMin = Math.floor(valueMin / 20) * 20;
+  const histMax = Math.ceil(valueMax / 20) * 20;
+  const histStep = Math.max(10, (histMax - histMin) / histogramBins);
+  const histogramCounts = Array(histogramBins).fill(0);
+  allValues.forEach((value) => {
+    const idx = clamp(Math.floor((value - histMin) / histStep), 0, histogramBins - 1);
+    histogramCounts[idx] += 1;
+  });
+  const histogramLabels = Array.from({ length: histogramBins }, (_, idx) => {
+    const start = Math.round(histMin + idx * histStep);
+    const end = Math.round(histMin + (idx + 1) * histStep);
+    return `${start}-${end}`;
+  });
+
+  const typicalWorkday = [];
+  const typicalWeekend = [];
+  for (let i = 0; i < 96; i += 1) {
+    const workValue = typicalMerged.workdayCount[i]
+      ? typicalMerged.workdaySum[i] / typicalMerged.workdayCount[i]
+      : null;
+    const weekendValue = typicalMerged.weekendCount[i]
+      ? typicalMerged.weekendSum[i] / typicalMerged.weekendCount[i]
+      : null;
+    typicalWorkday.push(workValue ? Number(workValue.toFixed(1)) : null);
+    typicalWeekend.push(weekendValue ? Number(weekendValue.toFixed(1)) : null);
+  }
+
+  const heatData = [];
+  let heatMin = Number.POSITIVE_INFINITY;
+  let heatMax = Number.NEGATIVE_INFINITY;
+  for (let month = 0; month < 12; month += 1) {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const count = heatCounts[month][hour];
+      const avg = count ? heatSums[month][hour] / count : null;
+      const value = Number.isFinite(avg) ? Number(avg.toFixed(1)) : null;
+      if (Number.isFinite(value)) {
+        heatMin = Math.min(heatMin, value);
+        heatMax = Math.max(heatMax, value);
+      }
+      heatData.push([hour, month, value]);
+    }
+  }
+
+  const boxplotData = monthMerged.map((values) => {
+    if (!values.length) return [0, 0, 0, 0, 0];
+    const sorted = [...values].sort((a, b) => a - b);
+    return [
+      Number(sorted[0].toFixed(1)),
+      Number((percentileSorted(sorted, 0.25) ?? 0).toFixed(1)),
+      Number((percentileSorted(sorted, 0.5) ?? 0).toFixed(1)),
+      Number((percentileSorted(sorted, 0.75) ?? 0).toFixed(1)),
+      Number(sorted[sorted.length - 1].toFixed(1))
+    ];
+  });
+  for (let i = 0; i < 12; i += 1) {
+    monthlyStd.push(stddev(monthMerged[i]));
+  }
+  let maxStdMonth = 0;
+  let maxStd = monthlyStd[0] || 0;
+  for (let i = 1; i < 12; i += 1) {
+    if ((monthlyStd[i] || 0) > maxStd) {
+      maxStd = monthlyStd[i];
+      maxStdMonth = i;
+    }
+  }
+  const yearsRangeText = `${range.startDate}至${range.endDate}`;
+  const provinceLabel = project.provinceLabel || getProvinceName(project.province) || "-";
+  const assetLabel = getAssetTypeLabel(project.assetType);
+  const siteLabel = getSiteTypeLabel(project.siteType);
+  const exportPrefix = [
+    sanitizeExportFilenamePart(provinceLabel),
+    "历史现货",
+    sanitizeExportFilenamePart(assetLabel),
+    sanitizeExportFilenamePart(siteLabel),
+    sanitizeExportFilenamePart(yearsRangeText)
+  ].join("-");
+  setHistoryExportPayload("monthTrend", `${exportPrefix}-月度均价趋势对比.csv`, [
+    ["month", ...selectedYears.map((yearData) => `${yearData.year}年均价_元每MWh`)],
+    ...HISTORY_MONTH_LABELS.map((monthLabel, monthIndex) => [
+      monthLabel,
+      ...trendSeries.map((series) => {
+        const value = series.data?.[monthIndex];
+        return Number.isFinite(value) ? value.toFixed(1) : "";
+      })
+    ])
+  ]);
+  setHistoryExportPayload("typicalDay", `${exportPrefix}-典型日电价曲线.csv`, [
+    ["time_label", "workday_price_yuan_per_mwh", "weekend_price_yuan_per_mwh"],
+    ...HISTORY_QUARTER_LABELS.map((label, index) => [
+      label,
+      Number.isFinite(typicalWorkday[index]) ? typicalWorkday[index].toFixed(1) : "",
+      Number.isFinite(typicalWeekend[index]) ? typicalWeekend[index].toFixed(1) : ""
+    ])
+  ]);
+  setHistoryExportPayload("distribution", `${exportPrefix}-电价分布直方图.csv`, [
+    ["price_bin_yuan_per_mwh", "sample_count"],
+    ...histogramLabels.map((label, index) => [label, histogramCounts[index]])
+  ]);
+  setHistoryExportPayload("heatmap", `${exportPrefix}-分时电价热力图.csv`, [
+    ["month", "hour_index_1_24", "hour_label", "avg_price_yuan_per_mwh"],
+    ...heatData
+      .filter((item) => Number.isFinite(item[2]))
+      .map(([hourIndex, monthIndex, value]) => [
+        HISTORY_MONTH_LABELS[monthIndex],
+        hourIndex + 1,
+        HISTORY_HEAT_HOUR_LABELS[hourIndex],
+        Number(value).toFixed(1)
+      ])
+  ]);
+  setHistoryExportPayload("boxplot", `${exportPrefix}-月度电价箱线图.csv`, [
+    ["month", "min", "p25", "p50", "p75", "max", "stddev"],
+    ...HISTORY_MONTH_LABELS.map((monthLabel, monthIndex) => [
+      monthLabel,
+      Number.isFinite(boxplotData[monthIndex]?.[0]) ? boxplotData[monthIndex][0].toFixed(1) : "",
+      Number.isFinite(boxplotData[monthIndex]?.[1]) ? boxplotData[monthIndex][1].toFixed(1) : "",
+      Number.isFinite(boxplotData[monthIndex]?.[2]) ? boxplotData[monthIndex][2].toFixed(1) : "",
+      Number.isFinite(boxplotData[monthIndex]?.[3]) ? boxplotData[monthIndex][3].toFixed(1) : "",
+      Number.isFinite(boxplotData[monthIndex]?.[4]) ? boxplotData[monthIndex][4].toFixed(1) : "",
+      Number.isFinite(monthlyStd[monthIndex]) ? monthlyStd[monthIndex].toFixed(1) : ""
+    ])
+  ]);
+  syncHistoryExportButtons();
+
+  if (charts.monthTrend) {
+    charts.monthTrend.setOption({
+      color: lineColors,
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: tokens.tooltipBg,
+        borderColor: tokens.tooltipBorder,
+        textStyle: { color: tokens.axisText }
+      },
+      legend: {
+        bottom: 0,
+        textStyle: { color: tokens.legendText }
+      },
+      grid: { top: 36, left: 48, right: 18, bottom: 54, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: HISTORY_MONTH_LABELS,
+        axisLabel: { color: tokens.axisText },
+        axisLine: { lineStyle: { color: tokens.axisLine } }
+      },
+      yAxis: {
+        type: "value",
+        name: "元/MWh",
+        nameGap: 24,
+        nameTextStyle: { color: tokens.axisText },
+        axisLabel: { color: tokens.axisText },
+        axisLine: { lineStyle: { color: tokens.axisLine } },
+        splitLine: { lineStyle: { color: tokens.splitLine } }
+      },
+      series: trendSeries
+    }, true);
+  }
+
+  if (charts.typicalDay) {
+    charts.typicalDay.setOption({
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: tokens.tooltipBg,
+        borderColor: tokens.tooltipBorder,
+        textStyle: { color: tokens.axisText }
+      },
+      legend: {
+        bottom: 0,
+        textStyle: { color: tokens.legendText }
+      },
+      grid: { top: 36, left: 50, right: 18, bottom: 54, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: HISTORY_QUARTER_LABELS,
+        axisLabel: {
+          color: tokens.axisText,
+          interval: 7
+        },
+        axisLine: { lineStyle: { color: tokens.axisLine } }
+      },
+      yAxis: {
+        type: "value",
+        name: "元/MWh",
+        nameGap: 24,
+        nameTextStyle: { color: tokens.axisText },
+        axisLabel: { color: tokens.axisText },
+        axisLine: { lineStyle: { color: tokens.axisLine } },
+        splitLine: { lineStyle: { color: tokens.splitLine } }
+      },
+      series: [
+        {
+          name: "工作日",
+          type: "line",
+          smooth: true,
+          symbol: "none",
+          lineStyle: { width: 2 },
+          areaStyle: { opacity: 0.09 },
+          data: typicalWorkday,
+          color: "#2f78e8"
+        },
+        {
+          name: "周末",
+          type: "line",
+          smooth: true,
+          symbol: "none",
+          lineStyle: { width: 2, type: "dashed" },
+          data: typicalWeekend,
+          color: "#52a852"
+        }
+      ]
+    }, true);
+  }
+
+  if (charts.distribution) {
+    charts.distribution.setOption({
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: tokens.tooltipBg,
+        borderColor: tokens.tooltipBorder,
+        textStyle: { color: tokens.axisText }
+      },
+      grid: { top: 30, left: 52, right: 18, bottom: 46, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: histogramLabels,
+        axisLabel: { color: tokens.axisText, interval: 1 },
+        axisLine: { lineStyle: { color: tokens.axisLine } }
+      },
+      yAxis: {
+        type: "value",
+        axisLabel: { color: tokens.axisText },
+        axisLine: { lineStyle: { color: tokens.axisLine } },
+        splitLine: { lineStyle: { color: tokens.splitLine } }
+      },
+      series: [{
+        type: "bar",
+        data: histogramCounts,
+        barMaxWidth: 24,
+        itemStyle: {
+          borderRadius: [4, 4, 0, 0],
+          color: (params) => {
+            const ratio = params.dataIndex / Math.max(histogramBins - 1, 1);
+            if (ratio < 0.22) return "#ff8a1f";
+            if (ratio < 0.72) return "#2f78e8";
+            return "#6c46d1";
+          }
+        }
+      }]
+    }, true);
+  }
+
+  if (charts.heatmap) {
+    charts.heatmap.setOption({
+      tooltip: {
+        position: "top",
+        backgroundColor: tokens.tooltipBg,
+        borderColor: tokens.tooltipBorder,
+        textStyle: { color: tokens.axisText },
+        formatter: (params) => `${HISTORY_MONTH_LABELS[params.value[1]]} ${HISTORY_HEAT_HOUR_LABELS[params.value[0]]}<br>${params.value[2]} 元/MWh`
+      },
+      grid: { top: 30, left: 48, right: 20, bottom: 52, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: HISTORY_HEAT_HOUR_LABELS,
+        axisLabel: { color: tokens.axisText, interval: 1 },
+        axisLine: { lineStyle: { color: tokens.axisLine } }
+      },
+      yAxis: {
+        type: "category",
+        data: HISTORY_MONTH_LABELS,
+        axisLabel: { color: tokens.axisText },
+        axisLine: { lineStyle: { color: tokens.axisLine } }
+      },
+      visualMap: {
+        min: Number.isFinite(heatMin) ? Math.floor(heatMin) : 0,
+        max: Number.isFinite(heatMax) ? Math.ceil(heatMax) : 500,
+        orient: "horizontal",
+        left: "center",
+        bottom: 0,
+        text: ["高", "低"],
+        textStyle: { color: tokens.axisText },
+        inRange: {
+          color: ["#2d60b0", "#7ab5df", "#f0dd9b", "#f39d41", "#df4a49"]
+        }
+      },
+      series: [{
+        type: "heatmap",
+        data: heatData,
+        emphasis: { itemStyle: { borderColor: "#ffffff", borderWidth: 1 } }
+      }]
+    }, true);
+  }
+
+  if (charts.boxplot) {
+    charts.boxplot.setOption({
+      tooltip: {
+        trigger: "item",
+        backgroundColor: tokens.tooltipBg,
+        borderColor: tokens.tooltipBorder,
+        textStyle: { color: tokens.axisText }
+      },
+      grid: { top: 30, left: 48, right: 18, bottom: 38, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: HISTORY_MONTH_LABELS,
+        axisLabel: { color: tokens.axisText },
+        axisLine: { lineStyle: { color: tokens.axisLine } }
+      },
+      yAxis: {
+        type: "value",
+        axisLabel: { color: tokens.axisText },
+        axisLine: { lineStyle: { color: tokens.axisLine } },
+        splitLine: { lineStyle: { color: tokens.splitLine } }
+      },
+      series: [{
+        type: "boxplot",
+        data: boxplotData,
+        itemStyle: {
+          color: "rgba(63, 125, 226, 0.18)",
+          borderColor: "#2f78e8"
+        }
+      }]
+    }, true);
+  }
+
+  queueHistoryChartsResize();
+
+  if (refs.historyKpiPoints) refs.historyKpiPoints.textContent = `${allValues.length.toLocaleString()} 点`;
+  if (refs.historyKpiAvg) refs.historyKpiAvg.textContent = `${valueAvg.toFixed(1)} 元/MWh`;
+  if (refs.historyKpiP50) refs.historyKpiP50.textContent = `${p50.toFixed(1)} 元/MWh`;
+  if (refs.historyKpiP90) refs.historyKpiP90.textContent = `${p90.toFixed(1)} 元/MWh`;
+  if (refs.historyKpiNegative) refs.historyKpiNegative.textContent = `${negativeRatio.toFixed(2)}%`;
+
+  const workdayMax = Math.max(...typicalWorkday.filter((value) => Number.isFinite(value)));
+  const workdayPeakIndex = typicalWorkday.findIndex((value) => value === workdayMax);
+  const peakTime = workdayPeakIndex >= 0 ? HISTORY_QUARTER_LABELS[workdayPeakIndex] : "--:--";
+  const sourceLabel = dataset.sourceType === "database"
+    ? `${provinceLabel}${dataset?.mock ? "省级现货模拟库" : "省级现货数据库"}`
+    : "历史现货数据库";
+  const storageLabel = project.hasStorage
+    ? `，已按配储(${project.storagePowerMw || 0}MW / ${project.storageDurationH || 0}h)对波动做平滑处理`
+    : "";
+  if (refs.historyInsightBox) {
+    refs.historyInsightBox.textContent = `数据源：${sourceLabel}。当前口径：${assetLabel} / ${siteLabel}${storageLabel}。日期区间：${yearsRangeText}（15分钟颗粒度）。工作日高价时段约在 ${peakTime}，波动最大月份为 ${HISTORY_MONTH_LABELS[maxStdMonth]}（标准差 ${maxStd.toFixed(1)} 元/MWh）。`;
+    refs.historyInsightBox.style.borderColor = "#8fb48d";
+    refs.historyInsightBox.style.background = "#f1fbf1";
+  }
+  if (project.statuses["history-page"] !== "completed") {
+    project.statuses["history-page"] = "completed";
+    renderStatuses();
+    renderProjects();
+    schedulePersistAppData();
+  }
+}
+
+function applyProvinceDefaultsToProject(provinceKey) {
+  const project = getActiveProject();
+  if (!project) {
+    refs.provinceApplyMessage.textContent = "请先创建或选择项目，再带入省份默认参数。";
+    refs.provinceApplyMessage.style.borderColor = "#d39191";
+    refs.provinceApplyMessage.style.background = "#fff2f2";
+    return;
+  }
+  ensureScenarioMetadata(project);
+  const scenario = getActiveScenario(project);
+  if (!scenario) return;
+  if (scenario.locked) {
+    refs.provinceApplyMessage.textContent = "当前场景已锁定，请先切换到可编辑场景。";
+    refs.provinceApplyMessage.style.borderColor = "#d39191";
+    refs.provinceApplyMessage.style.background = "#fff2f2";
+    return;
+  }
+
+  const defaults = getProvinceDefaults(provinceKey);
+  scenario.config.mechanismEnabled = defaults.mechanismEnabled;
+  scenario.config.mechanismRatio = defaults.mechanismRatio;
+  scenario.config.mechanismPrice = defaults.mechanismPrice;
+  scenario.config.marketOpFee = defaults.marketOpFee;
+  scenario.config.gridAssessFee = defaults.gridAssessFee;
+  scenario.config.ancillaryFee = defaults.ancillaryFee;
+  scenario.config.otherFee = defaults.otherFee;
+  scenario.config.greenCertPrice = defaults.greenCertPrice;
+  scenario.config.greenCertRealizeRatio = 1;
+  scenario.config.greenPremiumPrice = defaults.greenPremiumPrice;
+  scenario.config.greenPremiumRealizeRatio = 0;
+  scenario.config.carbonRealizeRatio = 0;
+  scenario.config.storageArbitragePrice = project.hasStorage ? defaults.storageArbitragePrice : 0;
+  scenario.config.storageCapacityCompPrice = project.hasStorage ? defaults.storageCapacityCompPrice : 0;
+  scenario.config.storageAncillaryRevenuePrice = project.hasStorage ? defaults.storageAncillaryRevenuePrice : 0;
+  scenario.config.storageOtherRevenuePrice = project.hasStorage ? defaults.storageOtherRevenuePrice : 0;
+  if (project.siteType !== "offshore") {
+    scenario.config.carbonEnabled = false;
+    scenario.config.carbonPrice = 0;
+  }
+  scenario.updatedAt = new Date().toISOString();
+  project.statuses["scenario-page"] = "completed";
+  markDownstreamStale(project, "scenario-page");
+
+  const sourceProvinceName = getProvinceName(provinceKey);
+  const projectProvinceName = getProvinceName(project.province);
+  refs.provinceApplyMessage.textContent = provinceKey === project.province
+    ? `已带入 ${sourceProvinceName} 默认参数，并应用到当前场景“${scenario.name}”。`
+    : `已调用 ${sourceProvinceName} 默认参数，并应用到当前场景“${scenario.name}”。项目省份仍为 ${projectProvinceName}。`;
+  refs.provinceApplyMessage.style.borderColor = "#8fb48d";
+  refs.provinceApplyMessage.style.background = "#f1fbf1";
+  refs.scenarioMessage.textContent = `场景“${scenario.name}”已按 ${sourceProvinceName} 参数更新。`;
+  refs.scenarioMessage.style.borderColor = "#8fb48d";
+  refs.scenarioMessage.style.background = "#f1fbf1";
+  renderAll();
+  schedulePersistAppData();
+}
+
+function toggleProvinceDefaultDetails(provinceKey) {
+  if (!provinceKey) return;
+  if (expandedProvinceDefaultKeys.has(provinceKey)) {
+    expandedProvinceDefaultKeys.delete(provinceKey);
+  } else {
+    expandedProvinceDefaultKeys.add(provinceKey);
+  }
+  renderProvinceLibrary();
+}
+
+function renderProvinceLibrary() {
+  const project = getActiveProject();
+  if (!refs.provinceParamBody || !refs.provinceApplyMessage) return;
+  if (!project) {
+    refs.provinceApplyMessage.textContent = "请选择项目后再一键带入省份默认参数。";
+    refs.provinceApplyMessage.style.borderColor = "#9ab7e5";
+    refs.provinceApplyMessage.style.background = "#eff5ff";
+    if (refs.provinceDefaultSelector) {
+      refs.provinceDefaultSelector.innerHTML = '<option value="">调用其他省份参数</option>';
+      refs.provinceDefaultSelector.value = "";
+      refs.provinceDefaultSelector.disabled = true;
+    }
+    refs.provinceParamBody.innerHTML = `
+      <div class="empty-box compact">当前项目尚未选择省份，保存基础信息后再查看默认参数。</div>
+    `;
+    return;
+  }
+  const currentProvinceKey = PROVINCE_KEY_SET.has(project?.province) ? project.province : "";
+  const currentProvinceName = getProvinceName(currentProvinceKey);
+  const currentRegionKey = getPolicyRegionKeyByProvince(currentProvinceKey);
+  const selectorContextKey = `${project.id || ""}:${currentProvinceKey || ""}`;
+  if (selectedProvinceDefaultContextKey !== selectorContextKey) {
+    selectedProvinceDefaultKey = currentProvinceKey;
+    selectedProvinceDefaultContextKey = selectorContextKey;
+  }
+  if (!PROVINCE_KEY_SET.has(selectedProvinceDefaultKey)) {
+    selectedProvinceDefaultKey = currentProvinceKey || PROVINCES[0]?.key || "";
+  }
+  const selectedProvince = PROVINCES.find((province) => province.key === selectedProvinceDefaultKey)
+    || PROVINCES.find((province) => province.key === currentProvinceKey)
+    || PROVINCES[0];
+  selectedProvinceDefaultKey = selectedProvince?.key || "";
+  if (refs.provinceDefaultSelector) {
+    const sortedOptions = [...PROVINCES].sort((left, right) => {
+      if (left.key === currentProvinceKey) return -1;
+      if (right.key === currentProvinceKey) return 1;
+      const leftSameRegion = getPolicyRegionKeyByProvince(left.key) === currentRegionKey;
+      const rightSameRegion = getPolicyRegionKeyByProvince(right.key) === currentRegionKey;
+      if (leftSameRegion && !rightSameRegion) return -1;
+      if (!leftSameRegion && rightSameRegion) return 1;
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+    refs.provinceDefaultSelector.disabled = !sortedOptions.length;
+    refs.provinceDefaultSelector.innerHTML = sortedOptions.map((province) => {
+      const currentMark = province.key === currentProvinceKey ? "（当前项目）" : "";
+      return `<option value="${escapeHtml(province.key)}">调用其他省份参数：${escapeHtml(province.name)}${currentMark}</option>`;
+    }).join("");
+    refs.provinceDefaultSelector.value = selectedProvinceDefaultKey;
+  }
+  if (
+    currentProvinceName
+    && (
+      !refs.provinceApplyMessage.textContent
+      || refs.provinceApplyMessage.textContent.includes("请选择一个省份")
+      || refs.provinceApplyMessage.textContent.includes("请选择项目后")
+      || refs.provinceApplyMessage.textContent.includes("当前项目已选省份")
+      || refs.provinceApplyMessage.textContent.includes("当前正在查看")
+    )
+  ) {
+    const selectedProvinceName = getProvinceName(selectedProvinceDefaultKey);
+    refs.provinceApplyMessage.textContent = selectedProvinceDefaultKey === currentProvinceKey
+      ? `当前项目已选省份：${currentProvinceName}。后续场景默认以该省口径为基础，可直接带入当前场景后再微调。`
+      : `当前正在查看：${selectedProvinceName}默认参数。可调用该省参数带入当前场景，项目省份仍为${currentProvinceName}。`;
+    refs.provinceApplyMessage.style.borderColor = "#9ab7e5";
+    refs.provinceApplyMessage.style.background = "#eff5ff";
+  }
+  const provincesToRender = selectedProvince ? [selectedProvince] : [];
+  refs.provinceParamBody.innerHTML = provincesToRender.map((province) => {
+    const defaults = getProvinceDefaults(province.key);
+    const isCurrentProvince = province.key === currentProvinceKey;
+    const isExpanded = expandedProvinceDefaultKeys.has(province.key);
+    return `
+      <article class="province-default-item ${isCurrentProvince ? "province-row-current" : ""}">
+        <div class="province-default-summary">
+          <div class="province-default-main">
+            <div class="province-default-title-row">
+              <span class="province-default-title">${province.name}</span>
+              ${isCurrentProvince ? '<span class="project-province-badge">当前项目</span>' : ""}
+              ${!isCurrentProvince ? '<span class="project-province-badge province-source-badge">参数来源</span>' : ""}
+            </div>
+            <div class="province-default-summary-grid">
+              <div class="province-default-metric">
+                <span class="label">机制状态</span>
+                <span class="value">${defaults.mechanismEnabled ? "纳入" : "不纳入"}</span>
+              </div>
+              <div class="province-default-metric">
+                <span class="label">机制占比</span>
+                <span class="value">${asNum(defaults.mechanismRatio * 100, 1)}%</span>
+              </div>
+              <div class="province-default-metric">
+                <span class="label">机制电价</span>
+                <span class="value">${asNum(defaults.mechanismPrice, 1)} 元/MWh</span>
+              </div>
+            </div>
+          </div>
+          <div class="province-default-actions">
+            <button
+              type="button"
+              class="ghost-button province-default-toggle"
+              data-toggle-province-details="${province.key}"
+              aria-expanded="${isExpanded ? "true" : "false"}"
+            >
+              ${isExpanded ? "收起详情" : "展开详情"}
+            </button>
+            <button type="button" class="ghost-button" data-apply-province="${province.key}" ${project ? "" : "disabled"}>
+              带入当前场景
+            </button>
+          </div>
+        </div>
+        ${isExpanded ? `
+          <div class="province-default-details">
+            <div class="province-default-detail">
+              <span class="label">市场运营费</span>
+              <span class="value">${asNum(defaults.marketOpFee, 1)} 元/MWh</span>
+            </div>
+            <div class="province-default-detail">
+              <span class="label">并网考核费</span>
+              <span class="value">${asNum(defaults.gridAssessFee, 1)} 元/MWh</span>
+            </div>
+            <div class="province-default-detail">
+              <span class="label">辅助服务费</span>
+              <span class="value">${asNum(defaults.ancillaryFee, 1)} 元/MWh</span>
+            </div>
+            <div class="province-default-detail">
+              <span class="label">其他费用</span>
+              <span class="value">${asNum(defaults.otherFee, 1)} 元/MWh</span>
+            </div>
+            <div class="province-default-detail">
+              <span class="label">绿证</span>
+              <span class="value">${asNum(defaults.greenCertPrice, 1)} 元/MWh</span>
+            </div>
+            <div class="province-default-detail">
+              <span class="label">绿电溢价</span>
+              <span class="value">${asNum(defaults.greenPremiumPrice, 1)} 元/MWh</span>
+            </div>
+            ${project?.hasStorage ? `
+              <div class="province-default-detail">
+                <span class="label">现货价差套利</span>
+                <span class="value">${asNum(defaults.storageArbitragePrice, 1)} 元/MWh</span>
+              </div>
+              <div class="province-default-detail">
+                <span class="label">容量补偿收益</span>
+                <span class="value">${asNum(defaults.storageCapacityCompPrice, 1)} 元/MWh</span>
+              </div>
+              <div class="province-default-detail">
+                <span class="label">配储辅助服务收益</span>
+                <span class="value">${asNum(defaults.storageAncillaryRevenuePrice, 1)} 元/MWh</span>
+              </div>
+              <div class="province-default-detail">
+                <span class="label">其他配储收益</span>
+                <span class="value">${asNum(defaults.storageOtherRevenuePrice, 1)} 元/MWh</span>
+              </div>
+            ` : ""}
+          </div>
+        ` : ""}
+      </article>
+    `;
+  }).join("");
+
+  if (!refs.provinceParamBody.innerHTML) {
+    refs.provinceParamBody.innerHTML = `
+      <div class="empty-box compact">当前项目尚未选择省份，保存基础信息后再查看默认参数。</div>
+    `;
+  }
+
+  document.querySelectorAll("[data-toggle-province-details]").forEach((button) => {
+    button.addEventListener("click", () => toggleProvinceDefaultDetails(button.dataset.toggleProvinceDetails));
+  });
+  document.querySelectorAll("[data-apply-province]").forEach((button) => {
+    button.addEventListener("click", () => applyProvinceDefaultsToProject(button.dataset.applyProvince));
+  });
+}
+
+function loadScenarioToForm(project, scenario) {
+  document.querySelector("#scenario-name").value = scenario.name;
+  document.querySelector("#mechanism-enabled").value = scenario.config.mechanismEnabled ? "yes" : "no";
+  document.querySelector("#mechanism-ratio").value = (scenario.config.mechanismRatio * 100).toFixed(1);
+  document.querySelector("#mechanism-price").value = scenario.config.mechanismPrice;
+  document.querySelector("#mechanism-start-ym").value = scenario.config.mechanismStartYm;
+  document.querySelector("#mechanism-end-ym").value = scenario.config.mechanismEndYm;
+  if (refs.ltPricingMode) refs.ltPricingMode.value = LT_PRICING_MODE_SET.has(scenario.config.ltPricingMode) ? scenario.config.ltPricingMode : "auto";
+  document.querySelector("#lt-year1-pnl").value = scenario.config.ltYear1Pnl;
+  document.querySelector("#lt-target-pnl").value = scenario.config.ltTargetPnl;
+  {
+    const ltConvergeStep = Number(scenario.config.ltConvergeSpeed);
+    document.querySelector("#lt-converge-speed").value = Number.isFinite(ltConvergeStep) ? String(ltConvergeStep) : "0";
+  }
+  document.querySelector("#green-cert-price").value = scenario.config.greenCertPrice;
+  document.querySelector("#green-cert-realize-ratio").value = asNum(Number(scenario.config.greenCertRealizeRatio || 0) * 100, 1);
+  document.querySelector("#green-premium-price").value = scenario.config.greenPremiumPrice;
+  document.querySelector("#green-premium-realize-ratio").value = asNum(Number(scenario.config.greenPremiumRealizeRatio || 0) * 100, 1);
+  if (refs.envValueMode) refs.envValueMode.value = ENV_VALUE_MODE_SET.has(scenario.config.envValueMode) ? scenario.config.envValueMode : "global";
+  document.querySelector("#carbon-enabled").value = scenario.config.carbonEnabled ? "yes" : "no";
+  document.querySelector("#carbon-price").value = scenario.config.carbonPrice;
+  document.querySelector("#carbon-realize-ratio").value = asNum(Number(scenario.config.carbonRealizeRatio || 0) * 100, 1);
+  document.querySelector("#market-op-fee").value = scenario.config.marketOpFee;
+  document.querySelector("#grid-assess-fee").value = scenario.config.gridAssessFee;
+  document.querySelector("#ancillary-fee").value = scenario.config.ancillaryFee;
+  document.querySelector("#other-fee").value = scenario.config.otherFee;
+  document.querySelector("#other-income").value = scenario.config.otherIncome;
+  if (refs.feeConfigMode) refs.feeConfigMode.value = FEE_CONFIG_MODE_SET.has(scenario.config.feeConfigMode) ? scenario.config.feeConfigMode : "global";
+  if (refs.storageArbitragePrice) refs.storageArbitragePrice.value = scenario.config.storageArbitragePrice;
+  if (refs.storageCapacityCompPrice) refs.storageCapacityCompPrice.value = scenario.config.storageCapacityCompPrice;
+  if (refs.storageAncillaryRevenuePrice) refs.storageAncillaryRevenuePrice.value = scenario.config.storageAncillaryRevenuePrice;
+  if (refs.storageOtherRevenuePrice) refs.storageOtherRevenuePrice.value = scenario.config.storageOtherRevenuePrice;
+  updateMarketTradeEnergyDisplay(project, scenario);
+  updateLtManualStatus(project, scenario);
+  updateEnvManualStatus(project, scenario);
+  updateFeeManualStatus(project, scenario);
+}
+
+function readScenarioMechanismDraft(scenario) {
+  const ratioInput = Number(document.querySelector("#mechanism-ratio")?.value);
+  return {
+    mechanismEnabled: document.querySelector("#mechanism-enabled")?.value === "yes",
+    mechanismRatio: Number.isFinite(ratioInput)
+      ? clamp(ratioInput / 100, 0, 1)
+      : clamp(Number(scenario?.config?.mechanismRatio || 0), 0, 1),
+    mechanismStartYm: document.querySelector("#mechanism-start-ym")?.value || scenario?.config?.mechanismStartYm || "",
+    mechanismEndYm: document.querySelector("#mechanism-end-ym")?.value || scenario?.config?.mechanismEndYm || ""
+  };
+}
+
+function updateMarketTradeEnergyDisplay(project = getActiveProject(), scenario = null) {
+  if (!refs.marketTradeEnergyRatio) {
+    return;
+  }
+  const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  if (!project || !activeScenario) {
+    refs.marketTradeEnergyRatio.value = "-";
+    updateEnvValueSpaceDisplay(project, activeScenario, 0);
+    return;
+  }
+  const mechanismDraft = readScenarioMechanismDraft(activeScenario);
+  const marketTradeRatio = mechanismDraft.mechanismEnabled ? clamp(1 - mechanismDraft.mechanismRatio, 0, 1) : 1;
+  refs.marketTradeEnergyRatio.value = asPercent(marketTradeRatio);
+  updateEnvValueSpaceDisplay(project, activeScenario, marketTradeRatio);
+}
+
+function getEnvValueMode(config) {
+  return ENV_VALUE_MODE_SET.has(config?.envValueMode) ? config.envValueMode : "global";
+}
+
+function getEnvManualEntryForYear(project, config, year) {
+  if (getEnvValueMode(config) !== "manual") return null;
+  const values = sanitizeEnvManualValuesByYear(config?.envManualValuesByYear || {}, project);
+  const entry = values[year];
+  return isPlainObject(entry) ? entry : null;
+}
+
+function getEnvValueAllocation(project, config, year = null) {
+  const manualEntry = Number.isInteger(year) ? getEnvManualEntryForYear(project, config, year) : null;
+  const source = manualEntry || config || {};
+  const canUseCarbon = project?.siteType === "offshore" && Boolean(source?.carbonEnabled);
+  const greenCertRatio = clamp(Number(source?.greenCertRealizeRatio) || 0, 0, 1);
+  const greenPremiumRatio = clamp(Number(source?.greenPremiumRealizeRatio) || 0, 0, 1);
+  const carbonRatio = canUseCarbon ? clamp(Number(source?.carbonRealizeRatio) || 0, 0, 1) : 0;
+  const greenCertPrice = Number(source?.greenCertPrice) || 0;
+  const greenPremiumPrice = Number(source?.greenPremiumPrice) || 0;
+  const carbonPrice = canUseCarbon ? Number(source?.carbonPrice) || 0 : 0;
+  const totalRatio = greenCertRatio + greenPremiumRatio + carbonRatio;
+  const unitValuePerMarketMwh =
+    greenCertRatio * greenCertPrice
+    + greenPremiumRatio * greenPremiumPrice
+    + carbonRatio * carbonPrice;
+  return {
+    greenCertRatio,
+    greenPremiumRatio,
+    carbonRatio,
+    greenCertPrice,
+    greenPremiumPrice,
+    carbonPrice,
+    totalRatio,
+    unitValuePerMarketMwh
+  };
+}
+
+function getEnvManualCompleteness(project, config) {
+  const values = sanitizeEnvManualValuesByYear(config?.envManualValuesByYear || {}, project);
+  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears) || project.forecastYears < 1) {
+    return { values, complete: 0, total: 0, missingYears: [] };
+  }
+  const missingYears = [];
+  let complete = 0;
+  for (let year = project.startYear; year < project.startYear + project.forecastYears; year += 1) {
+    if (isPlainObject(values[year])) {
+      complete += 1;
+    } else {
+      missingYears.push(year);
+    }
+  }
+  return { values, complete, total: project.forecastYears, missingYears };
+}
+
+function readEnvValueAllocationDraft(project = getActiveProject()) {
+  const canUseCarbon = project?.siteType === "offshore" && document.querySelector("#carbon-enabled")?.value === "yes";
+  const readPercent = (selector) => {
+    const value = Number(document.querySelector(selector)?.value);
+    return Number.isFinite(value) ? value / 100 : 0;
+  };
+  const greenCertRatio = readPercent("#green-cert-realize-ratio");
+  const greenPremiumRatio = readPercent("#green-premium-realize-ratio");
+  const carbonRatio = canUseCarbon ? readPercent("#carbon-realize-ratio") : 0;
+  return {
+    greenCertRatio,
+    greenPremiumRatio,
+    carbonRatio,
+    totalRatio: greenCertRatio + greenPremiumRatio + carbonRatio
+  };
+}
+
+function updateEnvValueSpaceDisplay(project = getActiveProject(), scenario = null, marketTradeRatio = null) {
+  if (!refs.envValueSpaceRatio && !refs.envValueUsedRatio) return;
+  const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  const mechanismDraft = activeScenario ? readScenarioMechanismDraft(activeScenario) : null;
+  const hasMarketTradeRatio = marketTradeRatio !== null && marketTradeRatio !== undefined && Number.isFinite(Number(marketTradeRatio));
+  const maxRatio = hasMarketTradeRatio
+    ? clamp(Number(marketTradeRatio), 0, 1)
+    : mechanismDraft
+      ? (mechanismDraft.mechanismEnabled ? clamp(1 - mechanismDraft.mechanismRatio, 0, 1) : 1)
+      : 0;
+  let draft = readEnvValueAllocationDraft(project);
+  const selectedEnvMode = refs.envValueMode?.value || getEnvValueMode(activeScenario?.config);
+  if (selectedEnvMode === "manual") {
+    const firstYear = Number.isInteger(project?.startYear) ? project.startYear : null;
+    draft = firstYear !== null && getEnvManualEntryForYear(project, activeScenario?.config, firstYear)
+      ? getEnvValueAllocation(project, activeScenario?.config, firstYear)
+      : { totalRatio: 0 };
+  }
+  if (refs.envValueSpaceRatio) refs.envValueSpaceRatio.value = project && activeScenario ? asPercent(maxRatio) : "-";
+  if (refs.envValueUsedRatio) {
+    refs.envValueUsedRatio.value = project && activeScenario ? asPercent(draft.totalRatio) : "-";
+    if (draft.totalRatio > 1 + 0.000001) {
+      refs.envValueUsedRatio.style.borderColor = "#d39191";
+      refs.envValueUsedRatio.style.background = "#fff2f2";
+    } else {
+      refs.envValueUsedRatio.style.removeProperty("border-color");
+      refs.envValueUsedRatio.style.removeProperty("background");
+    }
+  }
+}
+
+function updateEnvManualStatus(project = getActiveProject(), scenario = null) {
+  if (!refs.envManualStatus) return;
+  const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  if (!project || !activeScenario) {
+    refs.envManualStatus.textContent = "请先创建或选择项目。";
+    return;
+  }
+  const { complete, total, missingYears } = getEnvManualCompleteness(project, activeScenario.config);
+  if (!total) {
+    refs.envManualStatus.textContent = "保存项目测算周期后，可导出逐年环境价值兑现模板。";
+    return;
+  }
+  if (!complete) {
+    refs.envManualStatus.textContent = "尚未导入逐年环境价值兑现配置。各年份三条路径兑现空间合计不能超过100%。";
+    return;
+  }
+  refs.envManualStatus.textContent = complete === total
+    ? `已导入完整逐年环境价值兑现配置：${complete}/${total} 年。`
+    : `已导入 ${complete}/${total} 年，缺少：${missingYears.slice(0, 5).join("、")}${missingYears.length > 5 ? "…" : ""}。`;
+}
+
+function syncEnvValueControls(project = getActiveProject(), scenario = null, locked = false) {
+  const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  const mode = refs.envValueMode?.value || getEnvValueMode(activeScenario?.config);
+  const isManual = mode === "manual";
+  const canUseCarbon = project?.siteType === "offshore";
+  const carbonEnabled = document.querySelector("#carbon-enabled")?.value === "yes";
+  if (refs.envManualPanel) refs.envManualPanel.hidden = !isManual;
+  if (refs.envValueMode) refs.envValueMode.disabled = locked;
+  [
+    "#green-cert-price",
+    "#green-cert-realize-ratio",
+    "#green-premium-price",
+    "#green-premium-realize-ratio"
+  ].forEach((selector) => {
+    const field = document.querySelector(selector);
+    if (field) field.disabled = locked || isManual;
+  });
+  const carbonEnabledField = document.querySelector("#carbon-enabled");
+  const carbonPriceField = document.querySelector("#carbon-price");
+  const carbonRatioField = document.querySelector("#carbon-realize-ratio");
+  if (carbonEnabledField) carbonEnabledField.disabled = locked || isManual || !canUseCarbon;
+  if (carbonPriceField) carbonPriceField.disabled = locked || isManual || !(canUseCarbon && carbonEnabled);
+  if (carbonRatioField) carbonRatioField.disabled = locked || isManual || !(canUseCarbon && carbonEnabled);
+  if (!canUseCarbon) {
+    if (carbonEnabledField) carbonEnabledField.value = "no";
+    if (carbonPriceField) carbonPriceField.value = "0";
+    if (carbonRatioField) carbonRatioField.value = "0";
+  } else if (!carbonEnabled && !isManual && carbonRatioField) {
+    carbonRatioField.value = "0";
+  }
+  if (refs.envValueSpaceRatio) refs.envValueSpaceRatio.disabled = true;
+  if (refs.envValueUsedRatio) refs.envValueUsedRatio.disabled = true;
+  if (refs.exportEnvTemplateButton) refs.exportEnvTemplateButton.disabled = locked || !project;
+  if (refs.envManualFileInput) refs.envManualFileInput.disabled = locked || !project || !isManual;
+  if (refs.importEnvTemplateButton) refs.importEnvTemplateButton.disabled = locked || !project || !isManual;
+  updateEnvManualStatus(project, activeScenario);
+  updateEnvValueSpaceDisplay(project, activeScenario);
+}
+
+function getFeeConfigMode(config) {
+  return FEE_CONFIG_MODE_SET.has(config?.feeConfigMode) ? config.feeConfigMode : "global";
+}
+
+function getFeeManualEntryForYear(project, config, year) {
+  if (getFeeConfigMode(config) !== "manual") return null;
+  const values = sanitizeFeeManualValuesByYear(config?.feeManualValuesByYear || {}, project);
+  const entry = values[year];
+  return isPlainObject(entry) ? entry : null;
+}
+
+function getFeeConfigForYear(project, config, year = null) {
+  const manualEntry = Number.isInteger(year) ? getFeeManualEntryForYear(project, config, year) : null;
+  const source = manualEntry || config || {};
+  return {
+    marketOpFee: Number(source.marketOpFee) || 0,
+    gridAssessFee: Number(source.gridAssessFee) || 0,
+    ancillaryFee: Number(source.ancillaryFee) || 0,
+    otherFee: Number(source.otherFee) || 0,
+    otherIncome: Number(source.otherIncome) || 0
+  };
+}
+
+function getFeeManualCompleteness(project, config) {
+  const values = sanitizeFeeManualValuesByYear(config?.feeManualValuesByYear || {}, project);
+  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears) || project.forecastYears < 1) {
+    return { values, complete: 0, total: 0, missingYears: [] };
+  }
+  const missingYears = [];
+  let complete = 0;
+  for (let year = project.startYear; year < project.startYear + project.forecastYears; year += 1) {
+    if (isPlainObject(values[year])) {
+      complete += 1;
+    } else {
+      missingYears.push(year);
+    }
+  }
+  return { values, complete, total: project.forecastYears, missingYears };
+}
+
+function updateFeeManualStatus(project = getActiveProject(), scenario = null) {
+  if (!refs.feeManualStatus) return;
+  const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  if (!project || !activeScenario) {
+    refs.feeManualStatus.textContent = "请先创建或选择项目。";
+    return;
+  }
+  const { complete, total, missingYears } = getFeeManualCompleteness(project, activeScenario.config);
+  if (!total) {
+    refs.feeManualStatus.textContent = "保存项目测算周期后，可导出逐年扣费收益模板。";
+    return;
+  }
+  if (!complete) {
+    refs.feeManualStatus.textContent = "尚未导入逐年扣费收益配置。模板字段包含四类扣费和其他收入。";
+    return;
+  }
+  refs.feeManualStatus.textContent = complete === total
+    ? `已导入完整逐年扣费收益配置：${complete}/${total} 年。`
+    : `已导入 ${complete}/${total} 年，缺少：${missingYears.slice(0, 5).join("、")}${missingYears.length > 5 ? "…" : ""}。`;
+}
+
+function syncFeeConfigControls(project = getActiveProject(), scenario = null, locked = false) {
+  const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  const mode = refs.feeConfigMode?.value || getFeeConfigMode(activeScenario?.config);
+  const isManual = mode === "manual";
+  if (refs.feeManualPanel) refs.feeManualPanel.hidden = !isManual;
+  if (refs.feeConfigMode) refs.feeConfigMode.disabled = locked;
+  [
+    "#market-op-fee",
+    "#grid-assess-fee",
+    "#ancillary-fee",
+    "#other-fee",
+    "#other-income"
+  ].forEach((selector) => {
+    const field = document.querySelector(selector);
+    if (field) field.disabled = locked || isManual;
+  });
+  if (refs.exportFeeTemplateButton) refs.exportFeeTemplateButton.disabled = locked || !project;
+  if (refs.feeManualFileInput) refs.feeManualFileInput.disabled = locked || !project || !isManual;
+  if (refs.importFeeTemplateButton) refs.importFeeTemplateButton.disabled = locked || !project || !isManual;
+  updateFeeManualStatus(project, activeScenario);
+}
+
+function getLtPricingMode(config) {
+  return LT_PRICING_MODE_SET.has(config?.ltPricingMode) ? config.ltPricingMode : "auto";
+}
+
+function getLtManualCompleteness(project, config) {
+  const prices = sanitizeLtManualPricesByYear(config?.ltManualPricesByYear || {}, project);
+  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears) || project.forecastYears < 1) {
+    return { prices, complete: 0, total: 0, missingYears: [] };
+  }
+  const missingYears = [];
+  let complete = 0;
+  for (let year = project.startYear; year < project.startYear + project.forecastYears; year += 1) {
+    if (Number.isFinite(Number(prices[year]))) {
+      complete += 1;
+    } else {
+      missingYears.push(year);
+    }
+  }
+  return { prices, complete, total: project.forecastYears, missingYears };
+}
+
+function updateLtManualStatus(project = getActiveProject(), scenario = null) {
+  if (!refs.ltManualStatus) return;
+  const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  if (!project || !activeScenario) {
+    refs.ltManualStatus.textContent = "请先创建或选择项目。";
+    return;
+  }
+  const { complete, total, missingYears } = getLtManualCompleteness(project, activeScenario.config);
+  if (!total) {
+    refs.ltManualStatus.textContent = "保存项目测算周期后，可导出逐年损益模板。";
+    return;
+  }
+  if (!complete) {
+    refs.ltManualStatus.textContent = "尚未导入逐年损益值。模板字段：year,trade_strategy_pnl_yuan_per_mwh。";
+    return;
+  }
+  refs.ltManualStatus.textContent = complete === total
+    ? `已导入完整逐年损益值：${complete}/${total} 年。`
+    : `已导入 ${complete}/${total} 年，缺少：${missingYears.slice(0, 5).join("、")}${missingYears.length > 5 ? "…" : ""}。`;
+}
+
+function syncLtPricingControls(project = getActiveProject(), scenario = null, locked = false) {
+  const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  const mode = refs.ltPricingMode?.value || getLtPricingMode(activeScenario?.config);
+  const isManual = mode === "manual";
+  if (refs.ltManualPanel) refs.ltManualPanel.hidden = !isManual;
+  ["#lt-year1-pnl", "#lt-target-pnl", "#lt-converge-speed"].forEach((selector) => {
+    const field = document.querySelector(selector);
+    if (field) field.disabled = locked || isManual;
+  });
+  if (refs.ltPricingMode) refs.ltPricingMode.disabled = locked;
+  if (refs.exportLtTemplateButton) refs.exportLtTemplateButton.disabled = locked || !project;
+  if (refs.ltManualFileInput) refs.ltManualFileInput.disabled = locked || !project || !isManual;
+  if (refs.importLtTemplateButton) refs.importLtTemplateButton.disabled = locked || !project || !isManual;
+  updateLtManualStatus(project, activeScenario);
+}
+
+function setScenarioFormDisabled(disabled) {
+  refs.scenarioForm.querySelectorAll("input, select, button").forEach((element) => {
+    if (element.id === "market-trade-energy-ratio") {
+      element.disabled = true;
+      return;
+    }
+    element.disabled = disabled;
+  });
+}
+
+function renderScenarioManager() {
+  const project = getActiveProject();
+  if (!project) {
+    refs.scenarioSelector.innerHTML = "";
+    refs.scenarioQuickName.value = "";
+    refs.scenarioQuickName.disabled = true;
+    refs.scenarioListBody.innerHTML = "";
+    refs.scenarioLockHint.textContent = "请先创建项目。";
+    refs.duplicateScenarioButton.disabled = true;
+    refs.renameScenarioButton.disabled = true;
+    refs.deleteScenarioButton.disabled = true;
+    refs.toggleBaselineLockButton.disabled = true;
+    refs.applyBatchButton.disabled = true;
+    return;
+  }
+  ensureScenarioMetadata(project);
+  const activeScenario = getActiveScenario(project);
+  const baselineScenario = getBaselineScenario(project);
+
+  refs.scenarioSelector.innerHTML = project.scenarios.map((scenario) => `
+    <option value="${scenario.id}">
+      ${scenario.name}${scenario.isBaseline ? "（基准）" : ""}${scenario.locked ? " [已锁定]" : ""}
+    </option>
+  `).join("");
+  refs.scenarioSelector.value = activeScenario?.id || "";
+  refs.scenarioQuickName.value = activeScenario?.name || "";
+  refs.scenarioQuickName.disabled = !activeScenario || activeScenario.locked;
+
+  refs.scenarioListBody.innerHTML = project.scenarios.map((scenario) => {
+    const valuePart = getEnvValueAllocation(project, scenario.config, project.startYear).unitValuePerMarketMwh;
+    const feeConfig = getFeeConfigForYear(project, scenario.config, project.startYear);
+    const storagePart = project.hasStorage
+      ? scenario.config.storageArbitragePrice
+        + scenario.config.storageCapacityCompPrice
+        + scenario.config.storageAncillaryRevenuePrice
+        + scenario.config.storageOtherRevenuePrice
+      : null;
+    const feePart = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
+    const marks = [
+      scenario.id === project.activeScenarioId ? "当前" : "",
+      scenario.isBaseline ? "基准" : "",
+      scenario.locked ? "已锁定" : ""
+    ].filter(Boolean).join(" / ");
+    return `
+      <tr>
+        <td>${escapeHtml(scenario.name)}</td>
+        <td>${marks || "-"}</td>
+        <td>${asPercent(scenario.config.mechanismRatio)}</td>
+        <td>${asNum(scenario.config.mechanismPrice, 1)}</td>
+        <td>${asNum(scenario.config.ltYear1Pnl, 1)}</td>
+        <td>${asNum(valuePart, 1)}</td>
+        <td>${storagePart === null ? "-" : asNum(storagePart, 1)}</td>
+        <td>${asNum(feePart, 1)}</td>
+        <td>${new Date(scenario.updatedAt).toLocaleString("zh-CN", { hour12: false })}</td>
+      </tr>
+    `;
+  }).join("");
+
+  refs.deleteScenarioButton.disabled = !activeScenario || activeScenario.isBaseline || activeScenario.locked || project.scenarios.length <= 1;
+  refs.duplicateScenarioButton.disabled = !activeScenario;
+  refs.renameScenarioButton.disabled = !activeScenario || activeScenario.locked;
+  refs.toggleBaselineLockButton.disabled = !baselineScenario;
+  refs.applyBatchButton.disabled = !project.scenarios.length;
+  refs.toggleBaselineLockButton.textContent = baselineScenario?.locked ? "解锁基准场景" : "锁定基准场景";
+  refs.scenarioLockHint.textContent = baselineScenario?.locked
+    ? "基准场景已锁定。切换到其他场景可继续编辑。"
+    : "基准场景未锁定。建议阶段性锁定用于对比。";
+}
+
+function renderScenarioPageSummary() {
+  if (!refs.scenarioSummaryProject) return;
+  const project = getActiveProject();
+  if (!project) {
+    refs.scenarioSummaryProject.textContent = "请选择项目";
+    refs.scenarioSummaryActive.textContent = "-";
+    refs.scenarioSummaryPeriod.textContent = "-";
+    refs.scenarioSummaryStorage.textContent = "-";
+    return;
+  }
+  ensureScenarioMetadata(project);
+  const scenario = getActiveScenario(project);
+  const provinceName = getProvinceName(project.province || "") || "未选省份";
+  const assetText = getAssetTypeLabel(project.assetType);
+  const siteText = getSiteTypeLabel(project.siteType);
+  refs.scenarioSummaryProject.textContent = `${project.name || "未命名项目"} | ${provinceName} / ${assetText} / ${siteText}`;
+  refs.scenarioSummaryActive.textContent = scenario
+    ? `${scenario.name}${scenario.isBaseline ? "（基准）" : ""}${scenario.locked ? " / 已锁定" : ""}`
+    : "-";
+  refs.scenarioSummaryPeriod.textContent = getForecastPeriodDisplayRange(project);
+  refs.scenarioSummaryStorage.textContent = getStorageConfigText(project);
+}
+
+function switchActiveScenario(scenarioId) {
+  const project = getActiveProject();
+  if (!project) return;
+  if (!project.scenarios.some((scenario) => scenario.id === scenarioId)) return;
+  project.activeScenarioId = scenarioId;
+  renderAll();
+}
+
+function makeScenarioCopyName(project, sourceName) {
+  const base = `${sourceName}-副本`;
+  let seq = 1;
+  let name = `${base}${seq}`;
+  const exists = new Set(project.scenarios.map((item) => item.name));
+  while (exists.has(name)) {
+    seq += 1;
+    name = `${base}${seq}`;
+  }
+  return name;
+}
+
+function duplicateActiveScenario() {
+  const project = getActiveProject();
+  if (!project) return;
+  ensureScenarioMetadata(project);
+  const source = getActiveScenario(project);
+  if (!source) return;
+  const clone = {
+    id: makeId("scn"),
+    name: makeScenarioCopyName(project, source.name),
+    isBaseline: false,
+    locked: false,
+    config: cloneData(source.config),
+    updatedAt: new Date().toISOString()
+  };
+  project.scenarios.push(clone);
+  project.activeScenarioId = clone.id;
+  project.statuses["scenario-page"] = "in_progress";
+  refs.scenarioMessage.textContent = `已复制场景“${source.name}”，当前正在编辑“${clone.name}”。`;
+  refs.scenarioMessage.style.borderColor = "#8fb48d";
+  refs.scenarioMessage.style.background = "#f1fbf1";
+  renderAll();
+}
+
+function renameActiveScenario() {
+  const project = getActiveProject();
+  if (!project) return;
+  ensureScenarioMetadata(project);
+  const target = getActiveScenario(project);
+  if (!target) return;
+  if (target.locked) {
+    refs.scenarioMessage.textContent = "当前场景已锁定，不能重命名。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  const trimmedName = refs.scenarioQuickName.value.trim();
+  if (!trimmedName) {
+    refs.scenarioMessage.textContent = "场景名称不能为空。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  if (trimmedName === target.name) {
+    refs.scenarioMessage.textContent = "场景名称未变化。";
+    refs.scenarioMessage.style.borderColor = "#8fb48d";
+    refs.scenarioMessage.style.background = "#f1fbf1";
+    return;
+  }
+  const duplicatedName = project.scenarios.some((scenario) => (
+    scenario.id !== target.id && scenario.name === trimmedName
+  ));
+  if (duplicatedName) {
+    refs.scenarioMessage.textContent = "场景名称重复，请换一个名称。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  const oldName = target.name;
+  target.name = trimmedName;
+  target.updatedAt = new Date().toISOString();
+  refs.scenarioMessage.textContent = `场景“${oldName}”已重命名为“${target.name}”。`;
+  refs.scenarioMessage.style.borderColor = "#8fb48d";
+  refs.scenarioMessage.style.background = "#f1fbf1";
+  renderAll();
+}
+
+function deleteActiveScenario() {
+  const project = getActiveProject();
+  if (!project) return;
+  ensureScenarioMetadata(project);
+  const target = getActiveScenario(project);
+  if (!target) return;
+  if (target.isBaseline) {
+    refs.scenarioMessage.textContent = "基准场景不能删除。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  if (target.locked) {
+    refs.scenarioMessage.textContent = "当前场景已锁定，无法删除。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  project.scenarios = project.scenarios.filter((scenario) => scenario.id !== target.id);
+  delete project.resultsByScenario[target.id];
+  const fallback = getBaselineScenario(project) || project.scenarios[0] || null;
+  project.activeScenarioId = fallback?.id || null;
+  project.statuses["compare-page"] = countScenariosForCompare(project) >= 2 ? "completed" : "in_progress";
+  refs.scenarioMessage.textContent = `场景“${target.name}”已删除。`;
+  refs.scenarioMessage.style.borderColor = "#8fb48d";
+  refs.scenarioMessage.style.background = "#f1fbf1";
+  renderAll();
+}
+
+function toggleBaselineLock() {
+  const project = getActiveProject();
+  if (!project) return;
+  ensureScenarioMetadata(project);
+  const baseline = getBaselineScenario(project);
+  if (!baseline) return;
+  baseline.locked = !baseline.locked;
+  baseline.updatedAt = new Date().toISOString();
+  refs.scenarioMessage.textContent = baseline.locked ? "基准场景已锁定。" : "基准场景已解锁。";
+  refs.scenarioMessage.style.borderColor = "#8fb48d";
+  refs.scenarioMessage.style.background = "#f1fbf1";
+  renderAll();
+}
+
+function parseBatchValue(spec, rawText) {
+  const num = Number(rawText);
+  if (!Number.isFinite(num)) return null;
+  if (spec.type === "percent") {
+    return clamp(num / 100, spec.min / 100, spec.max / 100);
+  }
+  return clamp(num, spec.min, spec.max);
+}
+
+function applyBatchParameter() {
+  const project = getActiveProject();
+  if (!project) return;
+  ensureScenarioMetadata(project);
+  const key = refs.batchParamKey.value;
+  const spec = BATCH_PARAM_SPECS[key];
+  if (!spec) return;
+  const parsed = parseBatchValue(spec, refs.batchParamValue.value.trim());
+  if (parsed === null) {
+    refs.scenarioMessage.textContent = "批量参数值无效，请输入数字。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  const scope = refs.batchTargetScope.value;
+  let updated = 0;
+  let skippedBaseline = 0;
+  let skippedLocked = 0;
+  let skippedSpace = 0;
+  for (const scenario of project.scenarios) {
+    if (scope === "non_baseline" && scenario.isBaseline) {
+      skippedBaseline += 1;
+      continue;
+    }
+    if (scenario.locked) {
+      skippedLocked += 1;
+      continue;
+    }
+    if (key === "carbonPrice" && project.siteType !== "offshore") {
+      scenario.config.carbonPrice = 0;
+      scenario.config.carbonEnabled = false;
+      scenario.config.carbonRealizeRatio = 0;
+    } else if (key === "carbonRealizeRatio" && project.siteType !== "offshore") {
+      scenario.config.carbonRealizeRatio = 0;
+    } else if (ENV_VALUE_RATIO_KEYS.has(key)) {
+      const nextConfig = { ...scenario.config, [key]: parsed };
+      if (project.siteType !== "offshore") {
+        nextConfig.carbonRealizeRatio = 0;
+      }
+      const allocation = getEnvValueAllocation(project, nextConfig);
+      if (allocation.totalRatio > 1 + 0.000001) {
+        skippedSpace += 1;
+        continue;
+      }
+      scenario.config[key] = parsed;
+    } else {
+      scenario.config[key] = parsed;
+    }
+    scenario.updatedAt = new Date().toISOString();
+    updated += 1;
+  }
+
+  if (!updated) {
+    refs.scenarioMessage.textContent = "没有可更新的场景（可能被锁定或范围过滤）。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+
+  markDownstreamStale(project, "scenario-page");
+  refs.scenarioMessage.textContent = `批量更新完成：${updated} 个场景已更新，跳过基准 ${skippedBaseline} 个，跳过锁定 ${skippedLocked} 个。`;
+  if (skippedSpace) {
+    refs.scenarioMessage.textContent += ` 另有 ${skippedSpace} 个场景因环境价值兑现空间超过100%未更新。`;
+  }
+  refs.scenarioMessage.style.borderColor = "#8fb48d";
+  refs.scenarioMessage.style.background = "#f1fbf1";
+  renderAll();
+}
+
+function syncScenarioFieldLocks() {
+  const project = getActiveProject();
+  const scenario = project ? getActiveScenario(project) : null;
+  const locked = Boolean(scenario?.locked);
+  setScenarioFormDisabled(locked);
+  const canUseStorageRevenue = Boolean(project?.hasStorage);
+  if (refs.scenarioStorageRevenueSection) {
+    refs.scenarioStorageRevenueSection.hidden = !canUseStorageRevenue;
+  }
+
+  const mechanismEnabled = document.querySelector("#mechanism-enabled").value === "yes";
+  const mechanismFields = [
+    "#mechanism-ratio",
+    "#mechanism-price",
+    "#mechanism-start-ym",
+    "#mechanism-end-ym"
+  ];
+  mechanismFields.forEach((selector) => {
+    const target = document.querySelector(selector);
+    target.disabled = locked || !mechanismEnabled;
+  });
+
+  syncEnvValueControls(project, scenario, locked);
+  syncLtPricingControls(project, scenario, locked);
+  syncFeeConfigControls(project, scenario, locked);
+  [
+    refs.storageArbitragePrice,
+    refs.storageCapacityCompPrice,
+    refs.storageAncillaryRevenuePrice,
+    refs.storageOtherRevenuePrice
+  ].forEach((field) => {
+    if (!field) return;
+    field.disabled = locked || !canUseStorageRevenue;
+    if (!canUseStorageRevenue) {
+      field.value = "0";
+    }
+  });
+  refs.scenarioLockHint.textContent = locked
+    ? "当前为锁定场景，已禁止编辑。可切换场景或解锁基准场景。"
+    : "当前场景可编辑。";
+  updateMarketTradeEnergyDisplay(project, scenario);
+}
+
+function renderScenarioForm() {
+  const project = getActiveProject();
+  renderScenarioManager();
+  if (!project) return;
+  ensureScenarioMetadata(project);
+  const scenario = getActiveScenario(project);
+  if (!scenario) return;
+  loadScenarioToForm(project, scenario);
+  syncScenarioFieldLocks();
+}
+
+function saveScenarioFromForm() {
+  const project = getActiveProject();
+  if (!project) return;
+  ensureScenarioMetadata(project);
+
+  let scenario = getActiveScenario(project);
+  if (!scenario) return;
+  if (scenario.locked) {
+    refs.scenarioMessage.textContent = "当前场景已锁定，不能保存修改。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  const scenarioName = document.querySelector("#scenario-name").value.trim() || "基准场景";
+  const duplicatedName = project.scenarios.find((item) => item.id !== scenario.id && item.name === scenarioName);
+  if (duplicatedName) {
+    refs.scenarioMessage.textContent = "场景名称重复，请修改后再保存。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  scenario.name = scenarioName;
+
+  const mechanismEnabled = document.querySelector("#mechanism-enabled").value === "yes";
+  const mechanismStartYm = document.querySelector("#mechanism-start-ym").value;
+  const mechanismEndYm = document.querySelector("#mechanism-end-ym").value;
+  if (mechanismEnabled) {
+    const startSerial = monthSerial(mechanismStartYm);
+    const endSerial = monthSerial(mechanismEndYm);
+    if (startSerial === null || endSerial === null || endSerial < startSerial) {
+      refs.scenarioMessage.textContent = "机制执行年月无效，请检查起止区间。";
+      refs.scenarioMessage.style.borderColor = "#d39191";
+      refs.scenarioMessage.style.background = "#fff2f2";
+      return;
+    }
+  }
+  const ltPricingMode = LT_PRICING_MODE_SET.has(refs.ltPricingMode?.value) ? refs.ltPricingMode.value : "auto";
+  const ltManualPricesByYear = sanitizeLtManualPricesByYear(scenario.config?.ltManualPricesByYear || {}, project);
+  if (ltPricingMode === "manual") {
+    const completeness = getLtManualCompleteness(project, { ltManualPricesByYear });
+    if (completeness.complete !== completeness.total) {
+      refs.scenarioMessage.textContent = `逐年损益值不完整，当前 ${completeness.complete}/${completeness.total} 年。请导入完整测算周期后再保存。`;
+      refs.scenarioMessage.style.borderColor = "#d39191";
+      refs.scenarioMessage.style.background = "#fff2f2";
+      return;
+    }
+  }
+  const envValueMode = ENV_VALUE_MODE_SET.has(refs.envValueMode?.value) ? refs.envValueMode.value : "global";
+  const envManualValuesByYear = sanitizeEnvManualValuesByYear(scenario.config?.envManualValuesByYear || {}, project);
+  const envAllocationDraft = readEnvValueAllocationDraft(project);
+  if (envValueMode === "manual") {
+    const completeness = getEnvManualCompleteness(project, { envManualValuesByYear });
+    if (completeness.complete !== completeness.total) {
+      refs.scenarioMessage.textContent = `逐年环境价值兑现配置不完整，当前 ${completeness.complete}/${completeness.total} 年。请导入完整测算周期后再保存。`;
+      refs.scenarioMessage.style.borderColor = "#d39191";
+      refs.scenarioMessage.style.background = "#fff2f2";
+      return;
+    }
+  } else if (
+    envAllocationDraft.greenCertRatio < 0
+    || envAllocationDraft.greenPremiumRatio < 0
+    || envAllocationDraft.carbonRatio < 0
+    || envAllocationDraft.totalRatio > 1 + 0.000001
+  ) {
+    refs.scenarioMessage.textContent = `环境价值兑现空间分配无效：绿证、绿电溢价、碳收益合计为 ${asPercent(envAllocationDraft.totalRatio)}，不能超过 100.0%。`;
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  const feeConfigMode = FEE_CONFIG_MODE_SET.has(refs.feeConfigMode?.value) ? refs.feeConfigMode.value : "global";
+  const feeManualValuesByYear = sanitizeFeeManualValuesByYear(scenario.config?.feeManualValuesByYear || {}, project);
+  if (feeConfigMode === "manual") {
+    const completeness = getFeeManualCompleteness(project, { feeManualValuesByYear });
+    if (completeness.complete !== completeness.total) {
+      refs.scenarioMessage.textContent = `逐年扣费收益配置不完整，当前 ${completeness.complete}/${completeness.total} 年。请导入完整测算周期后再保存。`;
+      refs.scenarioMessage.style.borderColor = "#d39191";
+      refs.scenarioMessage.style.background = "#fff2f2";
+      return;
+    }
+  }
+
+  const config = {
+    mechanismEnabled,
+    mechanismRatio: clamp(Number(document.querySelector("#mechanism-ratio").value) / 100, 0, 1),
+    mechanismPrice: Number(document.querySelector("#mechanism-price").value),
+    mechanismStartYm,
+    mechanismEndYm,
+    ltPricingMode,
+    ltManualPricesByYear,
+    ltYear1Pnl: Number(document.querySelector("#lt-year1-pnl").value),
+    ltTargetPnl: Number(document.querySelector("#lt-target-pnl").value),
+    ltConvergeSpeedUnit: "fixed_step",
+    ltConvergeSpeed: clamp(Number(document.querySelector("#lt-converge-speed").value), 0, 2000),
+    envValueMode,
+    envManualValuesByYear,
+    greenCertPrice: Number(document.querySelector("#green-cert-price").value),
+    greenCertRealizeRatio: clamp(envAllocationDraft.greenCertRatio, 0, 1),
+    greenPremiumPrice: Number(document.querySelector("#green-premium-price").value),
+    greenPremiumRealizeRatio: clamp(envAllocationDraft.greenPremiumRatio, 0, 1),
+    carbonEnabled: project.siteType === "offshore" && document.querySelector("#carbon-enabled").value === "yes",
+    carbonPrice: project.siteType === "offshore" ? Number(document.querySelector("#carbon-price").value) : 0,
+    carbonRealizeRatio: project.siteType === "offshore" && document.querySelector("#carbon-enabled").value === "yes" ? clamp(envAllocationDraft.carbonRatio, 0, 1) : 0,
+    feeConfigMode,
+    feeManualValuesByYear,
+    marketOpFee: Number(document.querySelector("#market-op-fee").value),
+    gridAssessFee: Number(document.querySelector("#grid-assess-fee").value),
+    ancillaryFee: Number(document.querySelector("#ancillary-fee").value),
+    otherFee: Number(document.querySelector("#other-fee").value),
+    otherIncome: Number(document.querySelector("#other-income").value),
+    storageArbitragePrice: project.hasStorage ? Number(refs.storageArbitragePrice?.value || 0) : 0,
+    storageCapacityCompPrice: project.hasStorage ? Number(refs.storageCapacityCompPrice?.value || 0) : 0,
+    storageAncillaryRevenuePrice: project.hasStorage ? Number(refs.storageAncillaryRevenuePrice?.value || 0) : 0,
+    storageOtherRevenuePrice: project.hasStorage ? Number(refs.storageOtherRevenuePrice?.value || 0) : 0
+  };
+  scenario.config = config;
+  scenario.updatedAt = new Date().toISOString();
+
+  project.statuses["scenario-page"] = "completed";
+  markDownstreamStale(project, "scenario-page");
+  refs.scenarioMessage.textContent = `场景“${scenario.name}”已保存。`;
+  refs.scenarioMessage.style.borderColor = "#8fb48d";
+  refs.scenarioMessage.style.background = "#f1fbf1";
+  renderAll();
+}
+
+function ltPnlPriceForYear(config, yearIndex) {
+  const year1 = Number(config?.ltYear1Pnl) || 0;
+  const target = Number(config?.ltTargetPnl) || 0;
+  const step = Math.max(0, Number(config?.ltConvergeSpeed) || 0);
+  if (yearIndex <= 1 || step <= 0) return year1;
+  const delta = target - year1;
+  const distance = Math.abs(delta);
+  const moved = step * (yearIndex - 1);
+  if (moved >= distance) return target;
+  return year1 + Math.sign(delta) * moved;
+}
+
+function tradeStrategyPnlPriceForYear(config, yearIndex, year) {
+  if (getLtPricingMode(config) === "manual") {
+    const value = Number(config?.ltManualPricesByYear?.[year]);
+    if (Number.isFinite(value)) return value;
+  }
+  return ltPnlPriceForYear(config, yearIndex);
+}
+
+function formatYearListCompact(years) {
+  const sorted = Array.from(new Set((years || []).map((year) => Number(year)).filter(Number.isInteger))).sort((a, b) => a - b);
+  const ranges = [];
+  let start = null;
+  let prev = null;
+  sorted.forEach((year) => {
+    if (start === null) {
+      start = year;
+      prev = year;
+      return;
+    }
+    if (year === prev + 1) {
+      prev = year;
+      return;
+    }
+    ranges.push(start === prev ? String(start) : `${start}-${prev}`);
+    start = year;
+    prev = year;
+  });
+  if (start !== null) {
+    ranges.push(start === prev ? String(start) : `${start}-${prev}`);
+  }
+  return ranges.join("、");
+}
+
+function calculateScenarioResult(project, scenario, run) {
+  const rows = [];
+  const startYear = project.startYear;
+  const endYear = project.startYear + project.forecastYears - 1;
+  const missingYears = [];
+  const missingEnergyYears = [];
+  const missingPriceYears = [];
+  const cfg = scenario.config;
+  let hourlyPreview = [];
+  let totalEnergy = 0;
+  let totalFullRevenue = 0;
+
+  for (let year = startYear; year <= endYear; year += 1) {
+    const yearIndex = year - startYear + 1;
+    const hourlyHours = getHourlyEnergyForCalculation(project, year, yearIndex);
+    const prices = run.pricesByYear[year];
+    const energyReady = Array.isArray(hourlyHours) && hourlyHours.length === 8760;
+    const priceReady = Array.isArray(prices) && prices.length === 8760;
+    if (!energyReady || !priceReady) {
+      missingYears.push(year);
+      if (!energyReady) missingEnergyYears.push(year);
+      if (!priceReady) missingPriceYears.push(year);
+      rows.push({
+        year,
+        annualHours: 0,
+        energyMwh: 0,
+        spotAvgPrice: 0,
+        capturePrice: 0,
+        captureSpread: 0,
+        spotRevenue: 0,
+        mechanismRatio: 0,
+        mechanismRevenue: 0,
+        nonMechanismEnergy: 0,
+        ltPnlPrice: 0,
+        ltPnlRevenue: 0,
+        envRevenue: 0,
+        storageSupplementRevenue: 0,
+        comprehensiveFee: 0,
+        otherIncome: 0,
+        fullRevenue: 0,
+        fullRevenuePrice: 0,
+        note: "缺失曲线"
+      });
+      continue;
+    }
+
+    const annualHours = hourlyHours.reduce((sum, value) => sum + value, 0);
+    const energyMwh = annualHours * project.capacityMw;
+    const spotAvgPrice = prices.reduce((sum, value) => sum + value, 0) / 8760;
+    let spotRevenue = 0;
+    for (let i = 0; i < 8760; i += 1) {
+      const hourlyEnergy = hourlyHours[i] * project.capacityMw;
+      spotRevenue += hourlyEnergy * prices[i];
+    }
+    const capturePrice = energyMwh > 0 ? spotRevenue / energyMwh : 0;
+    const captureSpread = capturePrice - spotAvgPrice;
+
+    const months = cfg.mechanismEnabled
+      ? mechanismActiveMonthsForYear(year, cfg.mechanismStartYm, cfg.mechanismEndYm)
+      : 0;
+    const mechanismRatio = cfg.mechanismEnabled ? cfg.mechanismRatio * (months / 12) : 0;
+    const mechanismEnergy = energyMwh * mechanismRatio;
+    const mechanismRevenue = mechanismEnergy * (cfg.mechanismPrice - capturePrice);
+    const nonMechanismEnergy = Math.max(0, energyMwh - mechanismEnergy);
+
+    const ltPnlPrice = tradeStrategyPnlPriceForYear(cfg, yearIndex, year);
+    const ltPnlRevenue = nonMechanismEnergy * ltPnlPrice;
+
+    const envAllocation = getEnvValueAllocation(project, cfg, year);
+    const greenCertRevenue = nonMechanismEnergy * envAllocation.greenCertRatio * envAllocation.greenCertPrice;
+    const greenPremiumRevenue = nonMechanismEnergy * envAllocation.greenPremiumRatio * envAllocation.greenPremiumPrice;
+    const carbonRevenue = nonMechanismEnergy * envAllocation.carbonRatio * envAllocation.carbonPrice;
+    const envRevenue = greenCertRevenue + greenPremiumRevenue + carbonRevenue;
+    const storageSupplementPerMwh = project.hasStorage
+      ? Number(cfg.storageArbitragePrice || 0)
+        + Number(cfg.storageCapacityCompPrice || 0)
+        + Number(cfg.storageAncillaryRevenuePrice || 0)
+        + Number(cfg.storageOtherRevenuePrice || 0)
+      : 0;
+    const storageSupplementRevenue = energyMwh * storageSupplementPerMwh;
+
+    const feeConfig = getFeeConfigForYear(project, cfg, year);
+    const comprehensiveFeePerMwh = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
+    const comprehensiveFee = energyMwh * comprehensiveFeePerMwh;
+    const otherIncome = energyMwh * feeConfig.otherIncome;
+
+    const fullRevenue = spotRevenue + mechanismRevenue + ltPnlRevenue + envRevenue + storageSupplementRevenue - comprehensiveFee + otherIncome;
+    const fullRevenuePrice = energyMwh > 0 ? fullRevenue / energyMwh : 0;
+
+    totalEnergy += energyMwh;
+    totalFullRevenue += fullRevenue;
+
+    rows.push({
+      year,
+      annualHours,
+      energyMwh,
+      spotAvgPrice,
+      capturePrice,
+      captureSpread,
+      spotRevenue,
+      mechanismRatio,
+      mechanismRevenue,
+      nonMechanismEnergy,
+      ltPnlPrice,
+      ltPnlRevenue,
+      envRevenue,
+      storageSupplementRevenue,
+      comprehensiveFee,
+      otherIncome,
+      fullRevenue,
+      fullRevenuePrice,
+      note: ""
+    });
+
+    if (year === startYear) {
+      const marketTradeRatio = 1 - mechanismRatio;
+      const envValuePerMwh = envAllocation.unitValuePerMarketMwh;
+      const adjustmentPerMwh =
+        mechanismRatio * (cfg.mechanismPrice - capturePrice)
+        + (1 - mechanismRatio) * ltPnlPrice
+        + marketTradeRatio * envValuePerMwh
+        + storageSupplementPerMwh
+        - comprehensiveFeePerMwh
+        + feeConfig.otherIncome;
+      hourlyPreview = [];
+      for (let i = 0; i < 8760; i += 1) {
+        const hourEnergy = hourlyHours[i] * project.capacityMw;
+        const price = prices[i];
+        const spot = hourEnergy * price;
+        const full = hourEnergy * (price + adjustmentPerMwh);
+        hourlyPreview.push({
+          time: hourIndexToTimestamp(year, i),
+          equivalentHours: hourlyHours[i],
+          energyMwh: hourEnergy,
+          spotPrice: price,
+          spotRevenue: spot,
+          fullRevenue: full
+        });
+      }
+    }
+  }
+
+  const first = rows.find((row) => row.energyMwh > 0) || rows[0];
+  const split = [
+    { label: "现货市场收入", amount: first.spotRevenue, tone: "green" },
+    { label: "差价机制结算", amount: first.mechanismRevenue, tone: first.mechanismRevenue >= 0 ? "green" : "red" },
+    { label: "交易策略损益", amount: first.ltPnlRevenue, tone: first.ltPnlRevenue >= 0 ? "green" : "red" },
+    { label: "环境价值兑现", amount: first.envRevenue, tone: "orange" },
+    { label: "配储补充收益", amount: first.storageSupplementRevenue, tone: "green" },
+    { label: "综合费用", amount: -first.comprehensiveFee, tone: "red" },
+    { label: "其他收入项", amount: first.otherIncome, tone: "green" }
+  ];
+
+  return {
+    annualRows: rows,
+    hourlyPreview,
+    firstYearSplit: split,
+    totalEnergy,
+    totalFullRevenue,
+    avgFullRevenuePrice: totalEnergy > 0 ? totalFullRevenue / totalEnergy : 0,
+    missingYears,
+    missingEnergyYears,
+    missingPriceYears
+  };
+}
+
+function runCalculation() {
+  const project = getActiveProject();
+  if (!project) return;
+  const scenario = getActiveScenario(project);
+  const run = getActiveRun(project);
+  if (!scenario) {
+    setTopMeta("请先在全口径收入配置页保存至少一个配置方案。");
+    return;
+  }
+  if (!run) {
+    setTopMeta("请先在电价预测工作台生成并生效一个电价版本。");
+    return;
+  }
+  if (getLtPricingMode(scenario.config) === "manual") {
+    const completeness = getLtManualCompleteness(project, scenario.config);
+    if (completeness.complete !== completeness.total) {
+      setTopMeta(`请先导入完整的逐年交易策略损益值（当前 ${completeness.complete}/${completeness.total} 年）。`);
+      return;
+    }
+  }
+  if (getEnvValueMode(scenario.config) === "manual") {
+    const completeness = getEnvManualCompleteness(project, scenario.config);
+    if (completeness.complete !== completeness.total) {
+      setTopMeta(`请先导入完整的逐年环境价值兑现配置（当前 ${completeness.complete}/${completeness.total} 年）。`);
+      return;
+    }
+  }
+  if (getFeeConfigMode(scenario.config) === "manual") {
+    const completeness = getFeeManualCompleteness(project, scenario.config);
+    if (completeness.complete !== completeness.total) {
+      setTopMeta(`请先导入完整的逐年扣费收益配置（当前 ${completeness.complete}/${completeness.total} 年）。`);
+      return;
+    }
+  }
+
+  const energyPrepared = ensureHourlyEnergyForCalculation(project);
+  const result = calculateScenarioResult(project, scenario, run);
+  if (result.missingYears.length) {
+    const pieces = [];
+    if (result.missingEnergyYears.length) {
+      pieces.push(`缺失上网电量曲线：${formatYearListCompact(result.missingEnergyYears)}`);
+    }
+    if (result.missingPriceYears.length) {
+      pieces.push(`缺失生效电价曲线：${formatYearListCompact(result.missingPriceYears)}`);
+    }
+    setTopMeta(`测算失败：${pieces.join("；")}`);
+    if (energyPrepared.changed) {
+      renderAll();
+    }
+    return;
+  }
+
+  project.resultsByScenario[scenario.id] = result;
+  project.statuses["results-page"] = "completed";
+  project.statuses["compare-page"] = countScenariosForCompare(project) >= 2 ? "completed" : "in_progress";
+  if (energyPrepared.changed) {
+    const fillText = energyPrepared.defaultAnnualFilled ? "补齐默认逐年总量并" : "";
+    setTopMeta(`已自动${fillText}调用省份典型曲线生成 ${energyPrepared.completed}/${energyPrepared.total} 年上网电量，并完成测算。`);
+  }
+  renderAll();
+}
+
+function setResultReportView(view) {
+  const nextView = RESULT_REPORT_VIEW_SET.has(view) ? view : "annual";
+  activeResultReportView = nextView;
+  refs.resultReportTabs?.forEach((button) => {
+    const isActive = button.dataset.resultView === nextView;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+  refs.resultReportPanes?.forEach((pane) => {
+    const isActive = pane.dataset.resultPane === nextView;
+    pane.hidden = !isActive;
+    pane.classList.toggle("active", isActive);
+  });
+  queueResultChartsResize();
+}
+
+function resultChartTokens() {
+  const tokens = compareThemeTokens();
+  return {
+    ...tokens,
+    spot: tokens.primary,
+    mechanism: tokens.baseline,
+    trade: "#7569d8",
+    env: tokens.tertiary,
+    storage: "#a36cc1",
+    other: tokens.secondary,
+    fee: tokens.negative,
+    net: tokens.primary
+  };
+}
+
+function getResultChartNode(key) {
+  const nodeMap = {
+    annualStack: refs.resultAnnualStackChart,
+    pricePath: refs.resultPricePathChart,
+    waterfall: refs.resultWaterfallChart,
+    contribution: refs.resultContributionChart
+  };
+  return nodeMap[key] || null;
+}
+
+function ensureResultChart(key) {
+  const node = getResultChartNode(key);
+  if (!node || !window.echarts) return null;
+  const existing = resultChartInstances[key];
+  if (existing && !existing.isDisposed()) return existing;
+  const chart = window.echarts.init(node, null, { renderer: "canvas" });
+  resultChartInstances[key] = chart;
+  if (!resultChartsResizeBound && typeof window !== "undefined") {
+    window.addEventListener("resize", () => {
+      Object.values(resultChartInstances).forEach((instance) => {
+        if (instance && !instance.isDisposed()) instance.resize();
+      });
+    });
+    resultChartsResizeBound = true;
+  }
+  return chart;
+}
+
+function queueResultChartsResize() {
+  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      Object.values(resultChartInstances).forEach((instance) => {
+        if (instance && !instance.isDisposed()) instance.resize();
+      });
+    });
+  });
+}
+
+function renderResultChartsPlaceholder(message) {
+  if (resolveVisiblePageId(appState.activePage) !== "results-page") return;
+  const tokens = resultChartTokens();
+  ["annualStack", "pricePath", "waterfall", "contribution"].forEach((key) => {
+    const chart = ensureResultChart(key);
+    if (!chart) return;
+    chart.clear();
+    chart.setOption({
+      animation: false,
+      xAxis: { show: false, type: "value" },
+      yAxis: { show: false, type: "category", data: [] },
+      series: [],
+      graphic: [{
+        type: "text",
+        left: "center",
+        top: "middle",
+        style: {
+          text: message,
+          fill: tokens.axisText,
+          fontSize: 14,
+          fontWeight: 700
+        }
+      }]
+    }, true);
+  });
+}
+
+function resultMoneyWan(value) {
+  return Number(((Number(value) || 0) / 10000).toFixed(2));
+}
+
+function resultSeriesValue(value) {
+  return Number((Number(value || 0)).toFixed(4));
+}
+
+function getResultContributionItems(result) {
+  const rows = result?.annualRows || [];
+  const sum = (key) => rows.reduce((total, row) => total + Number(row[key] || 0), 0);
+  return [
+    { label: "现货市场收入", amount: sum("spotRevenue"), colorKey: "spot" },
+    { label: "差价机制结算", amount: sum("mechanismRevenue"), colorKey: "mechanism" },
+    { label: "交易策略损益", amount: sum("ltPnlRevenue"), colorKey: "trade" },
+    { label: "环境价值兑现", amount: sum("envRevenue"), colorKey: "env" },
+    { label: "配储补充收益", amount: sum("storageSupplementRevenue"), colorKey: "storage" },
+    { label: "综合费用", amount: -sum("comprehensiveFee"), colorKey: "fee" },
+    { label: "其他收入", amount: sum("otherIncome"), colorKey: "other" }
+  ];
+}
+
+function renderResultCharts(project, scenario, result) {
+  if (resolveVisiblePageId(appState.activePage) !== "results-page") return;
+  const rows = result?.annualRows || [];
+  if (!rows.length) {
+    renderResultChartsPlaceholder("请先发起基准测算");
+    return;
+  }
+
+  const tokens = resultChartTokens();
+  const years = rows.map((row) => String(row.year));
+  const axisLabel = { color: tokens.axisText };
+  const splitLine = { lineStyle: { color: tokens.splitLine } };
+  const axisLine = { lineStyle: { color: tokens.axisLine } };
+  const tooltip = {
+    trigger: "axis",
+    backgroundColor: tokens.tooltipBg,
+    borderColor: tokens.tooltipBorder,
+    borderWidth: 1,
+    textStyle: { color: tokens.axisText }
+  };
+  const legend = {
+    top: 0,
+    itemWidth: 10,
+    itemHeight: 10,
+    textStyle: { color: tokens.legendText, fontWeight: 700 }
+  };
+
+  const annualChart = ensureResultChart("annualStack");
+  if (annualChart) {
+    const componentSeries = [
+      { name: "现货收入", key: "spotRevenue", color: tokens.spot },
+      { name: "差价机制", key: "mechanismRevenue", color: tokens.mechanism },
+      { name: "交易策略", key: "ltPnlRevenue", color: tokens.trade },
+      { name: "环境价值", key: "envRevenue", color: tokens.env },
+      { name: "配储补充", key: "storageSupplementRevenue", color: tokens.storage },
+      { name: "其他收入", key: "otherIncome", color: tokens.other },
+      { name: "综合费用", key: "comprehensiveFee", color: tokens.fee, negative: true }
+    ];
+    annualChart.setOption({
+      animationDuration: 360,
+      color: componentSeries.map((item) => item.color).concat(tokens.net),
+      grid: { top: 64, left: 58, right: 34, bottom: 46, containLabel: true },
+      legend,
+      tooltip: {
+        ...tooltip,
+        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 万元`
+      },
+      xAxis: {
+        type: "category",
+        data: years,
+        axisLabel: { ...axisLabel, interval: scenarioVisualYearInterval(rows), hideOverlap: true },
+        axisLine,
+        axisTick: { show: false }
+      },
+      yAxis: {
+        type: "value",
+        name: "万元",
+        nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
+        axisLabel,
+        axisLine,
+        splitLine
+      },
+      series: [
+        ...componentSeries.map((item) => ({
+          name: item.name,
+          type: "bar",
+          stack: "revenue",
+          barWidth: 18,
+          itemStyle: { color: item.color },
+          data: rows.map((row) => resultMoneyWan(item.negative ? -row[item.key] : row[item.key]))
+        })),
+        {
+          name: "全口径收入",
+          type: "line",
+          smooth: true,
+          symbolSize: 6,
+          lineStyle: { width: 3, color: tokens.net },
+          itemStyle: { color: tokens.net },
+          data: rows.map((row) => resultMoneyWan(row.fullRevenue))
+        }
+      ]
+    }, true);
+  }
+
+  const priceChart = ensureResultChart("pricePath");
+  if (priceChart) {
+    const cfg = scenario?.config || {};
+    const hasMechanismLine = rows.some((row) => cfg.mechanismEnabled && mechanismActiveMonthsForYear(row.year, cfg.mechanismStartYm, cfg.mechanismEndYm) > 0);
+    const priceSeries = [
+      { name: "现货均价", data: rows.map((row) => resultSeriesValue(row.spotAvgPrice)), color: tokens.other },
+      { name: "捕获电价", data: rows.map((row) => resultSeriesValue(row.capturePrice)), color: tokens.spot },
+      { name: "全口径度电净价", data: rows.map((row) => resultSeriesValue(row.fullRevenuePrice)), color: tokens.net }
+    ];
+    if (hasMechanismLine) {
+      priceSeries.push({
+        name: "机制电价",
+        data: rows.map((row) => (
+          mechanismActiveMonthsForYear(row.year, cfg.mechanismStartYm, cfg.mechanismEndYm) > 0
+            ? resultSeriesValue(cfg.mechanismPrice)
+            : null
+        )),
+        color: tokens.mechanism
+      });
+    }
+    priceChart.setOption({
+      animationDuration: 360,
+      grid: { top: 54, left: 58, right: 28, bottom: 46, containLabel: true },
+      legend,
+      tooltip: {
+        ...tooltip,
+        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 元/MWh`
+      },
+      xAxis: {
+        type: "category",
+        data: years,
+        axisLabel: { ...axisLabel, interval: scenarioVisualYearInterval(rows), hideOverlap: true },
+        axisLine,
+        axisTick: { show: false }
+      },
+      yAxis: {
+        type: "value",
+        name: "元/MWh",
+        nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
+        axisLabel,
+        axisLine,
+        splitLine
+      },
+      series: priceSeries.map((item) => ({
+        name: item.name,
+        type: "line",
+        smooth: true,
+        connectNulls: false,
+        symbolSize: 5,
+        lineStyle: { width: 2.6, color: item.color },
+        itemStyle: { color: item.color },
+        data: item.data
+      }))
+    }, true);
+  }
+
+  const waterfallChart = ensureResultChart("waterfall");
+  const first = rows[0];
+  if (waterfallChart && first) {
+    const energyMwh = Math.max(1, Number(first.energyMwh || 0));
+    const bridgeItems = [
+      { label: "捕获电价", value: first.capturePrice, color: tokens.spot },
+      { label: "差价机制", value: first.mechanismRevenue / energyMwh, color: tokens.mechanism },
+      { label: "交易策略", value: first.ltPnlRevenue / energyMwh, color: tokens.trade },
+      { label: "环境价值", value: first.envRevenue / energyMwh, color: tokens.env },
+      { label: "配储补充", value: first.storageSupplementRevenue / energyMwh, color: tokens.storage },
+      { label: "综合费用", value: -first.comprehensiveFee / energyMwh, color: tokens.fee },
+      { label: "其他收入", value: first.otherIncome / energyMwh, color: tokens.other },
+      { label: "度电净价", value: first.fullRevenuePrice, color: tokens.net }
+    ];
+    waterfallChart.setOption({
+      animationDuration: 360,
+      grid: { top: 34, left: 56, right: 22, bottom: 66, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: tokens.tooltipBg,
+        borderColor: tokens.tooltipBorder,
+        borderWidth: 1,
+        textStyle: { color: tokens.axisText },
+        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 元/MWh`
+      },
+      xAxis: {
+        type: "category",
+        data: bridgeItems.map((item) => item.label),
+        axisLabel: { ...axisLabel, interval: 0, rotate: 28 },
+        axisLine,
+        axisTick: { show: false }
+      },
+      yAxis: {
+        type: "value",
+        name: "元/MWh",
+        nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
+        axisLabel,
+        axisLine,
+        splitLine
+      },
+      series: [{
+        name: "度电影响",
+        type: "bar",
+        barWidth: 20,
+        data: bridgeItems.map((item) => ({
+          value: resultSeriesValue(item.value),
+          itemStyle: { color: item.color }
+        }))
+      }]
+    }, true);
+  }
+
+  const contributionChart = ensureResultChart("contribution");
+  if (contributionChart) {
+    const contributionItems = getResultContributionItems(result);
+    contributionChart.setOption({
+      animationDuration: 360,
+      grid: { top: 22, left: 112, right: 28, bottom: 34, containLabel: true },
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: tokens.tooltipBg,
+        borderColor: tokens.tooltipBorder,
+        borderWidth: 1,
+        textStyle: { color: tokens.axisText },
+        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 万元`
+      },
+      xAxis: {
+        type: "value",
+        name: "万元",
+        nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
+        axisLabel,
+        axisLine,
+        splitLine
+      },
+      yAxis: {
+        type: "category",
+        data: contributionItems.map((item) => item.label),
+        axisLabel,
+        axisLine,
+        axisTick: { show: false }
+      },
+      series: [{
+        name: "累计贡献",
+        type: "bar",
+        barWidth: 16,
+        data: contributionItems.map((item) => ({
+          value: resultMoneyWan(item.amount),
+          itemStyle: { color: tokens[item.colorKey] || tokens.primary }
+        }))
+      }]
+    }, true);
+  }
+
+  queueResultChartsResize();
+}
+
+function renderResults() {
+  const project = getActiveProject();
+  if (refs.resultMetricGrid) refs.resultMetricGrid.innerHTML = "";
+  if (refs.resultInsightList) refs.resultInsightList.innerHTML = "";
+  if (refs.resultAssumptionList) refs.resultAssumptionList.innerHTML = "";
+  if (refs.annualResultBody) refs.annualResultBody.innerHTML = "";
+  if (refs.hourlyResultBody) refs.hourlyResultBody.innerHTML = "";
+  if (refs.hourlyPreviewHint) refs.hourlyPreviewHint.textContent = "等待测算";
+  setResultReportView(activeResultReportView);
+  if (!project) {
+    updatePrintReportHeader(null, null);
+    if (refs.resultExecutiveSummary) {
+      refs.resultExecutiveSummary.textContent = "请先选择项目并完成基准场景测算，生成可导出的结果简报。";
+    }
+    if (refs.resultReportMeta) {
+      refs.resultReportMeta.innerHTML = "<span>项目：-</span><span>方案：-</span><span>周期：-</span><span>口径：-</span>";
+    }
+    renderResultChartsPlaceholder("请选择项目后发起测算");
+    return;
+  }
+
+  const scenario = getActiveScenario(project);
+  updatePrintReportHeader(project, scenario);
+  if (refs.resultReportMeta) {
+    refs.resultReportMeta.innerHTML = `
+      <span>项目：${escapeHtml(project.name || "-")}</span>
+      <span>方案：${escapeHtml(scenario?.name || "-")}</span>
+      <span>周期：${escapeHtml(getForecastPeriodDisplayRange(project))}</span>
+      <span>口径：${escapeHtml(getAssetTypeLabel(project.assetType))} / ${escapeHtml(getSiteTypeLabel(project.siteType))} / ${escapeHtml(getStorageConfigText(project))}</span>
+    `;
+  }
+  const result = project.resultsByScenario[scenario?.id || ""];
+  if (!result) {
+    if (refs.resultExecutiveSummary) {
+      refs.resultExecutiveSummary.textContent = "当前基准场景尚未生成测算结果。点击“发起基准测算”后，将自动形成简报摘要、图表与明细附表。";
+    }
+    if (refs.resultMetricGrid) {
+      refs.resultMetricGrid.innerHTML = [
+        "首年全口径收入",
+        "首年度电净价",
+        "周期全口径收入",
+        "周期平均度电净价",
+        "周期总上网电量",
+        "生效场景"
+      ].map((label) => `
+        <article class="metric-card">
+          <div class="label">${label}</div>
+          <div class="value">-</div>
+        </article>
+      `).join("");
+    }
+    renderResultChartsPlaceholder("请先发起基准测算");
+    return;
+  }
+
+  const rows = result.annualRows || [];
+  const first = rows.find((row) => row.energyMwh > 0) || rows[0];
+  if (!first) {
+    renderResultChartsPlaceholder("暂无年度测算结果");
+    return;
+  }
+  const maxRevenueRow = rows.reduce((best, row) => (row.fullRevenue > best.fullRevenue ? row : best), first);
+  const minRevenueRow = rows.reduce((worst, row) => (row.fullRevenue < worst.fullRevenue ? row : worst), first);
+  const unitLift = first.fullRevenuePrice - first.capturePrice;
+  const liftText = unitLift >= 0 ? "增加" : "减少";
+  const contributionItems = getResultContributionItems(result);
+  const leadingPositive = contributionItems
+    .filter((item) => item.amount > 0 && item.label !== "现货市场收入")
+    .sort((a, b) => b.amount - a.amount)[0];
+  const leadingNegative = contributionItems
+    .filter((item) => item.amount < 0)
+    .sort((a, b) => a.amount - b.amount)[0];
+  if (refs.resultExecutiveSummary) {
+    const positiveText = leadingPositive ? `主要补充贡献来自${leadingPositive.label}（${asCompactMoney(leadingPositive.amount)}）` : "补充收益项贡献较小";
+    const negativeText = leadingNegative ? `主要扣减来自${leadingNegative.label}（${asCompactMoney(leadingNegative.amount)}）` : "未形成显著扣减项";
+    refs.resultExecutiveSummary.textContent = `基准场景下，${project.name}测算周期为${getForecastPeriodDisplayRange(project)}，周期全口径收入合计${asCompactMoney(result.totalFullRevenue)}，平均度电净价${asNum(result.avgFullRevenuePrice, 2)}元/MWh。首年度电净价较捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，${positiveText}，${negativeText}。`;
+  }
+
+  const metricItems = [
+    { label: "首年全口径收入", value: asCompactMoney(first.fullRevenue), note: `度电净价 ${asNum(first.fullRevenuePrice, 2)} 元/MWh` },
+    { label: "首年度电净价", value: `${asNum(first.fullRevenuePrice, 2)} 元/MWh`, note: `较捕获电价${liftText} ${asNum(Math.abs(unitLift), 2)}` },
+    { label: "周期全口径收入", value: asCompactMoney(result.totalFullRevenue), note: `测算周期 ${getForecastPeriodDisplayRange(project)}` },
+    { label: "周期平均度电净价", value: `${asNum(result.avgFullRevenuePrice, 2)} 元/MWh`, note: `总电量 ${asNum(result.totalEnergy, 0)} MWh` },
+    { label: "首年捕获电价", value: `${asNum(first.capturePrice, 2)} 元/MWh`, note: `现货均价 ${asNum(first.spotAvgPrice, 2)} 元/MWh` },
+    { label: "年度收入区间", value: `${asNum(minRevenueRow.fullRevenue / 10000, 1)}-${asNum(maxRevenueRow.fullRevenue / 10000, 1)} 万元`, note: `${minRevenueRow.year} 至 ${maxRevenueRow.year}` }
+  ];
+
+  if (refs.resultMetricGrid) refs.resultMetricGrid.innerHTML = metricItems.map((item) => `
+    <article class="metric-card">
+      <div class="label">${item.label}</div>
+      <div class="value">${item.value}</div>
+      <small>${item.note}</small>
+    </article>
+  `).join("");
+
+  if (refs.resultInsightList) {
+    const insightItems = [
+      {
+        title: "首年结果",
+        body: `首年全口径收入${asCompactMoney(first.fullRevenue)}，度电净价${asNum(first.fullRevenuePrice, 2)}元/MWh。`
+      },
+      {
+        title: "价格增量",
+        body: `较首年捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，捕获价差为${asNum(first.captureSpread, 2)}元/MWh。`
+      },
+      {
+        title: "主要贡献项",
+        body: leadingPositive ? `${leadingPositive.label}全周期贡献${asCompactMoney(leadingPositive.amount)}。` : "补充收益项贡献较小。"
+      },
+      {
+        title: "主要扣减项",
+        body: leadingNegative ? `${leadingNegative.label}全周期影响${asCompactMoney(leadingNegative.amount)}。` : "当前未形成显著扣减项。"
+      }
+    ];
+    refs.resultInsightList.innerHTML = insightItems.map((item) => `
+      <article class="result-insight-item">
+        <strong>${escapeHtml(item.title)}</strong>
+        <span>${escapeHtml(item.body)}</span>
+      </article>
+    `).join("");
+  }
+
+  if (refs.resultAssumptionList) {
+    const cfg = scenario?.config || {};
+    const firstMarketRatio = first.energyMwh > 0 ? first.nonMechanismEnergy / first.energyMwh : 0;
+    const assumptionItems = [
+      {
+        title: "差价机制口径",
+        body: cfg.mechanismEnabled
+          ? `机制电量按有效月份折算，首年机制电量占比${asPercent(first.mechanismRatio)}，机制电价${asNum(cfg.mechanismPrice, 1)}元/MWh。`
+          : "当前基准场景未启用差价机制。"
+      },
+      {
+        title: "市场化交易电量",
+        body: `交易策略损益与环境价值兑现均基于非纳入机制电量，首年市场化交易电量占比${asPercent(firstMarketRatio)}。`
+      },
+      {
+        title: "环境价值兑现",
+        body: getEnvValueMode(cfg) === "manual"
+          ? "环境价值采用逐年导入配置，逐年校核三类兑现空间合计不超过市场化交易电量空间。"
+          : "环境价值采用当前全周期默认配置，绿证、绿电溢价、碳收益不重复兑现。"
+      },
+      {
+        title: "费用与补充收益",
+        body: getFeeConfigMode(cfg) === "manual"
+          ? "综合费用与其他收入采用逐年导入配置；配储补充收益按当前储能收益口径计入。"
+          : "综合费用与其他收入按当前默认全周期配置执行；配储补充收益按当前储能收益口径计入。"
+      }
+    ];
+    refs.resultAssumptionList.innerHTML = assumptionItems.map((item) => `
+      <article class="result-assumption-item">
+        <strong>${escapeHtml(item.title)}</strong>
+        <span>${escapeHtml(item.body)}</span>
+      </article>
+    `).join("");
+  }
+
+  renderResultCharts(project, scenario, result);
+
+  if (refs.annualResultBody) refs.annualResultBody.innerHTML = rows.map((row) => `
+    <tr>
+      <td>${row.year}</td>
+      <td>${asNum(row.annualHours, 2)}</td>
+      <td>${asNum(row.energyMwh, 2)}</td>
+      <td>${asNum(row.spotAvgPrice, 2)}</td>
+      <td>${asNum(row.capturePrice, 2)}</td>
+      <td>${asMoney(row.spotRevenue)}</td>
+      <td>${asMoney(row.mechanismRevenue)}</td>
+      <td>${asMoney(row.ltPnlRevenue)}</td>
+      <td>${asMoney(row.envRevenue)}</td>
+      <td>${asMoney(row.storageSupplementRevenue)}</td>
+      <td>${asMoney(-row.comprehensiveFee)}</td>
+      <td>${asMoney(row.otherIncome)}</td>
+      <td>${asMoney(row.fullRevenue)}</td>
+      <td>${asNum(row.fullRevenuePrice, 2)}</td>
+    </tr>
+  `).join("");
+
+  const previewLimit = 240;
+  const previewRows = result.hourlyPreview.slice(0, previewLimit);
+  if (refs.hourlyResultBody) refs.hourlyResultBody.innerHTML = previewRows.map((row) => `
+    <tr>
+      <td>${row.time}</td>
+      <td>${asNum(row.equivalentHours, 6)}</td>
+      <td>${asNum(row.energyMwh, 4)}</td>
+      <td>${asNum(row.spotPrice, 2)}</td>
+      <td>${asMoney(row.spotRevenue)}</td>
+      <td>${asMoney(row.fullRevenue)}</td>
+    </tr>
+  `).join("");
+  if (refs.hourlyPreviewHint) refs.hourlyPreviewHint.textContent = `首年小时明细附件：展开后预览前 ${previewRows.length} 条，共 ${result.hourlyPreview.length} 条；导出为完整8760。`;
+}
+
+function renderCompare() {
+  renderCompareWorkspaceState();
+  const project = getActiveProject();
+  if (refs.compareBody) refs.compareBody.innerHTML = "";
+  if (refs.compareSensitivityBody) refs.compareSensitivityBody.innerHTML = "";
+  if (refs.compareSensitivityFactorList) refs.compareSensitivityFactorList.innerHTML = "";
+  if (refs.compareScenarioFocusList) refs.compareScenarioFocusList.innerHTML = "";
+  setCompareMetric(refs.compareMetricBaselineScenario, "-");
+  setCompareMetric(refs.compareMetricBaselineRevenue, "-");
+  setCompareMetric(refs.compareMetricSensitiveFactors, "0 项");
+  setCompareMetric(refs.compareMetricCompareCount, "0 个");
+  setCompareMetric(refs.compareMetricScenarioCount, "0 个");
+  setCompareMetric(refs.compareMetricBestScenario, "-");
+  setCompareMetric(refs.compareMetricMaxGap, "-");
+  setCompareMetric(refs.compareMetricPeriod, "-");
+  if (refs.compareSensitivityResponseLabel) refs.compareSensitivityResponseLabel.textContent = "等待变量选择";
+  if (refs.compareScenarioBridgeLabel) refs.compareScenarioBridgeLabel.textContent = "等待方案选择";
+  if (refs.compareSensitivityVariableSummary) refs.compareSensitivityVariableSummary.textContent = "默认启用全部变量";
+  if (refs.compareBaselineLabel) refs.compareBaselineLabel.textContent = "等待基准方案结果";
+  if (refs.compareScenarioLabel) refs.compareScenarioLabel.textContent = "等待方案结果";
+  if (refs.compareSensitivityMessage) {
+    refs.compareSensitivityMessage.textContent = "请先在基准结果总览完成基准方案测算，再查看敏感性分析。";
+  }
+  if (refs.compareScenarioMessage) {
+    refs.compareScenarioMessage.textContent = "当前仅展示已完成测算的方案结果；新增方案并测算后即可加入对比。";
+  }
+  syncCompareSensitivityControls();
+  if (!project) {
+    renderCompareChartPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, "请选择项目后查看敏感性分析。");
+    renderCompareChartPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, "请选择项目后查看响应曲线。");
+    renderCompareChartPlaceholder("scenarioRanking", refs.compareRankingChart, "请选择项目后查看方案对标。");
+    renderCompareChartPlaceholder("scenarioTrend", refs.compareTrendChart, "请选择项目后查看方案对比。");
+    renderCompareChartPlaceholder("scenarioBridge", refs.compareBridgeChart, "请选择方案查看差异归因。");
+    return;
+  }
+  ensureScenarioMetadata(project);
+  const available = project.scenarios
+    .map((scenario) => ({
+      scenario,
+      result: project.resultsByScenario[scenario.id]
+    }))
+    .filter((item) => item.result);
+  const comparePeriod = getForecastPeriodDisplayRange(project);
+  setCompareMetric(refs.compareMetricPeriod, comparePeriod);
+  setCompareMetric(refs.compareMetricCompareCount, `${available.length} 个`, available.length ? "已完成测算" : "等待测算");
+  setCompareMetric(refs.compareMetricScenarioCount, `${available.length} 个`, available.length >= 2 ? "可横向对比" : "至少 2 个方案");
+  if (!available.length) {
+    if (refs.compareBody) refs.compareBody.innerHTML = `<tr><td colspan="7">暂无可对比结果，请先在基准结果总览页完成基准方案测算。</td></tr>`;
+    renderCompareChartPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, "基准方案未测算，暂无法展示。");
+    renderCompareChartPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, "基准方案未测算，暂无法展示。");
+    renderCompareChartPlaceholder("scenarioRanking", refs.compareRankingChart, "暂无方案结果，无法生成收益排名。");
+    renderCompareChartPlaceholder("scenarioTrend", refs.compareTrendChart, "暂无方案结果，无法生成年度走势。");
+    renderCompareChartPlaceholder("scenarioBridge", refs.compareBridgeChart, "请选择方案查看差异归因。");
+    return;
+  }
+
+  const baseline = available.find((item) => item.scenario.isBaseline) || available[0];
+  const baselineFirst = baseline.result.annualRows.find((row) => row.energyMwh > 0) || baseline.result.annualRows[0];
+  const baselineRevenueWan = baselineFirst ? baselineFirst.fullRevenue / 10000 : 0;
+  const baselineCountLabel = available.length >= 2 ? `${available.length} 个方案已纳入对比` : "当前仅基准方案已测算";
+  if (refs.compareBaselineLabel) refs.compareBaselineLabel.textContent = `基准：${baseline.scenario.name}`;
+  if (refs.compareScenarioLabel) refs.compareScenarioLabel.textContent = baselineCountLabel;
+  setCompareMetric(refs.compareMetricBaselineScenario, baseline.scenario.name, "当前基准方案");
+  setCompareMetric(refs.compareMetricBaselineRevenue, `${asNum(baselineRevenueWan, 1)} 万元`, `首年总收益 / 周期 ${comparePeriod}`);
+
+  syncCompareSensitivityControls();
+  const allSensitivityFactors = buildCompareSensitivityFactors(baselineFirst, baselineRevenueWan, compareSensitivitySettings);
+  const allFactorKeys = allSensitivityFactors.map((factor) => factor.key);
+  if (!compareSensitivitySettings.selectedKeys.length) {
+    compareSensitivitySettings.selectedKeys = allFactorKeys;
+  } else {
+    compareSensitivitySettings.selectedKeys = compareSensitivitySettings.selectedKeys.filter((key) => allFactorKeys.includes(key));
+    if (!compareSensitivitySettings.selectedKeys.length) {
+      compareSensitivitySettings.selectedKeys = allFactorKeys;
+    }
+  }
+  const selectedFactorSet = new Set(compareSensitivitySettings.selectedKeys);
+  const sensitivityFactors = allSensitivityFactors.filter((factor) => selectedFactorSet.has(factor.key));
+  if (!activeSensitivityFactorKey || !sensitivityFactors.some((factor) => factor.key === activeSensitivityFactorKey)) {
+    activeSensitivityFactorKey = sensitivityFactors[0]?.key || "";
+  }
+  setCompareMetric(
+    refs.compareMetricSensitiveFactors,
+    `${sensitivityFactors.length} 项`,
+    sensitivityFactors[0] ? `最高敏感：${sensitivityFactors[0].name}` : "等待基准结果"
+  );
+  if (refs.compareSensitivityMessage) {
+    refs.compareSensitivityMessage.textContent = `基于基准方案“${baseline.scenario.name}”的首年总收益 ${asCompactMoney(baselineFirst.fullRevenue)}，按 ±${compareSensitivitySettings.rangePercent}% / ${compareSensitivitySettings.stepPercent}% 步长，对 ${sensitivityFactors.length} 个已启用变量做扰动。`;
+  }
+  renderSensitivityTornadoChart(sensitivityFactors, baselineRevenueWan);
+  renderSensitivityFactorList(allSensitivityFactors, sensitivityFactors);
+  renderSensitivityResponseChart(sensitivityFactors, baselineRevenueWan);
+  renderSensitivityTable(sensitivityFactors);
+
+  const bestScenario = available.reduce((best, current) => {
+    if (!best) return current;
+    return current.result.totalFullRevenue > best.result.totalFullRevenue ? current : best;
+  }, null);
+  const maxGapWan = available.reduce((maxValue, item) => {
+    const gap = Math.abs(item.result.totalFullRevenue - baseline.result.totalFullRevenue) / 10000;
+    return Math.max(maxValue, gap);
+  }, 0);
+  setCompareMetric(refs.compareMetricBestScenario, bestScenario?.scenario?.name || "-", bestScenario ? `周期总收益 ${asCompactMoney(bestScenario.result.totalFullRevenue)}` : "");
+  setCompareMetric(refs.compareMetricMaxGap, `${asNum(maxGapWan, 1)} 万元`, `相对 ${baseline.scenario.name}`);
+  if (refs.compareScenarioMessage) {
+    refs.compareScenarioMessage.textContent = available.length >= 2
+      ? `当前已纳入 ${available.length} 个已测算方案，方案名称沿用全口径收入配置页中的命名；以下对比均以“${baseline.scenario.name}”作为基准。`
+      : `当前仅“${baseline.scenario.name}”完成测算。可在全口径收入配置页新增并命名方案，完成测算后自动加入对比。`;
+  }
+
+  if (!activeCompareScenarioId || !available.some((item) => item.scenario.id === activeCompareScenarioId)) {
+    const bestNonBaseline = available
+      .filter((item) => item.scenario.id !== baseline.scenario.id)
+      .sort((a, b) => b.result.totalFullRevenue - a.result.totalFullRevenue)[0];
+    activeCompareScenarioId = bestNonBaseline?.scenario?.id || baseline.scenario.id;
+  }
+  const focusScenario = available.find((item) => item.scenario.id === activeCompareScenarioId) || baseline;
+  renderScenarioRankingChart(available, baseline);
+  renderCompareTrendChart(available);
+  renderScenarioFocusList(available, baseline);
+  renderScenarioBridgeChart(focusScenario, baseline);
+  if (refs.compareBody) refs.compareBody.innerHTML = available.map((item) => {
+    const deltaRevenue = item.result.totalFullRevenue - baseline.result.totalFullRevenue;
+    const topDriver = detectTopDriver(item.result);
+    const firstRow = item.result.annualRows.find((row) => row.energyMwh > 0) || item.result.annualRows[0];
+    const scenarioLabel = item.scenario.isBaseline
+      ? `${escapeHtml(item.scenario.name)} <span class="table-tag">基准</span>`
+      : escapeHtml(item.scenario.name);
+    return `
+      <tr>
+        <td>${scenarioLabel}</td>
+        <td>${asCompactMoney(firstRow.fullRevenue)}</td>
+        <td>${asCompactMoney(item.result.totalFullRevenue)}</td>
+        <td>${asNum(item.result.avgFullRevenuePrice, 2)}</td>
+        <td>${asNum(firstRow.capturePrice, 2)} 元/MWh</td>
+        <td>${deltaRevenue >= 0 ? "+" : ""}${asCompactMoney(deltaRevenue)}</td>
+        <td>${topDriver}</td>
+      </tr>
+    `;
+  }).join("");
+  queueCompareChartsResize();
+}
+
+function detectTopDriver(result) {
+  if (!result?.annualRows?.length) return "-";
+  const first = result.annualRows[0];
+  const map = [
+    { name: "现货收入", value: Math.abs(first.spotRevenue) },
+    { name: "差价机制", value: Math.abs(first.mechanismRevenue) },
+    { name: "交易策略损益", value: Math.abs(first.ltPnlRevenue) },
+    { name: "环境价值", value: Math.abs(first.envRevenue) },
+    { name: "配储补充收益", value: Math.abs(first.storageSupplementRevenue) },
+    { name: "综合费用", value: Math.abs(first.comprehensiveFee) }
+  ];
+  map.sort((a, b) => b.value - a.value);
+  return map[0].name;
+}
+
+function toCsvLine(values) {
+  return values
+    .map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`)
+    .join(",");
+}
+
+function downloadCsv(filename, rows) {
+  const content = rows.map((row) => toCsvLine(row)).join("\n");
+  const blob = new Blob([`\ufeff${content}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function sanitizeExportFilenamePart(value) {
+  return String(value || "-")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "");
+}
+
+function buildLtManualTemplateFilename(project, scenario) {
+  return `${sanitizeExportFilenamePart(project?.name || "项目")}-${sanitizeExportFilenamePart(scenario?.name || "场景")}-交易策略逐年损益模板.csv`;
+}
+
+function buildLtManualTemplateRows(project) {
+  const rows = [["year", "trade_strategy_pnl_yuan_per_mwh"]];
+  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears)) return rows;
+  for (let index = 0; index < project.forecastYears; index += 1) {
+    const year = project.startYear + index;
+    rows.push([year, ""]);
+  }
+  return rows;
+}
+
+function exportLtManualTemplate() {
+  const project = getActiveProject();
+  if (!project) {
+    setTopMeta("请先创建或选择项目。", "warn");
+    return;
+  }
+  const scenario = getActiveScenario(project);
+  if (!scenario) return;
+  downloadCsv(buildLtManualTemplateFilename(project, scenario), buildLtManualTemplateRows(project));
+  if (refs.ltManualStatus) {
+    refs.ltManualStatus.textContent = "已导出空白逐年损益模板，可填写后重新导入。";
+  }
+}
+
+function parseLtManualPricesCsv(csvText, project) {
+  const rows = parseCsvRows(csvText);
+  const header = normalizeCsvHeaderRow(rows[0] || []);
+  const acceptedHeaders = new Set([
+    "year,trade_strategy_pnl_yuan_per_mwh",
+    "year,lt_pnl_yuan_per_mwh",
+    "year,price"
+  ]);
+  if (!acceptedHeaders.has(header)) {
+    return {
+      ok: false,
+      message: "表头不匹配。请使用：year,trade_strategy_pnl_yuan_per_mwh。"
+    };
+  }
+  const prices = {};
+  for (let i = 1; i < rows.length; i += 1) {
+    const row = rows[i];
+    const year = Number(row[0]);
+    const price = Number(row[1]);
+    if (!Number.isInteger(year)) {
+      return { ok: false, message: `第 ${i + 1} 行 year 无效：${row[0] || "(空)"}` };
+    }
+    if (!Number.isFinite(price)) {
+      return { ok: false, message: `第 ${i + 1} 行 trade_strategy_pnl_yuan_per_mwh 无效：${row[1] || "(空)"}` };
+    }
+    prices[year] = price;
+  }
+  const sanitized = sanitizeLtManualPricesByYear(prices, project);
+  const completeness = getLtManualCompleteness(project, { ltManualPricesByYear: sanitized });
+  if (completeness.complete !== completeness.total) {
+    return {
+      ok: false,
+      message: `逐年损益值不完整，当前 ${completeness.complete}/${completeness.total} 年。`
+    };
+  }
+  return { ok: true, prices: sanitized };
+}
+
+async function importLtManualTemplate() {
+  const project = getActiveProject();
+  const scenario = project ? getActiveScenario(project) : null;
+  if (!project || !scenario) {
+    setTopMeta("请先创建或选择项目。", "warn");
+    return;
+  }
+  if (scenario.locked) {
+    refs.scenarioMessage.textContent = "当前场景已锁定，不能导入逐年损益。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  const file = refs.ltManualFileInput?.files?.[0];
+  if (!file) {
+    if (refs.ltManualStatus) refs.ltManualStatus.textContent = "请先选择CSV或Excel文件。";
+    return;
+  }
+  try {
+    const { text } = await readSpreadsheetToCsv(file);
+    const parsed = parseLtManualPricesCsv(text, project);
+    if (!parsed.ok) {
+      if (refs.ltManualStatus) refs.ltManualStatus.textContent = parsed.message;
+      refs.scenarioMessage.textContent = parsed.message;
+      refs.scenarioMessage.style.borderColor = "#d39191";
+      refs.scenarioMessage.style.background = "#fff2f2";
+      return;
+    }
+    scenario.config.ltPricingMode = "manual";
+    scenario.config.ltManualPricesByYear = parsed.prices;
+    scenario.updatedAt = new Date().toISOString();
+    project.statuses["scenario-page"] = "in_progress";
+    markDownstreamStale(project, "scenario-page");
+    refs.scenarioMessage.textContent = `已导入“${scenario.name}”的逐年交易策略损益值，请确认后保存当前配置。`;
+    refs.scenarioMessage.style.borderColor = "#8fb48d";
+    refs.scenarioMessage.style.background = "#f1fbf1";
+    renderAll();
+    schedulePersistAppData();
+  } catch (error) {
+    const message = normalizeUserFacingError(error);
+    if (refs.ltManualStatus) refs.ltManualStatus.textContent = message;
+    refs.scenarioMessage.textContent = message;
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+  }
+}
+
+function buildEnvManualTemplateFilename(project, scenario) {
+  return `${sanitizeExportFilenamePart(project?.name || "项目")}-${sanitizeExportFilenamePart(scenario?.name || "场景")}-环境价值逐年兑现模板.csv`;
+}
+
+function buildEnvManualTemplateRows(project) {
+  const rows = [[
+    "year",
+    "green_cert_price_yuan_per_mwh",
+    "green_cert_realize_ratio_pct",
+    "green_premium_price_yuan_per_mwh",
+    "green_premium_realize_ratio_pct",
+    "carbon_enabled",
+    "carbon_price_yuan_per_mwh",
+    "carbon_realize_ratio_pct"
+  ]];
+  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears)) return rows;
+  for (let index = 0; index < project.forecastYears; index += 1) {
+    rows.push([project.startYear + index, "", "", "", "", "", "", ""]);
+  }
+  return rows;
+}
+
+function exportEnvManualTemplate() {
+  const project = getActiveProject();
+  if (!project) {
+    setTopMeta("请先创建或选择项目。", "warn");
+    return;
+  }
+  const scenario = getActiveScenario(project);
+  if (!scenario) return;
+  downloadCsv(buildEnvManualTemplateFilename(project, scenario), buildEnvManualTemplateRows(project));
+  if (refs.envManualStatus) {
+    refs.envManualStatus.textContent = "已导出空白逐年环境价值兑现模板，可填写后重新导入。";
+  }
+}
+
+function parseEnvManualValuesCsv(csvText, project) {
+  const rows = parseCsvRows(csvText);
+  const header = normalizeCsvHeaderRow(rows[0] || []);
+  const expectedHeader = [
+    "year",
+    "green_cert_price_yuan_per_mwh",
+    "green_cert_realize_ratio_pct",
+    "green_premium_price_yuan_per_mwh",
+    "green_premium_realize_ratio_pct",
+    "carbon_enabled",
+    "carbon_price_yuan_per_mwh",
+    "carbon_realize_ratio_pct"
+  ].join(",");
+  if (header !== expectedHeader) {
+    return {
+      ok: false,
+      message: `表头不匹配。请使用：${expectedHeader}。`
+    };
+  }
+  const values = {};
+  const parseNonNegativeNumber = (rawValue, label, rowNumber) => {
+    const value = Number(rawValue);
+    if (!Number.isFinite(value) || value < 0) {
+      return { ok: false, message: `第 ${rowNumber} 行 ${label} 无效：${rawValue || "(空)"}` };
+    }
+    return { ok: true, value };
+  };
+  const parseRatio = (rawValue, label, rowNumber) => {
+    const parsed = parseNonNegativeNumber(rawValue, label, rowNumber);
+    if (!parsed.ok) return parsed;
+    if (parsed.value > 100) {
+      return { ok: false, message: `第 ${rowNumber} 行 ${label} 不能超过100：${rawValue}` };
+    }
+    return { ok: true, value: parsed.value / 100 };
+  };
+  for (let i = 1; i < rows.length; i += 1) {
+    const row = rows[i];
+    const rowNumber = i + 1;
+    const year = Number(row[0]);
+    if (!Number.isInteger(year)) {
+      return { ok: false, message: `第 ${rowNumber} 行 year 无效：${row[0] || "(空)"}` };
+    }
+    const greenCertPrice = parseNonNegativeNumber(row[1], "green_cert_price_yuan_per_mwh", rowNumber);
+    if (!greenCertPrice.ok) return greenCertPrice;
+    const greenCertRatio = parseRatio(row[2], "green_cert_realize_ratio_pct", rowNumber);
+    if (!greenCertRatio.ok) return greenCertRatio;
+    const greenPremiumPrice = parseNonNegativeNumber(row[3], "green_premium_price_yuan_per_mwh", rowNumber);
+    if (!greenPremiumPrice.ok) return greenPremiumPrice;
+    const greenPremiumRatio = parseRatio(row[4], "green_premium_realize_ratio_pct", rowNumber);
+    if (!greenPremiumRatio.ok) return greenPremiumRatio;
+    const carbonEnabled = project?.siteType === "offshore" ? parseBooleanLike(row[5], false) : false;
+    const carbonPrice = carbonEnabled
+      ? parseNonNegativeNumber(row[6], "carbon_price_yuan_per_mwh", rowNumber)
+      : { ok: true, value: Number(row[6]) || 0 };
+    if (!carbonPrice.ok) return carbonPrice;
+    const carbonRatio = carbonEnabled
+      ? parseRatio(row[7], "carbon_realize_ratio_pct", rowNumber)
+      : { ok: true, value: 0 };
+    if (!carbonRatio.ok) return carbonRatio;
+    const totalRatio = greenCertRatio.value + greenPremiumRatio.value + carbonRatio.value;
+    if (totalRatio > 1 + 0.000001) {
+      return { ok: false, message: `第 ${rowNumber} 行三条路径兑现空间合计为 ${asPercent(totalRatio)}，不能超过100.0%。` };
+    }
+    values[year] = {
+      greenCertPrice: greenCertPrice.value,
+      greenCertRealizeRatio: greenCertRatio.value,
+      greenPremiumPrice: greenPremiumPrice.value,
+      greenPremiumRealizeRatio: greenPremiumRatio.value,
+      carbonEnabled,
+      carbonPrice: carbonEnabled ? carbonPrice.value : 0,
+      carbonRealizeRatio: carbonEnabled ? carbonRatio.value : 0
+    };
+  }
+  const sanitized = sanitizeEnvManualValuesByYear(values, project);
+  const completeness = getEnvManualCompleteness(project, { envManualValuesByYear: sanitized });
+  if (completeness.complete !== completeness.total) {
+    return {
+      ok: false,
+      message: `逐年环境价值兑现配置不完整，当前 ${completeness.complete}/${completeness.total} 年。`
+    };
+  }
+  return { ok: true, values: sanitized };
+}
+
+async function importEnvManualTemplate() {
+  const project = getActiveProject();
+  const scenario = project ? getActiveScenario(project) : null;
+  if (!project || !scenario) {
+    setTopMeta("请先创建或选择项目。", "warn");
+    return;
+  }
+  if (scenario.locked) {
+    refs.scenarioMessage.textContent = "当前场景已锁定，不能导入逐年环境价值兑现配置。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  const file = refs.envManualFileInput?.files?.[0];
+  if (!file) {
+    if (refs.envManualStatus) refs.envManualStatus.textContent = "请先选择CSV或Excel文件。";
+    return;
+  }
+  try {
+    const { text } = await readSpreadsheetToCsv(file);
+    const parsed = parseEnvManualValuesCsv(text, project);
+    if (!parsed.ok) {
+      if (refs.envManualStatus) refs.envManualStatus.textContent = parsed.message;
+      refs.scenarioMessage.textContent = parsed.message;
+      refs.scenarioMessage.style.borderColor = "#d39191";
+      refs.scenarioMessage.style.background = "#fff2f2";
+      return;
+    }
+    scenario.config.envValueMode = "manual";
+    scenario.config.envManualValuesByYear = parsed.values;
+    scenario.updatedAt = new Date().toISOString();
+    project.statuses["scenario-page"] = "in_progress";
+    markDownstreamStale(project, "scenario-page");
+    refs.scenarioMessage.textContent = `已导入“${scenario.name}”的逐年环境价值兑现配置，请确认后保存当前配置。`;
+    refs.scenarioMessage.style.borderColor = "#8fb48d";
+    refs.scenarioMessage.style.background = "#f1fbf1";
+    renderAll();
+    schedulePersistAppData();
+  } catch (error) {
+    const message = normalizeUserFacingError(error);
+    if (refs.envManualStatus) refs.envManualStatus.textContent = message;
+    refs.scenarioMessage.textContent = message;
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+  }
+}
+
+function buildFeeManualTemplateFilename(project, scenario) {
+  return `${sanitizeExportFilenamePart(project?.name || "项目")}-${sanitizeExportFilenamePart(scenario?.name || "场景")}-逐年扣费收益模板.csv`;
+}
+
+function buildFeeManualTemplateRows(project) {
+  const rows = [[
+    "year",
+    "market_op_fee_yuan_per_mwh",
+    "grid_assess_fee_yuan_per_mwh",
+    "ancillary_fee_yuan_per_mwh",
+    "other_fee_yuan_per_mwh",
+    "other_income_yuan_per_mwh"
+  ]];
+  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears)) return rows;
+  for (let index = 0; index < project.forecastYears; index += 1) {
+    rows.push([project.startYear + index, "", "", "", "", ""]);
+  }
+  return rows;
+}
+
+function exportFeeManualTemplate() {
+  const project = getActiveProject();
+  if (!project) {
+    setTopMeta("请先创建或选择项目。", "warn");
+    return;
+  }
+  const scenario = getActiveScenario(project);
+  if (!scenario) return;
+  downloadCsv(buildFeeManualTemplateFilename(project, scenario), buildFeeManualTemplateRows(project));
+  if (refs.feeManualStatus) {
+    refs.feeManualStatus.textContent = "已导出空白逐年扣费收益模板，可填写后重新导入。";
+  }
+}
+
+function parseFeeManualValuesCsv(csvText, project) {
+  const rows = parseCsvRows(csvText);
+  const header = normalizeCsvHeaderRow(rows[0] || []);
+  const expectedHeader = [
+    "year",
+    "market_op_fee_yuan_per_mwh",
+    "grid_assess_fee_yuan_per_mwh",
+    "ancillary_fee_yuan_per_mwh",
+    "other_fee_yuan_per_mwh",
+    "other_income_yuan_per_mwh"
+  ].join(",");
+  if (header !== expectedHeader) {
+    return {
+      ok: false,
+      message: `表头不匹配。请使用：${expectedHeader}。`
+    };
+  }
+  const values = {};
+  const parseNonNegativeNumber = (rawValue, label, rowNumber) => {
+    const value = Number(rawValue);
+    if (!Number.isFinite(value) || value < 0) {
+      return { ok: false, message: `第 ${rowNumber} 行 ${label} 无效：${rawValue || "(空)"}` };
+    }
+    return { ok: true, value };
+  };
+  for (let i = 1; i < rows.length; i += 1) {
+    const row = rows[i];
+    const rowNumber = i + 1;
+    const year = Number(row[0]);
+    if (!Number.isInteger(year)) {
+      return { ok: false, message: `第 ${rowNumber} 行 year 无效：${row[0] || "(空)"}` };
+    }
+    const marketOpFee = parseNonNegativeNumber(row[1], "market_op_fee_yuan_per_mwh", rowNumber);
+    if (!marketOpFee.ok) return marketOpFee;
+    const gridAssessFee = parseNonNegativeNumber(row[2], "grid_assess_fee_yuan_per_mwh", rowNumber);
+    if (!gridAssessFee.ok) return gridAssessFee;
+    const ancillaryFee = parseNonNegativeNumber(row[3], "ancillary_fee_yuan_per_mwh", rowNumber);
+    if (!ancillaryFee.ok) return ancillaryFee;
+    const otherFee = parseNonNegativeNumber(row[4], "other_fee_yuan_per_mwh", rowNumber);
+    if (!otherFee.ok) return otherFee;
+    const otherIncome = parseNonNegativeNumber(row[5], "other_income_yuan_per_mwh", rowNumber);
+    if (!otherIncome.ok) return otherIncome;
+    values[year] = {
+      marketOpFee: marketOpFee.value,
+      gridAssessFee: gridAssessFee.value,
+      ancillaryFee: ancillaryFee.value,
+      otherFee: otherFee.value,
+      otherIncome: otherIncome.value
+    };
+  }
+  const sanitized = sanitizeFeeManualValuesByYear(values, project);
+  const completeness = getFeeManualCompleteness(project, { feeManualValuesByYear: sanitized });
+  if (completeness.complete !== completeness.total) {
+    return {
+      ok: false,
+      message: `逐年扣费收益配置不完整，当前 ${completeness.complete}/${completeness.total} 年。`
+    };
+  }
+  return { ok: true, values: sanitized };
+}
+
+async function importFeeManualTemplate() {
+  const project = getActiveProject();
+  const scenario = project ? getActiveScenario(project) : null;
+  if (!project || !scenario) {
+    setTopMeta("请先创建或选择项目。", "warn");
+    return;
+  }
+  if (scenario.locked) {
+    refs.scenarioMessage.textContent = "当前场景已锁定，不能导入逐年扣费收益配置。";
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+    return;
+  }
+  const file = refs.feeManualFileInput?.files?.[0];
+  if (!file) {
+    if (refs.feeManualStatus) refs.feeManualStatus.textContent = "请先选择CSV或Excel文件。";
+    return;
+  }
+  try {
+    const { text } = await readSpreadsheetToCsv(file);
+    const parsed = parseFeeManualValuesCsv(text, project);
+    if (!parsed.ok) {
+      if (refs.feeManualStatus) refs.feeManualStatus.textContent = parsed.message;
+      refs.scenarioMessage.textContent = parsed.message;
+      refs.scenarioMessage.style.borderColor = "#d39191";
+      refs.scenarioMessage.style.background = "#fff2f2";
+      return;
+    }
+    scenario.config.feeConfigMode = "manual";
+    scenario.config.feeManualValuesByYear = parsed.values;
+    scenario.updatedAt = new Date().toISOString();
+    project.statuses["scenario-page"] = "in_progress";
+    markDownstreamStale(project, "scenario-page");
+    refs.scenarioMessage.textContent = `已导入“${scenario.name}”的逐年扣费收益配置，请确认后保存当前配置。`;
+    refs.scenarioMessage.style.borderColor = "#8fb48d";
+    refs.scenarioMessage.style.background = "#f1fbf1";
+    renderAll();
+    schedulePersistAppData();
+  } catch (error) {
+    const message = normalizeUserFacingError(error);
+    if (refs.feeManualStatus) refs.feeManualStatus.textContent = message;
+    refs.scenarioMessage.textContent = message;
+    refs.scenarioMessage.style.borderColor = "#d39191";
+    refs.scenarioMessage.style.background = "#fff2f2";
+  }
+}
+
+function syncHistoryExportButtons() {
+  const buttonMap = {
+    monthTrend: refs.historyExportMonthTrendButton,
+    typicalDay: refs.historyExportTypicalDayButton,
+    distribution: refs.historyExportDistributionButton,
+    heatmap: refs.historyExportHeatmapButton,
+    boxplot: refs.historyExportBoxplotButton
+  };
+  Object.entries(buttonMap).forEach(([key, button]) => {
+    if (!button) return;
+    const enabled = Array.isArray(historyChartExportPayloads[key]?.rows) && historyChartExportPayloads[key].rows.length > 1;
+    button.disabled = !enabled;
+    button.setAttribute("aria-disabled", String(!enabled));
+  });
+}
+
+function resetHistoryExportPayloads() {
+  Object.keys(historyChartExportPayloads).forEach((key) => {
+    historyChartExportPayloads[key] = null;
+  });
+  syncHistoryExportButtons();
+}
+
+function setHistoryExportPayload(key, filename, rows) {
+  historyChartExportPayloads[key] = {
+    filename,
+    rows
+  };
+}
+
+function exportHistoryChartData(key) {
+  const payload = historyChartExportPayloads[key];
+  if (!payload || !Array.isArray(payload.rows) || payload.rows.length <= 1) return;
+  downloadCsv(payload.filename, payload.rows);
+}
+
+function exportAnnualCsv() {
+  const project = getActiveProject();
+  if (!project) return;
+  const scenario = getActiveScenario(project);
+  const result = project.resultsByScenario[scenario?.id || ""];
+  if (!result) return;
+  const rows = [
+    ["year", "annual_hours_h", "energy_mwh", "spot_avg_price", "capture_price", "spot_revenue", "mechanism_revenue", "lt_pnl_revenue", "env_revenue", "storage_supplement_revenue", "comprehensive_fee", "other_income", "full_revenue", "full_revenue_price"],
+    ...result.annualRows.map((row) => [
+      row.year,
+      row.annualHours.toFixed(6),
+      row.energyMwh.toFixed(6),
+      row.spotAvgPrice.toFixed(6),
+      row.capturePrice.toFixed(6),
+      row.spotRevenue.toFixed(2),
+      row.mechanismRevenue.toFixed(2),
+      row.ltPnlRevenue.toFixed(2),
+      row.envRevenue.toFixed(2),
+      row.storageSupplementRevenue.toFixed(2),
+      row.comprehensiveFee.toFixed(2),
+      row.otherIncome.toFixed(2),
+      row.fullRevenue.toFixed(2),
+      row.fullRevenuePrice.toFixed(6)
+    ])
+  ];
+  downloadCsv(`${project.name}-${scenario.name}-年度收入.csv`, rows);
+}
+
+function exportHourlyCsv() {
+  const project = getActiveProject();
+  if (!project) return;
+  const scenario = getActiveScenario(project);
+  const result = project.resultsByScenario[scenario?.id || ""];
+  if (!result) return;
+  const rows = [
+    ["time", "equivalent_hours_h", "energy_mwh", "spot_price_yuan_per_mwh", "spot_revenue", "full_revenue"],
+    ...result.hourlyPreview.map((row) => [
+      row.time,
+      row.equivalentHours.toFixed(6),
+      row.energyMwh.toFixed(6),
+      row.spotPrice.toFixed(6),
+      row.spotRevenue.toFixed(2),
+      row.fullRevenue.toFixed(2)
+    ])
+  ];
+  downloadCsv(`${project.name}-${scenario.name}-首年8760小时明细.csv`, rows);
+}
+
+function printScenarioReport() {
+  const project = getActiveProject();
+  if (!project) {
+    setTopMeta("请先选择项目，再打印报告。");
+    return;
+  }
+  ensureScenarioMetadata(project);
+  const scenario = getActiveScenario(project);
+  const result = project.resultsByScenario[scenario?.id || ""];
+  if (!result) {
+    setTopMeta("请先在基准结果总览页发起测算，再打印报告。");
+    return;
+  }
+
+  updatePrintReportHeader(project, scenario);
+
+  const previousPage = appState.activePage;
+  if (previousPage !== "results-page") {
+    setActivePage("results-page");
+  }
+  const paneStates = refs.resultReportPanes?.map((pane) => ({
+    pane,
+    hidden: pane.hidden,
+    active: pane.classList.contains("active")
+  })) || [];
+  const disclosureStates = Array.from(document.querySelectorAll("#results-page .result-disclosure")).map((node) => ({
+    node,
+    open: node.open
+  }));
+  refs.resultReportPanes?.forEach((pane) => {
+    pane.hidden = false;
+    pane.classList.add("active");
+  });
+  disclosureStates.forEach(({ node }) => {
+    if (!node.classList.contains("result-hourly-detail")) {
+      node.open = true;
+    }
+  });
+  Object.values(resultChartInstances).forEach((chart) => {
+    if (chart && !chart.isDisposed()) chart.resize();
+  });
+  document.body.classList.add("print-report-mode");
+
+  const cleanup = () => {
+    document.body.classList.remove("print-report-mode");
+    paneStates.forEach(({ pane, hidden, active }) => {
+      pane.hidden = hidden;
+      pane.classList.toggle("active", active);
+    });
+    disclosureStates.forEach(({ node, open }) => {
+      node.open = open;
+    });
+    if (previousPage !== "results-page") {
+      setActivePage(previousPage);
+    } else {
+      renderAll();
+    }
+  };
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+    window.setTimeout(() => {
+      if (document.body.classList.contains("print-report-mode")) {
+        cleanup();
+      }
+    }, 1800);
+  }
+}
+
+function renderAll() {
+  syncProjectProvinceScopedState();
+  reconcileAllProjectStatuses();
+  applySidebarGroups();
+  applyAuthLayout();
+  refreshNavigationAvailability();
+  syncCreateProjectFormWithActiveProject();
+  renderCreateWorkspaceState();
+  renderStatuses();
+  renderTopbar();
+  renderSettings();
+  renderHome();
+  renderProjects();
+  renderEnergyWorkspaceState();
+  renderEnergySummary();
+  renderEnergyCurveChart();
+  renderHistoryPrices();
+  renderForecastRuns();
+  renderScenarioPageSummary();
+  renderScenarioForm();
+  renderProvinceLibrary();
+  renderScenarioVisualization();
+  renderResults();
+  renderCompareWorkspaceState();
+  renderCompare();
+  if (suppressNextRenderPersist) {
+    suppressNextRenderPersist = false;
+  } else {
+    schedulePersistAppData();
+  }
+}
+
+function bindEvents() {
+  const setHistoryDatePanelOpen = (isOpen) => {
+    if (!refs.historyDatePanel || !refs.historyDateToggle) return;
+    refs.historyDatePanel.hidden = !isOpen;
+    refs.historyDateToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  };
+
+  const bindBenchmarkRangeDrag = () => {
+    if (!refs.benchmarkRangeSlider) return;
+
+    const onPointerMove = (event) => {
+      updateBenchmarkRangeDrag(event.clientY, false);
+    };
+
+    const onPointerUp = (event) => {
+      if (benchmarkRangeDragHandle) {
+        updateBenchmarkRangeDrag(event.clientY, true);
+      }
+      stopBenchmarkRangeDrag();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+      }
+    };
+
+    const beginDrag = (handleType, event) => {
+      event.preventDefault();
+      startBenchmarkRangeDrag(handleType, event.clientY);
+      if (typeof window !== "undefined") {
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp);
+      }
+    };
+
+    if (refs.benchmarkRangeHandleMax) {
+      refs.benchmarkRangeHandleMax.addEventListener("pointerdown", (event) => {
+        beginDrag("max", event);
+      });
+    }
+
+    if (refs.benchmarkRangeHandleMin) {
+      refs.benchmarkRangeHandleMin.addEventListener("pointerdown", (event) => {
+        beginDrag("min", event);
+      });
+    }
+
+    refs.benchmarkRangeSlider.addEventListener("pointerdown", (event) => {
+      const target = event.target;
+      if (target === refs.benchmarkRangeHandleMax || target === refs.benchmarkRangeHandleMin) return;
+      const value = benchmarkValueFromClientY(event.clientY);
+      if (!Number.isFinite(value)) return;
+      const currentMin = Number.isFinite(appState.benchmarkMap.rangeMin)
+        ? appState.benchmarkMap.rangeMin
+        : benchmarkRangeSliderBounds.min;
+      const currentMax = Number.isFinite(appState.benchmarkMap.rangeMax)
+        ? appState.benchmarkMap.rangeMax
+        : benchmarkRangeSliderBounds.max;
+      const handleType = Math.abs(value - currentMax) <= Math.abs(value - currentMin) ? "max" : "min";
+      beginDrag(handleType, event);
+    });
+  };
+
+  if (refs.themeToggleButton) {
+    refs.themeToggleButton.addEventListener("click", toggleTheme);
+  }
+  if (refs.benchmarkBackButton) {
+    refs.benchmarkBackButton.addEventListener("click", () => {
+      appState.benchmarkMap = {
+        level: "nation",
+        provinceKey: null,
+        zoom: null,
+        rangeMin: null,
+        rangeMax: null
+      };
+      void renderBenchmarkMap();
+      schedulePersistAppData();
+    });
+  }
+  if (refs.benchmarkZoomInButton) {
+    refs.benchmarkZoomInButton.addEventListener("click", () => {
+      adjustBenchmarkMapZoom(BENCHMARK_MAP_ZOOM_STEP);
+    });
+  }
+  if (refs.benchmarkZoomOutButton) {
+    refs.benchmarkZoomOutButton.addEventListener("click", () => {
+      adjustBenchmarkMapZoom(-BENCHMARK_MAP_ZOOM_STEP);
+    });
+  }
+  if (refs.benchmarkZoomResetButton) {
+    refs.benchmarkZoomResetButton.addEventListener("click", () => {
+      resetBenchmarkMapZoom();
+    });
+  }
+  bindBenchmarkRangeDrag();
+  if (refs.pageHelpButton) {
+    refs.pageHelpButton.addEventListener("click", togglePageHelp);
+  }
+  refs.overviewDots.forEach((dot, index) => {
+    dot.addEventListener("click", () => {
+      goToOverviewSlide(index);
+    });
+  });
+  if (refs.overviewDetailTrigger) {
+    refs.overviewDetailTrigger.addEventListener("click", () => {
+      openOverviewPolicyDetail(appState.overviewSlideIndex);
+    });
+  }
+  if (refs.loginEntryButton) {
+    refs.loginEntryButton.addEventListener("click", openLoginModal);
+  }
+  refs.groupToggles.forEach((toggle) => {
+    toggle.addEventListener("click", () => {
+      toggleSidebarGroup(toggle.dataset.group || "");
+    });
+  });
+  if (refs.accountTriggerButton) {
+    refs.accountTriggerButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleAccountDropdown();
+    });
+  }
+  if (refs.historyDateToggle) {
+    refs.historyDateToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const nextOpen = refs.historyDatePanel ? refs.historyDatePanel.hidden : false;
+      setHistoryDatePanelOpen(nextOpen);
+    });
+  }
+  if (refs.historyDatePanel) {
+    refs.historyDatePanel.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+  }
+  if (refs.accountProfileButton) {
+    refs.accountProfileButton.addEventListener("click", handleAccountManage);
+  }
+  if (refs.accountPasswordButton) {
+    refs.accountPasswordButton.addEventListener("click", handleAccountPassword);
+  }
+  if (refs.logoutButton) {
+    refs.logoutButton.addEventListener("click", handleLogout);
+  }
+  if (refs.settingsLogoutButton) {
+    refs.settingsLogoutButton.addEventListener("click", handleLogout);
+  }
+  if (refs.changePasswordForm) {
+    refs.changePasswordForm.addEventListener("submit", handleChangePassword);
+  }
+  if (refs.loginCancelButton) {
+    refs.loginCancelButton.addEventListener("click", closeLoginModal);
+  }
+  if (refs.loginForm) {
+    refs.loginForm.addEventListener("submit", (event) => {
+      void handleLoginSubmit(event);
+    });
+  }
+  if (refs.loginModal) {
+    refs.loginModal.addEventListener("click", (event) => {
+      if (event.target === refs.loginModal) {
+        closeLoginModal();
+      }
+    });
+  }
+  if (refs.policyDetailCloseButton) {
+    refs.policyDetailCloseButton.addEventListener("click", closeOverviewPolicyDetail);
+  }
+  if (refs.policyDetailModal) {
+    refs.policyDetailModal.addEventListener("click", (event) => {
+      if (event.target === refs.policyDetailModal) {
+        closeOverviewPolicyDetail();
+      }
+    });
+  }
+  if (typeof document !== "undefined") {
+    document.addEventListener("click", (event) => {
+      if (refs.accountModule && !refs.accountModule.hidden && !refs.accountModule.contains(event.target)) {
+        closeAccountDropdown();
+      }
+      if (refs.pageHelp && !refs.pageHelp.contains(event.target)) {
+        closePageHelp();
+      }
+      if (refs.historyDatePanel && refs.historyDateToggle && !refs.historyDatePanel.hidden && !refs.historyDatePanel.contains(event.target) && !refs.historyDateToggle.contains(event.target)) {
+        setHistoryDatePanelOpen(false);
+      }
+    });
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("beforeunload", () => {
+      stopOverviewAutoplay();
+      disposeHistoryCharts();
+      disposeCompareCharts();
+      disposeResultCharts();
+      if (energyAnnualChart && !energyAnnualChart.isDisposed()) {
+        energyAnnualChart.dispose();
+        energyAnnualChart = null;
+      }
+      if (energyCurveChart && !energyCurveChart.isDisposed()) {
+        energyCurveChart.dispose();
+        energyCurveChart = null;
+      }
+      if (benchmarkMapChart && !benchmarkMapChart.isDisposed()) {
+        benchmarkMapChart.dispose();
+        benchmarkMapChart = null;
+      }
+      Object.keys(scenarioVisualCharts).forEach((key) => {
+        const chart = scenarioVisualCharts[key];
+        if (chart && !chart.isDisposed()) {
+          chart.dispose();
+        }
+        delete scenarioVisualCharts[key];
+      });
+      persistAppDataNow({ forceLocal: true });
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && refs.policyDetailModal && !refs.policyDetailModal.hidden) {
+        closeOverviewPolicyDetail();
+      } else if (event.key === "Escape" && refs.loginModal && !refs.loginModal.hidden) {
+        closeLoginModal();
+      } else if (event.key === "Escape") {
+        closeAccountDropdown();
+        closePageHelp();
+      }
+    });
+    window.addEventListener("error", (event) => {
+      const fallbackError = event?.error || event?.message || "系统出现异常，请刷新页面后重试。";
+      setTopMeta(normalizeUserFacingError(fallbackError), "error");
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      const reason = event?.reason || "系统出现异常，请刷新页面后重试。";
+      setTopMeta(normalizeUserFacingError(reason), "error");
+    });
+  }
+  if (refs.policyFilterProvince) {
+    refs.policyFilterProvince.addEventListener("change", () => {
+      appState.policyFilters.provinceKey = refs.policyFilterProvince.value;
+      renderPolicyPanel();
+      schedulePersistAppData();
+    });
+  }
+  if (refs.policyFilterRegion) {
+    refs.policyFilterRegion.addEventListener("change", () => {
+      appState.policyFilters.regionKey = refs.policyFilterRegion.value;
+      renderPolicyPanel();
+      schedulePersistAppData();
+    });
+  }
+  if (refs.historyStartDate) {
+    refs.historyStartDate.addEventListener("change", () => {
+      const next = sanitizeHistoryAnalysis({
+        ...appState.historyAnalysis,
+        startDate: refs.historyStartDate.value
+      });
+      appState.historyAnalysis = next;
+      renderHistoryPrices();
+      schedulePersistAppData();
+    });
+  }
+  if (refs.historyEndDate) {
+    refs.historyEndDate.addEventListener("change", () => {
+      const next = sanitizeHistoryAnalysis({
+        ...appState.historyAnalysis,
+        endDate: refs.historyEndDate.value
+      });
+      appState.historyAnalysis = next;
+      renderHistoryPrices();
+      schedulePersistAppData();
+    });
+  }
+  if (refs.historyExportMonthTrendButton) {
+    refs.historyExportMonthTrendButton.addEventListener("click", () => {
+      exportHistoryChartData("monthTrend");
+    });
+  }
+  if (refs.historyExportTypicalDayButton) {
+    refs.historyExportTypicalDayButton.addEventListener("click", () => {
+      exportHistoryChartData("typicalDay");
+    });
+  }
+  if (refs.historyExportDistributionButton) {
+    refs.historyExportDistributionButton.addEventListener("click", () => {
+      exportHistoryChartData("distribution");
+    });
+  }
+  if (refs.historyExportHeatmapButton) {
+    refs.historyExportHeatmapButton.addEventListener("click", () => {
+      exportHistoryChartData("heatmap");
+    });
+  }
+  if (refs.historyExportBoxplotButton) {
+    refs.historyExportBoxplotButton.addEventListener("click", () => {
+      exportHistoryChartData("boxplot");
+    });
+  }
+
+  refs.navItems.forEach((item) => {
+    item.addEventListener("click", () => setActivePage(item.dataset.page));
+  });
+
+  if (Array.isArray(refs.compareTabButtons)) {
+    refs.compareTabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextView = sanitizeCompareView(button.dataset.compareView);
+        if (appState.compareView === nextView) return;
+        appState.compareView = nextView;
+        renderCompareWorkspaceState();
+        queueCompareChartsResize();
+        schedulePersistAppData();
+      });
+    });
+  }
+  if (refs.compareSensitivityFactorList) {
+    refs.compareSensitivityFactorList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-sensitivity-factor]");
+      if (!button) return;
+      activeSensitivityFactorKey = button.dataset.sensitivityFactor || "";
+      renderCompare();
+    });
+    refs.compareSensitivityFactorList.addEventListener("change", (event) => {
+      const input = event.target.closest("[data-sensitivity-variable]");
+      if (!input) return;
+      const key = input.dataset.sensitivityVariable || "";
+      const current = new Set(compareSensitivitySettings.selectedKeys);
+      if (input.checked) {
+        current.add(key);
+      } else {
+        current.delete(key);
+      }
+      compareSensitivitySettings.selectedKeys = Array.from(current);
+      if (!compareSensitivitySettings.selectedKeys.includes(activeSensitivityFactorKey)) {
+        activeSensitivityFactorKey = compareSensitivitySettings.selectedKeys[0] || "";
+      }
+      renderCompare();
+    });
+  }
+  [
+    refs.compareSensitivityRange,
+    refs.compareSensitivityStep,
+    refs.compareSensitivityScale,
+    refs.compareSensitivityTopn
+  ].forEach((control) => {
+    if (!control) return;
+    control.addEventListener("change", () => {
+      compareSensitivitySettings.rangePercent = Number(refs.compareSensitivityRange?.value) || compareSensitivitySettings.rangePercent;
+      compareSensitivitySettings.stepPercent = Number(refs.compareSensitivityStep?.value) || compareSensitivitySettings.stepPercent;
+      compareSensitivitySettings.responseScalePercent = Number(refs.compareSensitivityScale?.value) || compareSensitivitySettings.responseScalePercent;
+      compareSensitivitySettings.topN = refs.compareSensitivityTopn?.value === "all" ? "all" : Number(refs.compareSensitivityTopn?.value);
+      sanitizeCompareSensitivitySettings();
+      renderCompare();
+    });
+  });
+  if (refs.compareScenarioFocusList) {
+    refs.compareScenarioFocusList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-compare-focus-scenario]");
+      if (!button) return;
+      activeCompareScenarioId = button.dataset.compareFocusScenario || "";
+      renderCompare();
+    });
+  }
+
+  document.querySelectorAll("[data-jump]").forEach((button) => {
+    button.addEventListener("click", () => setActivePage(button.dataset.jump));
+  });
+  refs.resultReportTabs?.forEach((button) => {
+    button.addEventListener("click", () => setResultReportView(button.dataset.resultView));
+  });
+  document.querySelectorAll(".result-disclosure").forEach((node) => {
+    node.addEventListener("toggle", queueResultChartsResize);
+  });
+
+  refs.createProjectForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    createProjectFromForm({ targetPage: "create-page" });
+  });
+  if (refs.createHasStorage) {
+    refs.createHasStorage.addEventListener("change", syncCreateStorageFieldsUi);
+  }
+  if (refs.createToEnergyButton) {
+    refs.createToEnergyButton.addEventListener("click", () => {
+      const project = getActiveProject();
+      if (!project || !isProjectCreateCompleted(project)) {
+        setTopMeta("请先完成并保存项目基础信息。");
+        setCreateSaveMessage("请先保存基础信息，再进入结算电量配置。", "warn");
+        return;
+      }
+      setActivePage("energy-page");
+    });
+  }
+  if (refs.energyToHistoryButton) {
+    refs.energyToHistoryButton.addEventListener("click", () => {
+      const project = getActiveProject();
+      const ready = project && hasEnergyHistoryEntryReadiness(project);
+      if (!ready) {
+        setEnergyImportMessage("请先完成全部预测年份的结算电量配置，再进入历史电价分析。", "warn");
+        return;
+      }
+      setActivePage("history-page");
+    });
+  }
+
+  if (refs.exportEnergyAnnualTemplateButton) {
+    refs.exportEnergyAnnualTemplateButton.addEventListener("click", () => {
+      exportEnergyTemplate("annual_hours");
+    });
+  }
+  if (refs.importEnergyAnnualFileButton) {
+    refs.importEnergyAnnualFileButton.addEventListener("click", () => {
+      importEnergyFromFile("annual_hours", refs.energyAnnualFileInput);
+    });
+  }
+  if (refs.exportEnergyTypicalTemplateButton) {
+    refs.exportEnergyTypicalTemplateButton.addEventListener("click", () => {
+      exportEnergyTemplate("typical_curve_8760");
+    });
+  }
+  if (refs.importEnergyTypicalFileButton) {
+    refs.importEnergyTypicalFileButton.addEventListener("click", () => {
+      importEnergyFromFile("typical_curve_8760", refs.energyTypicalFileInput);
+    });
+  }
+  if (refs.applyEnergyProvinceCurveButton) {
+    refs.applyEnergyProvinceCurveButton.addEventListener("click", applyProvinceTypicalCurve);
+  }
+  if (Array.isArray(refs.energyStep2ChoiceButtons)) {
+    refs.energyStep2ChoiceButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextChoice = sanitizeEnergyStep2Choice(button.dataset.energyStep2Choice);
+        if (appState.energyStep2Choice === nextChoice) return;
+        appState.energyStep2Choice = nextChoice;
+        renderEnergyStep2ChoiceState();
+        schedulePersistAppData();
+      });
+    });
+  }
+  refs.forecastRunForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    generateForecastRun();
+  });
+  refs.scenarioForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveScenarioFromForm();
+  });
+  refs.scenarioSelector.addEventListener("change", () => switchActiveScenario(refs.scenarioSelector.value));
+  refs.scenarioQuickName.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      renameActiveScenario();
+    }
+  });
+  refs.duplicateScenarioButton.addEventListener("click", duplicateActiveScenario);
+  refs.renameScenarioButton.addEventListener("click", renameActiveScenario);
+  refs.deleteScenarioButton.addEventListener("click", deleteActiveScenario);
+  refs.toggleBaselineLockButton.addEventListener("click", toggleBaselineLock);
+  refs.applyBatchButton.addEventListener("click", applyBatchParameter);
+  if (refs.ltPricingMode) {
+    refs.ltPricingMode.addEventListener("change", () => {
+      syncScenarioFieldLocks();
+    });
+  }
+  if (refs.exportLtTemplateButton) {
+    refs.exportLtTemplateButton.addEventListener("click", exportLtManualTemplate);
+  }
+  if (refs.importLtTemplateButton) {
+    refs.importLtTemplateButton.addEventListener("click", importLtManualTemplate);
+  }
+  if (refs.envValueMode) {
+    refs.envValueMode.addEventListener("change", () => {
+      syncScenarioFieldLocks();
+    });
+  }
+  if (refs.exportEnvTemplateButton) {
+    refs.exportEnvTemplateButton.addEventListener("click", exportEnvManualTemplate);
+  }
+  if (refs.importEnvTemplateButton) {
+    refs.importEnvTemplateButton.addEventListener("click", importEnvManualTemplate);
+  }
+  if (refs.feeConfigMode) {
+    refs.feeConfigMode.addEventListener("change", () => {
+      syncScenarioFieldLocks();
+    });
+  }
+  if (refs.exportFeeTemplateButton) {
+    refs.exportFeeTemplateButton.addEventListener("click", exportFeeManualTemplate);
+  }
+  if (refs.importFeeTemplateButton) {
+    refs.importFeeTemplateButton.addEventListener("click", importFeeManualTemplate);
+  }
+  if (refs.provinceDefaultSelector) {
+    refs.provinceDefaultSelector.addEventListener("change", () => {
+      selectedProvinceDefaultKey = refs.provinceDefaultSelector.value;
+      if (refs.provinceApplyMessage) {
+        refs.provinceApplyMessage.textContent = "";
+      }
+      renderProvinceLibrary();
+    });
+  }
+  document.querySelector("#mechanism-enabled").addEventListener("change", syncScenarioFieldLocks);
+  [
+    "#mechanism-ratio",
+    "#mechanism-start-ym",
+    "#mechanism-end-ym"
+  ].forEach((selector) => {
+    const field = document.querySelector(selector);
+    if (!field) return;
+    field.addEventListener("input", () => updateMarketTradeEnergyDisplay());
+    field.addEventListener("change", () => updateMarketTradeEnergyDisplay());
+  });
+  document.querySelector("#carbon-enabled").addEventListener("change", syncScenarioFieldLocks);
+  [
+    "#green-cert-realize-ratio",
+    "#green-premium-realize-ratio",
+    "#carbon-realize-ratio"
+  ].forEach((selector) => {
+    const field = document.querySelector(selector);
+    if (!field) return;
+    field.addEventListener("input", () => updateEnvValueSpaceDisplay());
+    field.addEventListener("change", () => updateEnvValueSpaceDisplay());
+  });
+
+  refs.runCalcButton.addEventListener("click", runCalculation);
+  refs.exportAnnualButton.addEventListener("click", exportAnnualCsv);
+  refs.exportHourlyButton.addEventListener("click", exportHourlyCsv);
+  refs.printReportButton.addEventListener("click", printScenarioReport);
+}
+
+async function init() {
+  initTheme();
+  initAuth();
+  initSidebarGroups();
+  await loadAppDataFromStorage();
+  resetPolicyFiltersToDefault();
+  const claimedLegacy = claimLegacyProjectsForCurrentAccount();
+  const seededHistoryDemo = ensureMockHistoryProjectForCurrentAccount();
+  if (claimedLegacy || seededHistoryDemo) {
+    persistAppDataNow({ forceLocal: true });
+  }
+  syncActiveProjectForCurrentAccount({ allowNull: appState.activePage === "create-page" });
+  initProvinceSelect();
+  syncCreateStorageFieldsUi();
+  initBatchParamSelect();
+  bindOverviewImageFallbacks();
+  bindEvents();
+  syncScenarioFieldLocks();
+  setActivePage(appState.activePage || "home-page");
+}
+
+init();

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="skyE" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6baed8"/>
+      <stop offset="54%" stop-color="#c7e2ef"/>
+      <stop offset="100%" stop-color="#f0f5ed"/>
+    </linearGradient>
+    <linearGradient id="waterE" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8fd0df"/>
+      <stop offset="100%" stop-color="#53adc4"/>
+    </linearGradient>
+    <linearGradient id="landE" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7eb080"/>
+      <stop offset="100%" stop-color="#426e49"/>
+    </linearGradient>
+    <linearGradient id="panelE" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5d85aa"/>
+      <stop offset="100%" stop-color="#2e4b69"/>
+    </linearGradient>
+    <filter id="shadowE">
+      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#213447" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#skyE)"/>
+  <circle cx="1324" cy="166" r="74" fill="#ffd97a"/>
+  <path d="M1080 0 H1600 V900 H960 C1010 760 1036 650 1068 500 C1104 332 1104 186 1080 0 Z" fill="url(#waterE)" opacity="0.92"/>
+
+  <path d="M0 560 C250 520 454 520 666 560 C860 596 988 640 1080 668 L1080 900 L0 900 Z" fill="#8eb28b" opacity="0.6"/>
+  <path d="M0 630 C246 600 490 616 718 652 C904 682 1028 728 1110 770 L1110 900 L0 900 Z" fill="url(#landE)"/>
+
+  <g filter="url(#shadowE)">
+    <polygon points="154,708 376,618 512,694 286,786" fill="url(#panelE)"/>
+    <polygon points="354,728 576,636 712,712 486,804" fill="url(#panelE)"/>
+    <polygon points="556,746 778,654 914,730 688,822" fill="url(#panelE)"/>
+  </g>
+  <g opacity="0.28" stroke="#dceaf8" stroke-width="3">
+    <path d="M218 684 L414 606"/>
+    <path d="M414 704 L610 626"/>
+    <path d="M616 724 L812 646"/>
+  </g>
+
+  <g opacity="0.76" stroke="#eff6ff" stroke-width="8" stroke-linecap="round" fill="none">
+    <path d="M968 758 L1004 424"/>
+    <path d="M1002 428 L948 464"/>
+    <path d="M1002 428 L1058 462"/>
+    <path d="M1002 428 L1002 362"/>
+    <path d="M1168 756 L1204 302"/>
+    <path d="M1202 306 L1142 346"/>
+    <path d="M1202 306 L1264 344"/>
+    <path d="M1202 306 L1202 238"/>
+    <path d="M1368 754 L1402 386"/>
+    <path d="M1400 390 L1348 424"/>
+    <path d="M1400 390 L1454 422"/>
+    <path d="M1400 390 L1400 324"/>
+  </g>
+
+  <g opacity="0.14" fill="#ffffff">
+    <ellipse cx="1112" cy="320" rx="142" ry="44"/>
+    <ellipse cx="1230" cy="288" rx="112" ry="34"/>
+  </g>
+
+  <path d="M1012 714 C1086 666 1174 646 1248 648 C1326 650 1400 674 1494 742" fill="none" stroke="#c7eef5" stroke-width="4" opacity="0.5"/>
+</svg>

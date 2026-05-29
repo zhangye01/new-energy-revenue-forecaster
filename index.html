@@ -1,0 +1,2045 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>新能源全口径收入预测工作台</title>
+  <link rel="stylesheet" href="./styles.css?v=20260515t">
+    <script>
+      window.__openLoginModal = function () {
+        const modal = document.querySelector("#login-modal");
+        if (!modal) return;
+        modal.hidden = false;
+        const form = document.querySelector("#login-form");
+        if (form) form.reset();
+        const message = document.querySelector("#login-message");
+        if (message) message.textContent = "";
+        const account = document.querySelector("#login-account");
+        if (account) window.setTimeout(() => account.focus(), 0);
+      };
+      window.__submitLoginForm = function (event) {
+        if (event) event.preventDefault();
+        const accountInput = document.querySelector("#login-account");
+        const passwordInput = document.querySelector("#login-password");
+        const message = document.querySelector("#login-message");
+        const account = accountInput ? accountInput.value.trim() : "";
+        const password = passwordInput ? passwordInput.value : "";
+        if (!account || !password) {
+          if (message) message.textContent = "请输入账号和密码。";
+          return false;
+        }
+        const demoUsers = {
+          chenjing: "陈静",
+          wanglei: "王磊",
+          lina: "李娜",
+          zhaochen: "赵晨",
+          zhouying: "周颖"
+        };
+        const normalized = account.toLowerCase();
+        if (demoUsers[normalized] && password !== "demo123") {
+          if (message) message.textContent = "账号或密码错误，请重试。";
+          return false;
+        }
+        const payload = JSON.stringify({
+          loggedIn: true,
+          accountName: demoUsers[normalized] || account,
+          account,
+          lastLoginAt: new Date().toISOString()
+        });
+        let saved = false;
+        try {
+          localStorage.setItem("ne_auth_session_v1", payload);
+          saved = true;
+        } catch (error) {
+        }
+        try {
+          sessionStorage.setItem("ne_auth_session_v1", payload);
+          saved = true;
+        } catch (error) {
+        }
+        if (!saved) {
+          if (message) message.textContent = "登录状态保存失败，请检查浏览器权限。";
+          return false;
+        }
+        window.location.reload();
+        return false;
+      };
+    </script>
+    <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
+    <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
+    <script src="./config.js?v=20260515j" defer></script>
+    <script src="./runtime.js?v=20260515t" defer></script>
+    <script src="./map-data.js?v=20260507c" defer></script>
+    <script src="./app.js?v=20260516a" defer></script>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar" aria-label="主导航">
+        <div class="sidebar-brand">
+          <div class="brand-mark">
+            <img class="brand-logo" src="./assets/sidri-logo-transparent.png" alt="上海电力设计院标识">
+          </div>
+          <div>
+            <strong>上海勘测设计研究院</strong>
+            <div class="brand-sub">新能源项目收益预测工具</div>
+          </div>
+        </div>
+        <div class="sidebar-main">
+          <section class="sidebar-section">
+            <button class="sidebar-group-toggle" type="button" data-group="overview" aria-expanded="true">
+              <span class="group-main"><span class="group-icon">◈</span><span>平台概览</span></span>
+              <span class="group-caret">▾</span>
+            </button>
+            <div class="sidebar-group-body" data-group-body="overview">
+              <button class="nav-item active" data-page="home-page">
+                <span class="nav-main"><span class="nav-icon">⌂</span><span class="nav-text">首页</span></span>
+              </button>
+              <div class="auth-only-nav" id="auth-only-overview-nav" hidden>
+                <button class="nav-item" data-page="projects-page">
+                  <span class="nav-main"><span class="nav-icon">▤</span><span class="nav-text">我的项目</span></span>
+                  <span class="nav-badge" id="project-count-badge">0</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div class="auth-only-nav" id="auth-only-main-nav" hidden>
+            <section class="sidebar-section">
+              <button class="sidebar-group-toggle" type="button" data-group="analysis" aria-expanded="true">
+                <span class="group-main"><span class="group-icon">◉</span><span>分析流程</span></span>
+                <span class="group-caret">▾</span>
+              </button>
+              <div class="sidebar-group-body" data-group-body="analysis">
+              <button class="nav-item" data-page="create-page">
+                <span class="nav-main"><span class="nav-icon">✎</span><span class="nav-text">项目创建</span></span>
+                <span class="status-dot" id="status-create-page"></span>
+              </button>
+              <button class="nav-item" data-page="energy-page">
+                <span class="nav-main"><span class="nav-icon">▥</span><span class="nav-text">结算电量配置</span></span>
+                <span class="status-dot" id="status-energy-page"></span>
+              </button>
+              <button class="nav-item" data-page="history-page">
+                <span class="nav-main"><span class="nav-icon">◴</span><span class="nav-text">历史电价分析</span></span>
+                <span class="status-dot" id="status-history-page"></span>
+              </button>
+              <button class="nav-item" data-page="forecast-page">
+                <span class="nav-main"><span class="nav-icon">⌁</span><span class="nav-text">电价预测工作台</span></span>
+                <span class="status-dot" id="status-forecast-page"></span>
+              </button>
+              <button class="nav-item" data-page="scenario-page">
+                <span class="nav-main"><span class="nav-icon">⚙</span><span class="nav-text">全口径收入配置</span></span>
+                <span class="status-dot" id="status-scenario-page"></span>
+              </button>
+              </div>
+            </section>
+
+            <section class="sidebar-section">
+              <button class="sidebar-group-toggle" type="button" data-group="output" aria-expanded="false">
+                <span class="group-main"><span class="group-icon">◍</span><span>结果输出</span></span>
+                <span class="group-caret">▾</span>
+              </button>
+              <div class="sidebar-group-body" data-group-body="output" hidden>
+              <button class="nav-item" data-page="results-page">
+                <span class="nav-main"><span class="nav-icon">▣</span><span class="nav-text">基准结果总览</span></span>
+                <span class="status-dot" id="status-results-page"></span>
+              </button>
+              <button class="nav-item" data-page="compare-page">
+                <span class="nav-main"><span class="nav-icon">◬</span><span class="nav-text">多方案对比分析</span></span>
+                <span class="status-dot" id="status-compare-page"></span>
+              </button>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <section class="sidebar-section">
+            <button class="sidebar-group-toggle" type="button" data-group="support" aria-expanded="false">
+              <span class="group-main"><span class="group-icon">◎</span><span>支持中心</span></span>
+              <span class="group-caret">▾</span>
+            </button>
+            <div class="sidebar-group-body" data-group-body="support" hidden>
+              <button class="nav-item" data-page="help-page">
+                <span class="nav-main"><span class="nav-icon">ⓘ</span><span class="nav-text">帮助文档</span></span>
+              </button>
+              <button class="nav-item" data-page="settings-page">
+                <span class="nav-main"><span class="nav-icon">☷</span><span class="nav-text">系统设置</span></span>
+              </button>
+            </div>
+          </section>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div class="topbar-left">
+            <div class="topbar-pathline">
+              <p class="eyebrow" id="top-section-path">平台概览 / 首页</p>
+              <div class="page-help" id="page-help">
+                <button type="button" class="page-help-button" id="page-help-button" aria-label="本页说明" aria-expanded="false">i</button>
+                <div class="page-help-card" id="page-help-card" role="tooltip">
+                  <h4 id="page-help-title">本页说明</h4>
+                  <p id="page-help-purpose"></p>
+                  <p id="page-help-meaning"></p>
+                  <p id="page-help-guide"></p>
+                </div>
+              </div>
+            </div>
+            <h1 id="top-title">首页</h1>
+          </div>
+          <div class="topbar-right">
+                  <button type="button" class="ghost-button top-action-button" id="login-entry-button" onclick="window.__openLoginModal && window.__openLoginModal()">登录</button>
+            <div class="account-module" id="account-module" hidden>
+              <button type="button" class="account-trigger" id="account-trigger-button" aria-haspopup="true" aria-expanded="false">
+                <span class="account-avatar" id="account-avatar">-</span>
+                <span class="account-name" id="account-name-display">-</span>
+                <span class="account-caret">▾</span>
+              </button>
+              <div class="account-dropdown" id="account-dropdown" hidden>
+                <button type="button" class="account-dropdown-item" id="account-profile-button">个人信息</button>
+                <button type="button" class="account-dropdown-item" id="account-password-button">修改密码</button>
+                <button type="button" class="account-dropdown-item danger" id="logout-button">退出登录</button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <section class="page active" id="home-page">
+          <section class="overview-band">
+            <div class="overview-carousel" id="overview-carousel" aria-label="首页重点信息轮播">
+              <div class="overview-viewport">
+                <div class="overview-track" id="overview-track">
+                  <article class="overview-slide">
+                    <div class="overview-copy">
+                      <div class="overview-headline-group">
+                        <h2>新一轮电改顶层设计</h2>
+                        <p class="overview-docline">《关于进一步深化电力体制改革的若干意见》（中发〔2015〕9号）</p>
+                        <p class="overview-summary">以电价形成机制和交易主体重构为起点，奠定后续现货、绿电与辅助服务市场化演进的制度底座。</p>
+                      </div>
+                      <div class="overview-meta-grid">
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">定位</span>
+                          <p>新一轮电改总体纲领，明确“管住中间、放开两头”主线。</p>
+                        </div>
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">意义</span>
+                          <p>推动竞争性环节价格放开，为新能源收益测算建立市场化前提。</p>
+                        </div>
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">关注</span>
+                          <p>交易机构独立规范运行、配售侧放开与电能量价格联动口径。</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="overview-visual">
+                      <img
+                        class="overview-image"
+                        src="./assets/overview-slide-1.svg?v=20260427b"
+                        onerror="this.onerror=null;this.src='./assets/overview-slide-1.svg';"
+                        alt="输电线路"
+                      >
+                    </div>
+                  </article>
+
+                  <article class="overview-slide">
+                    <div class="overview-copy">
+                      <div class="overview-headline-group">
+                        <h2>全国统一电力市场体系建设</h2>
+                        <p class="overview-docline">《关于加快建设全国统一电力市场体系的指导意见》（发改体改〔2022〕118号）</p>
+                        <p class="overview-summary">把省内试点推向国家、区域、省三级协同，为跨省消纳、统一规则和省间价格信号铺出主通道。</p>
+                      </div>
+                      <div class="overview-meta-grid">
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">定位</span>
+                          <p>全国一体化建设的里程碑文件，明确三级市场架构与时序目标。</p>
+                        </div>
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">意义</span>
+                          <p>提升新能源跨区优化配置效率，减少单省口径割裂带来的测算偏差。</p>
+                        </div>
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">关注</span>
+                          <p>规则统一、计量一致和跨省跨区交易的协同结算体系。</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="overview-visual">
+                      <img
+                        class="overview-image"
+                        src="./assets/overview-slide-2.svg?v=20260427b"
+                        onerror="this.onerror=null;this.src='./assets/overview-slide-2.svg';"
+                        alt="风电与电网"
+                      >
+                    </div>
+                  </article>
+
+                  <article class="overview-slide">
+                    <div class="overview-copy">
+                      <div class="overview-headline-group">
+                        <h2>电力现货市场顶层规则</h2>
+                        <p class="overview-docline">《电力现货市场基本规则（试行）》（发改能源规〔2023〕1217号）</p>
+                        <p class="overview-summary">把实时平衡和分时价格正式收进统一规则，为捕获电价、现货结算和中长期偏差收益提供可比口径。</p>
+                      </div>
+                      <div class="overview-meta-grid">
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">定位</span>
+                          <p>现货市场价格发现与实时出清的核心制度，决定收益曲线的颗粒度基础。</p>
+                        </div>
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">意义</span>
+                          <p>推动中长期与现货衔接执行，强化新能源项目分时收益识别能力。</p>
+                        </div>
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">关注</span>
+                          <p>新能源入市方式、结算口径和 15 分钟级历史现货数据的解释边界。</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="overview-visual">
+                      <img
+                        class="overview-image"
+                        src="./assets/overview-slide-3.svg?v=20260427b"
+                        onerror="this.onerror=null;this.src='./assets/overview-slide-3.svg';"
+                        alt="风电场景"
+                      >
+                    </div>
+                  </article>
+
+                  <article class="overview-slide">
+                    <div class="overview-copy">
+                      <div class="overview-headline-group">
+                        <h2>新型电力系统调节保障</h2>
+                        <p class="overview-docline">《电力辅助服务市场基本规则》（发改能源规〔2024〕XX号）</p>
+                        <p class="overview-summary">在高比例新能源场景下，把储能、负荷侧灵活性和辅助服务收益、费用、考核统一进可执行的市场框架。</p>
+                      </div>
+                      <div class="overview-meta-grid">
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">定位</span>
+                          <p>新能源高比例并网下的调节支撑机制，是综合费用和服务补偿的重要来源。</p>
+                        </div>
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">意义</span>
+                          <p>让储能、负荷聚合商和虚拟电厂具备可量化参与路径。</p>
+                        </div>
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">关注</span>
+                          <p>辅助服务补偿、考核扣费与容量、负荷响应等资源的统一计价方式。</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="overview-visual">
+                      <img
+                        class="overview-image"
+                        src="./assets/overview-slide-4.svg?v=20260427b"
+                        onerror="this.onerror=null;this.src='./assets/overview-slide-4.svg';"
+                        alt="电力调度"
+                      >
+                    </div>
+                  </article>
+
+                  <article class="overview-slide">
+                    <div class="overview-copy">
+                      <div class="overview-headline-group">
+                        <h2>绿色转型与市场深化实施</h2>
+                        <p class="overview-docline">《关于完善全国统一电力市场体系的实施意见》（国办发〔2026〕4号）</p>
+                        <p class="overview-summary">从机制框架走向执行细则，把新能源长效消纳、容量回收和交易协同进一步落到可持续运行阶段。</p>
+                      </div>
+                      <div class="overview-meta-grid">
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">定位</span>
+                          <p>面向新型电力系统的市场机制升级版施工图，强调实施深度与跨环节协同。</p>
+                        </div>
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">意义</span>
+                          <p>把新能源收益测算从“单项规则判断”提升到“长期机制组合判断”。</p>
+                        </div>
+                        <div class="overview-meta-item">
+                          <span class="overview-meta-label">关注</span>
+                          <p>容量成本回收、中长期协同稳定性和绿色价值兑现的联动机制。</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="overview-visual">
+                      <img
+                        class="overview-image"
+                        src="./assets/overview-slide-5.svg?v=20260427b"
+                        onerror="this.onerror=null;this.src='./assets/overview-slide-5.svg';"
+                        alt="光伏与风电"
+                      >
+                    </div>
+                  </article>
+                </div>
+              </div>
+
+              <div class="overview-carousel-footer">
+                <div class="overview-progress" aria-hidden="true">
+                  <span id="overview-progress-bar"></span>
+                </div>
+                <div class="overview-footer-actions">
+                  <button type="button" class="overview-detail-trigger" id="overview-detail-trigger">查看详情</button>
+                  <div class="overview-dots" aria-label="轮播切换">
+                    <button type="button" class="overview-dot active" data-overview-slide="0" aria-label="第1条"></button>
+                    <button type="button" class="overview-dot" data-overview-slide="1" aria-label="第2条"></button>
+                    <button type="button" class="overview-dot" data-overview-slide="2" aria-label="第3条"></button>
+                    <button type="button" class="overview-dot" data-overview-slide="3" aria-label="第4条"></button>
+                    <button type="button" class="overview-dot" data-overview-slide="4" aria-label="第5条"></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="grid-2 home-main-grid">
+            <section class="panel benchmark-map-panel">
+              <div class="panel-head">
+                <h3>全国电力市场电价横向对比</h3>
+              </div>
+              <div class="benchmark-map-shell">
+                <div class="benchmark-map-toolbar">
+                  <button type="button" class="ghost-button" id="benchmark-back-button" hidden>返回全国</button>
+                  <span class="hint" id="benchmark-map-subtitle">点击省份查看地州详情</span>
+                </div>
+                <div class="benchmark-map-wrap">
+                  <div class="benchmark-map-scale">
+                    <span class="scale-label">高价</span>
+                    <span class="scale-value" id="benchmark-map-legend-max">-</span>
+                    <div class="scale-slider-wrap">
+                      <div class="scale-slider-track"></div>
+                      <div id="benchmark-range-slider" class="benchmark-range-slider" aria-label="电价范围筛选">
+                        <button type="button" id="benchmark-range-handle-max" class="scale-slider-handle max" aria-label="电价上限"></button>
+                        <button type="button" id="benchmark-range-handle-min" class="scale-slider-handle min" aria-label="电价下限"></button>
+                      </div>
+                    </div>
+                    <span class="scale-label">低价</span>
+                    <span class="scale-value" id="benchmark-map-legend-min">-</span>
+                  </div>
+                  <div class="benchmark-map-stage">
+                    <div class="benchmark-map-canvas" id="benchmark-map-canvas" aria-label="电价色块地图"></div>
+                    <div class="map-view-controls" aria-label="地图视图控制">
+                      <button type="button" class="map-view-btn" id="benchmark-zoom-in-button" aria-label="放大">+</button>
+                      <button type="button" class="map-view-btn" id="benchmark-zoom-out-button" aria-label="缩小">−</button>
+                      <button type="button" class="map-view-btn reset" id="benchmark-zoom-reset-button" aria-label="重置视图">⌖</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="benchmark-map-foot">
+                  <span id="benchmark-map-tip">提示：鼠标悬停查看电价数据，点击省份可查看地州详情。</span>
+                  <span id="benchmark-map-updated">数据更新时间：2026-04-13</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel policy-panel">
+              <div class="panel-head">
+                <h3>地区政策</h3>
+                <span class="hint">省级口径 / 最新基线</span>
+              </div>
+              <div class="policy-tools">
+                <label class="block-label">区域筛选
+                  <select id="policy-filter-region"></select>
+                </label>
+                <label class="block-label">省份筛选
+                  <select id="policy-filter-province"></select>
+                </label>
+              </div>
+              <div class="card-list" id="policy-card-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" id="projects-page">
+          <div class="project-workspaces" id="project-list"></div>
+        </section>
+
+        <section class="page" id="create-page">
+          <section class="panel create-workspace-panel" id="create-step-form">
+            <div class="workspace-step-head">
+              <div class="workspace-step-chip">步骤1</div>
+              <div class="workspace-step-meta">
+                <h3>基础信息</h3>
+                <p>先保存项目基础口径，再进入结算电量配置。</p>
+              </div>
+            </div>
+            <form id="create-project-form" class="form-grid">
+              <label>项目名称
+                <input id="create-project-name" type="text" placeholder="请输入项目名称">
+              </label>
+              <label>省份
+                <select id="create-province"></select>
+              </label>
+              <label>风/光类型
+                <select id="create-asset-type">
+                  <option value="">请选择风/光类型</option>
+                  <option value="wind">风电</option>
+                  <option value="photovoltaic">光伏</option>
+                </select>
+              </label>
+              <label>陆/海类型
+                <select id="create-site-type">
+                  <option value="">请选择陆/海类型</option>
+                  <option value="onshore">陆上</option>
+                  <option value="offshore">海上</option>
+                </select>
+              </label>
+              <label>装机容量 MW
+                <input id="create-capacity-mw" type="number" min="0.1" step="0.1" placeholder="请输入装机容量">
+              </label>
+              <label>开始年份
+                <input id="create-start-year" type="number" min="2026" max="2100" placeholder="请输入开始年份">
+              </label>
+              <label>预测周期 年
+                <input id="create-forecast-years" type="number" min="1" max="30" placeholder="默认30">
+              </label>
+              <label>备注（选填）
+                <input id="create-note" type="text" placeholder="可选备注">
+              </label>
+              <div class="form-section-header">
+                <strong>配建储能信息</strong>
+                <span>储能配置与场站基础属性分开填写；仅在配储项目中录入功率与时长。</span>
+              </div>
+              <label>是否配建储能
+                <select id="create-has-storage">
+                  <option value="">请选择是否配储</option>
+                  <option value="no">否</option>
+                  <option value="yes">是</option>
+                </select>
+              </label>
+              <label id="create-storage-power-field" hidden>储能功率 MW
+                <input id="create-storage-power-mw" type="number" min="0.1" step="0.1" placeholder="请输入储能功率">
+              </label>
+              <label id="create-storage-duration-field" hidden>储能时长 h
+                <input id="create-storage-duration-h" type="number" min="0.1" step="0.1" placeholder="请输入储能时长">
+              </label>
+              <label id="create-storage-note-field" hidden>储能备注（选填）
+                <input id="create-storage-note" type="text" placeholder="可选储能备注">
+              </label>
+              <div class="actions-row">
+                <button type="submit" class="primary-button" id="create-save-only-button">保存基础信息</button>
+              </div>
+              <div class="info-box" id="create-save-message">当前为新建模板，填写后先保存基础信息。</div>
+            </form>
+            <div class="create-next-step-bar">
+              <div class="hint">基础信息保存完成后，再进入结算电量配置。</div>
+              <button type="button" class="primary-button next-step-button" id="create-to-energy-button">进入结算电量配置</button>
+            </div>
+          </section>
+
+          <section class="panel create-workspace-panel" id="create-step-energy">
+            <div class="workspace-step-head">
+              <div class="workspace-step-chip">步骤2</div>
+              <div class="workspace-step-meta">
+                  <h3>结算电量配置</h3>
+                <p>先配置逐年总量，再通过典型年8760模板或省份典型曲线生成测算周期内的上网电量曲线。</p>
+              </div>
+            </div>
+            <div class="info-box energy-project-context" id="energy-project-context">
+              请选择项目并完成基础信息保存后，再导出模板与导入电量。
+            </div>
+            <div class="energy-workspace-grid">
+              <section class="energy-subpanel">
+                <div class="energy-subpanel-head">
+                  <div>
+                    <h4>上网电量配置</h4>
+                    <p>第一步必须导入逐年总量模板；第二步二选一，可上传典型年8760小时模板，或直接调用所选省份典型曲线。</p>
+                  </div>
+                </div>
+                <div class="energy-config-list">
+                  <article class="energy-config-row">
+                    <div class="energy-config-row-head">
+                      <div>
+                        <strong>第一步｜逐年总量模板（必做）</strong>
+                        <p>用于填写测算周期内各年度总小时数，仅包含“年度 / 小时数”两个字段。</p>
+                      </div>
+                      <span class="energy-template-status" id="energy-template-annual-status">待基础信息保存</span>
+                    </div>
+                    <div class="energy-config-actions">
+                      <div class="button-inline">
+                        <button type="button" class="ghost-button" id="export-energy-annual-template-button">导出逐年总量模板</button>
+                      </div>
+                      <div class="energy-file-import-row">
+                        <label class="energy-file-input-wrap">
+                          <span class="energy-file-input-label">上传文件</span>
+                          <input id="energy-annual-file-input" type="file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                        </label>
+                        <button type="button" class="primary-button" id="import-energy-annual-file-button">读取文件并导入</button>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="energy-config-row energy-step2-row">
+                    <div class="energy-config-row-head">
+                      <div>
+                        <strong>第二步｜典型年曲线来源（二选一）</strong>
+                        <p>逐年总量模板完整导入后，从“上传典型年8760小时模板”和“调用所选省份典型曲线”中二选一完成后续配置。</p>
+                      </div>
+                    </div>
+                    <div class="energy-choice-summary">
+                      <div class="energy-choice-summary-main" id="energy-step2-choice-summary">当前选择：待选择</div>
+                      <div class="energy-choice-summary-sub" id="energy-step2-choice-detail">完成第二步后，系统将按所选典型曲线来源生成测算周期内各年上网电量。</div>
+                    </div>
+                    <div class="energy-choice-tabs" role="tablist" aria-label="第二步配置方式">
+                      <button
+                        type="button"
+                        class="energy-choice-card active"
+                        id="energy-step2-choice-typical"
+                        data-energy-step2-choice="typical"
+                        role="tab"
+                        aria-selected="true"
+                      >
+                        <span class="energy-choice-card-indicator" aria-hidden="true"></span>
+                        <span class="energy-choice-card-copy">
+                          <span class="energy-choice-card-title">上传典型年8760小时模板</span>
+                          <span class="energy-choice-card-desc">适合已有一套标准典型年曲线的项目。</span>
+                        </span>
+                        <span class="energy-template-status" id="energy-template-typical-status">待基础信息保存</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="energy-choice-card"
+                        id="energy-step2-choice-province"
+                        data-energy-step2-choice="province"
+                        role="tab"
+                        aria-selected="false"
+                      >
+                        <span class="energy-choice-card-indicator" aria-hidden="true"></span>
+                        <span class="energy-choice-card-copy">
+                          <span class="energy-choice-card-title">调用所选省份典型曲线</span>
+                          <span class="energy-choice-card-desc">适合直接采用当前省份典型曲线样本的项目。</span>
+                        </span>
+                        <span class="energy-template-status" id="energy-template-province-status">待基础信息保存</span>
+                      </button>
+                    </div>
+                    <section class="energy-choice-pane" id="energy-step2-pane-typical" role="tabpanel">
+                      <div class="energy-choice-pane-head">
+                        <div>
+                          <h5>典型年8760小时模板</h5>
+                          <p>导入一套典型年8760小时分布曲线，系统将按该曲线拆分逐年总量。</p>
+                          <div class="energy-pane-current-note" id="energy-step2-typical-pane-status" hidden></div>
+                        </div>
+                      </div>
+                      <div class="energy-config-actions">
+                        <div class="button-inline">
+                          <button type="button" class="ghost-button" id="export-energy-typical-template-button">导出典型年8760模板</button>
+                        </div>
+                        <div class="energy-file-import-row">
+                          <label class="energy-file-input-wrap">
+                            <span class="energy-file-input-label">上传文件</span>
+                            <input id="energy-typical-file-input" type="file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                          </label>
+                          <button type="button" class="primary-button" id="import-energy-typical-file-button">读取文件并导入</button>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="energy-choice-pane" id="energy-step2-pane-province" role="tabpanel" hidden>
+                      <div class="energy-choice-pane-head">
+                        <div>
+                          <h5>调用所选省份典型曲线</h5>
+                          <p>直接调用当前项目所属省份的典型曲线样本，后续正式版可替换为数据库实时取数。</p>
+                          <div class="energy-pane-current-note" id="energy-step2-province-pane-status" hidden></div>
+                        </div>
+                      </div>
+                      <div class="energy-config-actions">
+                        <div class="button-inline">
+                          <button type="button" class="ghost-button" id="apply-energy-province-curve-button">调用所选省份典型曲线</button>
+                        </div>
+                      </div>
+                    </section>
+                  </article>
+                </div>
+                <div class="energy-runtime-feedback energy-runtime-feedback--inline" aria-live="polite">
+                  <div class="energy-runtime-feedback-message" id="energy-import-message" data-tone="info">等待导入</div>
+                  <div class="energy-runtime-metrics">
+                    <article class="energy-runtime-metric">
+                      <div class="label">预测周期</div>
+                      <div class="value" id="energy-period-label">-</div>
+                    </article>
+                    <article class="energy-runtime-metric">
+                      <div class="label">当前配置状态</div>
+                      <div class="value" id="energy-mode-label">-</div>
+                    </article>
+                    <article class="energy-runtime-metric">
+                      <div class="label">完整年份</div>
+                      <div class="value" id="energy-complete-years-label">0/0</div>
+                    </article>
+                    <article class="energy-runtime-metric">
+                      <div class="label">累计上网电量</div>
+                      <div class="value" id="energy-total-mwh-label">0.00</div>
+                    </article>
+                  </div>
+                  <div class="energy-summary-note" id="energy-summary-note">等待项目与结算电量配置结果。</div>
+                </div>
+              </section>
+
+              <section class="energy-subpanel energy-chart-panel">
+                <div class="energy-subpanel-head energy-chart-head">
+                  <div>
+                    <h4>8760电量曲线展示</h4>
+                    <p>左侧展示测算周期内逐年上网电量小时数，右侧展示典型年按月份拆解的24小时曲线。</p>
+                  </div>
+                </div>
+                <div class="info-box energy-chart-note" id="energy-curve-note">
+                  请先完成结算电量配置，再查看上网电量图形展示。
+                </div>
+                <div class="energy-chart-grid">
+                  <section class="energy-chart-card">
+                    <div class="energy-chart-card-head">
+                      <div>
+                        <h5>逐年上网电量小时数</h5>
+                        <p>按测算周期展示各年度总小时数。</p>
+                      </div>
+                    </div>
+                    <div class="energy-chart-canvas energy-annual-chart-canvas" id="energy-annual-chart"></div>
+                  </section>
+                  <section class="energy-chart-card">
+                    <div class="energy-chart-card-head">
+                      <div>
+                        <h5>典型年日内曲线（月度）</h5>
+                        <p id="energy-curve-subtitle">横轴为1-24时，纵轴为小时数，图例区分1-12月。</p>
+                      </div>
+                    </div>
+                    <div class="energy-chart-canvas energy-typical-chart-canvas" id="energy-curve-chart"></div>
+                  </section>
+                </div>
+              </section>
+
+              <div class="energy-next-step-row">
+                <div class="hint">全部预测年份完成后，再进入历史电价分析。</div>
+                <button type="button" class="primary-button next-step-button" id="energy-to-history-button" disabled>进入历史电价分析</button>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="energy-page"></section>
+
+        <section class="page" id="history-page">
+          <section class="panel history-analysis-panel">
+            <div class="panel-head history-head">
+              <h3 class="history-main-title"><img class="history-title-icon" src="./assets/history-icon-overview.svg" alt="" aria-hidden="true">历史现货电价分析（15分钟）</h3>
+              <div class="history-head-controls history-date-controls">
+                <button type="button" class="history-date-toggle" id="history-date-toggle" aria-expanded="false" aria-controls="history-date-panel">筛选日期</button>
+                <div class="history-date-popover" id="history-date-panel" hidden>
+                  <label>开始日期
+                    <input type="date" id="history-start-date">
+                  </label>
+                  <label>结束日期
+                    <input type="date" id="history-end-date">
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="history-source-panel">
+              <div class="history-source-left">
+                <div class="history-subhead">
+                  <h4>当前数据范围</h4>
+                  <p>按当前项目已选省份自动展示省级15分钟历史现货样本，可按日选择开始日期与结束日期，不支持手动替换数据源。</p>
+                </div>
+                <div class="history-source-tags">
+                  <span class="history-source-chip" id="history-source-province">当前省份：-</span>
+                  <span class="history-source-chip">数据颗粒度：15分钟</span>
+                  <span class="history-source-chip">取数方式：省级数据库模拟样本</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="history-kpi-row">
+              <div class="history-kpi-item"><span>样本点数</span><strong id="history-kpi-points">-</strong></div>
+              <div class="history-kpi-item"><span>全样本均价</span><strong id="history-kpi-avg">-</strong></div>
+              <div class="history-kpi-item"><span>P50</span><strong id="history-kpi-p50">-</strong></div>
+              <div class="history-kpi-item"><span>P90</span><strong id="history-kpi-p90">-</strong></div>
+              <div class="history-kpi-item"><span>负电价占比</span><strong id="history-kpi-negative">-</strong></div>
+            </div>
+            <div class="info-box" id="history-insight-box">等待生成历史现货分析图表。</div>
+
+            <div class="history-section-head">
+              <h4>趋势观察</h4>
+              <p>先看所选日期区间内的价格趋势和日内轮廓，判断整体水平、季节性和峰谷特征。</p>
+            </div>
+            <div class="history-grid history-grid-top">
+              <article class="history-card">
+                <div class="history-card-head">
+                  <h4 class="history-card-title"><img class="history-card-icon" src="./assets/history-icon-trend.svg" alt="" aria-hidden="true">月度均价趋势对比</h4>
+                  <button type="button" class="history-card-export" id="history-export-month-trend" disabled>导出数据</button>
+                </div>
+                <div class="history-chart" id="history-month-trend-chart"></div>
+              </article>
+              <article class="history-card">
+                <div class="history-card-head">
+                  <h4 class="history-card-title"><img class="history-card-icon" src="./assets/history-icon-day.svg" alt="" aria-hidden="true">典型日电价曲线</h4>
+                  <button type="button" class="history-card-export" id="history-export-typical-day" disabled>导出数据</button>
+                </div>
+                <div class="history-chart" id="history-typical-day-chart"></div>
+              </article>
+            </div>
+
+            <div class="history-section-head">
+              <h4>分布与波动</h4>
+              <p>再看样本分布、分时热力和月度箱线，帮助识别尖峰、负价和波动强度。</p>
+            </div>
+            <div class="history-grid history-grid-bottom">
+              <article class="history-card">
+                <div class="history-card-head">
+                  <h4 class="history-card-title"><img class="history-card-icon" src="./assets/history-icon-distribution.svg" alt="" aria-hidden="true">电价分布直方图</h4>
+                  <button type="button" class="history-card-export" id="history-export-distribution" disabled>导出数据</button>
+                </div>
+                <div class="history-chart" id="history-distribution-chart"></div>
+              </article>
+              <article class="history-card">
+                <div class="history-card-head">
+                  <h4 class="history-card-title"><img class="history-card-icon" src="./assets/history-icon-heatmap.svg" alt="" aria-hidden="true">分时电价热力图</h4>
+                  <button type="button" class="history-card-export" id="history-export-heatmap" disabled>导出数据</button>
+                </div>
+                <div class="history-chart" id="history-heatmap-chart"></div>
+              </article>
+              <article class="history-card">
+                <div class="history-card-head">
+                  <h4 class="history-card-title"><img class="history-card-icon" src="./assets/history-icon-boxplot.svg" alt="" aria-hidden="true">月度电价箱线图</h4>
+                  <button type="button" class="history-card-export" id="history-export-boxplot" disabled>导出数据</button>
+                </div>
+                <div class="history-chart" id="history-boxplot-chart"></div>
+              </article>
+            </div>
+            <div class="history-next-step-row">
+              <div class="hint">历史现货样本查看完成后，进入电价预测工作台生成并选择生效曲线。</div>
+              <button type="button" class="primary-button next-step-button" data-jump="forecast-page">进入电价预测工作台</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="forecast-page">
+          <section class="panel">
+            <form id="forecast-run-form" class="form-grid">
+              <label>算法类型
+                <select id="algo-family">
+                  <option value="all">三模型模拟：LSTM / XGBoost / Ensemble</option>
+                </select>
+              </label>
+              <label>算法版本
+                <input id="algo-version" type="text" value="1.0.0">
+              </label>
+              <label>特征版本
+                <input id="feature-version" type="text" value="1.0.0">
+              </label>
+              <label>数据快照ID
+                <input id="data-snapshot-id" type="text" value="snapshot-2026-12">
+              </label>
+              <label>训练窗口起始
+                <input id="train-start" type="number" min="2010" max="2100" value="2018">
+              </label>
+              <label>训练窗口结束
+                <input id="train-end" type="number" min="2010" max="2100" value="2025">
+              </label>
+              <label>随机种子
+                <input id="algo-seed" type="number" min="1" max="99999" value="2027">
+              </label>
+              <label>价格增长率 %
+                <input id="algo-growth" type="number" step="0.1" value="0.5">
+              </label>
+              <div class="actions-row">
+                <button type="submit" class="primary-button">生成三种模型电价曲线</button>
+              </div>
+            </form>
+            <div class="info-box" id="forecast-gate-message">质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。</div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>run_id</th>
+                    <th>算法</th>
+                    <th>版本</th>
+                    <th>特征版本</th>
+                    <th>颗粒度</th>
+                    <th>训练窗口</th>
+                    <th>MAPE</th>
+                    <th>sMAPE</th>
+                    <th>MAE</th>
+                    <th>RMSE</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="forecast-run-body"></tbody>
+              </table>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>激活时间</th>
+                    <th>from_run</th>
+                    <th>to_run</th>
+                    <th>切换原因</th>
+                  </tr>
+                </thead>
+                <tbody id="forecast-activation-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+
+        <section class="page" id="scenario-page">
+          <section class="panel">
+            <div class="scenario-page-summary" aria-label="当前全口径收入配置摘要">
+              <div class="scenario-summary-card scenario-summary-card-primary">
+                <span>当前项目</span>
+                <strong id="scenario-summary-project">请选择项目</strong>
+              </div>
+              <div class="scenario-summary-card">
+                <span>当前方案</span>
+                <strong id="scenario-summary-active">-</strong>
+              </div>
+              <div class="scenario-summary-card">
+                <span>测算周期</span>
+                <strong id="scenario-summary-period">-</strong>
+              </div>
+              <div class="scenario-summary-card">
+                <span>储能口径</span>
+                <strong id="scenario-summary-storage">-</strong>
+              </div>
+            </div>
+            <div class="scenario-workspace-grid">
+              <section class="scenario-workspace">
+                <div class="scenario-workspace-head">
+                  <div>
+                    <h3>选配方案</h3>
+                    <p>选择当前方案，完成复制、锁定、删除，并查看不同方案的摘要差异。</p>
+                  </div>
+                  <span class="hint">用于切换当前测算口径</span>
+                </div>
+                <label class="block-label">当前方案
+                  <select id="scenario-selector"></select>
+                </label>
+                <div class="scenario-name-edit-row">
+                  <label>当前方案名称
+                    <input id="scenario-quick-name" type="text" placeholder="请输入方案名称">
+                  </label>
+                  <button type="button" class="ghost-button" id="rename-scenario-button">保存名称</button>
+                </div>
+                <div class="actions-row scenario-actions-row">
+                  <button type="button" class="ghost-button" id="duplicate-scenario-button">复制当前场景</button>
+                  <button type="button" class="ghost-button" id="delete-scenario-button">删除当前场景</button>
+                  <button type="button" class="ghost-button" id="toggle-baseline-lock-button">锁定基准场景</button>
+                </div>
+                <div class="hint" id="scenario-lock-hint">基准场景可锁定，锁定后不允许编辑。</div>
+                <details class="subsection scenario-batch-subsection scenario-batch-details">
+                  <summary>
+                    <span>批量调整多个方案</span>
+                  </summary>
+                  <div class="scenario-batch-grid">
+                    <label>参数项
+                      <select id="batch-param-key"></select>
+                    </label>
+                    <label>参数值
+                      <input id="batch-param-value" type="text" value="10">
+                    </label>
+                    <label>作用范围
+                      <select id="batch-target-scope">
+                        <option value="non_baseline">除基准场景外</option>
+                        <option value="all">全部场景</option>
+                      </select>
+                    </label>
+                    <div class="scenario-batch-action">
+                      <button type="button" class="ghost-button" id="apply-batch-button">批量应用</button>
+                    </div>
+                  </div>
+                </details>
+                <div class="table-scroll scenario-table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>场景</th>
+                        <th>标记</th>
+                        <th>机制占比</th>
+                        <th>机制电价</th>
+                        <th>交易策略首年损益</th>
+                        <th>绿色价值</th>
+                        <th>配储收益</th>
+                        <th>综合费用</th>
+                        <th>更新时间</th>
+                      </tr>
+                    </thead>
+                    <tbody id="scenario-list-body"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="scenario-workspace">
+                <div class="scenario-workspace-head">
+                  <div>
+                    <h3>默认参数展示</h3>
+                    <p>按当前项目所属省份展示默认机制、绿色价值、配储补充收益和综合费用口径，可一键带入当前方案。</p>
+                  </div>
+                  <div class="scenario-workspace-tools">
+                    <select
+                      id="province-default-selector"
+                      class="province-default-selector"
+                      aria-label="调用其他省份参数"
+                    ></select>
+                  </div>
+                </div>
+                <div class="info-box" id="province-apply-message">请选择一个省份，点击“带入当前场景”。</div>
+                <div class="province-default-list-wrap">
+                  <div class="province-default-list" id="province-param-body"></div>
+                </div>
+              </section>
+
+              <section class="scenario-workspace scenario-workspace-editor">
+                <div class="scenario-workspace-head">
+                  <div>
+                    <h3>填写 / 调整参数</h3>
+                    <p>在当前方案内录入口径参数，保存后只更新当前方案。</p>
+                  </div>
+                  <span class="hint">保存后将更新当前方案</span>
+                </div>
+                <form id="scenario-form" class="scenario-form">
+                  <section class="scenario-form-section">
+                    <div class="scenario-form-section-title">
+                      <strong>方案与差价机制</strong>
+                      <span>按年结算，机制电量占比只作用于纳入机制部分。</span>
+                    </div>
+                    <div class="scenario-form-grid">
+                      <label>方案名称
+                        <input id="scenario-name" type="text" value="基准场景">
+                      </label>
+                      <label>是否纳入机制
+                        <select id="mechanism-enabled">
+                          <option value="no">否</option>
+                          <option value="yes">是</option>
+                        </select>
+                      </label>
+                      <label>机制电量占比 %
+                        <input id="mechanism-ratio" type="number" min="0" max="100" value="35">
+                      </label>
+                      <label>机制电价 元/MWh
+                        <input id="mechanism-price" type="number" min="0" step="1" value="340">
+                      </label>
+                      <label>机制执行起始年月
+                        <input id="mechanism-start-ym" type="month" value="2027-01">
+                      </label>
+                      <label>机制执行结束年月
+                        <input id="mechanism-end-ym" type="month" value="2030-12">
+                      </label>
+                    </div>
+                  </section>
+
+                  <section class="scenario-form-section">
+                    <div class="scenario-form-section-title">
+                      <strong>交易策略损益</strong>
+                      <span>以市场化交易电量为基数，按度电损益向目标值收敛。</span>
+                    </div>
+                    <div class="scenario-form-grid scenario-form-grid-compact scenario-trade-grid">
+                      <label class="scenario-trade-field-wide">市场化交易电量比例
+                        <input id="market-trade-energy-ratio" type="text" value="-" disabled aria-readonly="true">
+                      </label>
+                      <label class="scenario-trade-field-wide">配置方式
+                        <select id="lt-pricing-mode">
+                          <option value="auto">自动生成逐年损益</option>
+                          <option value="manual">导入逐年损益值</option>
+                        </select>
+                      </label>
+                      <label class="scenario-trade-field-third">交易策略首年度电损益 元/MWh
+                        <input id="lt-year1-pnl" type="number" step="1" value="8">
+                      </label>
+                      <label class="scenario-trade-field-third">收敛目标 元/MWh
+                        <input id="lt-target-pnl" type="number" step="1" value="2">
+                      </label>
+                      <label class="scenario-trade-field-third">年收敛步长 元/MWh/年
+                        <input id="lt-converge-speed" type="number" min="0" step="0.1" value="2">
+                      </label>
+                    </div>
+                    <div class="scenario-trade-manual-panel" id="lt-manual-panel" hidden>
+                      <div class="scenario-trade-manual-actions">
+                        <button type="button" class="ghost-button" id="export-lt-template-button">导出逐年损益模板</button>
+                        <label class="energy-file-input-label">
+                          <span>上传文件</span>
+                          <input id="lt-manual-file-input" type="file" accept=".csv,.txt,.xlsx,.xls">
+                        </label>
+                        <button type="button" class="ghost-button" id="import-lt-template-button">读取文件并导入</button>
+                      </div>
+                      <div class="hint" id="lt-manual-status">导入模板字段：year,trade_strategy_pnl_yuan_per_mwh。</div>
+                    </div>
+                  </section>
+
+                  <section class="scenario-form-section">
+                    <div class="scenario-form-section-title">
+                      <strong>环境价值兑现</strong>
+                      <span>以市场化交易电量为最大空间，三条路径兑现空间合计不超过100%。</span>
+                    </div>
+                    <div class="scenario-form-grid scenario-env-grid">
+                      <label class="scenario-env-field-third">最大可兑现空间（总电量）
+                        <input id="env-value-space-ratio" type="text" value="-" disabled aria-readonly="true">
+                      </label>
+                      <label class="scenario-env-field-third">已分配兑现空间（空间内）
+                        <input id="env-value-used-ratio" type="text" value="-" disabled aria-readonly="true">
+                      </label>
+                      <label class="scenario-env-field-third">配置方式
+                        <select id="env-value-mode">
+                          <option value="global">全周期统一配置</option>
+                          <option value="manual">导入逐年兑现配置</option>
+                        </select>
+                      </label>
+                      <label class="scenario-env-field-half">绿证价格 元/MWh
+                        <input id="green-cert-price" type="number" min="0" value="18">
+                      </label>
+                      <label class="scenario-env-field-half">绿证兑现空间占比 %
+                        <input id="green-cert-realize-ratio" type="number" min="0" max="100" step="0.1" value="100">
+                      </label>
+                      <label class="scenario-env-field-half">绿电溢价 元/MWh
+                        <input id="green-premium-price" type="number" min="0" value="10">
+                      </label>
+                      <label class="scenario-env-field-half">绿电溢价兑现空间占比 %
+                        <input id="green-premium-realize-ratio" type="number" min="0" max="100" step="0.1" value="0">
+                      </label>
+                      <label class="scenario-env-field-third">是否启用碳收益
+                        <select id="carbon-enabled">
+                          <option value="no">否</option>
+                          <option value="yes">是</option>
+                        </select>
+                      </label>
+                      <label class="scenario-env-field-third">碳收益 元/MWh（海上可用）
+                        <input id="carbon-price" type="number" min="0" value="4">
+                      </label>
+                      <label class="scenario-env-field-third">碳收益兑现空间占比 %
+                        <input id="carbon-realize-ratio" type="number" min="0" max="100" step="0.1" value="0">
+                      </label>
+                    </div>
+                    <div class="scenario-trade-manual-panel" id="env-manual-panel" hidden>
+                      <div class="scenario-trade-manual-actions">
+                        <button type="button" class="ghost-button" id="export-env-template-button">导出逐年兑现模板</button>
+                        <label class="energy-file-input-label">
+                          <span>上传文件</span>
+                          <input id="env-manual-file-input" type="file" accept=".csv,.txt,.xlsx,.xls">
+                        </label>
+                        <button type="button" class="ghost-button" id="import-env-template-button">读取文件并导入</button>
+                      </div>
+                      <div class="hint" id="env-manual-status">导入模板字段包含年份、绿证/绿电/碳收益价格和兑现空间占比。</div>
+                    </div>
+                  </section>
+
+                  <section class="scenario-form-section">
+                    <div class="scenario-form-section-title">
+                      <strong>综合扣费与其他收益</strong>
+                      <span>默认按全周期统一口径执行，也可导入逐年扣费与收益配置。</span>
+                    </div>
+                    <div class="scenario-form-grid">
+                      <label>配置方式
+                        <select id="fee-config-mode">
+                          <option value="global">全周期统一配置</option>
+                          <option value="manual">导入逐年扣费收益</option>
+                        </select>
+                      </label>
+                      <label>市场运营费用 元/MWh
+                        <input id="market-op-fee" type="number" min="0" value="6">
+                      </label>
+                      <label>并网考核费用 元/MWh
+                        <input id="grid-assess-fee" type="number" min="0" value="8">
+                      </label>
+                      <label>辅助服务费用 元/MWh
+                        <input id="ancillary-fee" type="number" min="0" value="7">
+                      </label>
+                      <label>其他费用 元/MWh
+                        <input id="other-fee" type="number" min="0" value="3">
+                      </label>
+                      <label>其他收入 元/MWh
+                        <input id="other-income" type="number" min="0" value="2">
+                      </label>
+                    </div>
+                    <div class="scenario-trade-manual-panel" id="fee-manual-panel" hidden>
+                      <div class="scenario-trade-manual-actions">
+                        <button type="button" class="ghost-button" id="export-fee-template-button">导出逐年扣费收益模板</button>
+                        <label class="energy-file-input-label">
+                          <span>上传文件</span>
+                          <input id="fee-manual-file-input" type="file" accept=".csv,.txt,.xlsx,.xls">
+                        </label>
+                        <button type="button" class="ghost-button" id="import-fee-template-button">读取文件并导入</button>
+                      </div>
+                      <div class="hint" id="fee-manual-status">导入模板字段包含年份、四类扣费和其他收入。</div>
+                    </div>
+                  </section>
+
+                  <section class="scenario-storage-revenue-section" id="scenario-storage-revenue-section" hidden>
+                    <div class="form-section-header">
+                      <strong>配储补充收益配置</strong>
+                      <span class="section-note">仅配储项目显示；用于录入储能带来的现货套利、容量补偿、辅助服务和其他补充收益口径。</span>
+                    </div>
+                    <div class="scenario-storage-revenue-grid">
+                      <label>现货价差套利 元/MWh
+                        <input id="storage-arbitrage-price" type="number" min="0" value="0">
+                      </label>
+                      <label>容量补偿收益 元/MWh
+                        <input id="storage-capacity-comp-price" type="number" min="0" value="0">
+                      </label>
+                      <label>配储辅助服务收益 元/MWh
+                        <input id="storage-ancillary-revenue-price" type="number" min="0" value="0">
+                      </label>
+                      <label>其他配储收益 元/MWh
+                        <input id="storage-other-revenue-price" type="number" min="0" value="0">
+                      </label>
+                    </div>
+                  </section>
+                  <div class="actions-row">
+                    <button type="submit" class="primary-button">保存当前配置</button>
+                  </div>
+                </form>
+                <div class="info-box" id="scenario-message">等待配置保存</div>
+              </section>
+
+              <section class="scenario-workspace scenario-workspace-visual">
+                <div class="scenario-workspace-head">
+                  <div>
+                    <h3>参数可视化展示</h3>
+                    <p>按测算周期查看电量口径、度电参数和年度收益影响，辅助校核当前方案是否合理。</p>
+                  </div>
+                  <span class="hint">周期参数图表</span>
+                </div>
+                <div class="info-box" id="scenario-visual-message">请选择项目并保存方案后查看参数结构。</div>
+                <div class="scenario-visual-chart-grid" aria-label="参数结构可视化图组">
+                  <article class="scenario-visual-chart-card scenario-visual-chart-card-wide">
+                    <div class="scenario-visual-chart-head">
+                      <strong>机制与环境电量口径</strong>
+                      <span>机制电量、绿色价值兑现电量与未兑现市场化电量</span>
+                    </div>
+                    <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-energy-chart" aria-label="机制与环境电量口径组合图"></div>
+                  </article>
+                  <article class="scenario-visual-chart-card scenario-visual-chart-card-wide">
+                    <div class="scenario-visual-chart-head">
+                      <strong>其他收入项目度电路径</strong>
+                      <span>交易、环境、费用、其他收入和配储收益</span>
+                    </div>
+                    <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-trend-chart" aria-label="度电参数周期曲线图"></div>
+                  </article>
+                  <article class="scenario-visual-chart-card scenario-visual-chart-card-wide">
+                    <div class="scenario-visual-chart-head">
+                      <strong>年度补充收益净影响构成</strong>
+                      <span>折算至总上网电量口径</span>
+                    </div>
+                    <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-unit-chart" aria-label="年度补充收益净影响构成图"></div>
+                  </article>
+                </div>
+              </section>
+              <div class="scenario-next-step-row">
+                <button type="button" class="primary-button next-step-button" data-jump="results-page">进入基准结果总览</button>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="results-page">
+          <section class="panel results-report-panel">
+            <section class="print-report-header" id="print-report-header" aria-label="打印报告抬头">
+              <div class="print-report-brand">
+                <img class="print-report-logo" src="./assets/sidri-logo-transparent.png" alt="上海电力设计院标识">
+                <div class="print-report-brand-text">
+                  <strong>新能源全口径收入测算报告</strong>
+                  <span>上海电力设计院</span>
+                </div>
+              </div>
+              <div class="print-report-meta">
+                <span>项目：<strong id="print-project-name">-</strong></span>
+                <span>场景：<strong id="print-scenario-name">-</strong></span>
+                <span>周期：<strong id="print-period-range">-</strong></span>
+                <span>生成时间：<strong id="print-generated-time">-</strong></span>
+              </div>
+            </section>
+
+            <section class="result-report-hero" aria-label="基准场景测算简报摘要">
+              <div>
+                <p class="eyebrow">基准场景测算简报</p>
+                <h2>新能源全口径收入基准结果</h2>
+                <p class="result-report-lead" id="result-executive-summary">请先发起测算，生成可导出的基准结果简报。</p>
+              </div>
+              <div class="result-report-meta" id="result-report-meta">
+                <span>项目：-</span>
+                <span>方案：-</span>
+                <span>周期：-</span>
+                <span>口径：-</span>
+              </div>
+            </section>
+
+            <div class="panel-head result-actionbar">
+              <div>
+                <h3>简报预览</h3>
+                <p>面向基准场景的报告正文预览，支持打印导出与年度/小时数据附件导出。</p>
+              </div>
+              <div class="button-inline">
+                <button type="button" class="ghost-button" id="run-calc-button">发起基准测算</button>
+                <button type="button" class="ghost-button" id="export-annual-button">导出年度CSV</button>
+                <button type="button" class="ghost-button" id="export-hourly-button">导出8760CSV</button>
+                <button type="button" class="ghost-button" id="print-report-button">打印报告</button>
+                <button type="button" class="primary-button" data-jump="compare-page">进入多方案对比</button>
+              </div>
+            </div>
+
+            <div class="metric-grid" id="result-metric-grid"></div>
+
+            <details class="result-disclosure result-disclosure-primary" open>
+              <summary>
+                <span>核心结论</span>
+                <small>自动提取首年与周期关键变化</small>
+              </summary>
+              <div class="result-insight-list" id="result-insight-list"></div>
+            </details>
+
+            <div class="result-report-tabbar" role="tablist" aria-label="基准结果简报模块切换">
+              <button class="result-report-tab active" type="button" role="tab" aria-selected="true" data-result-view="annual">
+                <span>年度收益</span>
+                <small>收入构成与累计贡献</small>
+              </button>
+              <button class="result-report-tab" type="button" role="tab" aria-selected="false" data-result-view="price">
+                <span>度电路径</span>
+                <small>价格路径与收益桥</small>
+              </button>
+              <button class="result-report-tab" type="button" role="tab" aria-selected="false" data-result-view="detail">
+                <span>明细附表</span>
+                <small>年度表与8760附件</small>
+              </button>
+            </div>
+
+            <section class="result-report-pane active" data-result-pane="annual">
+              <section class="result-chart-grid" aria-label="年度收益图表">
+                <article class="result-chart-card result-chart-card-wide">
+                  <div class="result-chart-head">
+                    <strong>年度全口径收入构成</strong>
+                    <span>按年度展示收入来源、扣费与全口径收入</span>
+                  </div>
+                  <div class="result-chart result-chart-tall" id="result-annual-stack-chart" aria-label="年度全口径收入构成图"></div>
+                </article>
+              </section>
+              <details class="result-disclosure result-drill" open>
+                <summary>
+                  <span>周期累计贡献钻取</span>
+                  <small>展开查看全周期各收入与扣费项累计贡献</small>
+                </summary>
+                <div class="result-chart" id="result-contribution-chart" aria-label="周期累计贡献分析图"></div>
+              </details>
+            </section>
+
+            <section class="result-report-pane" data-result-pane="price" hidden>
+              <section class="result-chart-grid result-chart-grid-two" aria-label="度电路径图表">
+                <article class="result-chart-card">
+                  <div class="result-chart-head">
+                    <strong>度电价格路径</strong>
+                    <span>市场价格与全口径度电净价</span>
+                  </div>
+                  <div class="result-chart" id="result-price-path-chart" aria-label="度电价格路径图"></div>
+                </article>
+                <article class="result-chart-card">
+                  <div class="result-chart-head">
+                    <strong>首年度电收益桥</strong>
+                    <span>从捕获电价到全口径度电净价</span>
+                  </div>
+                  <div class="result-chart" id="result-waterfall-chart" aria-label="首年度电收益桥图"></div>
+                </article>
+              </section>
+              <details class="result-disclosure result-drill">
+                <summary>
+                  <span>关键测算口径</span>
+                  <small>展开查看简报正文使用的配置口径</small>
+                </summary>
+                <div class="result-assumption-list" id="result-assumption-list"></div>
+              </details>
+            </section>
+
+            <section class="result-report-pane" data-result-pane="detail" hidden>
+              <details class="result-disclosure result-drill" open>
+                <summary>
+                  <span>年度结果明细附表</span>
+                  <small>用于校核简报图表，导出年度CSV保留完整口径</small>
+                </summary>
+                <div class="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>年份</th>
+                        <th>年利用小时 h</th>
+                        <th>上网电量 MWh</th>
+                        <th>现货均价</th>
+                        <th>捕获电价</th>
+                        <th>现货收入</th>
+                        <th>差价机制</th>
+                        <th>交易策略损益</th>
+                        <th>环境价值</th>
+                        <th>配储补充收益</th>
+                        <th>综合费用</th>
+                        <th>其他收入</th>
+                        <th>全口径收入</th>
+                        <th>度电净价</th>
+                      </tr>
+                    </thead>
+                    <tbody id="annual-result-body"></tbody>
+                  </table>
+                </div>
+              </details>
+
+              <details class="result-disclosure result-drill result-hourly-detail">
+                <summary>
+                  <span>首年8760小时明细附件预览</span>
+                  <small>展开查看前240条，完整数据请导出CSV</small>
+                </summary>
+                <div class="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>时间</th>
+                        <th>小时数 h</th>
+                        <th>上网电量 MWh</th>
+                        <th>现货价</th>
+                        <th>现货收入</th>
+                        <th>小时全口径收入</th>
+                      </tr>
+                    </thead>
+                    <tbody id="hourly-result-body"></tbody>
+                  </table>
+                </div>
+              </details>
+            </section>
+            <div class="hint" id="print-report-hint">打印报告展示简报正文与年度附表，8760小时明细建议另行CSV导出。</div>
+            <div class="hint" id="hourly-preview-hint">等待测算</div>
+          </section>
+        </section>
+
+        <section class="page" id="compare-page">
+          <section class="panel compare-page-shell">
+            <div class="compare-tabbar" role="tablist" aria-label="多方案对比分析工作区切换">
+              <button
+                class="compare-tab compare-tab-scenario"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-compare-view="scenario"
+              >
+                <span class="compare-tab-title">方案对标</span>
+                <span class="compare-tab-note">多个已测算方案横向比较</span>
+              </button>
+              <button
+                class="compare-tab compare-tab-sensitivity"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                data-compare-view="sensitivity"
+              >
+                <span class="compare-tab-title">基准敏感性</span>
+                <span class="compare-tab-note">基准方案扰动分析</span>
+              </button>
+            </div>
+
+            <section class="subsection compare-workspace compare-pane compare-pane-sensitivity" data-compare-pane="sensitivity">
+              <div class="compare-pane-banner">
+                不新增方案，仅围绕基准方案做关键变量扰动，识别收益弹性和主要风险来源。
+              </div>
+              <div class="panel-head">
+                <div>
+                  <h3>基准敏感性分析</h3>
+                  <p class="hint">以基准方案为锚，统一设置扰动范围与步长，变量清单默认收起。</p>
+                </div>
+                <span class="hint" id="compare-baseline-label">等待基准方案结果</span>
+              </div>
+              <div class="compare-control-strip compare-sensitivity-toolbar" aria-label="敏感性分析统一设置">
+                <label>目标指标
+                  <select id="compare-sensitivity-target" disabled>
+                    <option value="first_revenue">首年全口径收入</option>
+                  </select>
+                </label>
+                <label>扰动范围 ±%
+                  <input id="compare-sensitivity-range" type="number" min="5" max="60" step="5" value="20">
+                </label>
+                <label>步长 %
+                  <input id="compare-sensitivity-step" type="number" min="1" max="20" step="1" value="5">
+                </label>
+                <label>响应强度 %
+                  <input id="compare-sensitivity-scale" type="number" min="25" max="200" step="5" value="100">
+                </label>
+                <label>排序展示
+                  <select id="compare-sensitivity-topn">
+                    <option value="5">前5项</option>
+                    <option value="8" selected>前8项</option>
+                    <option value="10">前10项</option>
+                    <option value="all">全部</option>
+                  </select>
+                </label>
+              </div>
+              <div class="info-box" id="compare-sensitivity-message">
+                请先在基准结果总览完成基准方案测算，再查看敏感性分析。
+              </div>
+              <div class="compare-kpi-grid">
+                <article class="metric-card compare-metric-card">
+                  <div class="label">基准方案</div>
+                  <div class="value" id="compare-metric-baseline-scenario">-</div>
+                </article>
+                <article class="metric-card compare-metric-card">
+                  <div class="label">基准首年总收益</div>
+                  <div class="value" id="compare-metric-baseline-revenue">-</div>
+                </article>
+                <article class="metric-card compare-metric-card">
+                  <div class="label">敏感参数数</div>
+                  <div class="value" id="compare-metric-sensitive-factors">0 项</div>
+                </article>
+                <article class="metric-card compare-metric-card">
+                  <div class="label">可对比方案数</div>
+                  <div class="value" id="compare-metric-compare-count">0 个</div>
+                </article>
+              </div>
+              <section class="compare-chart-card compare-chart-card-wide">
+                <div class="compare-chart-head">
+                  <strong>敏感性排序</strong>
+                  <span id="compare-sensitivity-tornado-note">变量在 -20% 与 +20% 扰动下的首年收益变化区间</span>
+                </div>
+                <div class="compare-chart compare-chart-tall" id="compare-sensitivity-tornado-chart"></div>
+              </section>
+              <details class="compare-disclosure compare-variable-disclosure">
+                <summary>
+                  <span>敏感变量与钻取</span>
+                  <small id="compare-sensitivity-variable-summary">默认启用全部变量</small>
+                </summary>
+                <div class="compare-factor-list" id="compare-sensitivity-factor-list"></div>
+              </details>
+              <section class="compare-chart-card compare-chart-card-wide">
+                <div class="compare-chart-head">
+                  <strong>响应曲线</strong>
+                  <span id="compare-sensitivity-response-label">等待变量选择</span>
+                </div>
+                <div class="compare-chart" id="compare-sensitivity-response-chart"></div>
+              </section>
+              <details class="compare-disclosure">
+                <summary>
+                  <span>逐项敏感性明细</span>
+                  <small>展开查看每个变量的扰动区间和方向</small>
+                </summary>
+                <div class="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>变量</th>
+                        <th id="compare-sensitivity-low-head">-20%影响</th>
+                        <th id="compare-sensitivity-high-head">+20%影响</th>
+                        <th>敏感度</th>
+                        <th>方向</th>
+                      </tr>
+                    </thead>
+                    <tbody id="compare-sensitivity-body"></tbody>
+                  </table>
+                </div>
+              </details>
+            </section>
+
+            <section class="subsection compare-workspace compare-pane compare-pane-scenario" data-compare-pane="scenario">
+              <div class="compare-pane-banner">
+                基于已命名且完成测算的方案做横向对标，重点比较收益排名、年度走势和相对基准的差异归因。
+              </div>
+              <div class="panel-head">
+                <div>
+                  <h3>方案对标</h3>
+                  <p class="hint">以基准方案为锚点，比较多个方案的周期收益、度电净价和主要差异来源。</p>
+                </div>
+                <span class="hint" id="compare-scenario-label">等待方案结果</span>
+              </div>
+              <div class="compare-control-strip" aria-label="方案对标设置">
+                <span>基准：当前基准方案</span>
+                <span>口径：全周期</span>
+                <span>展示：已完成测算方案</span>
+                <span>钻取：点击方案</span>
+              </div>
+              <div class="info-box" id="compare-scenario-message">
+                当前仅展示已完成测算的方案结果；新增方案并测算后即可加入对比。
+              </div>
+              <div class="compare-kpi-grid">
+                <article class="metric-card compare-metric-card">
+                  <div class="label">已纳入对比方案</div>
+                  <div class="value" id="compare-metric-scenario-count">0 个</div>
+                </article>
+                <article class="metric-card compare-metric-card">
+                  <div class="label">最优方案</div>
+                  <div class="value" id="compare-metric-best-scenario">-</div>
+                </article>
+                <article class="metric-card compare-metric-card">
+                  <div class="label">相对基准最大差额</div>
+                  <div class="value" id="compare-metric-max-gap">-</div>
+                </article>
+                <article class="metric-card compare-metric-card">
+                  <div class="label">对比周期</div>
+                  <div class="value" id="compare-metric-period">-</div>
+                </article>
+              </div>
+              <section class="compare-chart-grid">
+                <article class="compare-chart-card">
+                  <div class="compare-chart-head">
+                    <strong>方案收益排名</strong>
+                    <span>周期全口径收入，显示相对基准水平</span>
+                  </div>
+                  <div class="compare-chart" id="compare-ranking-chart"></div>
+                </article>
+                <article class="compare-chart-card">
+                  <div class="compare-chart-head">
+                    <strong>年度总收益走势</strong>
+                    <span>按已测算方案展示周期年度收益变化</span>
+                  </div>
+                  <div class="compare-chart" id="compare-trend-chart"></div>
+                </article>
+              </section>
+              <section class="compare-drill-grid">
+                <article class="compare-drill-panel">
+                  <div class="compare-chart-head">
+                    <strong>方案钻取</strong>
+                    <span>选择一个方案与基准做差异归因</span>
+                  </div>
+                  <div class="compare-factor-list" id="compare-scenario-focus-list"></div>
+                </article>
+                <article class="compare-chart-card">
+                  <div class="compare-chart-head">
+                    <strong>相对基准差异归因</strong>
+                    <span id="compare-scenario-bridge-label">等待方案选择</span>
+                  </div>
+                  <div class="compare-chart" id="compare-bridge-chart"></div>
+                </article>
+              </section>
+              <details class="compare-disclosure">
+                <summary>
+                  <span>方案对标明细表</span>
+                  <small>展开查看所有方案关键指标</small>
+                </summary>
+                <div class="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>方案</th>
+                        <th>首年总收益</th>
+                        <th>周期总收益</th>
+                        <th>平均度电净价</th>
+                        <th>首年捕获电价</th>
+                        <th>相对基准收入差额</th>
+                        <th>最大驱动项</th>
+                      </tr>
+                    </thead>
+                    <tbody id="compare-body"></tbody>
+                  </table>
+                </div>
+              </details>
+            </section>
+          </section>
+        </section>
+
+        <section class="page" id="help-page">
+          <section class="panel help-doc">
+            <section class="subsection">
+              <div class="panel-head">
+                <h3>帮助文档总览</h3>
+                <span class="hint">当前版本适用于产品原型演示、业务流程确认与数据准备校验。</span>
+              </div>
+              <div class="help-grid-3">
+                <article class="help-card">
+                  <strong>适用对象</strong>
+                  <p>适用于新能源项目收益测算、方案比选、规则口径复核和演示汇报场景。</p>
+                </article>
+                <article class="help-card">
+                  <strong>适用项目</strong>
+                  <p>当前以风电、光伏为主，并区分陆上/海上、是否配建储能等基本属性。</p>
+                </article>
+                <article class="help-card">
+                  <strong>当前特点</strong>
+                  <p>支持账号隔离、项目持久化、结算电量配置、历史15分钟现货分析、电价预测、全口径收入配置与结果对比。</p>
+                </article>
+              </div>
+              <div class="info-box">
+                建议按“首页查看政策与基线 → 我的项目 → 项目创建 → 结算电量配置 → 历史电价分析 → 电价预测工作台 → 全口径收入配置 → 基准结果总览 / 多方案对比分析”的顺序使用。
+              </div>
+              <div class="button-inline">
+                <button class="ghost-button" type="button" data-jump="home-page">查看首页</button>
+                <button class="ghost-button" type="button" data-jump="projects-page">前往我的项目</button>
+                <button class="ghost-button" type="button" data-jump="energy-page">前往结算电量配置</button>
+                <button class="ghost-button" type="button" data-jump="forecast-page">前往预测工作台</button>
+              </div>
+            </section>
+
+            <section class="subsection">
+              <div class="panel-head">
+                <h3>一、使用边界与基础规则</h3>
+                <span class="hint">先理解边界，再开始录入口径，后面会省很多来回。</span>
+              </div>
+              <div class="help-grid-2">
+                <article class="help-card">
+                  <strong>账号与访问范围</strong>
+                  <ul class="help-list">
+                    <li>未登录时，可访问首页、帮助文档、系统设置。</li>
+                    <li>登录后，才可进入“我的项目”和完整分析流程。</li>
+                    <li>项目按账号隔离，历史项目仅显示当前账号名下数据。</li>
+                  </ul>
+                </article>
+                <article class="help-card">
+                  <strong>项目管理规则</strong>
+                  <ul class="help-list">
+                    <li>一个项目对应一个场站。</li>
+                    <li>“新建项目工作区”用于生成空项目模板；“我的历史项目”用于继续编辑或复制历史项目。</li>
+                    <li>已保存输入会自动持久化，刷新页面后仍可恢复。</li>
+                  </ul>
+                </article>
+              </div>
+            </section>
+
+            <section class="subsection">
+              <div class="panel-head">
+                <h3>二、推荐工作流</h3>
+                <span class="hint">建议按步骤推进，系统状态点也按这个顺序判断。</span>
+              </div>
+              <div class="help-flow">
+                <article class="help-step-card">
+                  <div class="help-step-index">1</div>
+                  <div class="help-step-body">
+                    <strong>首页</strong>
+                    <p>查看地区政策、各省电价横向对标与全国电价地图，先建立测算边界感。</p>
+                  </div>
+                </article>
+                <article class="help-step-card">
+                  <div class="help-step-index">2</div>
+                  <div class="help-step-body">
+                    <strong>我的项目</strong>
+                    <p>点击“新建项目”，生成空项目记录；后续通过历史项目继续编辑、复制或删除。</p>
+                  </div>
+                </article>
+                <article class="help-step-card">
+                  <div class="help-step-index">3</div>
+                  <div class="help-step-body">
+                    <strong>项目创建</strong>
+                    <p>填写项目名称、省份、风/光类型、陆/海类型、容量、开始年份和预测周期，先保存基础信息。</p>
+                  </div>
+                </article>
+                <article class="help-step-card">
+                  <div class="help-step-index">4</div>
+                  <div class="help-step-body">
+                    <strong>结算电量配置</strong>
+                    <p>先导出模板，再导入8760小时数或逐年小时数；导入成功后，可查看8760曲线展示。</p>
+                  </div>
+                </article>
+                <article class="help-step-card">
+                  <div class="help-step-index">5</div>
+                  <div class="help-step-body">
+                    <strong>历史电价分析</strong>
+                    <p>系统按项目省份自动关联15分钟历史现货数据库，查看月均价、典型日、热力图、箱线图等统计特征。</p>
+                  </div>
+                </article>
+                <article class="help-step-card">
+                  <div class="help-step-index">6</div>
+                  <div class="help-step-body">
+                    <strong>电价预测工作台</strong>
+                    <p>生成算法版本、检查误差指标、确认生效曲线；只有生效版本才能进入结果测算。</p>
+                  </div>
+                </article>
+                <article class="help-step-card">
+                  <div class="help-step-index">7</div>
+                  <div class="help-step-body">
+                    <strong>全口径收入配置与结果输出</strong>
+                    <p>带入省份默认参数后再做项目级调整，最后进入基准结果总览和多方案对比分析页面。</p>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="subsection">
+              <div class="panel-head">
+                <h3>三、各页面用途说明</h3>
+                <span class="hint">下面这部分可作为日常使用时的快速索引。</span>
+              </div>
+              <div class="help-grid-2">
+                <article class="help-card">
+                  <strong>首页</strong>
+                  <p>用于查看地区政策、区域/省份筛选后的省级基线，以及全国/地州电价地图。地图点击省份后，右侧地区政策卡会跟随切换。</p>
+                </article>
+                <article class="help-card">
+                  <strong>我的项目</strong>
+                  <p>上方是新建项目工作区，下方是历史项目工作区。新建项目不提供复制；历史项目可继续进入、复制项目、删除项目。</p>
+                </article>
+                <article class="help-card">
+                  <strong>项目创建</strong>
+                  <p>用于定义项目基本边界。当前不在此页选择导入模式，模式在结算电量配置页自动识别。</p>
+                </article>
+                <article class="help-card">
+                  <strong>结算电量配置</strong>
+                  <p>用于导出模板、导入电量、查看导入反馈和8760月度曲线。支持识别两种模板：8760小时模板、逐年小时模板。</p>
+                </article>
+                <article class="help-card">
+                  <strong>历史电价分析</strong>
+                  <p>用于按当前项目省份自动调取15分钟历史现货价格数据库，辅助判断训练窗口、波动区间和典型日特征。</p>
+                </article>
+                <article class="help-card">
+                  <strong>电价预测工作台</strong>
+                  <p>用于管理算法版本、训练窗口、误差指标和生效曲线。结果测算只使用生效版本。</p>
+                </article>
+                <article class="help-card">
+                  <strong>全口径收入配置</strong>
+                  <p>用于录入机制电价、交易策略损益、环境价值、综合费用、其他收入等参数。省份默认参数库已合并到本页。</p>
+                </article>
+                <article class="help-card">
+                  <strong>基准结果总览 / 多方案对比分析</strong>
+                  <p>用于查看分项收入、年度测算、首年小时结果和不同场景之间的横向差异。</p>
+                </article>
+              </div>
+            </section>
+
+            <section class="subsection">
+              <div class="panel-head">
+                <h3>四、数据模板与导入口径</h3>
+                <span class="hint">这部分建议直接按文档执行，避免因为表头、颗粒度和年份范围被校验拦住。</span>
+              </div>
+              <div class="table-scroll help-table-scroll">
+                <table class="help-mini-table">
+                  <thead>
+                    <tr>
+                      <th>模块</th>
+                      <th>模板字段</th>
+                      <th>校验规则</th>
+                      <th>说明</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>8760小时模板</td>
+                      <td><code>year, hour_index, equivalent_hours_h</code></td>
+                      <td>每个年份必须完整8760行；<code>hour_index</code> 范围 1-8760；<code>equivalent_hours_h</code> 必须为大于等于0的数值。</td>
+                      <td>适合直接导入完整小时曲线。</td>
+                    </tr>
+                    <tr>
+                      <td>逐年小时模板</td>
+                      <td><code>year, annual_hours_h</code></td>
+                      <td>每个年份只能出现1次；<code>annual_hours_h</code> 必须大于0。</td>
+                      <td>系统会按典型权重自动拆解到8760小时。</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="help-grid-2">
+                <article class="help-card">
+                  <strong>支持的文件格式</strong>
+                  <ul class="help-list">
+                    <li>CSV / TXT</li>
+                    <li>XLSX / XLS（自动读取第一张工作表）</li>
+                    <li>当前页面统一通过上传文件方式导入</li>
+                  </ul>
+                </article>
+                <article class="help-card">
+                  <strong>导入建议</strong>
+                  <ul class="help-list">
+                    <li>先保存项目基础信息，再导出模板。</li>
+                    <li>先导出模板，再填数，不建议手写表头。</li>
+                    <li>若使用逐年模板，导入成功后仍会生成8760小时曲线展示。</li>
+                  </ul>
+                </article>
+              </div>
+            </section>
+
+            <section class="subsection">
+              <div class="panel-head">
+                <h3>五、全口径收入测算口径</h3>
+                <span class="hint">以下口径是当前原型的核心业务结构。</span>
+              </div>
+              <div class="help-grid-2">
+                <article class="help-card">
+                  <strong>现货市场捕获电价</strong>
+                  <p>以8760上网电量曲线为结算基座，与预测电价曲线逐小时对齐，计算现货收入和捕获电价。</p>
+                </article>
+                <article class="help-card">
+                  <strong>差价机制结算收入</strong>
+                  <p>按年度口径处理。输入机制电量占比、机制电价和起止年月，用于仍处于机制期的场站。</p>
+                </article>
+                <article class="help-card">
+                  <strong>交易策略损益</strong>
+                  <p>按年度度电损益设置，只作用于非纳入机制电量部分，并支持向目标值收敛的路径配置。</p>
+                </article>
+                <article class="help-card">
+                  <strong>环境价值兑现</strong>
+                  <p>拆分为绿证价格、绿电溢价；海上风电和海上光伏场景可选碳收益，陆上默认关闭。</p>
+                </article>
+                <article class="help-card">
+                  <strong>综合费用</strong>
+                  <p>包含市场运营费用、并网运行考核、辅助服务及其他费用。辅助服务当前按固定度电费用处理。</p>
+                </article>
+                <article class="help-card">
+                  <strong>其他收入项</strong>
+                  <p>用于承接前述标准项以外的补充收入，保持结构开放，便于后续扩展。</p>
+                </article>
+              </div>
+            </section>
+
+            <section class="subsection">
+              <div class="panel-head">
+                <h3>六、状态点与完成标准</h3>
+                <span class="hint">侧边栏状态点不是“点过就完成”，而是按页面任务是否真正达标来判断。</span>
+              </div>
+              <div class="help-grid-2">
+                <article class="help-card">
+                  <strong>状态含义</strong>
+                  <ul class="help-list">
+                    <li><span class="help-dot completed"></span> 已完成：当前页面关键任务已经达到要求。</li>
+                    <li><span class="help-dot in-progress"></span> 进行中：已有输入或部分完成，但还未满足完成标准。</li>
+                    <li><span class="help-dot default"></span> 未开始：尚未开始有效操作。</li>
+                    <li><span class="help-dot stale"></span> 已失效：上游关键输入被修改，下游结果需复核。</li>
+                  </ul>
+                </article>
+                <article class="help-card">
+                  <strong>典型完成标准</strong>
+                  <ul class="help-list">
+                    <li>项目创建：基础信息已保存。</li>
+                    <li>结算电量配置：预测周期内年份电量已按要求导入。</li>
+                    <li>历史电价分析：已按项目省份成功关联历史现货数据库并生成图表。</li>
+                    <li>电价预测工作台：存在可发布并已生效的预测版本。</li>
+                    <li>全口径收入配置：当前配置已保存。</li>
+                    <li>基准结果总览 / 多方案对比分析：已完成测算并生成结果。</li>
+                  </ul>
+                </article>
+              </div>
+            </section>
+
+            <section class="subsection">
+              <div class="panel-head">
+                <h3>七、常见问题</h3>
+                <span class="hint">遇到拦截、状态异常或导入失败时，建议先看这里。</span>
+              </div>
+              <div class="help-faq">
+                <article class="help-faq-item">
+                  <strong>1. 为什么导不出8760模板？</strong>
+                  <p>请先进入一个项目，并完成“项目创建”页面的基础信息保存。未保存前，系统会阻止模板导出。</p>
+                </article>
+                <article class="help-faq-item">
+                  <strong>2. 为什么导入后侧边栏状态没有变绿？</strong>
+                  <p>状态点按完成标准判断，不是点一下页面就完成。比如结算电量配置只有在满足页面要求后才会变为已完成。</p>
+                </article>
+                <article class="help-faq-item">
+                  <strong>3. 为什么结果页不能直接测算？</strong>
+                  <p>通常是上游环节尚未满足条件，例如8760未补齐、历史现货未导入、电价版本未生效，或场景还未保存。</p>
+                </article>
+                <article class="help-faq-item">
+                  <strong>4. 为什么页面刷新后输入还在？</strong>
+                  <p>当前原型默认开启输入持久化，已保存的项目数据会在页面切换和刷新后自动恢复。</p>
+                </article>
+                <article class="help-faq-item">
+                  <strong>5. 省份参数库去哪了？</strong>
+                  <p>省份参数库已合并进“全口径收入配置”页面，现在以“省份默认参数带入”的方式提供默认值，再在同页内完成微调。</p>
+                </article>
+              </div>
+            </section>
+          </section>
+        </section>
+
+        <section class="page" id="settings-page">
+          <section class="panel">
+            <section class="subsection">
+              <div class="panel-head">
+                <h3>账号管理</h3>
+                <span class="hint">账号信息与安全设置</span>
+              </div>
+              <div class="form-grid">
+                <label>
+                  账号名称
+                  <input type="text" id="settings-account-name" readonly>
+                </label>
+                <label>
+                  账号
+                  <input type="text" id="settings-account-id" readonly>
+                </label>
+                <label>
+                  最近登录
+                  <input type="text" id="settings-last-login" readonly>
+                </label>
+              </div>
+              <form id="change-password-form" class="form-grid">
+                <label>
+                  当前密码
+                  <input type="password" id="password-current" autocomplete="current-password" required>
+                </label>
+                <label>
+                  新密码
+                  <input type="password" id="password-next" autocomplete="new-password" required>
+                </label>
+                <label>
+                  确认新密码
+                  <input type="password" id="password-confirm" autocomplete="new-password" required>
+                </label>
+                <div class="actions-row">
+                  <button type="submit" class="primary-button">修改密码</button>
+                  <button type="button" class="ghost-button" id="settings-logout-button">退出当前账号</button>
+                </div>
+                <div class="hint" id="account-manage-message"></div>
+              </form>
+            </section>
+
+            <section class="subsection">
+              <div class="setting-row">
+                <div>
+                  <strong>主题模式</strong>
+                  <div class="hint" id="theme-current-label">当前：浅色</div>
+                </div>
+                <button type="button" class="ghost-button" id="theme-toggle-button">切换深色</button>
+              </div>
+            </section>
+
+            <section class="subsection">
+              <div class="setting-row">
+                <div>
+                  <strong>输入持久化</strong>
+                  <div class="hint">页面切换与刷新后，已保存的项目输入自动恢复。</div>
+                </div>
+                <span class="setting-badge">已启用</span>
+              </div>
+            </section>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div class="login-modal" id="login-modal" hidden>
+      <section class="login-panel" role="dialog" aria-modal="true" aria-labelledby="login-title">
+        <h3 id="login-title">登录系统</h3>
+        <p class="hint">登录后可访问项目创建、测算流程与结果输出。</p>
+        <form class="login-form" id="login-form" onsubmit="return window.__submitLoginForm ? window.__submitLoginForm(event) : false">
+          <label>
+            账号
+            <input id="login-account" name="account" type="text" autocomplete="username" list="login-account-list" required>
+          </label>
+          <label>
+            密码
+            <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+          </label>
+          <datalist id="login-account-list">
+            <option value="chenjing"></option>
+            <option value="wanglei"></option>
+            <option value="lina"></option>
+            <option value="zhaochen"></option>
+            <option value="zhouying"></option>
+          </datalist>
+          <div class="hint">演示账号：chenjing / wanglei / lina / zhaochen / zhouying（密码统一为 `demo123`）。</div>
+          <div class="button-inline">
+            <button type="submit" class="primary-button" id="login-submit-button">登录</button>
+            <button type="button" class="ghost-button" id="login-cancel-button">取消</button>
+          </div>
+          <div class="hint" id="login-message"></div>
+        </form>
+      </section>
+    </div>
+    <div class="login-modal policy-detail-modal" id="policy-detail-modal" hidden>
+      <section class="login-panel policy-detail-panel" role="dialog" aria-modal="true" aria-labelledby="policy-detail-title">
+        <div class="policy-detail-head">
+          <h3 id="policy-detail-title">政策详情</h3>
+          <button type="button" class="ghost-button" id="policy-detail-close-button">关闭</button>
+        </div>
+        <div class="policy-detail-meta" id="policy-detail-docno">文号：-</div>
+        <div class="policy-detail-section">
+          <h4>政策名称</h4>
+          <p id="policy-detail-name">-</p>
+        </div>
+        <div class="policy-detail-section">
+          <h4>核心定位</h4>
+          <p id="policy-detail-position">-</p>
+        </div>
+        <div class="policy-detail-section">
+          <h4>关键内容</h4>
+          <ul id="policy-detail-highlights"></ul>
+        </div>
+        <div class="policy-detail-section">
+          <h4>核心意义</h4>
+          <p id="policy-detail-meaning">-</p>
+        </div>
+      </section>
+    </div>
+    <div class="global-toast" id="global-toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>

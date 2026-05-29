@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="bgC" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f2034"/>
+      <stop offset="52%" stop-color="#1a3553"/>
+      <stop offset="100%" stop-color="#2b5379"/>
+    </linearGradient>
+    <linearGradient id="glassC" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#173b5d" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#10283f" stop-opacity="0.92"/>
+    </linearGradient>
+    <linearGradient id="barC" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#59adff"/>
+      <stop offset="100%" stop-color="#2a629e"/>
+    </linearGradient>
+    <linearGradient id="lineC" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f6d372"/>
+      <stop offset="100%" stop-color="#ff9861"/>
+    </linearGradient>
+    <filter id="shadowC">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#08131f" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bgC)"/>
+  <g opacity="0.18" stroke="#b5d0ee" stroke-width="2">
+    <path d="M70 170 H1530"/>
+    <path d="M70 290 H1530"/>
+    <path d="M70 410 H1530"/>
+    <path d="M70 530 H1530"/>
+    <path d="M70 650 H1530"/>
+    <path d="M240 120 V780"/>
+    <path d="M520 120 V780"/>
+    <path d="M800 120 V780"/>
+    <path d="M1080 120 V780"/>
+    <path d="M1360 120 V780"/>
+  </g>
+
+  <rect x="114" y="116" width="1372" height="668" rx="28" fill="url(#glassC)" stroke="#3f6285" stroke-width="3" filter="url(#shadowC)"/>
+
+  <g opacity="0.88" fill="url(#barC)">
+    <rect x="212" y="520" width="90" height="180" rx="10"/>
+    <rect x="338" y="462" width="90" height="238" rx="10"/>
+    <rect x="464" y="490" width="90" height="210" rx="10"/>
+    <rect x="590" y="406" width="90" height="294" rx="10"/>
+    <rect x="716" y="330" width="90" height="370" rx="10"/>
+    <rect x="842" y="366" width="90" height="334" rx="10"/>
+  </g>
+
+  <polyline points="220,566 384,522 510,536 636,456 762,392 888,416 1032,352 1190,304 1376,248" fill="none" stroke="url(#lineC)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#ffd98a">
+    <circle cx="220" cy="566" r="8"/>
+    <circle cx="636" cy="456" r="8"/>
+    <circle cx="1032" cy="352" r="8"/>
+    <circle cx="1376" cy="248" r="8"/>
+  </g>
+
+  <g>
+    <rect x="1018" y="420" width="358" height="222" rx="16" fill="#12273c" stroke="#43698f" stroke-width="3"/>
+    <path d="M1052 584 C1094 562 1138 548 1176 556 C1212 564 1248 594 1286 586 C1322 578 1348 534 1376 524" fill="none" stroke="#76c5ff" stroke-width="6" stroke-linecap="round"/>
+    <path d="M1052 536 C1092 498 1134 484 1178 492 C1216 498 1256 530 1290 522 C1322 514 1350 460 1386 442" fill="none" stroke="#5df0c5" stroke-width="6" stroke-linecap="round"/>
+    <g opacity="0.24" stroke="#d6e4f3" stroke-width="2">
+      <path d="M1048 602 H1342"/>
+      <path d="M1048 550 H1342"/>
+      <path d="M1048 498 H1342"/>
+    </g>
+  </g>
+
+  <g opacity="0.72" stroke="#edf4fb" stroke-width="8" stroke-linecap="round" fill="none">
+    <path d="M1232 760 L1260 470"/>
+    <path d="M1258 474 L1210 506"/>
+    <path d="M1258 474 L1308 504"/>
+    <path d="M1258 474 L1258 414"/>
+  </g>
+</svg>
