@@ -29,11 +29,11 @@
           return false;
         }
         const demoUsers = {
-          chenjing: "陈静",
-          wanglei: "王磊",
-          lina: "李娜",
-          zhaochen: "赵晨",
-          zhouying: "周颖"
+          demo1: "演示用户A",
+          demo2: "演示用户B",
+          demo3: "演示用户C",
+          demo4: "演示用户D",
+          demo5: "演示用户E"
         };
         const normalized = account.toLowerCase();
         if (demoUsers[normalized] && password !== "demo123") {
@@ -2000,13 +2000,13 @@
             <input id="login-password" name="password" type="password" autocomplete="current-password" required>
           </label>
           <datalist id="login-account-list">
-            <option value="chenjing"></option>
-            <option value="wanglei"></option>
-            <option value="lina"></option>
-            <option value="zhaochen"></option>
-            <option value="zhouying"></option>
+            <option value="demo1"></option>
+            <option value="demo2"></option>
+            <option value="demo3"></option>
+            <option value="demo4"></option>
+            <option value="demo5"></option>
           </datalist>
-          <div class="hint">演示账号：chenjing / wanglei / lina / zhaochen / zhouying（密码统一为 `demo123`）。</div>
+          <div class="hint">演示账号：demo1 / demo2 / demo3 / demo4 / demo5（密码统一为 `demo123`）。</div>
           <div class="button-inline">
             <button type="submit" class="primary-button" id="login-submit-button">登录</button>
             <button type="button" class="ghost-button" id="login-cancel-button">取消</button>

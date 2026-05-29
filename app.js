@@ -260,11 +260,11 @@ const BENCHMARK_MAP_ZOOM_STEP = 0.18;
 const BENCHMARK_RANGE_MIN = 120;
 const BENCHMARK_RANGE_MAX = 520;
 const DEMO_AUTH_USERS = [
-  { accountName: "陈静", account: "chenjing", password: "demo123" },
-  { accountName: "王磊", account: "wanglei", password: "demo123" },
-  { accountName: "李娜", account: "lina", password: "demo123" },
-  { accountName: "赵晨", account: "zhaochen", password: "demo123" },
-  { accountName: "周颖", account: "zhouying", password: "demo123" }
+  { accountName: "演示用户A", account: "demo1", password: "demo123" },
+  { accountName: "演示用户B", account: "demo2", password: "demo123" },
+  { accountName: "演示用户C", account: "demo3", password: "demo123" },
+  { accountName: "演示用户D", account: "demo4", password: "demo123" },
+  { accountName: "演示用户E", account: "demo5", password: "demo123" }
 ];
 const ENERGY_MODE_META = {
   hourly_8760: {
