@@ -35,6 +35,7 @@
 | `scenario-model.js` | 场景默认值、复制、重命名、基准锁定规则 |
 | `project-settings.js` | 项目默认设置、配置清洗 |
 | `project-model.js` | 项目创建、项目清洗、基础字段默认值 |
+| `app-storage.js` | 业务快照的 localStorage / IndexedDB 读写、最新快照选择 |
 
 ## 3. `src/ui/` 模块责任
 

@@ -47,8 +47,9 @@ const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
 const resultCharts = window.NE_RESULT_CHARTS;
 const compareCharts = window.NE_COMPARE_CHARTS;
+const appStorage = window.NE_APP_STORAGE;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts || !compareCharts) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts || !compareCharts || !appStorage) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -58,6 +59,13 @@ const APP_DATA_DB_NAME = "ne_app_data_db_v1";
 const APP_DATA_DB_VERSION = 1;
 const APP_DATA_DB_STORE = "snapshots";
 const APP_DATA_DB_KEY = "app_data";
+const appDataSnapshotStore = appStorage.createAppDataSnapshotStore({
+  storageKey: APP_DATA_STORAGE_KEY,
+  dbName: APP_DATA_DB_NAME,
+  dbVersion: APP_DATA_DB_VERSION,
+  storeName: APP_DATA_DB_STORE,
+  dbKey: APP_DATA_DB_KEY
+});
 const OVERVIEW_AUTO_SWITCH_MS = 10000;
 const PAGE_ID_SET = new Set(Object.keys(PAGE_TITLES));
 const PROJECT_STATUS_SET = new Set(["not_started", "in_progress", "completed", "stale"]);
@@ -155,7 +163,6 @@ let persistAppDataTimer = null;
 let suppressNextRenderPersist = false;
 let storageWarningShown = false;
 let appDataStorageMode = "hybrid";
-let appDataDbPromise = null;
 let persistSequence = 0;
 let lastLocalStoragePersistAt = 0;
 let topMetaHideTimer = null;
@@ -1601,82 +1608,12 @@ function sanitizeEnergyStep2Choice(value) {
   return typeof value === "string" && ENERGY_STEP2_CHOICE_SET.has(value) ? value : "typical";
 }
 
-function supportsIndexedDb() {
-  return typeof indexedDB !== "undefined";
-}
-
-function openAppDataDb() {
-  if (!supportsIndexedDb()) {
-    return Promise.resolve(null);
-  }
-  if (appDataDbPromise) return appDataDbPromise;
-  appDataDbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(APP_DATA_DB_NAME, APP_DATA_DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(APP_DATA_DB_STORE)) {
-        db.createObjectStore(APP_DATA_DB_STORE);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("打开IndexedDB失败"));
-  }).catch((error) => {
-    appDataDbPromise = null;
-    throw error;
-  });
-  return appDataDbPromise;
-}
-
-async function readAppDataSnapshotFromDb() {
-  const db = await openAppDataDb();
-  if (!db) return null;
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(APP_DATA_DB_STORE, "readonly");
-    const store = tx.objectStore(APP_DATA_DB_STORE);
-    const request = store.get(APP_DATA_DB_KEY);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error || new Error("读取IndexedDB快照失败"));
-  });
-}
-
-async function writeAppDataSnapshotToDb(snapshot) {
-  const db = await openAppDataDb();
-  if (!db) return false;
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(APP_DATA_DB_STORE, "readwrite");
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error || new Error("写入IndexedDB快照失败"));
-    tx.objectStore(APP_DATA_DB_STORE).put(snapshot, APP_DATA_DB_KEY);
-  });
-}
-
-function snapshotTime(snapshot) {
-  if (!isPlainObject(snapshot)) return 0;
-  const time = Date.parse(snapshot.savedAt || "");
-  return Number.isFinite(time) ? time : 0;
-}
-
 async function loadAppDataFromStorage() {
-  let localSnapshot = null;
-  if (typeof localStorage !== "undefined") {
-    const raw = localStorage.getItem(APP_DATA_STORAGE_KEY);
-    if (raw) {
-      try {
-        localSnapshot = JSON.parse(raw);
-      } catch (error) {
-        console.warn("读取localStorage业务快照失败。", error);
-      }
-    }
-  }
-
-  let dbSnapshot = null;
-  try {
-    dbSnapshot = await readAppDataSnapshotFromDb();
-  } catch (error) {
-    console.warn("读取IndexedDB业务快照失败。", error);
-  }
-
-  const selected = snapshotTime(dbSnapshot) > snapshotTime(localSnapshot) ? dbSnapshot : localSnapshot;
+  const selected = await appDataSnapshotStore.readLatestSnapshot({
+    onLocalReadError: (error) => console.warn("读取localStorage业务快照失败。", error),
+    onLocalParseError: (error) => console.warn("读取localStorage业务快照失败。", error),
+    onDbReadError: (error) => console.warn("读取IndexedDB业务快照失败。", error)
+  });
   if (!selected) return;
   const payload = migrateAppDataSnapshot(selected);
   applyAppDataPayload(payload);
@@ -1816,18 +1753,19 @@ function persistAppDataNow(options = {}) {
 
   if (shouldTryLocal) {
     localAttempted = true;
-    try {
-      localStorage.setItem(APP_DATA_STORAGE_KEY, JSON.stringify(snapshot));
-      localSucceeded = true;
+    localSucceeded = appDataSnapshotStore.writeLocalSnapshot(snapshot, {
+      onLocalWriteError: (error) => {
+        appDataStorageMode = "idb_only";
+        console.warn("localStorage容量不足，已切换IndexedDB持久化。", error);
+      }
+    });
+    if (localSucceeded) {
       lastLocalStoragePersistAt = Date.now();
-    } catch (error) {
-      appDataStorageMode = "idb_only";
-      console.warn("localStorage容量不足，已切换IndexedDB持久化。", error);
     }
   }
 
   const currentSeq = ++persistSequence;
-  void writeAppDataSnapshotToDb(snapshot)
+  void appDataSnapshotStore.writeDbSnapshot(snapshot)
     .then(() => {
       if (currentSeq !== persistSequence) return;
       storageWarningShown = false;
@@ -1843,7 +1781,7 @@ function persistAppDataNow(options = {}) {
 
   if (localSucceeded || !localAttempted) {
     storageWarningShown = false;
-  } else if (!supportsIndexedDb() && !storageWarningShown) {
+  } else if (!appDataSnapshotStore.supportsIndexedDb() && !storageWarningShown) {
     storageWarningShown = true;
     setTopMeta("浏览器不支持大容量本地存储，当前改动可能在刷新后丢失。");
   }
