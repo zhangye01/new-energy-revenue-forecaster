@@ -29,6 +29,7 @@ http://127.0.0.1:8000/index.html
 2. 字段含义：再读 [业务数据字典 V1](./BUSINESS_DATA_DICTIONARY_V1.md)。
 3. 代码入口：查 [模块地图](./ARCHITECTURE.md)。
 4. 验收口径：对照 [验收用例 V1](./BUSINESS_ACCEPTANCE_CASES_V1.md)。
+5. 工程门槛：确认 [工程化准入基线](./ENGINEERING_BASELINE.md) 和 [工程风险台账](./RISK_REGISTER.md)。
 
 ## 3. 改动类型与必须同步项
 
@@ -60,8 +61,11 @@ npm run check
 
 1. `node --check`：检查静态脚本语法。
 2. `npm test`：运行核心业务模块测试和黄金样例测试。
+3. `npm run check:architecture`：检查模块测试、脚本加载和 `app.js` 规模是否越界。
 
 如果只改文案或 README，也建议至少跑一次 `npm run check`，避免脚本顺序或全局变量引用被意外破坏。
+
+GitHub Actions 已配置同一套检查。推送到 `main` 或提交 PR 时，CI 必须通过后再合并或发布。
 
 ## 6. 发布到 GitHub Pages
 
@@ -84,3 +88,4 @@ https://zhangye01.github.io/new-energy-revenue-forecaster/
 - 浏览器本地保存数据，清缓存或换浏览器会影响项目数据可见性。
 - 演示登录不是生产鉴权，不应承载敏感数据或真实账号权限。
 
+完整风险列表维护在 [工程风险台账](./RISK_REGISTER.md)。风险状态变化时必须同步更新。
