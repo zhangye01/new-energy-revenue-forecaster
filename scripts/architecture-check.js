@@ -76,6 +76,18 @@ function assertStaticCheckIsRequired() {
   }
 }
 
+function assertReleaseCheckIsRequired() {
+  const packageJson = JSON.parse(readText("package.json"));
+  const releaseScript = packageJson.scripts?.["check:release"] || "";
+  const checkScript = packageJson.scripts?.check || "";
+  if (releaseScript !== "node scripts/release-check.js") {
+    fail("npm run check:release must use scripts/release-check.js");
+  }
+  if (!checkScript.includes("npm run check:release")) {
+    fail("npm run check must include npm run check:release");
+  }
+}
+
 function assertBrowserModulesAreLoaded() {
   const html = readText("index.html");
   const modules = [
@@ -105,6 +117,7 @@ function run() {
   assertModulesAreInSyntaxCheck();
   assertTestsUseDiscovery();
   assertStaticCheckIsRequired();
+  assertReleaseCheckIsRequired();
   assertBrowserModulesAreLoaded();
   assertSingleWorkflow();
   if (!process.exitCode) {

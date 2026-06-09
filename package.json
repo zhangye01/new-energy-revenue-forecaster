@@ -7,6 +7,7 @@
     "test": "node scripts/run-tests.js",
     "check:architecture": "node scripts/architecture-check.js",
     "check:static": "node scripts/static-check.js",
-    "check": "npm run check:syntax && npm test && npm run check:architecture && npm run check:static"
+    "check:release": "node scripts/release-check.js",
+    "check": "npm run check:syntax && npm test && npm run check:architecture && npm run check:static && npm run check:release"
   }
 }

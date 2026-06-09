@@ -17,7 +17,7 @@
 | CI 入口 | `.github/workflows/` 保持一个检查 workflow，避免重复跑同一套门禁 |
 | 业务公式 | 公式变更必须同步业务交接包、模型说明和自动测试 |
 | 页面流程 | 流程变更必须同步烟测清单 |
-| 发布风险 | 推送 GitHub 前必须确认没有本地运行痕迹、个人文件、密钥或临时输出 |
+| 发布风险 | `scripts/release-check.js` 必须拦截本地运行痕迹、个人文件、疑似密钥或临时输出 |
 
 ## 2. 分层规则
 
@@ -55,6 +55,7 @@ npm run check
 2. 业务模块和图表模块单元测试：`scripts/run-tests.js` 自动扫描 `tests/*.test.js`。
 3. 架构守护检查。
 4. 静态页面完整性检查：`scripts/static-check.js` 检查 `index.html` / `styles.css` 的本地资源引用、重复 id 和标题结构。
+5. 发布仓库卫生检查：`scripts/release-check.js` 检查被 Git 追踪的本地缓存、个人绝对路径和高置信度密钥格式。
 
 如果改动涉及页面交互，还需要按 [最小回归检查清单](./SMOKE_CHECKLIST.md) 做人工烟测或浏览器烟测。
 
