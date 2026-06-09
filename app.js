@@ -46,12 +46,13 @@ const energyDataRules = window.NE_ENERGY_DATA;
 const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
 const resultCharts = window.NE_RESULT_CHARTS;
+const scenarioCharts = window.NE_SCENARIO_CHARTS;
 const compareCharts = window.NE_COMPARE_CHARTS;
 const historyCharts = window.NE_HISTORY_CHARTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -5133,67 +5134,6 @@ function queueHistoryChartsRefresh() {
   }, 90);
 }
 
-function scenarioVisualThemeTokens() {
-  if (appState.theme === "dark") {
-    return {
-      axisText: "#b8cae1",
-      axisLine: "#4b617d",
-      splitLine: "rgba(118, 145, 176, 0.22)",
-      tooltipBg: "rgba(28, 40, 58, 0.96)",
-      tooltipBorder: "#4a6180",
-      positive: "#6aa8ff",
-      positiveSoft: "#8cc5ff",
-      negative: "#ef9b63",
-      negativeSoft: "#d7b083",
-      mechanism: "#4e90ff",
-      market: "#6fb18b",
-      trade: "#8b8df4",
-      env: "#70c690",
-      carbon: "#a58cff",
-      storage: "#c294ef",
-      other: "#6ec9c1"
-    };
-  }
-  if (appState.theme === "eye") {
-    return {
-      axisText: "#47604e",
-      axisLine: "#adc3af",
-      splitLine: "rgba(139, 168, 141, 0.24)",
-      tooltipBg: "rgba(245, 250, 239, 0.96)",
-      tooltipBorder: "#acc4ad",
-      positive: "#4a8e74",
-      positiveSoft: "#7eb79d",
-      negative: "#d58e4d",
-      negativeSoft: "#c7b06a",
-      mechanism: "#3f7cb0",
-      market: "#78a86e",
-      trade: "#8174b4",
-      env: "#5f9d79",
-      carbon: "#9a7fca",
-      storage: "#a27ab9",
-      other: "#5b988e"
-    };
-  }
-  return {
-    axisText: "#5b6f89",
-    axisLine: "#bfd0e4",
-    splitLine: "rgba(151, 170, 196, 0.24)",
-    tooltipBg: "rgba(255, 255, 255, 0.96)",
-    tooltipBorder: "#c9d8eb",
-    positive: "#56a36f",
-    positiveSoft: "#79b592",
-    negative: "#e08a4a",
-    negativeSoft: "#d9b07a",
-    mechanism: "#3d7ce0",
-    market: "#79b592",
-    trade: "#6f6bd9",
-    env: "#56a36f",
-    carbon: "#8a69c8",
-    storage: "#a36cc1",
-    other: "#3fa096"
-  };
-}
-
 function getScenarioVisualChartNode(key) {
   const nodeMap = {
     energy: refs.scenarioVisualEnergyChart,
@@ -5338,10 +5278,6 @@ function buildScenarioVisualRows(project, scenario) {
   });
 }
 
-function scenarioVisualYearInterval(rows, targetTicks = 8) {
-  return Math.max(0, Math.ceil((rows?.length || 0) / targetTicks) - 1);
-}
-
 function queueScenarioVisualResize() {
   if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
   window.requestAnimationFrame(() => {
@@ -5361,47 +5297,12 @@ function renderScenarioVisualPlaceholder(message) {
   }
 
   if (resolveVisiblePageId(appState.activePage) !== "scenario-page") return;
-  const tokens = scenarioVisualThemeTokens();
+  const tokens = scenarioCharts.buildScenarioVisualThemeTokens(appState.theme);
+  const option = scenarioCharts.buildScenarioVisualEmptyOption(message, tokens);
   getScenarioVisualCharts().forEach((chart) => {
     chart.clear();
-    chart.setOption({
-      animation: false,
-      xAxis: { show: false, type: "value" },
-      yAxis: { show: false, type: "category", data: [] },
-      series: [],
-      graphic: [{
-        type: "text",
-        left: "center",
-        top: "middle",
-        style: {
-          text: message,
-          fill: tokens.axisText,
-          fontSize: 14,
-          fontWeight: 600
-        }
-      }]
-    }, true);
+    chart.setOption(option, true);
   });
-}
-
-function scenarioVisualEmptyOption(message, tokens) {
-  return {
-    animation: false,
-    xAxis: { show: false, type: "value" },
-    yAxis: { show: false, type: "category", data: [] },
-    series: [],
-    graphic: [{
-      type: "text",
-      left: "center",
-      top: "middle",
-      style: {
-        text: message,
-        fill: tokens.axisText,
-        fontSize: 14,
-        fontWeight: 700
-      }
-    }]
-  };
 }
 
 function renderScenarioVisualization() {
@@ -5423,273 +5324,13 @@ function renderScenarioVisualization() {
   refs.scenarioVisualMessage.textContent = `当前展示：${scenario.name} | ${provinceName || "未选省份"} / ${getAssetTypeLabel(project.assetType)} / ${getSiteTypeLabel(project.siteType)} / ${getStorageConfigText(project)}`;
 
   if (resolveVisiblePageId(appState.activePage) !== "scenario-page") return;
-  const tokens = scenarioVisualThemeTokens();
-  const tooltipBase = {
-    backgroundColor: tokens.tooltipBg,
-    borderColor: tokens.tooltipBorder,
-    borderWidth: 1,
-    textStyle: { color: tokens.axisText }
-  };
-  const valueAxis = (name = "") => ({
-    type: "value",
-    name,
-    nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
-    axisLabel: { color: tokens.axisText },
-    axisLine: { lineStyle: { color: tokens.axisLine } },
-    splitLine: { lineStyle: { color: tokens.splitLine } }
-  });
-  const categoryAxis = (data) => ({
-    type: "category",
-    data,
-    axisLabel: { color: tokens.axisText },
-    axisLine: { lineStyle: { color: tokens.axisLine } },
-    axisTick: { show: false }
-  });
+  const tokens = scenarioCharts.buildScenarioVisualThemeTokens(appState.theme);
   const visualRows = buildScenarioVisualRows(project, scenario);
-  const yearLabels = visualRows.map((row) => row.yearLabel);
-  const yearInterval = scenarioVisualYearInterval(visualRows);
-  const categoryYearAxis = {
-    ...categoryAxis(yearLabels),
-    axisLabel: { color: tokens.axisText, interval: yearInterval, hideOverlap: true, fontSize: 11 }
-  };
-  const legendBase = {
-    top: 0,
-    itemWidth: 10,
-    itemHeight: 10,
-    textStyle: { color: tokens.axisText, fontWeight: 700 }
-  };
-  const axisTooltip = {
-    ...tooltipBase,
-    trigger: "axis",
-    axisPointer: { type: "shadow" }
-  };
-  const lineTooltip = {
-    ...tooltipBase,
-    trigger: "axis"
-  };
-
-  const energyChart = ensureScenarioVisualChart("energy");
-  if (energyChart) {
-    if (!visualRows.some((row) => row.energyMwh > 0)) {
-      energyChart.setOption(scenarioVisualEmptyOption("请先完成上网电量配置", tokens), true);
-    } else {
-      const hasActiveMechanismPrice = visualRows.some((row) => row.mechanismActive);
-      const mechanismYAxis = [
-        valueAxis("万MWh")
-      ];
-      if (hasActiveMechanismPrice) {
-        mechanismYAxis.push({
-          ...valueAxis("元/MWh"),
-          position: "right"
-        });
-      }
-      const mechanismSeries = [
-        {
-          name: "机制电量",
-          type: "bar",
-          stack: "energy",
-          barWidth: 18,
-          data: visualRows.map((row) => Number((row.mechanismEnergy / 10000).toFixed(4)))
-        },
-        {
-          name: "绿证电量",
-          type: "bar",
-          stack: "energy",
-          barWidth: 18,
-          data: visualRows.map((row) => Number((row.greenCertEnergy / 10000).toFixed(4)))
-        },
-        {
-          name: "绿电溢价电量",
-          type: "bar",
-          stack: "energy",
-          barWidth: 18,
-          data: visualRows.map((row) => Number((row.greenPremiumEnergy / 10000).toFixed(4)))
-        },
-        {
-          name: "碳收益电量",
-          type: "bar",
-          stack: "energy",
-          barWidth: 18,
-          data: visualRows.map((row) => Number((row.carbonEnergy / 10000).toFixed(4)))
-        },
-        {
-          name: "未兑现市场化电量",
-          type: "bar",
-          stack: "energy",
-          barWidth: 18,
-          data: visualRows.map((row) => Number((row.unredeemedMarketEnergy / 10000).toFixed(4)))
-        }
-      ];
-      if (hasActiveMechanismPrice) {
-        mechanismSeries.push({
-          name: "机制电价",
-          type: "line",
-          yAxisIndex: 1,
-          connectNulls: false,
-          smooth: false,
-          symbolSize: 6,
-          lineStyle: { width: 2.5, color: tokens.negative },
-          itemStyle: { color: tokens.negative },
-          data: visualRows.map((row) => (
-            row.mechanismActive ? Number(row.mechanismPrice.toFixed(4)) : null
-          ))
-        });
-      }
-      energyChart.setOption({
-        animationDuration: 360,
-        color: [tokens.mechanism, tokens.env, tokens.positiveSoft, tokens.carbon, tokens.market, tokens.negative],
-        grid: { top: 72, right: hasActiveMechanismPrice ? 72 : 28, bottom: 44, left: 58, containLabel: true },
-        legend: legendBase,
-        tooltip: {
-          ...axisTooltip,
-          formatter: (params) => {
-            const items = Array.isArray(params) ? params : [params];
-            const yearText = items[0]?.axisValueLabel || items[0]?.axisValue || "";
-            const lines = [`${escapeHtml(String(yearText))}年`];
-            const row = visualRows[Number(items[0]?.dataIndex)] || null;
-            if (row) {
-              lines.push(`市场化交易电量合计：${asNum(row.marketEnergy, 0)} MWh`);
-            }
-            items.forEach((item) => {
-              if (item.value === null || item.value === undefined || item.value === "-") return;
-              const value = Number(item.value);
-              if (!Number.isFinite(value)) return;
-              let unit = "万MWh";
-              let digits = 2;
-              if (item.seriesName === "机制电价") {
-                unit = "元/MWh";
-                digits = 1;
-              }
-              const displayValue = unit === "万MWh" ? value * 10000 : value;
-              const displayUnit = unit === "万MWh" ? "MWh" : unit;
-              const displayDigits = unit === "万MWh" ? 0 : digits;
-              lines.push(`${item.marker}${escapeHtml(item.seriesName)}：${asNum(displayValue, displayDigits)} ${displayUnit}`);
-            });
-            return lines.join("<br/>");
-          }
-        },
-        xAxis: categoryYearAxis,
-        yAxis: mechanismYAxis,
-        series: mechanismSeries
-      }, true);
-    }
-  }
-
-  const unitChart = ensureScenarioVisualChart("unit");
-  if (unitChart) {
-    const impactAreaSeries = [
-      {
-        name: "交易策略",
-        data: visualRows.map((row) => Number(row.tradeImpact.toFixed(4))),
-        color: tokens.trade
-      },
-      {
-        name: "环境价值",
-        data: visualRows.map((row) => Number(row.envImpact.toFixed(4))),
-        color: tokens.env
-      },
-      {
-        name: "配储收益",
-        data: visualRows.map((row) => Number(row.storageImpact.toFixed(4))),
-        color: tokens.storage
-      },
-      {
-        name: "其他收入",
-        data: visualRows.map((row) => Number(row.otherIncomeImpact.toFixed(4))),
-        color: tokens.other
-      },
-      {
-        name: "综合费用",
-        data: visualRows.map((row) => Number(row.feeImpact.toFixed(4))),
-        color: tokens.negative
-      }
-    ];
-    unitChart.setOption({
-      animationDuration: 360,
-      color: impactAreaSeries.map((item) => item.color).concat(tokens.mechanism),
-      grid: { top: 58, right: 28, bottom: 44, left: 56, containLabel: true },
-      legend: legendBase,
-      tooltip: {
-        ...lineTooltip,
-        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 元/MWh`
-      },
-      xAxis: categoryYearAxis,
-      yAxis: valueAxis("元/MWh"),
-      series: [
-        ...impactAreaSeries.map((item) => ({
-          name: item.name,
-          type: "line",
-          stack: "annualImpact",
-          smooth: true,
-          symbol: "none",
-          lineStyle: { width: 1.8, color: item.color },
-          itemStyle: { color: item.color },
-          areaStyle: { opacity: 0.5, color: item.color },
-          data: item.data
-        })),
-        {
-          name: "净影响",
-          type: "line",
-          smooth: true,
-          symbolSize: 5,
-          lineStyle: { width: 3, color: tokens.mechanism },
-          itemStyle: { color: tokens.mechanism },
-          data: visualRows.map((row) => Number(row.netImpact.toFixed(4)))
-        }
-      ]
-    }, true);
-  }
-
-  const trendChart = ensureScenarioVisualChart("trend");
-  if (trendChart) {
-    const trendSeries = [
-      {
-        name: "交易策略损益",
-        data: visualRows.map((row) => Number(row.ltPnlPrice.toFixed(4))),
-        color: tokens.trade
-      },
-      {
-        name: "环境价值度电收益",
-        data: visualRows.map((row) => Number(row.envUnitValue.toFixed(4))),
-        color: tokens.env
-      },
-      {
-        name: "综合费用",
-        data: visualRows.map((row) => Number(row.feeTotal.toFixed(4))),
-        color: tokens.negative
-      },
-      {
-        name: "配储补充收益",
-        data: visualRows.map((row) => Number(row.storageSupplementPerMwh.toFixed(4))),
-        color: tokens.storage
-      },
-      {
-        name: "其他收入",
-        data: visualRows.map((row) => Number(row.otherIncomeImpact.toFixed(4))),
-        color: tokens.other
-      }
-    ];
-    trendChart.setOption({
-      animationDuration: 360,
-      grid: { top: 54, right: 28, bottom: 44, left: 56, containLabel: true },
-      legend: legendBase,
-      tooltip: {
-        ...lineTooltip,
-        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 元/MWh`
-      },
-      xAxis: categoryYearAxis,
-      yAxis: valueAxis("元/MWh"),
-      series: trendSeries.map((item) => ({
-        name: item.name,
-        type: "line",
-        smooth: true,
-        symbolSize: 5,
-        lineStyle: { width: 2.5, color: item.color },
-        itemStyle: { color: item.color },
-        data: item.data
-      }))
-    }, true);
-  }
+  const options = scenarioCharts.buildScenarioVisualOptions(visualRows, tokens);
+  Object.entries(options).forEach(([key, option]) => {
+    const chart = ensureScenarioVisualChart(key);
+    if (chart) chart.setOption(option, true);
+  });
   queueScenarioVisualResize();
 }
 
@@ -7388,7 +7029,7 @@ function renderResultCharts(project, scenario, result) {
   const tokens = resultChartTokens();
   const chartData = resultReport.buildResultChartData(result, scenario?.config || {});
   const options = resultCharts.buildResultChartOptions(chartData, tokens, {
-    yearInterval: scenarioVisualYearInterval(rows)
+    yearInterval: scenarioCharts.scenarioVisualYearInterval(rows)
   });
   Object.entries(options).forEach(([key, option]) => {
     const chart = ensureResultChart(key);
