@@ -5,10 +5,12 @@
 ## 推荐阅读顺序
 
 1. [业务交接包 V1](./BUSINESS_HANDOFF_V1.md)：冻结 V1 范围、核心对象、公式和流程状态规则。
-2. [模型说明](./MODEL_SPEC.md)：说明全口径收入预测模型边界、收入分项和字段建议。
-3. [业务数据字典 V1](./BUSINESS_DATA_DICTIONARY_V1.md)：约定项目、场景、结果等核心字段。
-4. [验收用例 V1](./BUSINESS_ACCEPTANCE_CASES_V1.md)：定义 P0/P1/P2 业务验收用例。
-5. [最小回归检查清单](./SMOKE_CHECKLIST.md)：用于每次 UI 或逻辑改动后的 3-5 分钟人工烟测。
+2. [开发交接 SOP](./DEVELOPER_HANDOFF.md)：说明本地启动、测试、发布和改动同步规则。
+3. [模块地图](./ARCHITECTURE.md)：说明当前代码分层、业务模块责任和后续拆分方向。
+4. [模型说明](./MODEL_SPEC.md)：说明全口径收入预测模型边界、收入分项和字段建议。
+5. [业务数据字典 V1](./BUSINESS_DATA_DICTIONARY_V1.md)：约定项目、场景、结果等核心字段。
+6. [验收用例 V1](./BUSINESS_ACCEPTANCE_CASES_V1.md)：定义 P0/P1/P2 业务验收用例。
+7. [最小回归检查清单](./SMOKE_CHECKLIST.md)：用于每次 UI 或逻辑改动后的 3-5 分钟人工烟测。
 
 ## 工程约定
 

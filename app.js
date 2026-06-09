@@ -44,8 +44,9 @@ const projectSettings = window.NE_PROJECT_SETTINGS;
 const projectModel = window.NE_PROJECT_MODEL;
 const energyDataRules = window.NE_ENERGY_DATA;
 const csvUtils = window.NE_CSV_UTILS;
+const exportBuilders = window.NE_EXPORT_BUILDERS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -8874,11 +8875,11 @@ function downloadCsv(filename, rows) {
 }
 
 function sanitizeExportFilenamePart(value) {
-  return csvUtils.sanitizeExportFilenamePart(value);
+  return exportBuilders.sanitizeExportFilenamePart(value);
 }
 
 function buildLtManualTemplateFilename(project, scenario) {
-  return `${sanitizeExportFilenamePart(project?.name || "项目")}-${sanitizeExportFilenamePart(scenario?.name || "场景")}-交易策略逐年损益模板.csv`;
+  return exportBuilders.buildLtManualTemplateFilename(project, scenario);
 }
 
 function buildLtManualTemplateRows(project) {
@@ -8951,7 +8952,7 @@ async function importLtManualTemplate() {
 }
 
 function buildEnvManualTemplateFilename(project, scenario) {
-  return `${sanitizeExportFilenamePart(project?.name || "项目")}-${sanitizeExportFilenamePart(scenario?.name || "场景")}-环境价值逐年兑现模板.csv`;
+  return exportBuilders.buildEnvManualTemplateFilename(project, scenario);
 }
 
 function buildEnvManualTemplateRows(project) {
@@ -9024,7 +9025,7 @@ async function importEnvManualTemplate() {
 }
 
 function buildFeeManualTemplateFilename(project, scenario) {
-  return `${sanitizeExportFilenamePart(project?.name || "项目")}-${sanitizeExportFilenamePart(scenario?.name || "场景")}-逐年扣费收益模板.csv`;
+  return exportBuilders.buildFeeManualTemplateFilename(project, scenario);
 }
 
 function buildFeeManualTemplateRows(project) {
@@ -9138,26 +9139,10 @@ function exportAnnualCsv() {
   const scenario = getActiveScenario(project);
   const result = project.resultsByScenario[scenario?.id || ""];
   if (!result) return;
-  const rows = [
-    ["year", "annual_hours_h", "energy_mwh", "spot_avg_price", "capture_price", "spot_revenue", "mechanism_revenue", "lt_pnl_revenue", "env_revenue", "storage_supplement_revenue", "comprehensive_fee", "other_income", "full_revenue", "full_revenue_price"],
-    ...result.annualRows.map((row) => [
-      row.year,
-      row.annualHours.toFixed(6),
-      row.energyMwh.toFixed(6),
-      row.spotAvgPrice.toFixed(6),
-      row.capturePrice.toFixed(6),
-      row.spotRevenue.toFixed(2),
-      row.mechanismRevenue.toFixed(2),
-      row.ltPnlRevenue.toFixed(2),
-      row.envRevenue.toFixed(2),
-      row.storageSupplementRevenue.toFixed(2),
-      row.comprehensiveFee.toFixed(2),
-      row.otherIncome.toFixed(2),
-      row.fullRevenue.toFixed(2),
-      row.fullRevenuePrice.toFixed(6)
-    ])
-  ];
-  downloadCsv(`${project.name}-${scenario.name}-年度收入.csv`, rows);
+  downloadCsv(
+    exportBuilders.buildAnnualResultExportFilename(project, scenario),
+    exportBuilders.buildAnnualResultExportRows(result)
+  );
 }
 
 function exportHourlyCsv() {
@@ -9166,18 +9151,10 @@ function exportHourlyCsv() {
   const scenario = getActiveScenario(project);
   const result = project.resultsByScenario[scenario?.id || ""];
   if (!result) return;
-  const rows = [
-    ["time", "equivalent_hours_h", "energy_mwh", "spot_price_yuan_per_mwh", "spot_revenue", "full_revenue"],
-    ...result.hourlyPreview.map((row) => [
-      row.time,
-      row.equivalentHours.toFixed(6),
-      row.energyMwh.toFixed(6),
-      row.spotPrice.toFixed(6),
-      row.spotRevenue.toFixed(2),
-      row.fullRevenue.toFixed(2)
-    ])
-  ];
-  downloadCsv(`${project.name}-${scenario.name}-首年8760小时明细.csv`, rows);
+  downloadCsv(
+    exportBuilders.buildHourlyResultExportFilename(project, scenario),
+    exportBuilders.buildHourlyResultExportRows(result)
+  );
 }
 
 function printScenarioReport() {
