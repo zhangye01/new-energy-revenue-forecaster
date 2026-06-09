@@ -4,7 +4,10 @@ const assert = require("node:assert/strict");
 const {
   buildHistorySelectedAnalysis,
   buildHistoryYearSlice,
+  buildMockHistorySpotAnalysisDataset,
   createHistoryTypicalAccumulator,
+  dayModeMatchesMonth,
+  historyCacheKey,
   percentileSorted,
   pushHistoryTypical,
   resolveHistoryDateRange,
@@ -130,5 +133,41 @@ const selectedByRange = selectHistoryYearsByDateRange({
   ]
 }, range);
 assert.deepEqual(selectedByRange.map((item) => item.year), [2026]);
+
+assert.equal(dayModeMatchesMonth("summer", 7), true);
+assert.equal(dayModeMatchesMonth("summer", 1), false);
+assert.equal(dayModeMatchesMonth("winter", 12), true);
+assert.equal(dayModeMatchesMonth("annual", 4), true);
+
+const mockProject = {
+  id: "proj-a",
+  province: "jiangsu",
+  capacityMw: 64,
+  startYear: 2026,
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: true,
+  storagePowerMw: 32,
+  storageDurationH: 2
+};
+assert.equal(historyCacheKey(mockProject), "proj-a|jiangsu|64|2026|wind|offshore|storage|32|2");
+const cache = new Map();
+const mockDataset = buildMockHistorySpotAnalysisDataset(mockProject, {
+  provinceBenchmarks: { jiangsu: { historyPrice: 365 } },
+  cache
+});
+assert.equal(mockDataset.sourceType, "database");
+assert.equal(mockDataset.mock, true);
+assert.equal(mockDataset.startYear, 2018);
+assert.equal(mockDataset.endYear, 2025);
+assert.equal(mockDataset.years.length, 8);
+assert.equal(mockDataset.years[0].values.length, 365 * 96);
+assert.equal(mockDataset.years[0].monthValues.length, 12);
+assert.equal(mockDataset.years[0].hourlySumsByMonth[0].length, 24);
+assert.equal(cache.get(historyCacheKey(mockProject)), mockDataset);
+assert.equal(buildMockHistorySpotAnalysisDataset(mockProject, {
+  provinceBenchmarks: { jiangsu: { historyPrice: 365 } },
+  cache
+}), mockDataset);
 
 console.log("history analysis tests passed");

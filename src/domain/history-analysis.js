@@ -4,10 +4,13 @@
   const energyProfiles = typeof module !== "undefined" && module.exports
     ? require("./energy-profiles")
     : root.NE_ENERGY_PROFILES;
+  const priceForecast = typeof module !== "undefined" && module.exports
+    ? require("./price-forecast")
+    : root.NE_PRICE_FORECAST;
   const appUtils = typeof module !== "undefined" && module.exports
     ? require("./app-utils")
     : root.NE_APP_UTILS;
-  const api = factory(energyProfiles, appUtils);
+  const api = factory(energyProfiles, priceForecast, appUtils);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -15,9 +18,9 @@
   if (root.window && root.window !== root) {
     root.window.NE_HISTORY_ANALYSIS = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (energyProfiles, appUtils) {
-  if (!energyProfiles || !appUtils) {
-    throw new Error("历史电价分析模块初始化失败：缺少电量曲线或应用工具模块");
+})(typeof globalThis !== "undefined" ? globalThis : window, function (energyProfiles, priceForecast, appUtils) {
+  if (!energyProfiles || !priceForecast || !appUtils) {
+    throw new Error("历史电价分析模块初始化失败：缺少电量曲线、电价预测或应用工具模块");
   }
 
   const HISTORY_MONTH_LABELS = Object.freeze(["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]);
@@ -81,6 +84,146 @@
     const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
     const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length;
     return Math.sqrt(Math.max(variance, 0));
+  }
+
+  function dayModeMatchesMonth(mode, month) {
+    if (mode === "summer") return month >= 6 && month <= 8;
+    if (mode === "winter") return month === 12 || month <= 2;
+    return true;
+  }
+
+  function historyCacheKey(project) {
+    return [
+      project.id,
+      project.province,
+      project.capacityMw,
+      project.startYear,
+      project.assetType,
+      project.siteType,
+      project.hasStorage ? "storage" : "plain",
+      project.storagePowerMw || 0,
+      project.storageDurationH || 0
+    ].join("|");
+  }
+
+  function trimHistoryCache(cache, maxSize = 24) {
+    if (!cache || typeof cache.size !== "number" || cache.size <= maxSize) return;
+    const firstKey = cache.keys().next().value;
+    if (firstKey) cache.delete(firstKey);
+  }
+
+  function buildMockHistorySpotAnalysisDataset(project, options = {}) {
+    const cache = options.cache;
+    const cacheKey = historyCacheKey(project);
+    if (cache?.has(cacheKey)) {
+      return cache.get(cacheKey);
+    }
+    const factors = priceForecast.getHistoryMockShapeFactors(project);
+    const base = priceForecast.getPriceBaseForProvince(project.province, options.provinceBenchmarks || {}) + factors.baseShift;
+    const endYear = project.startYear - 1;
+    const startYear = endYear - 7;
+    const seedBase = Math.round((project.capacityMw || 0) * 10)
+      + project.startYear * 7
+      + (project.siteType === "offshore" ? 211 : 109)
+      + (project.assetType === "photovoltaic" ? 307 : 173)
+      + (project.hasStorage ? 419 : 0);
+    const years = [];
+
+    for (let year = startYear; year <= endYear; year += 1) {
+      const monthlySums = Array(12).fill(0);
+      const monthlyCounts = Array(12).fill(0);
+      const monthValues = Array.from({ length: 12 }, () => []);
+      const hourlySumsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
+      const hourlyCountsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
+      const typical = {
+        annual: createHistoryTypicalAccumulator(),
+        summer: createHistoryTypicalAccumulator(),
+        winter: createHistoryTypicalAccumulator()
+      };
+      const values = [];
+
+      for (let day = 1; day <= 365; day += 1) {
+        const { month, day: dayOfMonth } = energyProfiles.dayOfYearToMonthDay(day);
+        const monthIndex = month - 1;
+        const dayIndex = day - 1;
+        const dayOfWeek = new Date(Date.UTC(year, monthIndex, dayOfMonth)).getUTCDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const winterLoad = 0.18 * Math.cos(((dayIndex - 12) / 365) * 2 * Math.PI) * factors.winterScale;
+        const summerLoad = 0.16 * Math.cos(((dayIndex - 196) / 365) * 2 * Math.PI) * factors.summerScale;
+        const seasonal = 1 + winterLoad + summerLoad;
+        const yearFactor = 0.92 + ((year - startYear) / 7) * (0.16 * factors.yearVolatility);
+
+        for (let quarter = 0; quarter < 96; quarter += 1) {
+          const hour = quarter / 4;
+          const morningPeak = Math.exp(-Math.pow((hour - 8.5) / 2.2, 2));
+          const eveningPeak = 1.22 * Math.exp(-Math.pow((hour - 18.4) / 2.9, 2));
+          const noonValley = 0.13 * Math.exp(-Math.pow((hour - 13.2) / 2.4, 2));
+          const nightValley = 0.07 * Math.exp(-Math.pow((hour - 3.2) / 2.8, 2));
+          const storageShift = factors.storageScale;
+          const diurnal = 0.9
+            + factors.morningPeakWeight * morningPeak
+            + factors.eveningPeakWeight * eveningPeak
+            - (factors.noonValleyWeight - storageShift * 0.05) * noonValley
+            - factors.nightValleyWeight * nightValley;
+          const weekendFactor = isWeekend ? factors.weekendLevel : 1;
+          const randomFactor = 1 + (energyProfiles.pseudoNoise(dayIndex * 97 + quarter, seedBase + year) - 0.5) * factors.noiseAmplitude;
+          let price = base * yearFactor * seasonal * diurnal * weekendFactor * randomFactor;
+
+          const spikeSeed = energyProfiles.pseudoNoise(dayIndex * 53 + quarter, seedBase + year + 37);
+          if (spikeSeed > factors.spikeThreshold) {
+            price *= 1.38 + (spikeSeed - factors.spikeThreshold) * 26 * factors.spikeScale;
+          }
+          const negativeSeed = energyProfiles.pseudoNoise(dayIndex * 31 + quarter, seedBase + year + 73);
+          if (
+            hour >= 10.5 && hour <= 15.5
+            && (month === 4 || month === 5 || month === 10 || (project.assetType === "photovoltaic" && month === 9))
+            && negativeSeed > factors.negativeThreshold
+          ) {
+            price = -5 - 85 * energyProfiles.pseudoNoise(dayIndex * 43 + quarter, seedBase + year + 91) * factors.negativeScale;
+          }
+          price = clamp(price, -120, 880);
+
+          const hourSlot = Math.floor(quarter / 4);
+          values.push(price);
+          monthlySums[monthIndex] += price;
+          monthlyCounts[monthIndex] += 1;
+          monthValues[monthIndex].push(price);
+          hourlySumsByMonth[monthIndex][hourSlot] += price;
+          hourlyCountsByMonth[monthIndex][hourSlot] += 1;
+
+          pushHistoryTypical(typical.annual, isWeekend, quarter, price);
+          if (dayModeMatchesMonth("summer", month)) {
+            pushHistoryTypical(typical.summer, isWeekend, quarter, price);
+          }
+          if (dayModeMatchesMonth("winter", month)) {
+            pushHistoryTypical(typical.winter, isWeekend, quarter, price);
+          }
+        }
+      }
+
+      years.push({
+        year,
+        values,
+        monthValues,
+        monthlyAvg: monthlySums.map((sum, idx) => (monthlyCounts[idx] ? sum / monthlyCounts[idx] : null)),
+        hourlySumsByMonth,
+        hourlyCountsByMonth,
+        typical
+      });
+    }
+
+    const payload = {
+      sourceType: "database",
+      mock: true,
+      startYear,
+      endYear,
+      years
+    };
+    if (cache) {
+      cache.set(cacheKey, payload);
+      trimHistoryCache(cache, options.maxCacheSize || 24);
+    }
+    return payload;
   }
 
   function resolveHistoryDateRange(controls, dataset) {
@@ -346,6 +489,9 @@
     mergeHistoryTypical,
     percentileSorted,
     stddev,
+    dayModeMatchesMonth,
+    historyCacheKey,
+    buildMockHistorySpotAnalysisDataset,
     resolveHistoryDateRange,
     buildHistoryYearSlice,
     selectHistoryYearsByDateRange,

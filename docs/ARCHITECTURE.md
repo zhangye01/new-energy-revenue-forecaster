@@ -31,7 +31,7 @@
 | `revenue-calculator.js` | 场景全口径收入主计算 |
 | `result-report.js` | 基准结果总览的数据摘要和图表数据 |
 | `compare-analysis.js` | 多方案对比和敏感性分析数据 |
-| `history-analysis.js` | 历史电价日期范围切片、统计、典型日、热力图、分布和导出数据 |
+| `history-analysis.js` | 历史电价模拟样本、日期范围切片、统计、典型日、热力图、分布和导出数据 |
 | `workflow-status.js` | 流程状态和缺失项判断 |
 | `scenario-config.js` | 场景配置清洗、逐年 CSV 模板和导入校验 |
 | `scenario-model.js` | 场景默认值、复制、重命名、基准锁定规则 |
