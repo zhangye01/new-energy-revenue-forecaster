@@ -45,8 +45,9 @@ const projectModel = window.NE_PROJECT_MODEL;
 const energyDataRules = window.NE_ENERGY_DATA;
 const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
+const resultCharts = window.NE_RESULT_CHARTS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -8252,18 +8253,7 @@ function setResultReportView(view) {
 }
 
 function resultChartTokens() {
-  const tokens = compareThemeTokens();
-  return {
-    ...tokens,
-    spot: tokens.primary,
-    mechanism: tokens.baseline,
-    trade: "#7569d8",
-    env: tokens.tertiary,
-    storage: "#a36cc1",
-    other: tokens.secondary,
-    fee: tokens.negative,
-    net: tokens.primary
-  };
+  return resultCharts.buildResultChartTokens(compareThemeTokens());
 }
 
 function getResultChartNode(key) {
@@ -8308,27 +8298,12 @@ function queueResultChartsResize() {
 function renderResultChartsPlaceholder(message) {
   if (resolveVisiblePageId(appState.activePage) !== "results-page") return;
   const tokens = resultChartTokens();
+  const option = resultCharts.buildResultPlaceholderOption(message, tokens);
   ["annualStack", "pricePath", "waterfall", "contribution"].forEach((key) => {
     const chart = ensureResultChart(key);
     if (!chart) return;
     chart.clear();
-    chart.setOption({
-      animation: false,
-      xAxis: { show: false, type: "value" },
-      yAxis: { show: false, type: "category", data: [] },
-      series: [],
-      graphic: [{
-        type: "text",
-        left: "center",
-        top: "middle",
-        style: {
-          text: message,
-          fill: tokens.axisText,
-          fontSize: 14,
-          fontWeight: 700
-        }
-      }]
-    }, true);
+    chart.setOption(option, true);
   });
 }
 
@@ -8341,195 +8316,14 @@ function renderResultCharts(project, scenario, result) {
   }
 
   const tokens = resultChartTokens();
-  const years = rows.map((row) => String(row.year));
   const chartData = resultReport.buildResultChartData(result, scenario?.config || {});
-  const axisLabel = { color: tokens.axisText };
-  const splitLine = { lineStyle: { color: tokens.splitLine } };
-  const axisLine = { lineStyle: { color: tokens.axisLine } };
-  const tooltip = {
-    trigger: "axis",
-    backgroundColor: tokens.tooltipBg,
-    borderColor: tokens.tooltipBorder,
-    borderWidth: 1,
-    textStyle: { color: tokens.axisText }
-  };
-  const legend = {
-    top: 0,
-    itemWidth: 10,
-    itemHeight: 10,
-    textStyle: { color: tokens.legendText, fontWeight: 700 }
-  };
-
-  const annualChart = ensureResultChart("annualStack");
-  if (annualChart) {
-    const componentSeries = chartData.annualComponents;
-    annualChart.setOption({
-      animationDuration: 360,
-      color: componentSeries.map((item) => tokens[item.colorKey] || tokens.primary).concat(tokens.net),
-      grid: { top: 64, left: 58, right: 34, bottom: 46, containLabel: true },
-      legend,
-      tooltip: {
-        ...tooltip,
-        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 万元`
-      },
-      xAxis: {
-        type: "category",
-        data: years,
-        axisLabel: { ...axisLabel, interval: scenarioVisualYearInterval(rows), hideOverlap: true },
-        axisLine,
-        axisTick: { show: false }
-      },
-      yAxis: {
-        type: "value",
-        name: "万元",
-        nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
-        axisLabel,
-        axisLine,
-        splitLine
-      },
-      series: [
-        ...componentSeries.map((item) => ({
-          name: item.name,
-          type: "bar",
-          stack: "revenue",
-          barWidth: 18,
-          itemStyle: { color: tokens[item.colorKey] || tokens.primary },
-          data: item.data
-        })),
-        {
-          name: chartData.annualNet.name,
-          type: "line",
-          smooth: true,
-          symbolSize: 6,
-          lineStyle: { width: 3, color: tokens.net },
-          itemStyle: { color: tokens.net },
-          data: chartData.annualNet.data
-        }
-      ]
-    }, true);
-  }
-
-  const priceChart = ensureResultChart("pricePath");
-  if (priceChart) {
-    const priceSeries = chartData.priceSeries;
-    priceChart.setOption({
-      animationDuration: 360,
-      grid: { top: 54, left: 58, right: 28, bottom: 46, containLabel: true },
-      legend,
-      tooltip: {
-        ...tooltip,
-        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 元/MWh`
-      },
-      xAxis: {
-        type: "category",
-        data: years,
-        axisLabel: { ...axisLabel, interval: scenarioVisualYearInterval(rows), hideOverlap: true },
-        axisLine,
-        axisTick: { show: false }
-      },
-      yAxis: {
-        type: "value",
-        name: "元/MWh",
-        nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
-        axisLabel,
-        axisLine,
-        splitLine
-      },
-      series: priceSeries.map((item) => ({
-        name: item.name,
-        type: "line",
-        smooth: true,
-        connectNulls: false,
-        symbolSize: 5,
-        lineStyle: { width: 2.6, color: tokens[item.colorKey] || tokens.primary },
-        itemStyle: { color: tokens[item.colorKey] || tokens.primary },
-        data: item.data
-      }))
-    }, true);
-  }
-
-  const waterfallChart = ensureResultChart("waterfall");
-  const first = rows[0];
-  if (waterfallChart && first) {
-    const bridgeItems = chartData.firstYearBridgeItems;
-    waterfallChart.setOption({
-      animationDuration: 360,
-      grid: { top: 34, left: 56, right: 22, bottom: 66, containLabel: true },
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: tokens.tooltipBg,
-        borderColor: tokens.tooltipBorder,
-        borderWidth: 1,
-        textStyle: { color: tokens.axisText },
-        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 元/MWh`
-      },
-      xAxis: {
-        type: "category",
-        data: bridgeItems.map((item) => item.label),
-        axisLabel: { ...axisLabel, interval: 0, rotate: 28 },
-        axisLine,
-        axisTick: { show: false }
-      },
-      yAxis: {
-        type: "value",
-        name: "元/MWh",
-        nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
-        axisLabel,
-        axisLine,
-        splitLine
-      },
-      series: [{
-        name: "度电影响",
-        type: "bar",
-        barWidth: 20,
-        data: bridgeItems.map((item) => ({
-          value: item.value,
-          itemStyle: { color: tokens[item.colorKey] || tokens.primary }
-        }))
-      }]
-    }, true);
-  }
-
-  const contributionChart = ensureResultChart("contribution");
-  if (contributionChart) {
-    const contributionItems = chartData.contributionItems;
-    contributionChart.setOption({
-      animationDuration: 360,
-      grid: { top: 22, left: 112, right: 28, bottom: 34, containLabel: true },
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: tokens.tooltipBg,
-        borderColor: tokens.tooltipBorder,
-        borderWidth: 1,
-        textStyle: { color: tokens.axisText },
-        valueFormatter: (value) => `${asNum(Number(value || 0), 2)} 万元`
-      },
-      xAxis: {
-        type: "value",
-        name: "万元",
-        nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
-        axisLabel,
-        axisLine,
-        splitLine
-      },
-      yAxis: {
-        type: "category",
-        data: contributionItems.map((item) => item.label),
-        axisLabel,
-        axisLine,
-        axisTick: { show: false }
-      },
-      series: [{
-        name: "累计贡献",
-        type: "bar",
-        barWidth: 16,
-        data: contributionItems.map((item) => ({
-          value: item.valueWan,
-          itemStyle: { color: tokens[item.colorKey] || tokens.primary }
-        }))
-      }]
-    }, true);
-  }
+  const options = resultCharts.buildResultChartOptions(chartData, tokens, {
+    yearInterval: scenarioVisualYearInterval(rows)
+  });
+  Object.entries(options).forEach(([key, option]) => {
+    const chart = ensureResultChart(key);
+    if (chart) chart.setOption(option, true);
+  });
 
   queueResultChartsResize();
 }
