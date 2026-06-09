@@ -25,6 +25,7 @@
 | `export-builders.js` | CSV 导出文件名、年度结果和小时明细导出行构造 |
 | `energy-profiles.js` | 年总小时拆分、典型曲线归一化、逐年电量扩展 |
 | `energy-data.js` | 电量导入模板校验、模式识别、电量状态重建 |
+| `app-utils.js` | 页面主控共用的格式化、转义、日期裁剪、对象判断和基础工具函数 |
 | `price-forecast.js` | 三模型模拟现货电价、预测质量校核 |
 | `revenue-rules.js` | 机制月份、交易策略收敛、环境价值、综合费用规则 |
 | `revenue-calculator.js` | 场景全口径收入主计算 |

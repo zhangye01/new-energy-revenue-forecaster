@@ -49,10 +49,29 @@ const resultCharts = window.NE_RESULT_CHARTS;
 const compareCharts = window.NE_COMPARE_CHARTS;
 const historyCharts = window.NE_HISTORY_CHARTS;
 const appStorage = window.NE_APP_STORAGE;
+const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts || !compareCharts || !historyCharts || !appStorage) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
+
+const {
+  makeId,
+  cloneData,
+  clamp,
+  asMoney,
+  asCompactMoney,
+  asNum,
+  asPercent,
+  escapeHtml,
+  isPlainObject,
+  hasNonEmptyObject,
+  isIsoDateString,
+  makeIsoDate,
+  compareIsoDate,
+  clampIsoDate,
+  noLeapDayOfYear
+} = appUtils;
 
 const APP_DATA_STORAGE_KEY = "ne_app_data_v1";
 const APP_DATA_VERSION = 1;
@@ -1222,51 +1241,6 @@ function toggleTheme() {
   });
 }
 
-function makeId(prefix) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function cloneData(value) {
-  if (typeof structuredClone === "function") {
-    return structuredClone(value);
-  }
-  return JSON.parse(JSON.stringify(value));
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function asMoney(value) {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: "CNY",
-    maximumFractionDigits: 0
-  }).format(value);
-}
-
-function asCompactMoney(value) {
-  const abs = Math.abs(value);
-  if (abs >= 100000000) return `${(value / 100000000).toFixed(2)} 亿元`;
-  if (abs >= 10000) return `${(value / 10000).toFixed(1)} 万元`;
-  return asMoney(value);
-}
-
-function asNum(value, digits = 1) {
-  return Number(value).toFixed(digits);
-}
-
-function asPercent(value) {
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function escapeHtml(text) {
-  return String(text)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
 function dayOfYearToMonthDay(dayOfYear) {
   return energyProfiles.dayOfYearToMonthDay(dayOfYear);
 }
@@ -1289,23 +1263,6 @@ function createEmptyHistorySpotImport() {
 function createDefaultSpotMarketConfig(project = null) {
   const activeRun = project ? getActiveRun(project) : null;
   return projectSettings.createDefaultSpotMarketConfig(activeRun);
-}
-
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function hasNonEmptyObject(value) {
-  if (!isPlainObject(value)) return false;
-  return Object.keys(value).some((key) => {
-    const item = value[key];
-    if (item === null || item === undefined) return false;
-    if (typeof item === "string") return item.trim() !== "";
-    if (typeof item === "number") return Number.isFinite(item);
-    if (Array.isArray(item)) return item.length > 0;
-    if (isPlainObject(item)) return Object.keys(item).length > 0;
-    return Boolean(item);
-  });
 }
 
 function isHistoryDatasetUsable(dataset) {
@@ -1344,34 +1301,6 @@ function resetPolicyFiltersToDefault() {
 
 function sanitizeHistoryAnalysis(raw) {
   return projectSettings.sanitizeHistoryAnalysis(raw);
-}
-
-function isIsoDateString(value) {
-  return projectSettings.isIsoDateString(value);
-}
-
-function makeIsoDate(year, month = 1, day = 1) {
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function compareIsoDate(a, b) {
-  return String(a || "").localeCompare(String(b || ""));
-}
-
-function clampIsoDate(value, minDate, maxDate) {
-  if (!isIsoDateString(value)) return "";
-  if (compareIsoDate(value, minDate) < 0) return minDate;
-  if (compareIsoDate(value, maxDate) > 0) return maxDate;
-  return value;
-}
-
-function noLeapDayOfYear(isoDate) {
-  if (!isIsoDateString(isoDate)) return 1;
-  const monthLengths = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  const month = clamp(Number(isoDate.slice(5, 7)), 1, 12);
-  const rawDay = Number(isoDate.slice(8, 10));
-  const day = clamp(rawDay, 1, monthLengths[month - 1]);
-  return monthLengths.slice(0, month - 1).reduce((sum, length) => sum + length, 0) + day;
 }
 
 function resolveHistoryDateRange(controls, dataset) {
@@ -8043,15 +7972,61 @@ function sanitizeExportFilenamePart(value) {
   return exportBuilders.sanitizeExportFilenamePart(value);
 }
 
-function buildLtManualTemplateFilename(project, scenario) {
-  return exportBuilders.buildLtManualTemplateFilename(project, scenario);
+const MANUAL_SCENARIO_IMPORTS = Object.freeze({
+  lt: {
+    fileInputRef: "ltManualFileInput",
+    statusRef: "ltManualStatus",
+    modeKey: "ltPricingMode",
+    valuesKey: "ltManualPricesByYear",
+    parsedKey: "prices",
+    filename: exportBuilders.buildLtManualTemplateFilename,
+    rows: scenarioConfig.buildLtManualTemplateRows,
+    parse: scenarioConfig.parseLtManualPricesCsv,
+    exportedMessage: "已导出空白逐年损益模板，可填写后重新导入。",
+    lockedMessage: "当前场景已锁定，不能导入逐年损益。",
+    successMessage: (scenario) => `已导入“${scenario.name}”的逐年交易策略损益值，请确认后保存当前配置。`
+  },
+  env: {
+    fileInputRef: "envManualFileInput",
+    statusRef: "envManualStatus",
+    modeKey: "envValueMode",
+    valuesKey: "envManualValuesByYear",
+    parsedKey: "values",
+    filename: exportBuilders.buildEnvManualTemplateFilename,
+    rows: scenarioConfig.buildEnvManualTemplateRows,
+    parse: scenarioConfig.parseEnvManualValuesCsv,
+    exportedMessage: "已导出空白逐年环境价值兑现模板，可填写后重新导入。",
+    lockedMessage: "当前场景已锁定，不能导入逐年环境价值兑现配置。",
+    successMessage: (scenario) => `已导入“${scenario.name}”的逐年环境价值兑现配置，请确认后保存当前配置。`
+  },
+  fee: {
+    fileInputRef: "feeManualFileInput",
+    statusRef: "feeManualStatus",
+    modeKey: "feeConfigMode",
+    valuesKey: "feeManualValuesByYear",
+    parsedKey: "values",
+    filename: exportBuilders.buildFeeManualTemplateFilename,
+    rows: scenarioConfig.buildFeeManualTemplateRows,
+    parse: scenarioConfig.parseFeeManualValuesCsv,
+    exportedMessage: "已导出空白逐年扣费收益模板，可填写后重新导入。",
+    lockedMessage: "当前场景已锁定，不能导入逐年扣费收益配置。",
+    successMessage: (scenario) => `已导入“${scenario.name}”的逐年扣费收益配置，请确认后保存当前配置。`
+  }
+});
+
+function setManualScenarioStatus(config, text) {
+  const node = refs[config.statusRef];
+  if (node) node.textContent = text;
 }
 
-function buildLtManualTemplateRows(project) {
-  return scenarioConfig.buildLtManualTemplateRows(project);
+function setScenarioImportMessage(text, tone) {
+  refs.scenarioMessage.textContent = text;
+  refs.scenarioMessage.style.borderColor = tone === "success" ? "#8fb48d" : "#d39191";
+  refs.scenarioMessage.style.background = tone === "success" ? "#f1fbf1" : "#fff2f2";
 }
 
-function exportLtManualTemplate() {
+function exportManualScenarioTemplate(kind) {
+  const config = MANUAL_SCENARIO_IMPORTS[kind];
   const project = getActiveProject();
   if (!project) {
     setTopMeta("请先创建或选择项目。", "warn");
@@ -8059,17 +8034,12 @@ function exportLtManualTemplate() {
   }
   const scenario = getActiveScenario(project);
   if (!scenario) return;
-  downloadCsv(buildLtManualTemplateFilename(project, scenario), buildLtManualTemplateRows(project));
-  if (refs.ltManualStatus) {
-    refs.ltManualStatus.textContent = "已导出空白逐年损益模板，可填写后重新导入。";
-  }
+  downloadCsv(config.filename(project, scenario), config.rows(project));
+  setManualScenarioStatus(config, config.exportedMessage);
 }
 
-function parseLtManualPricesCsv(csvText, project) {
-  return scenarioConfig.parseLtManualPricesCsv(csvText, project);
-}
-
-async function importLtManualTemplate() {
+async function importManualScenarioTemplate(kind) {
+  const config = MANUAL_SCENARIO_IMPORTS[kind];
   const project = getActiveProject();
   const scenario = project ? getActiveScenario(project) : null;
   if (!project || !scenario) {
@@ -8077,188 +8047,34 @@ async function importLtManualTemplate() {
     return;
   }
   if (scenario.locked) {
-    refs.scenarioMessage.textContent = "当前场景已锁定，不能导入逐年损益。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
+    setScenarioImportMessage(config.lockedMessage, "error");
     return;
   }
-  const file = refs.ltManualFileInput?.files?.[0];
+  const file = refs[config.fileInputRef]?.files?.[0];
   if (!file) {
-    if (refs.ltManualStatus) refs.ltManualStatus.textContent = "请先选择CSV或Excel文件。";
+    setManualScenarioStatus(config, "请先选择CSV或Excel文件。");
     return;
   }
   try {
     const { text } = await readSpreadsheetToCsv(file);
-    const parsed = parseLtManualPricesCsv(text, project);
+    const parsed = config.parse(text, project);
     if (!parsed.ok) {
-      if (refs.ltManualStatus) refs.ltManualStatus.textContent = parsed.message;
-      refs.scenarioMessage.textContent = parsed.message;
-      refs.scenarioMessage.style.borderColor = "#d39191";
-      refs.scenarioMessage.style.background = "#fff2f2";
+      setManualScenarioStatus(config, parsed.message);
+      setScenarioImportMessage(parsed.message, "error");
       return;
     }
-    scenario.config.ltPricingMode = "manual";
-    scenario.config.ltManualPricesByYear = parsed.prices;
+    scenario.config[config.modeKey] = "manual";
+    scenario.config[config.valuesKey] = parsed[config.parsedKey];
     scenario.updatedAt = new Date().toISOString();
     project.statuses["scenario-page"] = "in_progress";
     markDownstreamStale(project, "scenario-page");
-    refs.scenarioMessage.textContent = `已导入“${scenario.name}”的逐年交易策略损益值，请确认后保存当前配置。`;
-    refs.scenarioMessage.style.borderColor = "#8fb48d";
-    refs.scenarioMessage.style.background = "#f1fbf1";
+    setScenarioImportMessage(config.successMessage(scenario), "success");
     renderAll();
     schedulePersistAppData();
   } catch (error) {
     const message = normalizeUserFacingError(error);
-    if (refs.ltManualStatus) refs.ltManualStatus.textContent = message;
-    refs.scenarioMessage.textContent = message;
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-  }
-}
-
-function buildEnvManualTemplateFilename(project, scenario) {
-  return exportBuilders.buildEnvManualTemplateFilename(project, scenario);
-}
-
-function buildEnvManualTemplateRows(project) {
-  return scenarioConfig.buildEnvManualTemplateRows(project);
-}
-
-function exportEnvManualTemplate() {
-  const project = getActiveProject();
-  if (!project) {
-    setTopMeta("请先创建或选择项目。", "warn");
-    return;
-  }
-  const scenario = getActiveScenario(project);
-  if (!scenario) return;
-  downloadCsv(buildEnvManualTemplateFilename(project, scenario), buildEnvManualTemplateRows(project));
-  if (refs.envManualStatus) {
-    refs.envManualStatus.textContent = "已导出空白逐年环境价值兑现模板，可填写后重新导入。";
-  }
-}
-
-function parseEnvManualValuesCsv(csvText, project) {
-  return scenarioConfig.parseEnvManualValuesCsv(csvText, project);
-}
-
-async function importEnvManualTemplate() {
-  const project = getActiveProject();
-  const scenario = project ? getActiveScenario(project) : null;
-  if (!project || !scenario) {
-    setTopMeta("请先创建或选择项目。", "warn");
-    return;
-  }
-  if (scenario.locked) {
-    refs.scenarioMessage.textContent = "当前场景已锁定，不能导入逐年环境价值兑现配置。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-    return;
-  }
-  const file = refs.envManualFileInput?.files?.[0];
-  if (!file) {
-    if (refs.envManualStatus) refs.envManualStatus.textContent = "请先选择CSV或Excel文件。";
-    return;
-  }
-  try {
-    const { text } = await readSpreadsheetToCsv(file);
-    const parsed = parseEnvManualValuesCsv(text, project);
-    if (!parsed.ok) {
-      if (refs.envManualStatus) refs.envManualStatus.textContent = parsed.message;
-      refs.scenarioMessage.textContent = parsed.message;
-      refs.scenarioMessage.style.borderColor = "#d39191";
-      refs.scenarioMessage.style.background = "#fff2f2";
-      return;
-    }
-    scenario.config.envValueMode = "manual";
-    scenario.config.envManualValuesByYear = parsed.values;
-    scenario.updatedAt = new Date().toISOString();
-    project.statuses["scenario-page"] = "in_progress";
-    markDownstreamStale(project, "scenario-page");
-    refs.scenarioMessage.textContent = `已导入“${scenario.name}”的逐年环境价值兑现配置，请确认后保存当前配置。`;
-    refs.scenarioMessage.style.borderColor = "#8fb48d";
-    refs.scenarioMessage.style.background = "#f1fbf1";
-    renderAll();
-    schedulePersistAppData();
-  } catch (error) {
-    const message = normalizeUserFacingError(error);
-    if (refs.envManualStatus) refs.envManualStatus.textContent = message;
-    refs.scenarioMessage.textContent = message;
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-  }
-}
-
-function buildFeeManualTemplateFilename(project, scenario) {
-  return exportBuilders.buildFeeManualTemplateFilename(project, scenario);
-}
-
-function buildFeeManualTemplateRows(project) {
-  return scenarioConfig.buildFeeManualTemplateRows(project);
-}
-
-function exportFeeManualTemplate() {
-  const project = getActiveProject();
-  if (!project) {
-    setTopMeta("请先创建或选择项目。", "warn");
-    return;
-  }
-  const scenario = getActiveScenario(project);
-  if (!scenario) return;
-  downloadCsv(buildFeeManualTemplateFilename(project, scenario), buildFeeManualTemplateRows(project));
-  if (refs.feeManualStatus) {
-    refs.feeManualStatus.textContent = "已导出空白逐年扣费收益模板，可填写后重新导入。";
-  }
-}
-
-function parseFeeManualValuesCsv(csvText, project) {
-  return scenarioConfig.parseFeeManualValuesCsv(csvText, project);
-}
-
-async function importFeeManualTemplate() {
-  const project = getActiveProject();
-  const scenario = project ? getActiveScenario(project) : null;
-  if (!project || !scenario) {
-    setTopMeta("请先创建或选择项目。", "warn");
-    return;
-  }
-  if (scenario.locked) {
-    refs.scenarioMessage.textContent = "当前场景已锁定，不能导入逐年扣费收益配置。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-    return;
-  }
-  const file = refs.feeManualFileInput?.files?.[0];
-  if (!file) {
-    if (refs.feeManualStatus) refs.feeManualStatus.textContent = "请先选择CSV或Excel文件。";
-    return;
-  }
-  try {
-    const { text } = await readSpreadsheetToCsv(file);
-    const parsed = parseFeeManualValuesCsv(text, project);
-    if (!parsed.ok) {
-      if (refs.feeManualStatus) refs.feeManualStatus.textContent = parsed.message;
-      refs.scenarioMessage.textContent = parsed.message;
-      refs.scenarioMessage.style.borderColor = "#d39191";
-      refs.scenarioMessage.style.background = "#fff2f2";
-      return;
-    }
-    scenario.config.feeConfigMode = "manual";
-    scenario.config.feeManualValuesByYear = parsed.values;
-    scenario.updatedAt = new Date().toISOString();
-    project.statuses["scenario-page"] = "in_progress";
-    markDownstreamStale(project, "scenario-page");
-    refs.scenarioMessage.textContent = `已导入“${scenario.name}”的逐年扣费收益配置，请确认后保存当前配置。`;
-    refs.scenarioMessage.style.borderColor = "#8fb48d";
-    refs.scenarioMessage.style.background = "#f1fbf1";
-    renderAll();
-    schedulePersistAppData();
-  } catch (error) {
-    const message = normalizeUserFacingError(error);
-    if (refs.feeManualStatus) refs.feeManualStatus.textContent = message;
-    refs.scenarioMessage.textContent = message;
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
+    setManualScenarioStatus(config, message);
+    setScenarioImportMessage(message, "error");
   }
 }
 
@@ -8883,10 +8699,10 @@ function bindEvents() {
     });
   }
   if (refs.exportLtTemplateButton) {
-    refs.exportLtTemplateButton.addEventListener("click", exportLtManualTemplate);
+    refs.exportLtTemplateButton.addEventListener("click", () => exportManualScenarioTemplate("lt"));
   }
   if (refs.importLtTemplateButton) {
-    refs.importLtTemplateButton.addEventListener("click", importLtManualTemplate);
+    refs.importLtTemplateButton.addEventListener("click", () => importManualScenarioTemplate("lt"));
   }
   if (refs.envValueMode) {
     refs.envValueMode.addEventListener("change", () => {
@@ -8894,10 +8710,10 @@ function bindEvents() {
     });
   }
   if (refs.exportEnvTemplateButton) {
-    refs.exportEnvTemplateButton.addEventListener("click", exportEnvManualTemplate);
+    refs.exportEnvTemplateButton.addEventListener("click", () => exportManualScenarioTemplate("env"));
   }
   if (refs.importEnvTemplateButton) {
-    refs.importEnvTemplateButton.addEventListener("click", importEnvManualTemplate);
+    refs.importEnvTemplateButton.addEventListener("click", () => importManualScenarioTemplate("env"));
   }
   if (refs.feeConfigMode) {
     refs.feeConfigMode.addEventListener("change", () => {
@@ -8905,10 +8721,10 @@ function bindEvents() {
     });
   }
   if (refs.exportFeeTemplateButton) {
-    refs.exportFeeTemplateButton.addEventListener("click", exportFeeManualTemplate);
+    refs.exportFeeTemplateButton.addEventListener("click", () => exportManualScenarioTemplate("fee"));
   }
   if (refs.importFeeTemplateButton) {
-    refs.importFeeTemplateButton.addEventListener("click", importFeeManualTemplate);
+    refs.importFeeTemplateButton.addEventListener("click", () => importManualScenarioTemplate("fee"));
   }
   if (refs.provinceDefaultSelector) {
     refs.provinceDefaultSelector.addEventListener("change", () => {
