@@ -1,7 +1,13 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const energyProfiles = typeof module !== "undefined" && module.exports
+    ? require("./energy-profiles")
+    : root.NE_ENERGY_PROFILES;
+  const appUtils = typeof module !== "undefined" && module.exports
+    ? require("./app-utils")
+    : root.NE_APP_UTILS;
+  const api = factory(energyProfiles, appUtils);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -9,7 +15,11 @@
   if (root.window && root.window !== root) {
     root.window.NE_HISTORY_ANALYSIS = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (energyProfiles, appUtils) {
+  if (!energyProfiles || !appUtils) {
+    throw new Error("历史电价分析模块初始化失败：缺少电量曲线或应用工具模块");
+  }
+
   const HISTORY_MONTH_LABELS = Object.freeze(["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]);
   const HISTORY_HEAT_HOUR_LABELS = Object.freeze(Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}时`));
   const HISTORY_QUARTER_LABELS = Object.freeze(Array.from({ length: 96 }, (_, index) => {
@@ -17,6 +27,12 @@
     const minute = (index % 4) * 15;
     return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   }));
+  const {
+    makeIsoDate,
+    compareIsoDate,
+    clampIsoDate,
+    noLeapDayOfYear
+  } = appUtils;
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -65,6 +81,76 @@
     const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
     const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length;
     return Math.sqrt(Math.max(variance, 0));
+  }
+
+  function resolveHistoryDateRange(controls, dataset) {
+    const minDate = makeIsoDate(dataset.startYear, 1, 1);
+    const maxDate = makeIsoDate(dataset.endYear, 12, 31);
+    const defaultStartYear = Math.max(dataset.startYear, dataset.endYear - 1);
+    const defaultStartDate = makeIsoDate(defaultStartYear, 1, 1);
+    let startDate = clampIsoDate(controls.startDate || defaultStartDate, minDate, maxDate) || defaultStartDate;
+    let endDate = clampIsoDate(controls.endDate || maxDate, minDate, maxDate) || maxDate;
+    if (compareIsoDate(startDate, endDate) > 0) {
+      [startDate, endDate] = [endDate, startDate];
+    }
+    return {
+      startDate,
+      endDate,
+      minDate,
+      maxDate
+    };
+  }
+
+  function buildHistoryYearSlice(yearData, range) {
+    const yearStartDate = makeIsoDate(yearData.year, 1, 1);
+    const yearEndDate = makeIsoDate(yearData.year, 12, 31);
+    if (compareIsoDate(yearEndDate, range.startDate) < 0 || compareIsoDate(yearStartDate, range.endDate) > 0) {
+      return null;
+    }
+    const startDay = yearData.year === Number(range.startDate.slice(0, 4)) ? noLeapDayOfYear(range.startDate) : 1;
+    const endDay = yearData.year === Number(range.endDate.slice(0, 4)) ? noLeapDayOfYear(range.endDate) : 365;
+    const monthValues = Array.from({ length: 12 }, () => []);
+    const hourlySumsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
+    const hourlyCountsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
+    const monthlySums = Array(12).fill(0);
+    const monthlyCounts = Array(12).fill(0);
+    const typical = createHistoryTypicalAccumulator();
+    const values = [];
+
+    for (let day = startDay; day <= endDay; day += 1) {
+      const { month, day: dayOfMonth } = energyProfiles.dayOfYearToMonthDay(day);
+      const monthIndex = month - 1;
+      const dayOfWeek = new Date(Date.UTC(yearData.year, monthIndex, dayOfMonth)).getUTCDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      for (let quarter = 0; quarter < 96; quarter += 1) {
+        const value = yearData.values[(day - 1) * 96 + quarter];
+        if (!Number.isFinite(value)) continue;
+        const hourSlot = Math.floor(quarter / 4);
+        values.push(value);
+        monthlySums[monthIndex] += value;
+        monthlyCounts[monthIndex] += 1;
+        monthValues[monthIndex].push(value);
+        hourlySumsByMonth[monthIndex][hourSlot] += value;
+        hourlyCountsByMonth[monthIndex][hourSlot] += 1;
+        pushHistoryTypical(typical, isWeekend, quarter, value);
+      }
+    }
+
+    return {
+      year: yearData.year,
+      values,
+      monthValues,
+      monthlyAvg: monthlySums.map((sum, idx) => (monthlyCounts[idx] ? sum / monthlyCounts[idx] : null)),
+      hourlySumsByMonth,
+      hourlyCountsByMonth,
+      typical
+    };
+  }
+
+  function selectHistoryYearsByDateRange(dataset, range) {
+    return dataset.years
+      .map((yearData) => buildHistoryYearSlice(yearData, range))
+      .filter((yearData) => yearData && yearData.values.length);
   }
 
   function buildHistorySelectedAnalysis(selectedYears, options = {}) {
@@ -260,6 +346,9 @@
     mergeHistoryTypical,
     percentileSorted,
     stddev,
+    resolveHistoryDateRange,
+    buildHistoryYearSlice,
+    selectHistoryYearsByDateRange,
     buildHistorySelectedAnalysis
   });
 });

@@ -3,9 +3,12 @@
 const assert = require("node:assert/strict");
 const {
   buildHistorySelectedAnalysis,
+  buildHistoryYearSlice,
   createHistoryTypicalAccumulator,
   percentileSorted,
   pushHistoryTypical,
+  resolveHistoryDateRange,
+  selectHistoryYearsByDateRange,
   stddev
 } = require("../src/domain/history-analysis");
 
@@ -96,5 +99,36 @@ assert.equal(analysis.exportRows.monthTrend[0][1], "2024年均价_元每MWh");
 assert.equal(analysis.exportRows.typicalDay[33][1], "230.0");
 assert.deepEqual(analysis.exportRows.distribution[0], ["price_bin_yuan_per_mwh", "sample_count"]);
 assert.deepEqual(analysis.exportRows.boxplot[1].slice(0, 6), ["1月", "100.0", "150.0", "200.0", "250.0", "300.0"]);
+
+const fullYearValues = Array.from({ length: 365 * 96 }, (_, index) => index);
+const fullYearData = { year: 2026, values: fullYearValues };
+const range = resolveHistoryDateRange({ startDate: "2026-03-01", endDate: "2026-03-01" }, {
+  startYear: 2026,
+  endYear: 2026
+});
+assert.deepEqual(range, {
+  startDate: "2026-03-01",
+  endDate: "2026-03-01",
+  minDate: "2026-01-01",
+  maxDate: "2026-12-31"
+});
+const marchFirstSlice = buildHistoryYearSlice(fullYearData, range);
+assert.equal(marchFirstSlice.year, 2026);
+assert.equal(marchFirstSlice.values.length, 96);
+assert.equal(marchFirstSlice.values[0], 59 * 96);
+assert.equal(marchFirstSlice.monthValues[2].length, 96);
+assert.equal(marchFirstSlice.monthlyAvg[2], marchFirstSlice.values.reduce((sum, value) => sum + value, 0) / 96);
+assert.equal(marchFirstSlice.hourlyCountsByMonth[2][0], 4);
+assert.equal(marchFirstSlice.typical.weekendCount[0], 1);
+
+const selectedByRange = selectHistoryYearsByDateRange({
+  startYear: 2025,
+  endYear: 2026,
+  years: [
+    { year: 2025, values: fullYearValues.map(() => 1) },
+    fullYearData
+  ]
+}, range);
+assert.deepEqual(selectedByRange.map((item) => item.year), [2026]);
 
 console.log("history analysis tests passed");

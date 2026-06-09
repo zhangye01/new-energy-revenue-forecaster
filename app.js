@@ -65,12 +65,7 @@ const {
   asPercent,
   escapeHtml,
   isPlainObject,
-  hasNonEmptyObject,
-  isIsoDateString,
-  makeIsoDate,
-  compareIsoDate,
-  clampIsoDate,
-  noLeapDayOfYear
+  hasNonEmptyObject
 } = appUtils;
 
 const APP_DATA_STORAGE_KEY = "ne_app_data_v1";
@@ -1301,76 +1296,6 @@ function resetPolicyFiltersToDefault() {
 
 function sanitizeHistoryAnalysis(raw) {
   return projectSettings.sanitizeHistoryAnalysis(raw);
-}
-
-function resolveHistoryDateRange(controls, dataset) {
-  const minDate = makeIsoDate(dataset.startYear, 1, 1);
-  const maxDate = makeIsoDate(dataset.endYear, 12, 31);
-  const defaultStartYear = Math.max(dataset.startYear, dataset.endYear - 1);
-  const defaultStartDate = makeIsoDate(defaultStartYear, 1, 1);
-  let startDate = clampIsoDate(controls.startDate || defaultStartDate, minDate, maxDate) || defaultStartDate;
-  let endDate = clampIsoDate(controls.endDate || maxDate, minDate, maxDate) || maxDate;
-  if (compareIsoDate(startDate, endDate) > 0) {
-    [startDate, endDate] = [endDate, startDate];
-  }
-  return {
-    startDate,
-    endDate,
-    minDate,
-    maxDate
-  };
-}
-
-function buildHistoryYearSlice(yearData, range) {
-  const yearStartDate = makeIsoDate(yearData.year, 1, 1);
-  const yearEndDate = makeIsoDate(yearData.year, 12, 31);
-  if (compareIsoDate(yearEndDate, range.startDate) < 0 || compareIsoDate(yearStartDate, range.endDate) > 0) {
-    return null;
-  }
-  const startDay = yearData.year === Number(range.startDate.slice(0, 4)) ? noLeapDayOfYear(range.startDate) : 1;
-  const endDay = yearData.year === Number(range.endDate.slice(0, 4)) ? noLeapDayOfYear(range.endDate) : 365;
-  const monthValues = Array.from({ length: 12 }, () => []);
-  const hourlySumsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
-  const hourlyCountsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
-  const monthlySums = Array(12).fill(0);
-  const monthlyCounts = Array(12).fill(0);
-  const typical = createHistoryTypicalAccumulator();
-  const values = [];
-
-  for (let day = startDay; day <= endDay; day += 1) {
-    const { month, day: dayOfMonth } = dayOfYearToMonthDay(day);
-    const monthIndex = month - 1;
-    const dayOfWeek = new Date(Date.UTC(yearData.year, monthIndex, dayOfMonth)).getUTCDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    for (let quarter = 0; quarter < 96; quarter += 1) {
-      const value = yearData.values[(day - 1) * 96 + quarter];
-      if (!Number.isFinite(value)) continue;
-      const hourSlot = Math.floor(quarter / 4);
-      values.push(value);
-      monthlySums[monthIndex] += value;
-      monthlyCounts[monthIndex] += 1;
-      monthValues[monthIndex].push(value);
-      hourlySumsByMonth[monthIndex][hourSlot] += value;
-      hourlyCountsByMonth[monthIndex][hourSlot] += 1;
-      pushHistoryTypical(typical, isWeekend, quarter, value);
-    }
-  }
-
-  return {
-    year: yearData.year,
-    values,
-    monthValues,
-    monthlyAvg: monthlySums.map((sum, idx) => (monthlyCounts[idx] ? sum / monthlyCounts[idx] : null)),
-    hourlySumsByMonth,
-    hourlyCountsByMonth,
-    typical
-  };
-}
-
-function selectHistoryYearsByDateRange(dataset, range) {
-  return dataset.years
-    .map((yearData) => buildHistoryYearSlice(yearData, range))
-    .filter((yearData) => yearData && yearData.values.length);
 }
 
 function sanitizeBenchmarkMap(raw) {
@@ -6318,7 +6243,7 @@ function renderHistoryPrices() {
 
   const dataset = buildHistorySpotAnalysisDataset(project);
   renderHistoryImportState(project, dataset);
-  const range = resolveHistoryDateRange(controls, dataset);
+  const range = historyAnalysis.resolveHistoryDateRange(controls, dataset);
   if (controls.startDate !== range.startDate || controls.endDate !== range.endDate) {
     appState.historyAnalysis = {
       startDate: range.startDate,
@@ -6335,7 +6260,7 @@ function renderHistoryPrices() {
     refs.historyEndDate.max = range.maxDate;
     refs.historyEndDate.value = range.endDate;
   }
-  const selectedYears = selectHistoryYearsByDateRange(dataset, range);
+  const selectedYears = historyAnalysis.selectHistoryYearsByDateRange(dataset, range);
   if (!selectedYears.length) {
     setHistoryNoData("当前项目暂无可分析数据。");
     resetHistoryKpis();
