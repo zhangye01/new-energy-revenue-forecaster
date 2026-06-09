@@ -30,6 +30,24 @@ const {
 const PAGE_HELP_MAP = PAGE_HELP_TEXTS || {};
 
 const { appState, refs } = runtime;
+const energyProfiles = window.NE_ENERGY_PROFILES;
+const priceForecast = window.NE_PRICE_FORECAST;
+const revenueRules = window.NE_REVENUE_RULES;
+const revenueCalculator = window.NE_REVENUE_CALCULATOR;
+const resultReport = window.NE_RESULT_REPORT;
+const compareAnalysis = window.NE_COMPARE_ANALYSIS;
+const historyAnalysis = window.NE_HISTORY_ANALYSIS;
+const workflowStatus = window.NE_WORKFLOW_STATUS;
+const scenarioConfig = window.NE_SCENARIO_CONFIG;
+const scenarioModel = window.NE_SCENARIO_MODEL;
+const projectSettings = window.NE_PROJECT_SETTINGS;
+const projectModel = window.NE_PROJECT_MODEL;
+const energyDataRules = window.NE_ENERGY_DATA;
+const csvUtils = window.NE_CSV_UTILS;
+
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils) {
+  throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
+}
 
 const APP_DATA_STORAGE_KEY = "ne_app_data_v1";
 const APP_DATA_VERSION = 1;
@@ -54,13 +72,9 @@ const FEE_CONFIG_MODE_SET = new Set(["global", "manual"]);
 const RESULT_REPORT_VIEW_SET = new Set(["annual", "price", "detail"]);
 const ENV_VALUE_RATIO_KEYS = new Set(["greenCertRealizeRatio", "greenPremiumRealizeRatio", "carbonRealizeRatio"]);
 const MAP_LEVEL_SET = new Set(["nation", "province"]);
-const HISTORY_MONTH_LABELS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
-const HISTORY_HEAT_HOUR_LABELS = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}时`);
-const HISTORY_QUARTER_LABELS = Array.from({ length: 96 }, (_, index) => {
-  const hour = Math.floor(index / 4);
-  const minute = (index % 4) * 15;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-});
+const HISTORY_MONTH_LABELS = historyAnalysis.HISTORY_MONTH_LABELS;
+const HISTORY_HEAT_HOUR_LABELS = historyAnalysis.HISTORY_HEAT_HOUR_LABELS;
+const HISTORY_QUARTER_LABELS = historyAnalysis.HISTORY_QUARTER_LABELS;
 const ENERGY_MONTH_DAY_COUNTS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 const ENERGY_HOUR_LABELS = Array.from({ length: 24 }, (_, hour) => `${hour}时`);
 const ECHARTS_MAP_BASE_URLS = [
@@ -182,56 +196,7 @@ const compareChartInstances = {
   scenarioBridge: null,
   scenarioTrend: null
 };
-const FORECAST_MODEL_DEFINITIONS = [
-  {
-    family: "lstm",
-    name: "LSTM",
-    label: "LSTM 序列模型",
-    versionSuffix: "lstm",
-    seedOffset: 101,
-    levelBias: 0.99,
-    volatility: 0.82,
-    peakScale: 0.92,
-    spikeScale: 0.7,
-    negativeScale: 0.75,
-    mapeBase: 0.118,
-    smapeBase: 0.138,
-    maeBase: 42,
-    rmseBase: 66
-  },
-  {
-    family: "xgboost",
-    name: "XGBoost",
-    label: "XGBoost 特征树模型",
-    versionSuffix: "xgb",
-    seedOffset: 211,
-    levelBias: 1.015,
-    volatility: 1.18,
-    peakScale: 1.13,
-    spikeScale: 1.28,
-    negativeScale: 1.05,
-    mapeBase: 0.132,
-    smapeBase: 0.151,
-    maeBase: 50,
-    rmseBase: 76
-  },
-  {
-    family: "ensemble",
-    name: "Ensemble",
-    label: "Ensemble 融合模型",
-    versionSuffix: "ens",
-    seedOffset: 307,
-    levelBias: 1.005,
-    volatility: 0.95,
-    peakScale: 1.02,
-    spikeScale: 0.88,
-    negativeScale: 0.82,
-    mapeBase: 0.104,
-    smapeBase: 0.124,
-    maeBase: 36,
-    rmseBase: 58
-  }
-];
+const FORECAST_MODEL_DEFINITIONS = priceForecast.FORECAST_MODEL_DEFINITIONS;
 const resultChartInstances = {
   annualStack: null,
   pricePath: null,
@@ -266,28 +231,6 @@ const DEMO_AUTH_USERS = [
   { accountName: "演示用户D", account: "demo4", password: "demo123" },
   { accountName: "演示用户E", account: "demo5", password: "demo123" }
 ];
-const ENERGY_MODE_META = {
-  hourly_8760: {
-    label: "完整8760小时曲线（旧版）",
-    header: "year,hour_index,equivalent_hours_h",
-    placeholder: "year,hour_index,equivalent_hours_h"
-  },
-  annual_hours: {
-    label: "逐年总量模板",
-    header: "year,annual_hours_h",
-    placeholder: "year,annual_hours_h"
-  },
-  typical_curve_8760: {
-    label: "典型年8760模板",
-    header: "hour_index,equivalent_hours_h",
-    placeholder: "hour_index,equivalent_hours_h"
-  },
-  province_typical_curve: {
-    label: "省份典型曲线",
-    header: "",
-    placeholder: ""
-  }
-};
 const PAGE_COMPLETION_STANDARD_MAP = {
   "create-page": "项目基础信息填写完整并成功创建。",
   "energy-page": "逐年总量覆盖全部测算年度，并完成典型年曲线来源二选一。",
@@ -428,52 +371,19 @@ function getForecastPeriodDisplayRange(project) {
 }
 
 function createEmptyEnergyDataState(mode = "annual_hours") {
-  return {
-    mode: normalizeEnergyMode(mode),
-    annualInputByYear: {},
-    typicalCurveSource: "",
-    typicalCurveProfile: [],
-    hourlyByYear: {},
-    annualSummary: {}
-  };
+  return projectModel.createEmptyEnergyDataState(mode);
 }
 
 function normalizeTypicalCurveProfile(values) {
-  if (!Array.isArray(values) || values.length !== 8760) return [];
-  const parsed = values.map((value) => Number(value));
-  const valid = parsed.every((value) => Number.isFinite(value) && value >= 0);
-  if (!valid) return [];
-  const total = parsed.reduce((sum, value) => sum + value, 0);
-  if (!(total > 0)) return [];
-  return parsed.map((value) => value / total);
+  return energyProfiles.normalizeTypicalCurveProfile(values);
 }
 
 function ensureProjectEnergyDataState(project) {
-  if (!project || !isPlainObject(project)) return createEmptyEnergyDataState();
-  const raw = isPlainObject(project.energyData) ? project.energyData : {};
-  const normalized = createEmptyEnergyDataState(raw.mode || project.energyMode || "annual_hours");
-  normalized.mode = normalizeEnergyMode(raw.mode || project.energyMode || "annual_hours");
-  normalized.hourlyByYear = isPlainObject(raw.hourlyByYear) ? raw.hourlyByYear : {};
-  normalized.annualSummary = isPlainObject(raw.annualSummary) ? raw.annualSummary : {};
-  normalized.annualInputByYear = isPlainObject(raw.annualInputByYear)
-    ? raw.annualInputByYear
-    : Object.fromEntries(
-      Object.entries(normalized.annualSummary)
-        .map(([year, item]) => [year, Number(item?.annualHours)])
-        .filter(([, value]) => Number.isFinite(value) && value > 0)
-    );
-  normalized.typicalCurveSource = ["typical_curve_8760", "province_typical_curve"].includes(raw.typicalCurveSource)
-    ? raw.typicalCurveSource
-    : (normalized.mode === "typical_curve_8760" || normalized.mode === "province_typical_curve" ? normalized.mode : "");
-  normalized.typicalCurveProfile = normalizeTypicalCurveProfile(raw.typicalCurveProfile);
-  project.energyData = normalized;
-  project.energyMode = normalized.mode;
-  return normalized;
+  return energyDataRules.ensureProjectEnergyDataState(project);
 }
 
 function hasStoredEnergyTypicalCurve(energyData) {
-  return normalizeTypicalCurveProfile(energyData?.typicalCurveProfile).length === 8760
-    && ["typical_curve_8760", "province_typical_curve"].includes(energyData?.typicalCurveSource);
+  return energyDataRules.hasStoredEnergyTypicalCurve(energyData);
 }
 
 function ensureProjectEnergyDataDerivedState(project) {
@@ -601,9 +511,7 @@ function alignDefaultForecastYearsToStoredAnnualInput(project) {
 }
 
 function hasEnergyTypicalCurve(project) {
-  const energyData = ensureProjectEnergyDataState(project);
-  return normalizeTypicalCurveProfile(energyData.typicalCurveProfile).length === 8760
-    && ["typical_curve_8760", "province_typical_curve"].includes(energyData.typicalCurveSource);
+  return energyDataRules.hasEnergyTypicalCurve(project);
 }
 
 function buildEnergyMonthHourlyShareCurves(hourlyValues) {
@@ -1353,15 +1261,7 @@ function escapeHtml(text) {
 }
 
 function dayOfYearToMonthDay(dayOfYear) {
-  const monthLengths = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  let day = dayOfYear;
-  let month = 1;
-  for (const monthLength of monthLengths) {
-    if (day <= monthLength) break;
-    day -= monthLength;
-    month += 1;
-  }
-  return { month, day };
+  return energyProfiles.dayOfYearToMonthDay(dayOfYear);
 }
 
 function hourIndexToTimestamp(year, hourIndex) {
@@ -1372,37 +1272,16 @@ function hourIndexToTimestamp(year, hourIndex) {
 }
 
 function statusMapTemplate() {
-  return {
-    "create-page": "not_started",
-    "energy-page": "not_started",
-    "history-page": "not_started",
-    "forecast-page": "not_started",
-    "scenario-page": "not_started",
-    "results-page": "not_started",
-    "compare-page": "not_started"
-  };
+  return workflowStatus.statusMapTemplate(WORKFLOW_PAGES);
 }
 
 function createEmptyHistorySpotImport() {
-  return {
-    sourceType: "mock",
-    importedAt: "",
-    sourceName: "",
-    dataset: null
-  };
+  return projectSettings.createEmptyHistorySpotImport();
 }
 
 function createDefaultSpotMarketConfig(project = null) {
   const activeRun = project ? getActiveRun(project) : null;
-  return {
-    energyBasis: "settlement_generation_hourly",
-    priceSourceMode: "active_forecast_run",
-    captureMethod: "generation_weighted_spot",
-    settlementGranularity: "hourly",
-    linkedRunId: activeRun?.id || "",
-    note: "",
-    savedAt: ""
-  };
+  return projectSettings.createDefaultSpotMarketConfig(activeRun);
 }
 
 function isPlainObject(value) {
@@ -1423,37 +1302,16 @@ function hasNonEmptyObject(value) {
 }
 
 function isHistoryDatasetUsable(dataset) {
-  return Boolean(
-    isPlainObject(dataset)
-    && Array.isArray(dataset.years)
-    && dataset.years.length
-  );
+  return projectSettings.isHistoryDatasetUsable(dataset);
 }
 
 function sanitizeHistorySpotImport(rawImport) {
-  const normalized = createEmptyHistorySpotImport();
-  if (!isPlainObject(rawImport)) return normalized;
-  if (rawImport.sourceType === "csv" && isHistoryDatasetUsable(rawImport.dataset)) {
-    normalized.sourceType = "csv";
-    normalized.dataset = rawImport.dataset;
-    normalized.importedAt = typeof rawImport.importedAt === "string" ? rawImport.importedAt : "";
-    normalized.sourceName = typeof rawImport.sourceName === "string" ? rawImport.sourceName : "";
-  }
-  return normalized;
+  return projectSettings.sanitizeHistorySpotImport(rawImport);
 }
 
 function sanitizeSpotMarketConfig(project, rawConfig) {
-  const defaults = createDefaultSpotMarketConfig(project);
-  const config = isPlainObject(rawConfig) ? rawConfig : {};
-  return {
-    energyBasis: config.energyBasis === "settlement_generation_hourly" ? config.energyBasis : defaults.energyBasis,
-    priceSourceMode: config.priceSourceMode === "active_forecast_run" ? config.priceSourceMode : defaults.priceSourceMode,
-    captureMethod: config.captureMethod === "generation_weighted_spot" ? config.captureMethod : defaults.captureMethod,
-    settlementGranularity: config.settlementGranularity === "hourly" ? config.settlementGranularity : defaults.settlementGranularity,
-    linkedRunId: typeof config.linkedRunId === "string" ? config.linkedRunId : defaults.linkedRunId,
-    note: typeof config.note === "string" ? config.note : "",
-    savedAt: typeof config.savedAt === "string" ? config.savedAt : ""
-  };
+  const activeRun = project ? getActiveRun(project) : null;
+  return projectSettings.sanitizeSpotMarketConfig(rawConfig, activeRun);
 }
 
 function ensureProjectSpotMarketConfig(project) {
@@ -1466,21 +1324,10 @@ function ensureProjectSpotMarketConfig(project) {
 }
 
 function sanitizePolicyFilters(raw) {
-  const defaults = {
-    provinceKey: "shanghai",
-    regionKey: "east"
-  };
-  if (!isPlainObject(raw)) return defaults;
-  const next = { ...defaults };
-  const provinceKey = String(raw.provinceKey || "all");
-  if (provinceKey === "all" || PROVINCE_KEY_SET.has(provinceKey)) {
-    next.provinceKey = provinceKey;
-  }
-  const regionKey = String(raw.regionKey || "all");
-  if (regionKey === "all" || POLICY_REGION_KEY_SET.has(regionKey)) {
-    next.regionKey = regionKey;
-  }
-  return next;
+  return projectSettings.sanitizePolicyFilters(raw, {
+    provinceKeys: Array.from(PROVINCE_KEY_SET),
+    regionKeys: Array.from(POLICY_REGION_KEY_SET)
+  });
 }
 
 function resetPolicyFiltersToDefault() {
@@ -1489,19 +1336,11 @@ function resetPolicyFiltersToDefault() {
 }
 
 function sanitizeHistoryAnalysis(raw) {
-  const defaults = {
-    startDate: "",
-    endDate: ""
-  };
-  if (!isPlainObject(raw)) return defaults;
-  return {
-    startDate: isIsoDateString(raw.startDate) ? raw.startDate : "",
-    endDate: isIsoDateString(raw.endDate) ? raw.endDate : ""
-  };
+  return projectSettings.sanitizeHistoryAnalysis(raw);
 }
 
 function isIsoDateString(value) {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return projectSettings.isIsoDateString(value);
 }
 
 function makeIsoDate(year, month = 1, day = 1) {
@@ -1599,259 +1438,59 @@ function selectHistoryYearsByDateRange(dataset, range) {
 }
 
 function sanitizeBenchmarkMap(raw) {
-  const defaults = {
-    level: "nation",
-    provinceKey: null,
-    zoom: null,
-    rangeMin: null,
-    rangeMax: null
-  };
-  if (!isPlainObject(raw)) return defaults;
-  const next = { ...defaults };
-  if (MAP_LEVEL_SET.has(raw.level)) {
-    next.level = raw.level;
-  }
-  if (typeof raw.provinceKey === "string" && PROVINCE_KEY_SET.has(raw.provinceKey)) {
-    next.provinceKey = raw.provinceKey;
-  }
-  if (next.level === "nation") {
-    next.provinceKey = null;
-  }
-  if (next.level === "province" && !next.provinceKey) {
-    next.level = "nation";
-  }
-  const zoom = Number(raw.zoom);
-  if (Number.isFinite(zoom)) {
-    next.zoom = clamp(zoom, BENCHMARK_MAP_ZOOM_MIN, BENCHMARK_MAP_ZOOM_MAX);
-  }
-  const rangeMin = Number(raw.rangeMin);
-  const rangeMax = Number(raw.rangeMax);
-  if (Number.isFinite(rangeMin)) {
-    next.rangeMin = rangeMin;
-  }
-  if (Number.isFinite(rangeMax)) {
-    next.rangeMax = rangeMax;
-  }
-  if (Number.isFinite(next.rangeMin) && Number.isFinite(next.rangeMax) && next.rangeMin > next.rangeMax) {
-    const swap = next.rangeMin;
-    next.rangeMin = next.rangeMax;
-    next.rangeMax = swap;
-  }
-  return next;
+  return projectSettings.sanitizeBenchmarkMap(raw, {
+    provinceKeys: Array.from(PROVINCE_KEY_SET),
+    zoomMin: BENCHMARK_MAP_ZOOM_MIN,
+    zoomMax: BENCHMARK_MAP_ZOOM_MAX
+  });
 }
 
 function sanitizeStatuses(rawStatuses) {
-  const statuses = statusMapTemplate();
-  if (!isPlainObject(rawStatuses)) return statuses;
-  for (const pageId of WORKFLOW_PAGES) {
-    const value = rawStatuses[pageId];
-    if (PROJECT_STATUS_SET.has(value)) {
-      statuses[pageId] = value;
-    }
-  }
-  return statuses;
+  return workflowStatus.sanitizeStatuses(rawStatuses, WORKFLOW_PAGES);
 }
 
 function sanitizeLtManualPricesByYear(rawPrices, project) {
-  const next = {};
-  if (!isPlainObject(rawPrices)) return next;
-  const startYear = Number.isInteger(project?.startYear) ? project.startYear : null;
-  const forecastYears = Number.isInteger(project?.forecastYears) ? project.forecastYears : null;
-  const minYear = startYear;
-  const maxYear = startYear !== null && forecastYears !== null ? startYear + forecastYears - 1 : null;
-  Object.entries(rawPrices).forEach(([yearKey, rawValue]) => {
-    const year = Number(yearKey);
-    const value = Number(rawValue);
-    if (!Number.isInteger(year) || !Number.isFinite(value)) return;
-    if (minYear !== null && maxYear !== null && (year < minYear || year > maxYear)) return;
-    next[year] = value;
-  });
-  return next;
+  return scenarioConfig.sanitizeLtManualPricesByYear(rawPrices, project);
 }
 
 function parseBooleanLike(value, fallback = false) {
-  if (typeof value === "boolean") return value;
-  const normalized = String(value ?? "").trim().toLowerCase();
-  if (["yes", "y", "true", "1", "是", "启用"].includes(normalized)) return true;
-  if (["no", "n", "false", "0", "否", "不启用"].includes(normalized)) return false;
-  return fallback;
+  return scenarioConfig.parseBooleanLike(value, fallback);
 }
 
 function sanitizeEnvManualValuesByYear(rawValues, project) {
-  const next = {};
-  if (!isPlainObject(rawValues)) return next;
-  const startYear = Number.isInteger(project?.startYear) ? project.startYear : null;
-  const forecastYears = Number.isInteger(project?.forecastYears) ? project.forecastYears : null;
-  const minYear = startYear;
-  const maxYear = startYear !== null && forecastYears !== null ? startYear + forecastYears - 1 : null;
-  Object.entries(rawValues).forEach(([yearKey, rawValue]) => {
-    const year = Number(yearKey);
-    if (!Number.isInteger(year) || !isPlainObject(rawValue)) return;
-    if (minYear !== null && maxYear !== null && (year < minYear || year > maxYear)) return;
-    const carbonEnabled = project?.siteType === "offshore" && parseBooleanLike(rawValue.carbonEnabled, Boolean(rawValue.carbonEnabled));
-    const entry = {
-      greenCertPrice: Number(rawValue.greenCertPrice) || 0,
-      greenCertRealizeRatio: clamp(Number(rawValue.greenCertRealizeRatio) || 0, 0, 1),
-      greenPremiumPrice: Number(rawValue.greenPremiumPrice) || 0,
-      greenPremiumRealizeRatio: clamp(Number(rawValue.greenPremiumRealizeRatio) || 0, 0, 1),
-      carbonEnabled,
-      carbonPrice: carbonEnabled ? Number(rawValue.carbonPrice) || 0 : 0,
-      carbonRealizeRatio: carbonEnabled ? clamp(Number(rawValue.carbonRealizeRatio) || 0, 0, 1) : 0
-    };
-    if (entry.greenCertRealizeRatio + entry.greenPremiumRealizeRatio + entry.carbonRealizeRatio > 1 + 0.000001) return;
-    next[year] = entry;
-  });
-  return next;
+  return scenarioConfig.sanitizeEnvManualValuesByYear(rawValues, project);
 }
 
 function sanitizeFeeManualValuesByYear(rawValues, project) {
-  const next = {};
-  if (!isPlainObject(rawValues)) return next;
-  const startYear = Number.isInteger(project?.startYear) ? project.startYear : null;
-  const forecastYears = Number.isInteger(project?.forecastYears) ? project.forecastYears : null;
-  const minYear = startYear;
-  const maxYear = startYear !== null && forecastYears !== null ? startYear + forecastYears - 1 : null;
-  Object.entries(rawValues).forEach(([yearKey, rawValue]) => {
-    const year = Number(yearKey);
-    if (!Number.isInteger(year) || !isPlainObject(rawValue)) return;
-    if (minYear !== null && maxYear !== null && (year < minYear || year > maxYear)) return;
-    const entry = {
-      marketOpFee: Number(rawValue.marketOpFee) || 0,
-      gridAssessFee: Number(rawValue.gridAssessFee) || 0,
-      ancillaryFee: Number(rawValue.ancillaryFee) || 0,
-      otherFee: Number(rawValue.otherFee) || 0,
-      otherIncome: Number(rawValue.otherIncome) || 0
-    };
-    if (Object.values(entry).some((value) => value < 0)) return;
-    next[year] = entry;
-  });
-  return next;
+  return scenarioConfig.sanitizeFeeManualValuesByYear(rawValues, project);
 }
 
 function normalizeLtConvergeStep(rawValue, rawYear1, rawTarget, fallback = 2, isFixedStep = false) {
-  const value = Number(rawValue);
-  if (!Number.isFinite(value) || value < 0) return fallback;
-  if (!isFixedStep && value > 0 && value <= 1) {
-    const year1 = Number(rawYear1);
-    const target = Number(rawTarget);
-    const delta = Number.isFinite(year1) && Number.isFinite(target) ? Math.abs(year1 - target) : 0;
-    if (delta > 0) {
-      return Number((delta * value).toFixed(4));
-    }
-  }
-  return value;
+  return scenarioModel.normalizeLtConvergeStep(rawValue, rawYear1, rawTarget, fallback, isFixedStep);
 }
 
 function sanitizeScenario(project, rawScenario, index) {
-  const scenario = isPlainObject(rawScenario) ? rawScenario : {};
-  const baseConfig = defaultScenarioConfig(project);
-  const srcConfig = isPlainObject(scenario.config) ? scenario.config : {};
-  const merged = { ...baseConfig, ...srcConfig };
-  const next = {
-    id: typeof scenario.id === "string" && scenario.id ? scenario.id : makeId("scn"),
-    name: typeof scenario.name === "string" && scenario.name.trim() ? scenario.name.trim() : `场景${index + 1}`,
-    isBaseline: Boolean(scenario.isBaseline),
-    locked: Boolean(scenario.locked),
-    config: {
-      mechanismEnabled: Boolean(merged.mechanismEnabled),
-      mechanismRatio: clamp(Number(merged.mechanismRatio) || 0, 0, 1),
-      mechanismPrice: Number.isFinite(Number(merged.mechanismPrice)) ? Number(merged.mechanismPrice) : baseConfig.mechanismPrice,
-      mechanismStartYm: typeof merged.mechanismStartYm === "string" && merged.mechanismStartYm ? merged.mechanismStartYm : baseConfig.mechanismStartYm,
-      mechanismEndYm: typeof merged.mechanismEndYm === "string" && merged.mechanismEndYm ? merged.mechanismEndYm : baseConfig.mechanismEndYm,
-      ltPricingMode: LT_PRICING_MODE_SET.has(merged.ltPricingMode) ? merged.ltPricingMode : baseConfig.ltPricingMode,
-      ltManualPricesByYear: sanitizeLtManualPricesByYear(merged.ltManualPricesByYear, project),
-      ltYear1Pnl: Number.isFinite(Number(merged.ltYear1Pnl)) ? Number(merged.ltYear1Pnl) : baseConfig.ltYear1Pnl,
-      ltTargetPnl: Number.isFinite(Number(merged.ltTargetPnl)) ? Number(merged.ltTargetPnl) : baseConfig.ltTargetPnl,
-      ltConvergeSpeedUnit: "fixed_step",
-      ltConvergeSpeed: normalizeLtConvergeStep(
-        merged.ltConvergeSpeed,
-        merged.ltYear1Pnl,
-        merged.ltTargetPnl,
-        baseConfig.ltConvergeSpeed,
-        srcConfig.ltConvergeSpeedUnit === "fixed_step"
-      ),
-      greenCertPrice: Number.isFinite(Number(merged.greenCertPrice)) ? Number(merged.greenCertPrice) : baseConfig.greenCertPrice,
-      greenCertRealizeRatio: Number.isFinite(Number(merged.greenCertRealizeRatio)) ? clamp(Number(merged.greenCertRealizeRatio), 0, 1) : baseConfig.greenCertRealizeRatio,
-      greenPremiumPrice: Number.isFinite(Number(merged.greenPremiumPrice)) ? Number(merged.greenPremiumPrice) : baseConfig.greenPremiumPrice,
-      greenPremiumRealizeRatio: Number.isFinite(Number(merged.greenPremiumRealizeRatio)) ? clamp(Number(merged.greenPremiumRealizeRatio), 0, 1) : baseConfig.greenPremiumRealizeRatio,
-      envValueMode: ENV_VALUE_MODE_SET.has(merged.envValueMode) ? merged.envValueMode : baseConfig.envValueMode,
-      envManualValuesByYear: sanitizeEnvManualValuesByYear(merged.envManualValuesByYear, project),
-      carbonEnabled: Boolean(merged.carbonEnabled),
-      carbonPrice: Number.isFinite(Number(merged.carbonPrice)) ? Number(merged.carbonPrice) : baseConfig.carbonPrice,
-      carbonRealizeRatio: Number.isFinite(Number(merged.carbonRealizeRatio)) ? clamp(Number(merged.carbonRealizeRatio), 0, 1) : baseConfig.carbonRealizeRatio,
-      feeConfigMode: FEE_CONFIG_MODE_SET.has(merged.feeConfigMode) ? merged.feeConfigMode : baseConfig.feeConfigMode,
-      feeManualValuesByYear: sanitizeFeeManualValuesByYear(merged.feeManualValuesByYear, project),
-      marketOpFee: Number.isFinite(Number(merged.marketOpFee)) ? Number(merged.marketOpFee) : baseConfig.marketOpFee,
-      gridAssessFee: Number.isFinite(Number(merged.gridAssessFee)) ? Number(merged.gridAssessFee) : baseConfig.gridAssessFee,
-      ancillaryFee: Number.isFinite(Number(merged.ancillaryFee)) ? Number(merged.ancillaryFee) : baseConfig.ancillaryFee,
-      otherFee: Number.isFinite(Number(merged.otherFee)) ? Number(merged.otherFee) : baseConfig.otherFee,
-      otherIncome: Number.isFinite(Number(merged.otherIncome)) ? Number(merged.otherIncome) : baseConfig.otherIncome,
-      storageArbitragePrice: Number.isFinite(Number(merged.storageArbitragePrice)) ? Number(merged.storageArbitragePrice) : baseConfig.storageArbitragePrice,
-      storageCapacityCompPrice: Number.isFinite(Number(merged.storageCapacityCompPrice)) ? Number(merged.storageCapacityCompPrice) : baseConfig.storageCapacityCompPrice,
-      storageAncillaryRevenuePrice: Number.isFinite(Number(merged.storageAncillaryRevenuePrice)) ? Number(merged.storageAncillaryRevenuePrice) : baseConfig.storageAncillaryRevenuePrice,
-      storageOtherRevenuePrice: Number.isFinite(Number(merged.storageOtherRevenuePrice)) ? Number(merged.storageOtherRevenuePrice) : baseConfig.storageOtherRevenuePrice
-    },
-    updatedAt: typeof scenario.updatedAt === "string" && scenario.updatedAt ? scenario.updatedAt : new Date().toISOString()
-  };
-  if (project.siteType !== "offshore") {
-    next.config.carbonEnabled = false;
-    next.config.carbonPrice = 0;
-    next.config.carbonRealizeRatio = 0;
-  }
-  if (!project.hasStorage) {
-    next.config.storageArbitragePrice = 0;
-    next.config.storageCapacityCompPrice = 0;
-    next.config.storageAncillaryRevenuePrice = 0;
-    next.config.storageOtherRevenuePrice = 0;
-  }
-  return next;
+  return scenarioModel.sanitizeScenario(project, rawScenario, index, {
+    provinceDefaults: getProvinceDefaults(project?.province),
+    currentYear: new Date().getFullYear(),
+    nowIso: () => new Date().toISOString(),
+    makeId
+  });
 }
 
 function sanitizeProject(rawProject, index) {
   if (!isPlainObject(rawProject)) return null;
-  const currentYear = new Date().getFullYear();
-  const isNewDraft = rawProject.workspaceBucket === "new";
-  const rawName = typeof rawProject.name === "string" ? rawProject.name.trim() : "";
-  const rawCapacity = Number(rawProject.capacityMw);
-  const rawStoragePower = Number(rawProject.storagePowerMw);
-  const rawStorageDuration = Number(rawProject.storageDurationH);
-  const hasStorage = Boolean(rawProject.hasStorage);
-  const migratedStoragePower = hasStorage && (!Number.isFinite(rawStoragePower) || rawStoragePower <= 0) && Number.isFinite(rawCapacity) && rawCapacity > 0
-    ? Number((rawCapacity * 0.2).toFixed(1))
-    : null;
-  const migratedStorageDuration = hasStorage && (!Number.isFinite(rawStorageDuration) || rawStorageDuration <= 0)
-    ? 2
-    : null;
-  const rawStartYear = Number(rawProject.startYear);
-  const rawForecastYears = Number(rawProject.forecastYears);
   const project = {
-    id: typeof rawProject.id === "string" && rawProject.id ? rawProject.id : makeId("proj"),
-    ownerAccount: typeof rawProject.ownerAccount === "string"
-      ? rawProject.ownerAccount.trim()
-      : (typeof rawProject.account === "string" ? rawProject.account.trim() : ""),
-    workspaceBucket: PROJECT_WORKSPACE_BUCKET_SET.has(rawProject.workspaceBucket) ? rawProject.workspaceBucket : "history",
-    name: rawName || (isNewDraft ? resolveUniqueProjectName("新建项目") : `项目${index + 1}`),
-    province: PROVINCE_KEY_SET.has(rawProject.province) ? rawProject.province : (isNewDraft ? "" : "shandong"),
-    assetType: ASSET_TYPE_SET.has(rawProject.assetType) ? rawProject.assetType : (isNewDraft ? "" : "wind"),
-    siteType: SITE_TYPE_SET.has(rawProject.siteType) ? rawProject.siteType : (isNewDraft ? "" : "onshore"),
-    hasStorage,
-    storagePowerMw: Number.isFinite(rawStoragePower) && rawStoragePower > 0 ? rawStoragePower : migratedStoragePower,
-    storageDurationH: Number.isFinite(rawStorageDuration) && rawStorageDuration > 0 ? rawStorageDuration : migratedStorageDuration,
-    storageNote: typeof rawProject.storageNote === "string" ? rawProject.storageNote : "",
-    capacityMw: Number.isFinite(rawCapacity) ? rawCapacity : (isNewDraft ? null : 0),
-    startYear: Number.isFinite(rawStartYear) ? Math.floor(rawStartYear) : (isNewDraft ? null : currentYear),
-    forecastYears: Number.isFinite(rawForecastYears) ? clamp(Math.floor(rawForecastYears), 1, 30) : (isNewDraft ? null : 30),
-    energyMode: ENERGY_MODE_SET.has(rawProject.energyMode) ? rawProject.energyMode : "annual_hours",
-    note: typeof rawProject.note === "string" ? rawProject.note : "",
-    createdAt: typeof rawProject.createdAt === "string" && rawProject.createdAt ? rawProject.createdAt : new Date().toISOString(),
+    ...projectModel.sanitizeProjectBase(rawProject, index, {
+      currentYear: new Date().getFullYear(),
+      nowIso: () => new Date().toISOString(),
+      provinceKeys: Array.from(PROVINCE_KEY_SET),
+      makeId,
+      resolveUniqueName: resolveUniqueProjectName
+    }),
     statuses: sanitizeStatuses(rawProject.statuses),
     energyData: createEmptyEnergyDataState("annual_hours"),
-    energyTemplateExports: {
-      hourly_8760: "",
-      annual_hours: "",
-      typical_curve_8760: "",
-      province_typical_curve: ""
-    },
+    energyTemplateExports: projectModel.createEmptyEnergyTemplateExports(),
     historySpotImport: createEmptyHistorySpotImport(),
     priceRuns: [],
     activeRunId: null,
@@ -1870,30 +1509,17 @@ function sanitizeProject(rawProject, index) {
   ensureProjectEnergyTemplateExports(project);
   project.historySpotImport = sanitizeHistorySpotImport(rawProject.historySpotImport);
 
-  if (Array.isArray(rawProject.priceRuns)) {
-    project.priceRuns = rawProject.priceRuns
-      .filter(isPlainObject)
-      .map((run) => ({
-        ...run,
-        id: typeof run.id === "string" && run.id ? run.id : makeId("run"),
-        createdAt: typeof run.createdAt === "string" && run.createdAt ? run.createdAt : new Date().toISOString(),
-        pricesByYear: isPlainObject(run.pricesByYear) ? run.pricesByYear : {}
-      }));
-  }
-  project.activeRunId = project.priceRuns.some((run) => run.id === rawProject.activeRunId) ? rawProject.activeRunId : null;
+  project.priceRuns = projectModel.sanitizePriceRuns(rawProject.priceRuns, {
+    makeId,
+    nowIso: () => new Date().toISOString()
+  });
+  project.activeRunId = projectModel.resolveActiveRunId(project.priceRuns, rawProject.activeRunId);
   project.spotMarketConfig = sanitizeSpotMarketConfig(project, rawProject.spotMarketConfig);
 
-  if (Array.isArray(rawProject.activationLogs)) {
-    project.activationLogs = rawProject.activationLogs
-      .filter(isPlainObject)
-      .map((item) => ({
-        id: typeof item.id === "string" && item.id ? item.id : makeId("act"),
-        fromRunId: typeof item.fromRunId === "string" ? item.fromRunId : "-",
-        toRunId: typeof item.toRunId === "string" ? item.toRunId : "-",
-        reason: typeof item.reason === "string" ? item.reason : "",
-        changedAt: typeof item.changedAt === "string" && item.changedAt ? item.changedAt : new Date().toISOString()
-      }));
-  }
+  project.activationLogs = projectModel.sanitizeActivationLogs(rawProject.activationLogs, {
+    makeId,
+    nowIso: () => new Date().toISOString()
+  });
 
   const rawScenarios = Array.isArray(rawProject.scenarios) ? rawProject.scenarios : [];
   project.scenarios = rawScenarios.map((scenario, i) => sanitizeScenario(project, scenario, i));
@@ -2511,6 +2137,7 @@ function buildWorkflowCompletionSnapshot(project) {
     scenarioCompleted,
     resultsCompleted,
     compareCompleted,
+    hasPriceRuns: (project.priceRuns?.length || 0) > 0,
     completeEnergyYears,
     compareReadyCount
   };
@@ -2518,37 +2145,11 @@ function buildWorkflowCompletionSnapshot(project) {
 
 function reconcileProjectStatuses(project) {
   if (!project) return;
-  project.statuses = sanitizeStatuses(project.statuses);
   const snapshot = buildWorkflowCompletionSnapshot(project);
-  const inProgressMap = {
-    "create-page": !snapshot.createCompleted && Boolean(project.name?.trim?.()),
-    "energy-page": snapshot.createCompleted,
-    "history-page": snapshot.historyReady,
-    "forecast-page": snapshot.historyCompleted || (project.priceRuns?.length || 0) > 0,
-    "scenario-page": snapshot.forecastCompleted || project.statuses["scenario-page"] === "in_progress",
-    "results-page": snapshot.scenarioCompleted && snapshot.forecastCompleted,
-    "compare-page": snapshot.resultsCompleted && snapshot.compareReadyCount >= 1
-  };
-  const completedMap = {
-    "create-page": snapshot.createCompleted,
-    "energy-page": snapshot.energyCompleted,
-    "history-page": snapshot.historyCompleted,
-    "forecast-page": snapshot.forecastCompleted,
-    "scenario-page": snapshot.scenarioCompleted,
-    "results-page": snapshot.resultsCompleted,
-    "compare-page": snapshot.compareCompleted
-  };
-  for (const pageId of WORKFLOW_PAGES) {
-    const current = project.statuses[pageId] || "not_started";
-    if (completedMap[pageId]) {
-      project.statuses[pageId] = "completed";
-      continue;
-    }
-    if (current === "stale") {
-      continue;
-    }
-    project.statuses[pageId] = inProgressMap[pageId] ? "in_progress" : "not_started";
-  }
+  project.statuses = workflowStatus.reconcileStatuses(project.statuses, snapshot, {
+    workflowPages: WORKFLOW_PAGES,
+    hasProjectName: Boolean(project.name?.trim?.())
+  });
 }
 
 function reconcileAllProjectStatuses() {
@@ -2590,26 +2191,14 @@ function getPageHelpContent(pageId, title, group) {
 }
 
 function statusText(state) {
-  if (state === "completed") return "已完成";
-  if (state === "in_progress") return "进行中";
-  if (state === "stale") return "需复核";
-  return "未开始";
+  return workflowStatus.statusText(state);
 }
 
 function markDownstreamStale(project, fromPage) {
   if (!project) return;
-  const chain = {
-    "energy-page": ["forecast-page", "scenario-page", "results-page", "compare-page"],
-    "history-page": ["forecast-page", "scenario-page", "results-page", "compare-page"],
-    "forecast-page": ["scenario-page", "results-page", "compare-page"],
-    "scenario-page": ["results-page", "compare-page"]
-  };
-  const targets = chain[fromPage] || [];
-  for (const pageId of targets) {
-    if (project.statuses[pageId] !== "not_started") {
-      project.statuses[pageId] = "stale";
-    }
-  }
+  project.statuses = workflowStatus.markDownstreamStale(project.statuses, fromPage, {
+    workflowPages: WORKFLOW_PAGES
+  });
 }
 
 function setTopMeta(text, tone = "info") {
@@ -4057,48 +3646,10 @@ function initBatchParamSelect() {
 }
 
 function defaultScenarioConfig(project) {
-  const provinceDefaults = getProvinceDefaults(project.province);
-  const currentYear = new Date().getFullYear();
-  const startYear = Number.isInteger(project?.startYear) && project.startYear >= 2026
-    ? project.startYear
-    : Math.max(2026, currentYear);
-  const forecastYears = Number.isInteger(project?.forecastYears) && project.forecastYears > 0
-    ? project.forecastYears
-    : 30;
-  const siteType = SITE_TYPE_SET.has(project?.siteType) ? project.siteType : "onshore";
-  return {
-    mechanismEnabled: provinceDefaults.mechanismEnabled,
-    mechanismRatio: provinceDefaults.mechanismRatio,
-    mechanismPrice: provinceDefaults.mechanismPrice,
-    mechanismStartYm: `${startYear}-01`,
-    mechanismEndYm: `${Math.min(startYear + 3, startYear + forecastYears - 1)}-12`,
-    ltPricingMode: "auto",
-    ltManualPricesByYear: {},
-    ltYear1Pnl: 8,
-    ltTargetPnl: 2,
-    ltConvergeSpeedUnit: "fixed_step",
-    ltConvergeSpeed: 2,
-    envValueMode: "global",
-    envManualValuesByYear: {},
-    greenCertPrice: provinceDefaults.greenCertPrice,
-    greenCertRealizeRatio: 1,
-    greenPremiumPrice: provinceDefaults.greenPremiumPrice,
-    greenPremiumRealizeRatio: 0,
-    carbonEnabled: siteType === "offshore",
-    carbonPrice: siteType === "offshore" ? 4 : 0,
-    carbonRealizeRatio: 0,
-    feeConfigMode: "global",
-    feeManualValuesByYear: {},
-    marketOpFee: provinceDefaults.marketOpFee,
-    gridAssessFee: provinceDefaults.gridAssessFee,
-    ancillaryFee: provinceDefaults.ancillaryFee,
-    otherFee: provinceDefaults.otherFee,
-    otherIncome: 2,
-    storageArbitragePrice: project?.hasStorage ? provinceDefaults.storageArbitragePrice : 0,
-    storageCapacityCompPrice: project?.hasStorage ? provinceDefaults.storageCapacityCompPrice : 0,
-    storageAncillaryRevenuePrice: project?.hasStorage ? provinceDefaults.storageAncillaryRevenuePrice : 0,
-    storageOtherRevenuePrice: project?.hasStorage ? provinceDefaults.storageOtherRevenuePrice : 0
-  };
+  return scenarioModel.defaultScenarioConfig(project, {
+    provinceDefaults: getProvinceDefaults(project?.province),
+    currentYear: new Date().getFullYear()
+  });
 }
 
 function resolveUniqueProjectName(baseName) {
@@ -4381,19 +3932,15 @@ function createProjectFromForm(options = {}) {
 }
 
 function normalizeCsvHeaderToken(value) {
-  return String(value || "")
-    .replace(/^\uFEFF/, "")
-    .trim()
-    .toLowerCase();
+  return csvUtils.normalizeCsvHeaderToken(value);
 }
 
 function normalizeCsvHeaderRow(row) {
-  if (!Array.isArray(row)) return "";
-  return row.map((cell) => normalizeCsvHeaderToken(cell)).join(",");
+  return csvUtils.normalizeCsvHeaderRow(row);
 }
 
 function normalizeEnergyMode(mode) {
-  return ENERGY_MODE_SET.has(mode) ? mode : "annual_hours";
+  return projectModel.normalizeEnergyMode(mode);
 }
 
 function ensureProjectEnergyTemplateExports(project) {
@@ -4432,20 +3979,11 @@ function clearHistoryAnalysisCacheForProject(projectId) {
 }
 
 function getEnergyModeMeta(mode) {
-  const key = normalizeEnergyMode(mode);
-  return ENERGY_MODE_META[key] || ENERGY_MODE_META.hourly_8760;
+  return energyDataRules.getEnergyModeMeta(mode);
 }
 
 function detectEnergyModeByHeader(headerRow) {
-  const actualHeader = normalizeCsvHeaderRow(headerRow);
-  if (!actualHeader) return null;
-  for (const mode of ENERGY_MODE_SET) {
-    const expectedHeader = normalizeCsvHeaderRow(getEnergyModeMeta(mode).header.split(","));
-    if (actualHeader === expectedHeader) {
-      return mode;
-    }
-  }
-  return null;
+  return energyDataRules.detectEnergyModeByHeader(headerRow);
 }
 
 function applyEnergyModeUi(mode) {
@@ -4488,22 +4026,7 @@ function moveProjectToHistoryWorkspaceIfReady(project) {
 }
 
 function parseCsvRows(text) {
-  const parseCell = (cell) => {
-    const trimmed = String(cell || "").trim();
-    if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-      return trimmed.slice(1, -1).replaceAll("\"\"", "\"").trim();
-    }
-    return trimmed;
-  };
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const normalized = line.replaceAll("，", ",");
-      const separator = normalized.includes(",") ? "," : "\t";
-      return normalized.split(separator).map((value) => parseCell(value));
-    });
+  return csvUtils.parseCsvRows(text);
 }
 
 function readTextFile(file) {
@@ -4538,52 +4061,23 @@ async function readSpreadsheetToCsv(file) {
 }
 
 function monthSerial(ym) {
-  const [year, month] = String(ym).split("-").map((item) => Number(item));
-  if (!year || !month) return null;
-  return year * 12 + (month - 1);
+  return revenueRules.monthSerial(ym);
 }
 
 function mechanismActiveMonthsForYear(year, startYm, endYm) {
-  const start = monthSerial(startYm);
-  const end = monthSerial(endYm);
-  if (start === null || end === null || end < start) return 0;
-  const yearStart = year * 12;
-  const yearEnd = year * 12 + 11;
-  const overlapStart = Math.max(start, yearStart);
-  const overlapEnd = Math.min(end, yearEnd);
-  return Math.max(0, overlapEnd - overlapStart + 1);
+  return revenueRules.mechanismActiveMonthsForYear(year, startYm, endYm);
 }
 
 function pseudoNoise(index, seed) {
-  const raw = Math.sin(index * 12.9898 + seed * 78.233) * 43758.5453;
-  return raw - Math.floor(raw);
+  return energyProfiles.pseudoNoise(index, seed);
 }
 
 function generationWeight(assetType, hourIndex, seed) {
-  const day = Math.floor(hourIndex / 24);
-  const hour = hourIndex % 24;
-  if (assetType === "photovoltaic") {
-    if (hour < 6 || hour > 18) return 0;
-    const daylight = Math.sin(((hour - 6) / 12) * Math.PI);
-    const seasonal = 0.82 + 0.22 * Math.sin(((day - 85) / 365) * 2 * Math.PI);
-    const weather = 0.8 + 0.28 * pseudoNoise(day, seed + 3);
-    return Math.max(0, daylight * seasonal * weather);
-  }
-  const seasonal = 1 + 0.16 * Math.cos(((day - 30) / 365) * 2 * Math.PI);
-  const diurnal = 0.96 + 0.08 * Math.sin(((hour + 5) / 24) * 2 * Math.PI);
-  const weather = 0.72 + 0.44 * pseudoNoise(hourIndex, seed + 9);
-  return Math.max(0.05, seasonal * diurnal * weather);
+  return energyProfiles.generationWeight(assetType, hourIndex, seed);
 }
 
 function generateHourlyHoursFromAnnual(annualHours, assetType, seed) {
-  const weights = [];
-  let total = 0;
-  for (let i = 0; i < 8760; i += 1) {
-    const w = generationWeight(assetType, i, seed);
-    weights.push(w);
-    total += w;
-  }
-  return weights.map((w) => annualHours * w / total);
+  return energyProfiles.generateHourlyHoursFromAnnual(annualHours, assetType, seed);
 }
 
 function getProvinceTypicalCurveRecordKey(project) {
@@ -4645,192 +4139,15 @@ function buildProvinceTypicalCurveProfile(project) {
 }
 
 function deriveEnergyModeFromInputs(energyData) {
-  if (energyData.typicalCurveSource === "province_typical_curve" && hasNonEmptyObject(energyData.annualInputByYear)) {
-    return "province_typical_curve";
-  }
-  if (energyData.typicalCurveSource === "typical_curve_8760" && hasNonEmptyObject(energyData.annualInputByYear)) {
-    return "typical_curve_8760";
-  }
-  if (hasNonEmptyObject(energyData.annualInputByYear)) {
-    return "annual_hours";
-  }
-  return normalizeEnergyMode(energyData.mode);
+  return energyDataRules.deriveEnergyModeFromInputs(energyData);
 }
 
 function rebuildProjectEnergyData(project) {
-  const energyData = ensureProjectEnergyDataState(project);
-  const hourlyByYear = {};
-  const annualSummary = {};
-  const forecastYears = Number.isInteger(project?.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
-  const typicalCurveReady = hasEnergyTypicalCurve(project);
-
-  for (let offset = 0; offset < forecastYears; offset += 1) {
-    const year = project.startYear + offset;
-    const annualHours = Number(energyData.annualInputByYear?.[year]);
-    if (!Number.isFinite(annualHours) || annualHours <= 0) {
-      annualSummary[year] = { annualHours: 0, energyMwh: 0, status: "缺失" };
-      continue;
-    }
-    if (!typicalCurveReady) {
-      annualSummary[year] = {
-        annualHours,
-        energyMwh: annualHours * project.capacityMw,
-        status: "待典型曲线"
-      };
-      continue;
-    }
-    const hourlyValues = energyData.typicalCurveProfile.map((weight) => annualHours * weight);
-    hourlyByYear[year] = hourlyValues;
-    annualSummary[year] = {
-      annualHours,
-      energyMwh: annualHours * project.capacityMw,
-      status: "完整"
-    };
-  }
-
-  energyData.hourlyByYear = hourlyByYear;
-  energyData.annualSummary = annualSummary;
-  energyData.mode = deriveEnergyModeFromInputs(energyData);
-  project.energyMode = energyData.mode;
+  energyDataRules.rebuildProjectEnergyData(project);
 }
 
 function validateAndBuildEnergyData(project, csvText, expectedMode = null) {
-  const rows = parseCsvRows(csvText);
-  const yearRange = `${project.startYear}-${project.startYear + project.forecastYears - 1}`;
-  if (!rows.length) return { ok: false, message: "没有检测到文件内容，请上传模板文件后重试。" };
-  const normalizedMode = detectEnergyModeByHeader(rows[0]);
-  if (!normalizedMode) {
-    const actualHeader = Array.isArray(rows[0]) ? rows[0].join(",") : "";
-    return {
-      ok: false,
-      message: `表头不匹配。识别到：${actualHeader || "(空)"}；请使用：${getEnergyModeMeta("annual_hours").header} 或 ${getEnergyModeMeta("typical_curve_8760").header}`
-    };
-  }
-  if (expectedMode && normalizedMode !== expectedMode) {
-    return {
-      ok: false,
-      message: `当前上传文件与本行模板不匹配。请上传「${getEnergyModeMeta(expectedMode).label}」对应文件。`
-    };
-  }
-
-  const rangeYears = new Set(
-    Array.from({ length: project.forecastYears }, (_, idx) => project.startYear + idx)
-  );
-  const hourlyByYear = {};
-  const annualInputByYear = {};
-
-  if (normalizedMode === "hourly_8760") {
-    for (let i = 1; i < rows.length; i += 1) {
-      const [yearRaw, hourRaw, hoursRaw] = rows[i];
-      const year = Number(yearRaw);
-      const hourIndex = Number(hourRaw);
-      const hours = Number(hoursRaw);
-      if (!Number.isInteger(year) || !rangeYears.has(year)) {
-        return { ok: false, message: `第 ${i + 1} 行第1列（year）无效：${yearRaw || "(空)"}。要求范围 ${yearRange}。` };
-      }
-      if (!Number.isInteger(hourIndex) || hourIndex < 1 || hourIndex > 8760) {
-        return { ok: false, message: `第 ${i + 1} 行第2列（hour_index）无效：${hourRaw || "(空)"}。要求 1-8760。` };
-      }
-      if (!Number.isFinite(hours) || hours < 0) {
-        return { ok: false, message: `第 ${i + 1} 行第3列（equivalent_hours_h）无效：${hoursRaw || "(空)"}。要求 >=0 数值。` };
-      }
-      if (!hourlyByYear[year]) hourlyByYear[year] = Array(8760).fill(null);
-      if (hourlyByYear[year][hourIndex - 1] !== null) {
-        return { ok: false, message: `第 ${i + 1} 行第2列（hour_index）重复：${hourIndex}。` };
-      }
-      hourlyByYear[year][hourIndex - 1] = hours;
-    }
-    for (const [yearText, arr] of Object.entries(hourlyByYear)) {
-      const missingIndex = arr.findIndex((value) => value === null);
-      if (missingIndex >= 0) {
-        return { ok: false, message: `${yearText} 年缺少第 ${missingIndex + 1} 小时数据（需完整8760点）。` };
-      }
-      annualInputByYear[yearText] = arr.reduce((sum, value) => sum + value, 0);
-    }
-  } else if (normalizedMode === "annual_hours") {
-    const seen = new Set();
-    for (let i = 1; i < rows.length; i += 1) {
-      const [yearRaw, annualHoursRaw] = rows[i];
-      const year = Number(yearRaw);
-      const annualHours = Number(annualHoursRaw);
-      if (!Number.isInteger(year) || !rangeYears.has(year)) {
-        return { ok: false, message: `第 ${i + 1} 行第1列（year）无效：${yearRaw || "(空)"}。要求范围 ${yearRange}。` };
-      }
-      if (seen.has(year)) {
-        return { ok: false, message: `第 ${i + 1} 行第1列（year）重复：${year}。` };
-      }
-      if (!Number.isFinite(annualHours) || annualHours <= 0) {
-        return { ok: false, message: `第 ${i + 1} 行第2列（annual_hours_h）无效：${annualHoursRaw || "(空)"}。要求 >0 数值。` };
-      }
-      seen.add(year);
-      annualInputByYear[year] = annualHours;
-    }
-    return {
-      ok: true,
-      mode: normalizedMode,
-      annualInputByYear
-    };
-  } else if (normalizedMode === "typical_curve_8760") {
-    const values = Array(8760).fill(null);
-    for (let i = 1; i < rows.length; i += 1) {
-      const [hourRaw, hoursRaw] = rows[i];
-      const hourIndex = Number(hourRaw);
-      const hours = Number(hoursRaw);
-      if (!Number.isInteger(hourIndex) || hourIndex < 1 || hourIndex > 8760) {
-        return { ok: false, message: `第 ${i + 1} 行第1列（hour_index）无效：${hourRaw || "(空)"}。要求 1-8760。` };
-      }
-      if (!Number.isFinite(hours) || hours < 0) {
-        return { ok: false, message: `第 ${i + 1} 行第2列（equivalent_hours_h）无效：${hoursRaw || "(空)"}。要求 >=0 数值。` };
-      }
-      if (values[hourIndex - 1] !== null) {
-        return { ok: false, message: `第 ${i + 1} 行第1列（hour_index）重复：${hourIndex}。` };
-      }
-      values[hourIndex - 1] = hours;
-    }
-    const missingIndex = values.findIndex((value) => value === null);
-    if (missingIndex >= 0) {
-      return { ok: false, message: `典型年8760模板缺少第 ${missingIndex + 1} 小时数据（需完整8760点）。` };
-    }
-    const typicalCurveProfile = normalizeTypicalCurveProfile(values);
-    if (!typicalCurveProfile.length) {
-      return { ok: false, message: "典型年8760模板无有效小时曲线，请检查数据是否均为非负数且总量大于0。" };
-    }
-    return {
-      ok: true,
-      mode: normalizedMode,
-      typicalCurveProfile
-    };
-  }
-
-  const annualSummary = {};
-  let completeYears = 0;
-  const missingYears = [];
-  for (let i = 0; i < project.forecastYears; i += 1) {
-    const year = project.startYear + i;
-    const values = hourlyByYear[year];
-    if (!values) {
-      annualSummary[year] = { annualHours: 0, energyMwh: 0, status: "缺失" };
-      missingYears.push(year);
-      continue;
-    }
-    const annualHours = values.reduce((sum, value) => sum + value, 0);
-    annualSummary[year] = {
-      annualHours,
-      energyMwh: annualHours * project.capacityMw,
-      status: "完整"
-    };
-    completeYears += 1;
-  }
-
-  return {
-    ok: true,
-    mode: normalizedMode,
-    hourlyByYear,
-    annualSummary,
-    annualInputByYear,
-    completeYears,
-    missingYears
-  };
+  return energyDataRules.validateAndBuildEnergyData(project, csvText, expectedMode);
 }
 
 function importEnergyDataFromText(mode, csvText, sourceLabel = "") {
@@ -4924,28 +4241,7 @@ function exportEnergyTemplate(mode = "hourly_8760") {
     return;
   }
   const normalizedMode = normalizeEnergyMode(mode);
-  const rows = [];
-
-  if (normalizedMode === "annual_hours") {
-    rows.push(["year", "annual_hours_h"]);
-    for (let i = 0; i < project.forecastYears; i += 1) {
-      const year = project.startYear + i;
-      rows.push([year, ""]);
-    }
-  } else if (normalizedMode === "typical_curve_8760") {
-    rows.push(["hour_index", "equivalent_hours_h"]);
-    for (let hour = 1; hour <= 8760; hour += 1) {
-      rows.push([hour, ""]);
-    }
-  } else {
-    rows.push(["year", "hour_index", "equivalent_hours_h"]);
-    for (let i = 0; i < project.forecastYears; i += 1) {
-      const year = project.startYear + i;
-      for (let hour = 1; hour <= 8760; hour += 1) {
-        rows.push([year, hour, ""]);
-      }
-    }
-  }
+  const rows = energyDataRules.buildEnergyTemplateRows(project, normalizedMode);
 
   downloadCsv(buildEnergyTemplateFilename(project, normalizedMode), rows);
   const exports = ensureProjectEnergyTemplateExports(project);
@@ -5144,7 +4440,7 @@ function getHourlyEnergyForCalculation(project, year, yearIndex) {
 }
 
 function getPriceBaseForProvince(province) {
-  return PROVINCE_BENCHMARKS[province]?.historyPrice || 360;
+  return priceForecast.getPriceBaseForProvince(province, PROVINCE_BENCHMARKS);
 }
 
 function priceShape(hourIndex, seed) {
@@ -5157,107 +4453,21 @@ function priceShape(hourIndex, seed) {
 }
 
 function buildForecastDayMeta(year) {
-  return Array.from({ length: 365 }, (_, dayIndex) => {
-    const { month, day } = dayOfYearToMonthDay(dayIndex + 1, false);
-    const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-    return {
-      month,
-      dayOfWeek,
-      isWeekend: dayOfWeek === 0 || dayOfWeek === 6
-    };
-  });
+  return priceForecast.buildForecastDayMeta(year);
 }
 
 function hourlyPricesFromQuarterPrices(quarterPrices) {
-  if (!Array.isArray(quarterPrices) || quarterPrices.length !== 35040) return [];
-  const hourly = [];
-  for (let hour = 0; hour < 8760; hour += 1) {
-    const start = hour * 4;
-    hourly.push(Number(((quarterPrices[start] + quarterPrices[start + 1] + quarterPrices[start + 2] + quarterPrices[start + 3]) / 4).toFixed(4)));
-  }
-  return hourly;
+  return priceForecast.hourlyPricesFromQuarterPrices(quarterPrices);
 }
 
 function forecastQuarterPrice(project, model, context) {
-  const {
-    year,
-    dayIndex,
-    quarterOfDay,
-    baseLevel,
-    dayMeta,
-    factors,
-    seed
-  } = context;
-  const hour = quarterOfDay / 4;
-  const { month, isWeekend } = dayMeta;
-  const winterLoad = 0.18 * Math.cos(((dayIndex - 12) / 365) * 2 * Math.PI) * factors.winterScale;
-  const summerLoad = 0.16 * Math.cos(((dayIndex - 196) / 365) * 2 * Math.PI) * factors.summerScale;
-  const seasonal = 1 + winterLoad + summerLoad;
-  const morningPeak = Math.exp(-Math.pow((hour - 8.5) / 2.2, 2));
-  const eveningPeak = 1.22 * Math.exp(-Math.pow((hour - 18.4) / 2.9, 2));
-  const noonValley = 0.13 * Math.exp(-Math.pow((hour - 13.2) / 2.4, 2));
-  const nightValley = 0.07 * Math.exp(-Math.pow((hour - 3.2) / 2.8, 2));
-  const storageShift = factors.storageScale;
-  const diurnal = 0.9
-    + factors.morningPeakWeight * model.peakScale * morningPeak
-    + factors.eveningPeakWeight * model.peakScale * eveningPeak
-    - (factors.noonValleyWeight - storageShift * 0.05) * noonValley
-    - factors.nightValleyWeight * nightValley;
-  const weekendFactor = isWeekend ? factors.weekendLevel : 1;
-  const quarterIndex = dayIndex * 96 + quarterOfDay;
-  const intradayRipple = 1 + 0.012 * model.volatility * Math.sin((quarterOfDay / 96) * 8 * Math.PI + model.seedOffset / 100);
-  const randomFactor = 1 + (pseudoNoise(quarterIndex * 97 + year, seed + model.seedOffset) - 0.5) * factors.noiseAmplitude * model.volatility;
-  let price = baseLevel * model.levelBias * seasonal * diurnal * weekendFactor * intradayRipple * randomFactor;
-
-  const spikeThreshold = clamp(factors.spikeThreshold + (1 - model.spikeScale) * 0.0015, 0.99, 0.9998);
-  const spikeSeed = pseudoNoise(quarterIndex * 53 + year, seed + model.seedOffset + 37);
-  if (spikeSeed > spikeThreshold) {
-    price *= 1.32 + (spikeSeed - spikeThreshold) * 28 * model.spikeScale;
-  }
-
-  const negativeThreshold = clamp(factors.negativeThreshold + (1 - model.negativeScale) * 0.002, 0.985, 0.9995);
-  const negativeSeed = pseudoNoise(quarterIndex * 31 + year, seed + model.seedOffset + 73);
-  if (
-    hour >= 10.5 && hour <= 15.5
-    && (month === 4 || month === 5 || month === 10 || (project.assetType === "photovoltaic" && month === 9))
-    && negativeSeed > negativeThreshold
-  ) {
-    price = -5 - 90 * pseudoNoise(quarterIndex * 43 + year, seed + model.seedOffset + 91) * model.negativeScale;
-  }
-
-  return Number(clamp(price, -150, 950).toFixed(2));
+  return priceForecast.forecastQuarterPrice(project, model, context);
 }
 
 function buildForecastPriceSeries(project, model, seed, growth) {
-  const factors = getHistoryMockShapeFactors(project);
-  const base = getPriceBaseForProvince(project.province) + factors.baseShift;
-  const quarterPricesByYear = {};
-  const pricesByYear = {};
-
-  for (let i = 0; i < project.forecastYears; i += 1) {
-    const year = project.startYear + i;
-    const yearEscalator = Math.pow(1 + growth, i);
-    const baseLevel = base * yearEscalator;
-    const dayMeta = buildForecastDayMeta(year);
-    const quarterPrices = [];
-    for (let dayIndex = 0; dayIndex < 365; dayIndex += 1) {
-      for (let quarterOfDay = 0; quarterOfDay < 96; quarterOfDay += 1) {
-        quarterPrices.push(forecastQuarterPrice(project, model, {
-          year,
-          dayIndex,
-          quarterOfDay,
-          baseLevel,
-          dayMeta: dayMeta[dayIndex],
-          factors,
-          seed
-        }));
-      }
-    }
-    quarterPricesByYear[year] = quarterPrices;
-    pricesByYear[year] = hourlyPricesFromQuarterPrices(quarterPrices);
-  }
-
-  return { quarterPricesByYear, pricesByYear };
+  return priceForecast.buildForecastPriceSeries(project, model, seed, growth, {
+    provinceBenchmarks: PROVINCE_BENCHMARKS
+  });
 }
 
 function createForecastRunForModel(project, model, options) {
@@ -5270,33 +4480,19 @@ function createForecastRunForModel(project, model, options) {
     seed,
     growth
   } = options;
-  const modelSeed = seed + model.seedOffset;
-  const { quarterPricesByYear, pricesByYear } = buildForecastPriceSeries(project, model, modelSeed, growth);
-  const run = {
-    id: makeId("run"),
-    algorithmFamily: model.family,
-    algorithmName: model.name,
-    algorithmLabel: model.label,
-    algorithmVersion: `${algorithmVersion}-${model.versionSuffix}`,
+  return priceForecast.createForecastRunForModel(project, model, {
+    algorithmVersion,
     featureVersion,
     dataSnapshotId,
     trainStart,
     trainEnd,
-    seed: modelSeed,
+    seed,
     growth,
-    status: "validated",
+    id: makeId("run"),
     createdAt: new Date().toISOString(),
-    granularityMinutes: 15,
-    pointsPerYear: 35040,
-    pricesByYear,
-    quarterPricesByYear,
-    mape: model.mapeBase + pseudoNoise(modelSeed, trainStart) * 0.01,
-    smape: model.smapeBase + pseudoNoise(modelSeed, trainEnd) * 0.012,
-    mae: model.maeBase + pseudoNoise(modelSeed, 8) * 7,
-    rmse: model.rmseBase + pseudoNoise(modelSeed, 10) * 8
-  };
-  evaluateRunQuality(project, run);
-  return run;
+    qualityGate: QUALITY_GATE,
+    provinceBenchmarks: PROVINCE_BENCHMARKS
+  });
 }
 
 function formatForecastGranularity(run) {
@@ -5307,43 +4503,11 @@ function formatForecastGranularity(run) {
 }
 
 function countForecastPriceMissing(project, run) {
-  let missing = 0;
-  const pricesByYear = run?.pricesByYear || {};
-  const quarterPricesByYear = run?.quarterPricesByYear || {};
-  for (let i = 0; i < project.forecastYears; i += 1) {
-    const year = project.startYear + i;
-    const price = pricesByYear[year];
-    if (!price || price.length !== 8760) {
-      missing += 8760;
-    }
-    if (run?.granularityMinutes === 15) {
-      const quarterPrice = quarterPricesByYear[year];
-      if (!quarterPrice || quarterPrice.length !== 35040) {
-        missing += 35040;
-      }
-    }
-  }
-  return missing;
+  return priceForecast.countForecastPriceMissing(project, run);
 }
 
 function evaluateRunQuality(project, run) {
-  const missingPoints = countForecastPriceMissing(project, run);
-  const hardPass = run.mape <= QUALITY_GATE.hard.mape
-    && run.smape <= QUALITY_GATE.hard.smape
-    && missingPoints <= QUALITY_GATE.hard.missingPoints;
-  const softPass = run.mae <= QUALITY_GATE.soft.mae
-    && run.rmse <= QUALITY_GATE.soft.rmse;
-
-  run.qualityGatePassed = hardPass;
-  run.softGatePassed = softPass;
-  run.missingPoints = missingPoints;
-  if (!hardPass) {
-    run.status = "validated";
-  } else if (softPass) {
-    run.status = "publishable";
-  } else {
-    run.status = "publishable_warn";
-  }
+  return priceForecast.evaluateRunQuality(project, run, QUALITY_GATE);
 }
 
 function canActivateRun(run) {
@@ -6118,48 +5282,23 @@ function dayModeMatchesMonth(mode, month) {
 }
 
 function createHistoryTypicalAccumulator() {
-  return {
-    workdaySum: Array(96).fill(0),
-    workdayCount: Array(96).fill(0),
-    weekendSum: Array(96).fill(0),
-    weekendCount: Array(96).fill(0)
-  };
+  return historyAnalysis.createHistoryTypicalAccumulator();
 }
 
 function pushHistoryTypical(acc, isWeekend, quarterIndex, price) {
-  if (isWeekend) {
-    acc.weekendSum[quarterIndex] += price;
-    acc.weekendCount[quarterIndex] += 1;
-  } else {
-    acc.workdaySum[quarterIndex] += price;
-    acc.workdayCount[quarterIndex] += 1;
-  }
+  historyAnalysis.pushHistoryTypical(acc, isWeekend, quarterIndex, price);
 }
 
 function mergeHistoryTypical(target, source) {
-  for (let i = 0; i < 96; i += 1) {
-    target.workdaySum[i] += source.workdaySum[i];
-    target.workdayCount[i] += source.workdayCount[i];
-    target.weekendSum[i] += source.weekendSum[i];
-    target.weekendCount[i] += source.weekendCount[i];
-  }
+  historyAnalysis.mergeHistoryTypical(target, source);
 }
 
 function percentileSorted(sortedValues, p) {
-  if (!sortedValues.length) return null;
-  const rank = (sortedValues.length - 1) * p;
-  const lower = Math.floor(rank);
-  const upper = Math.ceil(rank);
-  if (lower === upper) return sortedValues[lower];
-  const weight = rank - lower;
-  return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
+  return historyAnalysis.percentileSorted(sortedValues, p);
 }
 
 function stddev(values) {
-  if (!values.length) return 0;
-  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-  const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length;
-  return Math.sqrt(Math.max(variance, 0));
+  return historyAnalysis.stddev(values);
 }
 
 function historyCacheKey(project) {
@@ -6177,30 +5316,7 @@ function historyCacheKey(project) {
 }
 
 function getHistoryMockShapeFactors(project) {
-  const isPhotovoltaic = project.assetType === "photovoltaic";
-  const isOffshore = project.siteType === "offshore";
-  const hasStorage = Boolean(project.hasStorage);
-  const storageScale = hasStorage
-    ? clamp(((project.storagePowerMw || 0) * (project.storageDurationH || 0)) / Math.max(project.capacityMw || 1, 1), 0.05, 0.3)
-    : 0;
-
-  return {
-    baseShift: isPhotovoltaic ? -14 : 10,
-    yearVolatility: isPhotovoltaic ? 0.96 : 1.07,
-    winterScale: isOffshore ? 1.2 : (isPhotovoltaic ? 0.72 : 1),
-    summerScale: isPhotovoltaic ? 1.22 : 0.92,
-    morningPeakWeight: isPhotovoltaic ? 0.17 : 0.24,
-    eveningPeakWeight: hasStorage ? 0.26 : (isPhotovoltaic ? 0.37 : 0.42),
-    noonValleyWeight: hasStorage ? (isPhotovoltaic ? 0.11 : 0.08) : (isPhotovoltaic ? 0.21 : 0.13),
-    nightValleyWeight: isOffshore ? 0.03 : 0.07,
-    weekendLevel: isPhotovoltaic ? 0.94 : 0.91,
-    noiseAmplitude: isOffshore ? 0.16 : (isPhotovoltaic ? 0.2 : 0.22),
-    spikeThreshold: hasStorage ? 0.9978 : (isPhotovoltaic ? 0.9968 : 0.9962),
-    spikeScale: hasStorage ? 0.78 : 1,
-    negativeThreshold: hasStorage ? 0.9968 : (isPhotovoltaic ? 0.9918 : 0.9946),
-    negativeScale: hasStorage ? 0.55 : (isPhotovoltaic ? 1 : 0.78),
-    storageScale
-  };
+  return priceForecast.getHistoryMockShapeFactors(project);
 }
 
 function buildMockHistorySpotAnalysisDataset(project) {
@@ -7083,14 +6199,7 @@ function renderCompareChartPlaceholder(chartKey, node, message) {
 }
 
 function sanitizeCompareSensitivitySettings() {
-  compareSensitivitySettings.rangePercent = clamp(Math.round(Number(compareSensitivitySettings.rangePercent) || 20), 5, 60);
-  compareSensitivitySettings.stepPercent = clamp(Math.round(Number(compareSensitivitySettings.stepPercent) || 5), 1, 20);
-  compareSensitivitySettings.responseScalePercent = clamp(Math.round(Number(compareSensitivitySettings.responseScalePercent) || 100), 25, 200);
-  const topN = compareSensitivitySettings.topN === "all" ? "all" : Math.round(Number(compareSensitivitySettings.topN) || 8);
-  compareSensitivitySettings.topN = topN === "all" ? "all" : clamp(topN, 3, 20);
-  compareSensitivitySettings.selectedKeys = Array.isArray(compareSensitivitySettings.selectedKeys)
-    ? compareSensitivitySettings.selectedKeys.filter(Boolean)
-    : [];
+  Object.assign(compareSensitivitySettings, compareAnalysis.sanitizeCompareSensitivitySettings(compareSensitivitySettings));
   return compareSensitivitySettings;
 }
 
@@ -7103,29 +6212,7 @@ function syncCompareSensitivityControls() {
 }
 
 function sensitivityAxisLabels(settings = compareSensitivitySettings) {
-  const safe = sanitizeCompareSensitivitySettings();
-  const range = Math.max(1, Number(settings.rangePercent || safe.rangePercent));
-  const step = Math.max(1, Number(settings.stepPercent || safe.stepPercent));
-  const values = new Set([0, -range, range]);
-  for (let value = 0; value <= range; value += step) {
-    values.add(value);
-    values.add(-value);
-  }
-  return Array.from(values)
-    .sort((a, b) => a - b)
-    .map((value) => `${value > 0 ? "+" : ""}${value}%`);
-}
-
-function buildSensitivitySeries(baseRevenueWan, impactWan, options = {}, settings = compareSensitivitySettings) {
-  const invert = Boolean(options.invert);
-  const factor = Number.isFinite(options.factor) ? options.factor : 1;
-  const responseScale = (Number(settings.responseScalePercent) || 100) / 100;
-  return sensitivityAxisLabels(settings).map((label) => {
-    const ratio = Number(label.replace("%", "").replace("+", "")) / 100;
-    const signedRatio = invert ? -ratio : ratio;
-    const value = Math.max(0, baseRevenueWan + impactWan * factor * responseScale * signedRatio);
-    return Number(value.toFixed(1));
-  });
+  return compareAnalysis.sensitivityAxisLabels(settings);
 }
 
 function renderSensitivityChart(chartKey, node, values, baseRevenueWan, lineColor) {
@@ -7196,97 +6283,8 @@ function renderSensitivityChart(chartKey, node, values, baseRevenueWan, lineColo
 }
 
 function buildCompareSensitivityFactors(baselineFirst, baselineRevenueWan, settings = compareSensitivitySettings) {
-  if (!baselineFirst) return [];
   sanitizeCompareSensitivitySettings();
-  const safeBase = Math.max(1, Math.abs(baselineRevenueWan));
-  const mechanismEnergyRatio = Number(baselineFirst.mechanismRatio || 0);
-  const factorDefs = [
-    {
-      key: "spot",
-      name: "现货价格水平",
-      note: "影响现货收入和捕获价格",
-      impactWan: Math.max(Math.abs(baselineFirst.spotRevenue / 10000) * 0.2, safeBase * 0.16),
-      colorIndex: 0
-    },
-    {
-      key: "hours",
-      name: "年利用小时 / 上网电量",
-      note: "影响所有按电量结算的收入和费用",
-      impactWan: Math.max(safeBase * 0.72, Math.abs((baselineFirst.spotRevenue + baselineFirst.envRevenue - baselineFirst.comprehensiveFee) / 10000) * 0.18),
-      colorIndex: 1
-    },
-    {
-      key: "capture_spread",
-      name: "捕获价差",
-      note: "影响捕获电价相对现货均价表现",
-      impactWan: Math.max(Math.abs((baselineFirst.captureSpread * baselineFirst.energyMwh) / 10000) * 0.35, safeBase * 0.08),
-      colorIndex: 2
-    },
-    {
-      key: "mechanism_price",
-      name: "机制电价",
-      note: "影响纳入机制电量的差价结算",
-      impactWan: Math.max(Math.abs(baselineFirst.mechanismRevenue / 10000) * 0.45, safeBase * mechanismEnergyRatio * 0.08),
-      colorIndex: 3
-    },
-    {
-      key: "mechanism_ratio",
-      name: "机制电量占比",
-      note: "改变机制结算与市场化交易电量空间",
-      impactWan: Math.max(Math.abs(baselineFirst.mechanismRevenue / 10000) * 0.55, safeBase * mechanismEnergyRatio * 0.1),
-      colorIndex: 4
-    },
-    {
-      key: "trade_strategy",
-      name: "交易策略损益",
-      note: "作用于市场化交易电量部分",
-      impactWan: Math.max(Math.abs(baselineFirst.ltPnlRevenue / 10000) * 0.65, safeBase * 0.05),
-      colorIndex: 0
-    },
-    {
-      key: "env_value",
-      name: "环境价值单价",
-      note: "影响绿证、绿电溢价和碳收益度电收益",
-      impactWan: Math.max(Math.abs(baselineFirst.envRevenue / 10000) * 0.8, safeBase * 0.06),
-      colorIndex: 2
-    },
-    {
-      key: "env_ratio",
-      name: "环境价值兑现比例",
-      note: "影响市场化交易电量的兑现空间",
-      impactWan: Math.max(Math.abs(baselineFirst.envRevenue / 10000) * 0.55, safeBase * 0.04),
-      colorIndex: 1
-    },
-    {
-      key: "fee",
-      name: "综合费用",
-      note: "费用上升将压低全口径收益",
-      impactWan: Math.max(Math.abs(baselineFirst.comprehensiveFee / 10000) * 0.8, safeBase * 0.05),
-      invert: true,
-      colorIndex: 3
-    },
-    {
-      key: "storage",
-      name: "配储补充收益",
-      note: "影响含储能项目的补充收益项",
-      impactWan: Math.max(Math.abs(baselineFirst.storageSupplementRevenue / 10000) * 0.8, safeBase * 0.03),
-      colorIndex: 4
-    }
-  ];
-  return factorDefs
-    .map((factor) => {
-      const series = buildSensitivitySeries(baselineRevenueWan, factor.impactWan, { invert: factor.invert, factor: 1 }, settings);
-      const lowDelta = Number((series[0] - baselineRevenueWan).toFixed(2));
-      const highDelta = Number((series[series.length - 1] - baselineRevenueWan).toFixed(2));
-      return {
-        ...factor,
-        series,
-        lowDelta,
-        highDelta,
-        sensitivity: Math.max(Math.abs(lowDelta), Math.abs(highDelta))
-      };
-    })
-    .sort((a, b) => b.sensitivity - a.sensitivity);
+  return compareAnalysis.buildCompareSensitivityFactors(baselineFirst, baselineRevenueWan, settings);
 }
 
 function renderSensitivityTornadoChart(factors, baselineRevenueWan) {
@@ -7554,20 +6552,6 @@ function renderCompareTrendChart(available) {
   }, true);
 }
 
-function resultComponentTotals(result) {
-  const rows = result?.annualRows || [];
-  const sum = (key) => rows.reduce((total, row) => total + Number(row[key] || 0), 0);
-  return {
-    spotRevenue: sum("spotRevenue"),
-    mechanismRevenue: sum("mechanismRevenue"),
-    ltPnlRevenue: sum("ltPnlRevenue"),
-    envRevenue: sum("envRevenue"),
-    storageSupplementRevenue: sum("storageSupplementRevenue"),
-    comprehensiveFee: -sum("comprehensiveFee"),
-    otherIncome: sum("otherIncome")
-  };
-}
-
 function renderScenarioRankingChart(available, baseline) {
   if (resolveVisiblePageId(appState.activePage) !== "compare-page") return;
   const chart = ensureCompareChart("scenarioRanking", refs.compareRankingChart);
@@ -7669,8 +6653,8 @@ function renderScenarioBridgeChart(focusItem, baseline) {
       ? "基准方案自身，无差异"
       : `${focusItem.scenario.name} 相对 ${baseline.scenario.name}`;
   }
-  const focusTotals = resultComponentTotals(focusItem.result);
-  const baseTotals = resultComponentTotals(baseline.result);
+  const focusTotals = compareAnalysis.resultComponentTotals(focusItem.result);
+  const baseTotals = compareAnalysis.resultComponentTotals(baseline.result);
   const items = [
     { label: "现货收入", key: "spotRevenue", color: tokens.primary },
     { label: "差价机制", key: "mechanismRevenue", color: tokens.baseline },
@@ -7857,115 +6841,27 @@ function renderHistoryPrices() {
   const charts = ensureHistoryCharts();
   const tokens = historyThemeTokens();
   const lineColors = ["#2f78e8", "#6cb34f", "#ff8a1f", "#8b5cf6", "#0ea5a3"];
-  const allValues = [];
-  const monthMerged = Array.from({ length: 12 }, () => []);
-  const monthlyStd = [];
-  const heatSums = Array.from({ length: 12 }, () => Array(24).fill(0));
-  const heatCounts = Array.from({ length: 12 }, () => Array(24).fill(0));
-  const typicalMerged = createHistoryTypicalAccumulator();
-  const trendSeries = selectedYears.map((yearData, idx) => {
-    allValues.push(...yearData.values);
-    for (let m = 0; m < 12; m += 1) {
-      monthMerged[m].push(...yearData.monthValues[m]);
-      for (let h = 0; h < 24; h += 1) {
-        heatSums[m][h] += yearData.hourlySumsByMonth[m][h];
-        heatCounts[m][h] += yearData.hourlyCountsByMonth[m][h];
-      }
-    }
-    mergeHistoryTypical(typicalMerged, yearData.typical);
-    return {
-      name: `${yearData.year}年`,
-      type: "line",
-      smooth: true,
-      symbol: "none",
-      lineStyle: { width: 2 },
-      data: yearData.monthlyAvg.map((value) => (Number.isFinite(value) ? Number(value.toFixed(1)) : null)),
-      color: lineColors[idx % lineColors.length]
-    };
-  });
-
-  const sortedValues = [...allValues].sort((a, b) => a - b);
-  let valueMin = Number.POSITIVE_INFINITY;
-  let valueMax = Number.NEGATIVE_INFINITY;
-  let valueSum = 0;
-  let negativeCount = 0;
-  allValues.forEach((value) => {
-    valueMin = Math.min(valueMin, value);
-    valueMax = Math.max(valueMax, value);
-    valueSum += value;
-    if (value < 0) negativeCount += 1;
-  });
-  const valueAvg = allValues.length ? valueSum / allValues.length : 0;
-  const p50 = percentileSorted(sortedValues, 0.5) ?? 0;
-  const p90 = percentileSorted(sortedValues, 0.9) ?? 0;
-  const negativeRatio = allValues.length ? (negativeCount / allValues.length) * 100 : 0;
-
-  const histogramBins = 12;
-  const histMin = Math.floor(valueMin / 20) * 20;
-  const histMax = Math.ceil(valueMax / 20) * 20;
-  const histStep = Math.max(10, (histMax - histMin) / histogramBins);
-  const histogramCounts = Array(histogramBins).fill(0);
-  allValues.forEach((value) => {
-    const idx = clamp(Math.floor((value - histMin) / histStep), 0, histogramBins - 1);
-    histogramCounts[idx] += 1;
-  });
-  const histogramLabels = Array.from({ length: histogramBins }, (_, idx) => {
-    const start = Math.round(histMin + idx * histStep);
-    const end = Math.round(histMin + (idx + 1) * histStep);
-    return `${start}-${end}`;
-  });
-
-  const typicalWorkday = [];
-  const typicalWeekend = [];
-  for (let i = 0; i < 96; i += 1) {
-    const workValue = typicalMerged.workdayCount[i]
-      ? typicalMerged.workdaySum[i] / typicalMerged.workdayCount[i]
-      : null;
-    const weekendValue = typicalMerged.weekendCount[i]
-      ? typicalMerged.weekendSum[i] / typicalMerged.weekendCount[i]
-      : null;
-    typicalWorkday.push(workValue ? Number(workValue.toFixed(1)) : null);
-    typicalWeekend.push(weekendValue ? Number(weekendValue.toFixed(1)) : null);
-  }
-
-  const heatData = [];
-  let heatMin = Number.POSITIVE_INFINITY;
-  let heatMax = Number.NEGATIVE_INFINITY;
-  for (let month = 0; month < 12; month += 1) {
-    for (let hour = 0; hour < 24; hour += 1) {
-      const count = heatCounts[month][hour];
-      const avg = count ? heatSums[month][hour] / count : null;
-      const value = Number.isFinite(avg) ? Number(avg.toFixed(1)) : null;
-      if (Number.isFinite(value)) {
-        heatMin = Math.min(heatMin, value);
-        heatMax = Math.max(heatMax, value);
-      }
-      heatData.push([hour, month, value]);
-    }
-  }
-
-  const boxplotData = monthMerged.map((values) => {
-    if (!values.length) return [0, 0, 0, 0, 0];
-    const sorted = [...values].sort((a, b) => a - b);
-    return [
-      Number(sorted[0].toFixed(1)),
-      Number((percentileSorted(sorted, 0.25) ?? 0).toFixed(1)),
-      Number((percentileSorted(sorted, 0.5) ?? 0).toFixed(1)),
-      Number((percentileSorted(sorted, 0.75) ?? 0).toFixed(1)),
-      Number(sorted[sorted.length - 1].toFixed(1))
-    ];
-  });
-  for (let i = 0; i < 12; i += 1) {
-    monthlyStd.push(stddev(monthMerged[i]));
-  }
-  let maxStdMonth = 0;
-  let maxStd = monthlyStd[0] || 0;
-  for (let i = 1; i < 12; i += 1) {
-    if ((monthlyStd[i] || 0) > maxStd) {
-      maxStd = monthlyStd[i];
-      maxStdMonth = i;
-    }
-  }
+  const historyData = historyAnalysis.buildHistorySelectedAnalysis(selectedYears, { lineColors });
+  const {
+    allValues,
+    trendSeries,
+    valueAvg,
+    p50,
+    p90,
+    negativeRatio,
+    histogramBins,
+    histogramLabels,
+    histogramCounts,
+    typicalWorkday,
+    typicalWeekend,
+    heatData,
+    heatMin,
+    heatMax,
+    boxplotData,
+    maxStdMonth,
+    maxStd,
+    exportRows
+  } = historyData;
   const yearsRangeText = `${range.startDate}至${range.endDate}`;
   const provinceLabel = project.provinceLabel || getProvinceName(project.province) || "-";
   const assetLabel = getAssetTypeLabel(project.assetType);
@@ -7977,51 +6873,11 @@ function renderHistoryPrices() {
     sanitizeExportFilenamePart(siteLabel),
     sanitizeExportFilenamePart(yearsRangeText)
   ].join("-");
-  setHistoryExportPayload("monthTrend", `${exportPrefix}-月度均价趋势对比.csv`, [
-    ["month", ...selectedYears.map((yearData) => `${yearData.year}年均价_元每MWh`)],
-    ...HISTORY_MONTH_LABELS.map((monthLabel, monthIndex) => [
-      monthLabel,
-      ...trendSeries.map((series) => {
-        const value = series.data?.[monthIndex];
-        return Number.isFinite(value) ? value.toFixed(1) : "";
-      })
-    ])
-  ]);
-  setHistoryExportPayload("typicalDay", `${exportPrefix}-典型日电价曲线.csv`, [
-    ["time_label", "workday_price_yuan_per_mwh", "weekend_price_yuan_per_mwh"],
-    ...HISTORY_QUARTER_LABELS.map((label, index) => [
-      label,
-      Number.isFinite(typicalWorkday[index]) ? typicalWorkday[index].toFixed(1) : "",
-      Number.isFinite(typicalWeekend[index]) ? typicalWeekend[index].toFixed(1) : ""
-    ])
-  ]);
-  setHistoryExportPayload("distribution", `${exportPrefix}-电价分布直方图.csv`, [
-    ["price_bin_yuan_per_mwh", "sample_count"],
-    ...histogramLabels.map((label, index) => [label, histogramCounts[index]])
-  ]);
-  setHistoryExportPayload("heatmap", `${exportPrefix}-分时电价热力图.csv`, [
-    ["month", "hour_index_1_24", "hour_label", "avg_price_yuan_per_mwh"],
-    ...heatData
-      .filter((item) => Number.isFinite(item[2]))
-      .map(([hourIndex, monthIndex, value]) => [
-        HISTORY_MONTH_LABELS[monthIndex],
-        hourIndex + 1,
-        HISTORY_HEAT_HOUR_LABELS[hourIndex],
-        Number(value).toFixed(1)
-      ])
-  ]);
-  setHistoryExportPayload("boxplot", `${exportPrefix}-月度电价箱线图.csv`, [
-    ["month", "min", "p25", "p50", "p75", "max", "stddev"],
-    ...HISTORY_MONTH_LABELS.map((monthLabel, monthIndex) => [
-      monthLabel,
-      Number.isFinite(boxplotData[monthIndex]?.[0]) ? boxplotData[monthIndex][0].toFixed(1) : "",
-      Number.isFinite(boxplotData[monthIndex]?.[1]) ? boxplotData[monthIndex][1].toFixed(1) : "",
-      Number.isFinite(boxplotData[monthIndex]?.[2]) ? boxplotData[monthIndex][2].toFixed(1) : "",
-      Number.isFinite(boxplotData[monthIndex]?.[3]) ? boxplotData[monthIndex][3].toFixed(1) : "",
-      Number.isFinite(boxplotData[monthIndex]?.[4]) ? boxplotData[monthIndex][4].toFixed(1) : "",
-      Number.isFinite(monthlyStd[monthIndex]) ? monthlyStd[monthIndex].toFixed(1) : ""
-    ])
-  ]);
+  setHistoryExportPayload("monthTrend", `${exportPrefix}-月度均价趋势对比.csv`, exportRows.monthTrend);
+  setHistoryExportPayload("typicalDay", `${exportPrefix}-典型日电价曲线.csv`, exportRows.typicalDay);
+  setHistoryExportPayload("distribution", `${exportPrefix}-电价分布直方图.csv`, exportRows.distribution);
+  setHistoryExportPayload("heatmap", `${exportPrefix}-分时电价热力图.csv`, exportRows.heatmap);
+  setHistoryExportPayload("boxplot", `${exportPrefix}-月度电价箱线图.csv`, exportRows.boxplot);
   syncHistoryExportButtons();
 
   if (charts.monthTrend) {
@@ -8561,58 +7417,19 @@ function updateMarketTradeEnergyDisplay(project = getActiveProject(), scenario =
 }
 
 function getEnvValueMode(config) {
-  return ENV_VALUE_MODE_SET.has(config?.envValueMode) ? config.envValueMode : "global";
+  return scenarioConfig.getEnvValueMode(config);
 }
 
 function getEnvManualEntryForYear(project, config, year) {
-  if (getEnvValueMode(config) !== "manual") return null;
-  const values = sanitizeEnvManualValuesByYear(config?.envManualValuesByYear || {}, project);
-  const entry = values[year];
-  return isPlainObject(entry) ? entry : null;
+  return scenarioConfig.getEnvManualEntryForYear(project, config, year);
 }
 
 function getEnvValueAllocation(project, config, year = null) {
-  const manualEntry = Number.isInteger(year) ? getEnvManualEntryForYear(project, config, year) : null;
-  const source = manualEntry || config || {};
-  const canUseCarbon = project?.siteType === "offshore" && Boolean(source?.carbonEnabled);
-  const greenCertRatio = clamp(Number(source?.greenCertRealizeRatio) || 0, 0, 1);
-  const greenPremiumRatio = clamp(Number(source?.greenPremiumRealizeRatio) || 0, 0, 1);
-  const carbonRatio = canUseCarbon ? clamp(Number(source?.carbonRealizeRatio) || 0, 0, 1) : 0;
-  const greenCertPrice = Number(source?.greenCertPrice) || 0;
-  const greenPremiumPrice = Number(source?.greenPremiumPrice) || 0;
-  const carbonPrice = canUseCarbon ? Number(source?.carbonPrice) || 0 : 0;
-  const totalRatio = greenCertRatio + greenPremiumRatio + carbonRatio;
-  const unitValuePerMarketMwh =
-    greenCertRatio * greenCertPrice
-    + greenPremiumRatio * greenPremiumPrice
-    + carbonRatio * carbonPrice;
-  return {
-    greenCertRatio,
-    greenPremiumRatio,
-    carbonRatio,
-    greenCertPrice,
-    greenPremiumPrice,
-    carbonPrice,
-    totalRatio,
-    unitValuePerMarketMwh
-  };
+  return revenueRules.getEnvValueAllocation(project, config, year);
 }
 
 function getEnvManualCompleteness(project, config) {
-  const values = sanitizeEnvManualValuesByYear(config?.envManualValuesByYear || {}, project);
-  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears) || project.forecastYears < 1) {
-    return { values, complete: 0, total: 0, missingYears: [] };
-  }
-  const missingYears = [];
-  let complete = 0;
-  for (let year = project.startYear; year < project.startYear + project.forecastYears; year += 1) {
-    if (isPlainObject(values[year])) {
-      complete += 1;
-    } else {
-      missingYears.push(year);
-    }
-  }
-  return { values, complete, total: project.forecastYears, missingYears };
+  return scenarioConfig.getEnvManualCompleteness(project, config);
 }
 
 function readEnvValueAllocationDraft(project = getActiveProject()) {
@@ -8724,43 +7541,19 @@ function syncEnvValueControls(project = getActiveProject(), scenario = null, loc
 }
 
 function getFeeConfigMode(config) {
-  return FEE_CONFIG_MODE_SET.has(config?.feeConfigMode) ? config.feeConfigMode : "global";
+  return scenarioConfig.getFeeConfigMode(config);
 }
 
 function getFeeManualEntryForYear(project, config, year) {
-  if (getFeeConfigMode(config) !== "manual") return null;
-  const values = sanitizeFeeManualValuesByYear(config?.feeManualValuesByYear || {}, project);
-  const entry = values[year];
-  return isPlainObject(entry) ? entry : null;
+  return scenarioConfig.getFeeManualEntryForYear(project, config, year);
 }
 
 function getFeeConfigForYear(project, config, year = null) {
-  const manualEntry = Number.isInteger(year) ? getFeeManualEntryForYear(project, config, year) : null;
-  const source = manualEntry || config || {};
-  return {
-    marketOpFee: Number(source.marketOpFee) || 0,
-    gridAssessFee: Number(source.gridAssessFee) || 0,
-    ancillaryFee: Number(source.ancillaryFee) || 0,
-    otherFee: Number(source.otherFee) || 0,
-    otherIncome: Number(source.otherIncome) || 0
-  };
+  return revenueRules.getFeeConfigForYear(project, config, year);
 }
 
 function getFeeManualCompleteness(project, config) {
-  const values = sanitizeFeeManualValuesByYear(config?.feeManualValuesByYear || {}, project);
-  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears) || project.forecastYears < 1) {
-    return { values, complete: 0, total: 0, missingYears: [] };
-  }
-  const missingYears = [];
-  let complete = 0;
-  for (let year = project.startYear; year < project.startYear + project.forecastYears; year += 1) {
-    if (isPlainObject(values[year])) {
-      complete += 1;
-    } else {
-      missingYears.push(year);
-    }
-  }
-  return { values, complete, total: project.forecastYears, missingYears };
+  return scenarioConfig.getFeeManualCompleteness(project, config);
 }
 
 function updateFeeManualStatus(project = getActiveProject(), scenario = null) {
@@ -8807,24 +7600,11 @@ function syncFeeConfigControls(project = getActiveProject(), scenario = null, lo
 }
 
 function getLtPricingMode(config) {
-  return LT_PRICING_MODE_SET.has(config?.ltPricingMode) ? config.ltPricingMode : "auto";
+  return scenarioConfig.getLtPricingMode(config);
 }
 
 function getLtManualCompleteness(project, config) {
-  const prices = sanitizeLtManualPricesByYear(config?.ltManualPricesByYear || {}, project);
-  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears) || project.forecastYears < 1) {
-    return { prices, complete: 0, total: 0, missingYears: [] };
-  }
-  const missingYears = [];
-  let complete = 0;
-  for (let year = project.startYear; year < project.startYear + project.forecastYears; year += 1) {
-    if (Number.isFinite(Number(prices[year]))) {
-      complete += 1;
-    } else {
-      missingYears.push(year);
-    }
-  }
-  return { prices, complete, total: project.forecastYears, missingYears };
+  return scenarioConfig.getLtManualCompleteness(project, config);
 }
 
 function updateLtManualStatus(project = getActiveProject(), scenario = null) {
@@ -9353,23 +8133,11 @@ function saveScenarioFromForm() {
 }
 
 function ltPnlPriceForYear(config, yearIndex) {
-  const year1 = Number(config?.ltYear1Pnl) || 0;
-  const target = Number(config?.ltTargetPnl) || 0;
-  const step = Math.max(0, Number(config?.ltConvergeSpeed) || 0);
-  if (yearIndex <= 1 || step <= 0) return year1;
-  const delta = target - year1;
-  const distance = Math.abs(delta);
-  const moved = step * (yearIndex - 1);
-  if (moved >= distance) return target;
-  return year1 + Math.sign(delta) * moved;
+  return revenueRules.ltPnlPriceForYear(config, yearIndex);
 }
 
 function tradeStrategyPnlPriceForYear(config, yearIndex, year) {
-  if (getLtPricingMode(config) === "manual") {
-    const value = Number(config?.ltManualPricesByYear?.[year]);
-    if (Number.isFinite(value)) return value;
-  }
-  return ltPnlPriceForYear(config, yearIndex);
+  return revenueRules.tradeStrategyPnlPriceForYear(config, yearIndex, year);
 }
 
 function formatYearListCompact(years) {
@@ -9398,169 +8166,10 @@ function formatYearListCompact(years) {
 }
 
 function calculateScenarioResult(project, scenario, run) {
-  const rows = [];
-  const startYear = project.startYear;
-  const endYear = project.startYear + project.forecastYears - 1;
-  const missingYears = [];
-  const missingEnergyYears = [];
-  const missingPriceYears = [];
-  const cfg = scenario.config;
-  let hourlyPreview = [];
-  let totalEnergy = 0;
-  let totalFullRevenue = 0;
-
-  for (let year = startYear; year <= endYear; year += 1) {
-    const yearIndex = year - startYear + 1;
-    const hourlyHours = getHourlyEnergyForCalculation(project, year, yearIndex);
-    const prices = run.pricesByYear[year];
-    const energyReady = Array.isArray(hourlyHours) && hourlyHours.length === 8760;
-    const priceReady = Array.isArray(prices) && prices.length === 8760;
-    if (!energyReady || !priceReady) {
-      missingYears.push(year);
-      if (!energyReady) missingEnergyYears.push(year);
-      if (!priceReady) missingPriceYears.push(year);
-      rows.push({
-        year,
-        annualHours: 0,
-        energyMwh: 0,
-        spotAvgPrice: 0,
-        capturePrice: 0,
-        captureSpread: 0,
-        spotRevenue: 0,
-        mechanismRatio: 0,
-        mechanismRevenue: 0,
-        nonMechanismEnergy: 0,
-        ltPnlPrice: 0,
-        ltPnlRevenue: 0,
-        envRevenue: 0,
-        storageSupplementRevenue: 0,
-        comprehensiveFee: 0,
-        otherIncome: 0,
-        fullRevenue: 0,
-        fullRevenuePrice: 0,
-        note: "缺失曲线"
-      });
-      continue;
-    }
-
-    const annualHours = hourlyHours.reduce((sum, value) => sum + value, 0);
-    const energyMwh = annualHours * project.capacityMw;
-    const spotAvgPrice = prices.reduce((sum, value) => sum + value, 0) / 8760;
-    let spotRevenue = 0;
-    for (let i = 0; i < 8760; i += 1) {
-      const hourlyEnergy = hourlyHours[i] * project.capacityMw;
-      spotRevenue += hourlyEnergy * prices[i];
-    }
-    const capturePrice = energyMwh > 0 ? spotRevenue / energyMwh : 0;
-    const captureSpread = capturePrice - spotAvgPrice;
-
-    const months = cfg.mechanismEnabled
-      ? mechanismActiveMonthsForYear(year, cfg.mechanismStartYm, cfg.mechanismEndYm)
-      : 0;
-    const mechanismRatio = cfg.mechanismEnabled ? cfg.mechanismRatio * (months / 12) : 0;
-    const mechanismEnergy = energyMwh * mechanismRatio;
-    const mechanismRevenue = mechanismEnergy * (cfg.mechanismPrice - capturePrice);
-    const nonMechanismEnergy = Math.max(0, energyMwh - mechanismEnergy);
-
-    const ltPnlPrice = tradeStrategyPnlPriceForYear(cfg, yearIndex, year);
-    const ltPnlRevenue = nonMechanismEnergy * ltPnlPrice;
-
-    const envAllocation = getEnvValueAllocation(project, cfg, year);
-    const greenCertRevenue = nonMechanismEnergy * envAllocation.greenCertRatio * envAllocation.greenCertPrice;
-    const greenPremiumRevenue = nonMechanismEnergy * envAllocation.greenPremiumRatio * envAllocation.greenPremiumPrice;
-    const carbonRevenue = nonMechanismEnergy * envAllocation.carbonRatio * envAllocation.carbonPrice;
-    const envRevenue = greenCertRevenue + greenPremiumRevenue + carbonRevenue;
-    const storageSupplementPerMwh = project.hasStorage
-      ? Number(cfg.storageArbitragePrice || 0)
-        + Number(cfg.storageCapacityCompPrice || 0)
-        + Number(cfg.storageAncillaryRevenuePrice || 0)
-        + Number(cfg.storageOtherRevenuePrice || 0)
-      : 0;
-    const storageSupplementRevenue = energyMwh * storageSupplementPerMwh;
-
-    const feeConfig = getFeeConfigForYear(project, cfg, year);
-    const comprehensiveFeePerMwh = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
-    const comprehensiveFee = energyMwh * comprehensiveFeePerMwh;
-    const otherIncome = energyMwh * feeConfig.otherIncome;
-
-    const fullRevenue = spotRevenue + mechanismRevenue + ltPnlRevenue + envRevenue + storageSupplementRevenue - comprehensiveFee + otherIncome;
-    const fullRevenuePrice = energyMwh > 0 ? fullRevenue / energyMwh : 0;
-
-    totalEnergy += energyMwh;
-    totalFullRevenue += fullRevenue;
-
-    rows.push({
-      year,
-      annualHours,
-      energyMwh,
-      spotAvgPrice,
-      capturePrice,
-      captureSpread,
-      spotRevenue,
-      mechanismRatio,
-      mechanismRevenue,
-      nonMechanismEnergy,
-      ltPnlPrice,
-      ltPnlRevenue,
-      envRevenue,
-      storageSupplementRevenue,
-      comprehensiveFee,
-      otherIncome,
-      fullRevenue,
-      fullRevenuePrice,
-      note: ""
-    });
-
-    if (year === startYear) {
-      const marketTradeRatio = 1 - mechanismRatio;
-      const envValuePerMwh = envAllocation.unitValuePerMarketMwh;
-      const adjustmentPerMwh =
-        mechanismRatio * (cfg.mechanismPrice - capturePrice)
-        + (1 - mechanismRatio) * ltPnlPrice
-        + marketTradeRatio * envValuePerMwh
-        + storageSupplementPerMwh
-        - comprehensiveFeePerMwh
-        + feeConfig.otherIncome;
-      hourlyPreview = [];
-      for (let i = 0; i < 8760; i += 1) {
-        const hourEnergy = hourlyHours[i] * project.capacityMw;
-        const price = prices[i];
-        const spot = hourEnergy * price;
-        const full = hourEnergy * (price + adjustmentPerMwh);
-        hourlyPreview.push({
-          time: hourIndexToTimestamp(year, i),
-          equivalentHours: hourlyHours[i],
-          energyMwh: hourEnergy,
-          spotPrice: price,
-          spotRevenue: spot,
-          fullRevenue: full
-        });
-      }
-    }
-  }
-
-  const first = rows.find((row) => row.energyMwh > 0) || rows[0];
-  const split = [
-    { label: "现货市场收入", amount: first.spotRevenue, tone: "green" },
-    { label: "差价机制结算", amount: first.mechanismRevenue, tone: first.mechanismRevenue >= 0 ? "green" : "red" },
-    { label: "交易策略损益", amount: first.ltPnlRevenue, tone: first.ltPnlRevenue >= 0 ? "green" : "red" },
-    { label: "环境价值兑现", amount: first.envRevenue, tone: "orange" },
-    { label: "配储补充收益", amount: first.storageSupplementRevenue, tone: "green" },
-    { label: "综合费用", amount: -first.comprehensiveFee, tone: "red" },
-    { label: "其他收入项", amount: first.otherIncome, tone: "green" }
-  ];
-
-  return {
-    annualRows: rows,
-    hourlyPreview,
-    firstYearSplit: split,
-    totalEnergy,
-    totalFullRevenue,
-    avgFullRevenuePrice: totalEnergy > 0 ? totalFullRevenue / totalEnergy : 0,
-    missingYears,
-    missingEnergyYears,
-    missingPriceYears
-  };
+  return revenueCalculator.calculateScenarioResult(project, scenario, run, {
+    getHourlyEnergyForCalculation,
+    hourIndexToTimestamp
+  });
 }
 
 function runCalculation() {
@@ -9722,28 +8331,6 @@ function renderResultChartsPlaceholder(message) {
   });
 }
 
-function resultMoneyWan(value) {
-  return Number(((Number(value) || 0) / 10000).toFixed(2));
-}
-
-function resultSeriesValue(value) {
-  return Number((Number(value || 0)).toFixed(4));
-}
-
-function getResultContributionItems(result) {
-  const rows = result?.annualRows || [];
-  const sum = (key) => rows.reduce((total, row) => total + Number(row[key] || 0), 0);
-  return [
-    { label: "现货市场收入", amount: sum("spotRevenue"), colorKey: "spot" },
-    { label: "差价机制结算", amount: sum("mechanismRevenue"), colorKey: "mechanism" },
-    { label: "交易策略损益", amount: sum("ltPnlRevenue"), colorKey: "trade" },
-    { label: "环境价值兑现", amount: sum("envRevenue"), colorKey: "env" },
-    { label: "配储补充收益", amount: sum("storageSupplementRevenue"), colorKey: "storage" },
-    { label: "综合费用", amount: -sum("comprehensiveFee"), colorKey: "fee" },
-    { label: "其他收入", amount: sum("otherIncome"), colorKey: "other" }
-  ];
-}
-
 function renderResultCharts(project, scenario, result) {
   if (resolveVisiblePageId(appState.activePage) !== "results-page") return;
   const rows = result?.annualRows || [];
@@ -9754,6 +8341,7 @@ function renderResultCharts(project, scenario, result) {
 
   const tokens = resultChartTokens();
   const years = rows.map((row) => String(row.year));
+  const chartData = resultReport.buildResultChartData(result, scenario?.config || {});
   const axisLabel = { color: tokens.axisText };
   const splitLine = { lineStyle: { color: tokens.splitLine } };
   const axisLine = { lineStyle: { color: tokens.axisLine } };
@@ -9773,18 +8361,10 @@ function renderResultCharts(project, scenario, result) {
 
   const annualChart = ensureResultChart("annualStack");
   if (annualChart) {
-    const componentSeries = [
-      { name: "现货收入", key: "spotRevenue", color: tokens.spot },
-      { name: "差价机制", key: "mechanismRevenue", color: tokens.mechanism },
-      { name: "交易策略", key: "ltPnlRevenue", color: tokens.trade },
-      { name: "环境价值", key: "envRevenue", color: tokens.env },
-      { name: "配储补充", key: "storageSupplementRevenue", color: tokens.storage },
-      { name: "其他收入", key: "otherIncome", color: tokens.other },
-      { name: "综合费用", key: "comprehensiveFee", color: tokens.fee, negative: true }
-    ];
+    const componentSeries = chartData.annualComponents;
     annualChart.setOption({
       animationDuration: 360,
-      color: componentSeries.map((item) => item.color).concat(tokens.net),
+      color: componentSeries.map((item) => tokens[item.colorKey] || tokens.primary).concat(tokens.net),
       grid: { top: 64, left: 58, right: 34, bottom: 46, containLabel: true },
       legend,
       tooltip: {
@@ -9812,17 +8392,17 @@ function renderResultCharts(project, scenario, result) {
           type: "bar",
           stack: "revenue",
           barWidth: 18,
-          itemStyle: { color: item.color },
-          data: rows.map((row) => resultMoneyWan(item.negative ? -row[item.key] : row[item.key]))
+          itemStyle: { color: tokens[item.colorKey] || tokens.primary },
+          data: item.data
         })),
         {
-          name: "全口径收入",
+          name: chartData.annualNet.name,
           type: "line",
           smooth: true,
           symbolSize: 6,
           lineStyle: { width: 3, color: tokens.net },
           itemStyle: { color: tokens.net },
-          data: rows.map((row) => resultMoneyWan(row.fullRevenue))
+          data: chartData.annualNet.data
         }
       ]
     }, true);
@@ -9830,24 +8410,7 @@ function renderResultCharts(project, scenario, result) {
 
   const priceChart = ensureResultChart("pricePath");
   if (priceChart) {
-    const cfg = scenario?.config || {};
-    const hasMechanismLine = rows.some((row) => cfg.mechanismEnabled && mechanismActiveMonthsForYear(row.year, cfg.mechanismStartYm, cfg.mechanismEndYm) > 0);
-    const priceSeries = [
-      { name: "现货均价", data: rows.map((row) => resultSeriesValue(row.spotAvgPrice)), color: tokens.other },
-      { name: "捕获电价", data: rows.map((row) => resultSeriesValue(row.capturePrice)), color: tokens.spot },
-      { name: "全口径度电净价", data: rows.map((row) => resultSeriesValue(row.fullRevenuePrice)), color: tokens.net }
-    ];
-    if (hasMechanismLine) {
-      priceSeries.push({
-        name: "机制电价",
-        data: rows.map((row) => (
-          mechanismActiveMonthsForYear(row.year, cfg.mechanismStartYm, cfg.mechanismEndYm) > 0
-            ? resultSeriesValue(cfg.mechanismPrice)
-            : null
-        )),
-        color: tokens.mechanism
-      });
-    }
+    const priceSeries = chartData.priceSeries;
     priceChart.setOption({
       animationDuration: 360,
       grid: { top: 54, left: 58, right: 28, bottom: 46, containLabel: true },
@@ -9877,8 +8440,8 @@ function renderResultCharts(project, scenario, result) {
         smooth: true,
         connectNulls: false,
         symbolSize: 5,
-        lineStyle: { width: 2.6, color: item.color },
-        itemStyle: { color: item.color },
+        lineStyle: { width: 2.6, color: tokens[item.colorKey] || tokens.primary },
+        itemStyle: { color: tokens[item.colorKey] || tokens.primary },
         data: item.data
       }))
     }, true);
@@ -9887,17 +8450,7 @@ function renderResultCharts(project, scenario, result) {
   const waterfallChart = ensureResultChart("waterfall");
   const first = rows[0];
   if (waterfallChart && first) {
-    const energyMwh = Math.max(1, Number(first.energyMwh || 0));
-    const bridgeItems = [
-      { label: "捕获电价", value: first.capturePrice, color: tokens.spot },
-      { label: "差价机制", value: first.mechanismRevenue / energyMwh, color: tokens.mechanism },
-      { label: "交易策略", value: first.ltPnlRevenue / energyMwh, color: tokens.trade },
-      { label: "环境价值", value: first.envRevenue / energyMwh, color: tokens.env },
-      { label: "配储补充", value: first.storageSupplementRevenue / energyMwh, color: tokens.storage },
-      { label: "综合费用", value: -first.comprehensiveFee / energyMwh, color: tokens.fee },
-      { label: "其他收入", value: first.otherIncome / energyMwh, color: tokens.other },
-      { label: "度电净价", value: first.fullRevenuePrice, color: tokens.net }
-    ];
+    const bridgeItems = chartData.firstYearBridgeItems;
     waterfallChart.setOption({
       animationDuration: 360,
       grid: { top: 34, left: 56, right: 22, bottom: 66, containLabel: true },
@@ -9929,8 +8482,8 @@ function renderResultCharts(project, scenario, result) {
         type: "bar",
         barWidth: 20,
         data: bridgeItems.map((item) => ({
-          value: resultSeriesValue(item.value),
-          itemStyle: { color: item.color }
+          value: item.value,
+          itemStyle: { color: tokens[item.colorKey] || tokens.primary }
         }))
       }]
     }, true);
@@ -9938,7 +8491,7 @@ function renderResultCharts(project, scenario, result) {
 
   const contributionChart = ensureResultChart("contribution");
   if (contributionChart) {
-    const contributionItems = getResultContributionItems(result);
+    const contributionItems = chartData.contributionItems;
     contributionChart.setOption({
       animationDuration: 360,
       grid: { top: 22, left: 112, right: 28, bottom: 34, containLabel: true },
@@ -9970,7 +8523,7 @@ function renderResultCharts(project, scenario, result) {
         type: "bar",
         barWidth: 16,
         data: contributionItems.map((item) => ({
-          value: resultMoneyWan(item.amount),
+          value: item.valueWan,
           itemStyle: { color: tokens[item.colorKey] || tokens.primary }
         }))
       }]
@@ -10035,23 +8588,12 @@ function renderResults() {
     return;
   }
 
-  const rows = result.annualRows || [];
-  const first = rows.find((row) => row.energyMwh > 0) || rows[0];
+  const summaryData = resultReport.buildResultSummaryData(result);
+  const { rows, first, maxRevenueRow, minRevenueRow, unitLift, liftText, leadingPositive, leadingNegative } = summaryData;
   if (!first) {
     renderResultChartsPlaceholder("暂无年度测算结果");
     return;
   }
-  const maxRevenueRow = rows.reduce((best, row) => (row.fullRevenue > best.fullRevenue ? row : best), first);
-  const minRevenueRow = rows.reduce((worst, row) => (row.fullRevenue < worst.fullRevenue ? row : worst), first);
-  const unitLift = first.fullRevenuePrice - first.capturePrice;
-  const liftText = unitLift >= 0 ? "增加" : "减少";
-  const contributionItems = getResultContributionItems(result);
-  const leadingPositive = contributionItems
-    .filter((item) => item.amount > 0 && item.label !== "现货市场收入")
-    .sort((a, b) => b.amount - a.amount)[0];
-  const leadingNegative = contributionItems
-    .filter((item) => item.amount < 0)
-    .sort((a, b) => a.amount - b.amount)[0];
   if (refs.resultExecutiveSummary) {
     const positiveText = leadingPositive ? `主要补充贡献来自${leadingPositive.label}（${asCompactMoney(leadingPositive.amount)}）` : "补充收益项贡献较小";
     const negativeText = leadingNegative ? `主要扣减来自${leadingNegative.label}（${asCompactMoney(leadingNegative.amount)}）` : "未形成显著扣减项";
@@ -10104,7 +8646,7 @@ function renderResults() {
 
   if (refs.resultAssumptionList) {
     const cfg = scenario?.config || {};
-    const firstMarketRatio = first.energyMwh > 0 ? first.nonMechanismEnergy / first.energyMwh : 0;
+    const firstMarketRatio = summaryData.firstMarketRatio;
     const assumptionItems = [
       {
         title: "差价机制口径",
@@ -10296,7 +8838,7 @@ function renderCompare() {
   renderScenarioBridgeChart(focusScenario, baseline);
   if (refs.compareBody) refs.compareBody.innerHTML = available.map((item) => {
     const deltaRevenue = item.result.totalFullRevenue - baseline.result.totalFullRevenue;
-    const topDriver = detectTopDriver(item.result);
+    const topDriver = compareAnalysis.detectTopDriver(item.result);
     const firstRow = item.result.annualRows.find((row) => row.energyMwh > 0) || item.result.annualRows[0];
     const scenarioLabel = item.scenario.isBaseline
       ? `${escapeHtml(item.scenario.name)} <span class="table-tag">基准</span>`
@@ -10316,25 +8858,8 @@ function renderCompare() {
   queueCompareChartsResize();
 }
 
-function detectTopDriver(result) {
-  if (!result?.annualRows?.length) return "-";
-  const first = result.annualRows[0];
-  const map = [
-    { name: "现货收入", value: Math.abs(first.spotRevenue) },
-    { name: "差价机制", value: Math.abs(first.mechanismRevenue) },
-    { name: "交易策略损益", value: Math.abs(first.ltPnlRevenue) },
-    { name: "环境价值", value: Math.abs(first.envRevenue) },
-    { name: "配储补充收益", value: Math.abs(first.storageSupplementRevenue) },
-    { name: "综合费用", value: Math.abs(first.comprehensiveFee) }
-  ];
-  map.sort((a, b) => b.value - a.value);
-  return map[0].name;
-}
-
 function toCsvLine(values) {
-  return values
-    .map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`)
-    .join(",");
+  return csvUtils.toCsvLine(values);
 }
 
 function downloadCsv(filename, rows) {
@@ -10349,10 +8874,7 @@ function downloadCsv(filename, rows) {
 }
 
 function sanitizeExportFilenamePart(value) {
-  return String(value || "-")
-    .trim()
-    .replace(/[\\/:*?"<>|]+/g, "-")
-    .replace(/\s+/g, "");
+  return csvUtils.sanitizeExportFilenamePart(value);
 }
 
 function buildLtManualTemplateFilename(project, scenario) {
@@ -10360,13 +8882,7 @@ function buildLtManualTemplateFilename(project, scenario) {
 }
 
 function buildLtManualTemplateRows(project) {
-  const rows = [["year", "trade_strategy_pnl_yuan_per_mwh"]];
-  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears)) return rows;
-  for (let index = 0; index < project.forecastYears; index += 1) {
-    const year = project.startYear + index;
-    rows.push([year, ""]);
-  }
-  return rows;
+  return scenarioConfig.buildLtManualTemplateRows(project);
 }
 
 function exportLtManualTemplate() {
@@ -10384,41 +8900,7 @@ function exportLtManualTemplate() {
 }
 
 function parseLtManualPricesCsv(csvText, project) {
-  const rows = parseCsvRows(csvText);
-  const header = normalizeCsvHeaderRow(rows[0] || []);
-  const acceptedHeaders = new Set([
-    "year,trade_strategy_pnl_yuan_per_mwh",
-    "year,lt_pnl_yuan_per_mwh",
-    "year,price"
-  ]);
-  if (!acceptedHeaders.has(header)) {
-    return {
-      ok: false,
-      message: "表头不匹配。请使用：year,trade_strategy_pnl_yuan_per_mwh。"
-    };
-  }
-  const prices = {};
-  for (let i = 1; i < rows.length; i += 1) {
-    const row = rows[i];
-    const year = Number(row[0]);
-    const price = Number(row[1]);
-    if (!Number.isInteger(year)) {
-      return { ok: false, message: `第 ${i + 1} 行 year 无效：${row[0] || "(空)"}` };
-    }
-    if (!Number.isFinite(price)) {
-      return { ok: false, message: `第 ${i + 1} 行 trade_strategy_pnl_yuan_per_mwh 无效：${row[1] || "(空)"}` };
-    }
-    prices[year] = price;
-  }
-  const sanitized = sanitizeLtManualPricesByYear(prices, project);
-  const completeness = getLtManualCompleteness(project, { ltManualPricesByYear: sanitized });
-  if (completeness.complete !== completeness.total) {
-    return {
-      ok: false,
-      message: `逐年损益值不完整，当前 ${completeness.complete}/${completeness.total} 年。`
-    };
-  }
-  return { ok: true, prices: sanitized };
+  return scenarioConfig.parseLtManualPricesCsv(csvText, project);
 }
 
 async function importLtManualTemplate() {
@@ -10473,21 +8955,7 @@ function buildEnvManualTemplateFilename(project, scenario) {
 }
 
 function buildEnvManualTemplateRows(project) {
-  const rows = [[
-    "year",
-    "green_cert_price_yuan_per_mwh",
-    "green_cert_realize_ratio_pct",
-    "green_premium_price_yuan_per_mwh",
-    "green_premium_realize_ratio_pct",
-    "carbon_enabled",
-    "carbon_price_yuan_per_mwh",
-    "carbon_realize_ratio_pct"
-  ]];
-  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears)) return rows;
-  for (let index = 0; index < project.forecastYears; index += 1) {
-    rows.push([project.startYear + index, "", "", "", "", "", "", ""]);
-  }
-  return rows;
+  return scenarioConfig.buildEnvManualTemplateRows(project);
 }
 
 function exportEnvManualTemplate() {
@@ -10505,87 +8973,7 @@ function exportEnvManualTemplate() {
 }
 
 function parseEnvManualValuesCsv(csvText, project) {
-  const rows = parseCsvRows(csvText);
-  const header = normalizeCsvHeaderRow(rows[0] || []);
-  const expectedHeader = [
-    "year",
-    "green_cert_price_yuan_per_mwh",
-    "green_cert_realize_ratio_pct",
-    "green_premium_price_yuan_per_mwh",
-    "green_premium_realize_ratio_pct",
-    "carbon_enabled",
-    "carbon_price_yuan_per_mwh",
-    "carbon_realize_ratio_pct"
-  ].join(",");
-  if (header !== expectedHeader) {
-    return {
-      ok: false,
-      message: `表头不匹配。请使用：${expectedHeader}。`
-    };
-  }
-  const values = {};
-  const parseNonNegativeNumber = (rawValue, label, rowNumber) => {
-    const value = Number(rawValue);
-    if (!Number.isFinite(value) || value < 0) {
-      return { ok: false, message: `第 ${rowNumber} 行 ${label} 无效：${rawValue || "(空)"}` };
-    }
-    return { ok: true, value };
-  };
-  const parseRatio = (rawValue, label, rowNumber) => {
-    const parsed = parseNonNegativeNumber(rawValue, label, rowNumber);
-    if (!parsed.ok) return parsed;
-    if (parsed.value > 100) {
-      return { ok: false, message: `第 ${rowNumber} 行 ${label} 不能超过100：${rawValue}` };
-    }
-    return { ok: true, value: parsed.value / 100 };
-  };
-  for (let i = 1; i < rows.length; i += 1) {
-    const row = rows[i];
-    const rowNumber = i + 1;
-    const year = Number(row[0]);
-    if (!Number.isInteger(year)) {
-      return { ok: false, message: `第 ${rowNumber} 行 year 无效：${row[0] || "(空)"}` };
-    }
-    const greenCertPrice = parseNonNegativeNumber(row[1], "green_cert_price_yuan_per_mwh", rowNumber);
-    if (!greenCertPrice.ok) return greenCertPrice;
-    const greenCertRatio = parseRatio(row[2], "green_cert_realize_ratio_pct", rowNumber);
-    if (!greenCertRatio.ok) return greenCertRatio;
-    const greenPremiumPrice = parseNonNegativeNumber(row[3], "green_premium_price_yuan_per_mwh", rowNumber);
-    if (!greenPremiumPrice.ok) return greenPremiumPrice;
-    const greenPremiumRatio = parseRatio(row[4], "green_premium_realize_ratio_pct", rowNumber);
-    if (!greenPremiumRatio.ok) return greenPremiumRatio;
-    const carbonEnabled = project?.siteType === "offshore" ? parseBooleanLike(row[5], false) : false;
-    const carbonPrice = carbonEnabled
-      ? parseNonNegativeNumber(row[6], "carbon_price_yuan_per_mwh", rowNumber)
-      : { ok: true, value: Number(row[6]) || 0 };
-    if (!carbonPrice.ok) return carbonPrice;
-    const carbonRatio = carbonEnabled
-      ? parseRatio(row[7], "carbon_realize_ratio_pct", rowNumber)
-      : { ok: true, value: 0 };
-    if (!carbonRatio.ok) return carbonRatio;
-    const totalRatio = greenCertRatio.value + greenPremiumRatio.value + carbonRatio.value;
-    if (totalRatio > 1 + 0.000001) {
-      return { ok: false, message: `第 ${rowNumber} 行三条路径兑现空间合计为 ${asPercent(totalRatio)}，不能超过100.0%。` };
-    }
-    values[year] = {
-      greenCertPrice: greenCertPrice.value,
-      greenCertRealizeRatio: greenCertRatio.value,
-      greenPremiumPrice: greenPremiumPrice.value,
-      greenPremiumRealizeRatio: greenPremiumRatio.value,
-      carbonEnabled,
-      carbonPrice: carbonEnabled ? carbonPrice.value : 0,
-      carbonRealizeRatio: carbonEnabled ? carbonRatio.value : 0
-    };
-  }
-  const sanitized = sanitizeEnvManualValuesByYear(values, project);
-  const completeness = getEnvManualCompleteness(project, { envManualValuesByYear: sanitized });
-  if (completeness.complete !== completeness.total) {
-    return {
-      ok: false,
-      message: `逐年环境价值兑现配置不完整，当前 ${completeness.complete}/${completeness.total} 年。`
-    };
-  }
-  return { ok: true, values: sanitized };
+  return scenarioConfig.parseEnvManualValuesCsv(csvText, project);
 }
 
 async function importEnvManualTemplate() {
@@ -10640,19 +9028,7 @@ function buildFeeManualTemplateFilename(project, scenario) {
 }
 
 function buildFeeManualTemplateRows(project) {
-  const rows = [[
-    "year",
-    "market_op_fee_yuan_per_mwh",
-    "grid_assess_fee_yuan_per_mwh",
-    "ancillary_fee_yuan_per_mwh",
-    "other_fee_yuan_per_mwh",
-    "other_income_yuan_per_mwh"
-  ]];
-  if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears)) return rows;
-  for (let index = 0; index < project.forecastYears; index += 1) {
-    rows.push([project.startYear + index, "", "", "", "", ""]);
-  }
-  return rows;
+  return scenarioConfig.buildFeeManualTemplateRows(project);
 }
 
 function exportFeeManualTemplate() {
@@ -10670,64 +9046,7 @@ function exportFeeManualTemplate() {
 }
 
 function parseFeeManualValuesCsv(csvText, project) {
-  const rows = parseCsvRows(csvText);
-  const header = normalizeCsvHeaderRow(rows[0] || []);
-  const expectedHeader = [
-    "year",
-    "market_op_fee_yuan_per_mwh",
-    "grid_assess_fee_yuan_per_mwh",
-    "ancillary_fee_yuan_per_mwh",
-    "other_fee_yuan_per_mwh",
-    "other_income_yuan_per_mwh"
-  ].join(",");
-  if (header !== expectedHeader) {
-    return {
-      ok: false,
-      message: `表头不匹配。请使用：${expectedHeader}。`
-    };
-  }
-  const values = {};
-  const parseNonNegativeNumber = (rawValue, label, rowNumber) => {
-    const value = Number(rawValue);
-    if (!Number.isFinite(value) || value < 0) {
-      return { ok: false, message: `第 ${rowNumber} 行 ${label} 无效：${rawValue || "(空)"}` };
-    }
-    return { ok: true, value };
-  };
-  for (let i = 1; i < rows.length; i += 1) {
-    const row = rows[i];
-    const rowNumber = i + 1;
-    const year = Number(row[0]);
-    if (!Number.isInteger(year)) {
-      return { ok: false, message: `第 ${rowNumber} 行 year 无效：${row[0] || "(空)"}` };
-    }
-    const marketOpFee = parseNonNegativeNumber(row[1], "market_op_fee_yuan_per_mwh", rowNumber);
-    if (!marketOpFee.ok) return marketOpFee;
-    const gridAssessFee = parseNonNegativeNumber(row[2], "grid_assess_fee_yuan_per_mwh", rowNumber);
-    if (!gridAssessFee.ok) return gridAssessFee;
-    const ancillaryFee = parseNonNegativeNumber(row[3], "ancillary_fee_yuan_per_mwh", rowNumber);
-    if (!ancillaryFee.ok) return ancillaryFee;
-    const otherFee = parseNonNegativeNumber(row[4], "other_fee_yuan_per_mwh", rowNumber);
-    if (!otherFee.ok) return otherFee;
-    const otherIncome = parseNonNegativeNumber(row[5], "other_income_yuan_per_mwh", rowNumber);
-    if (!otherIncome.ok) return otherIncome;
-    values[year] = {
-      marketOpFee: marketOpFee.value,
-      gridAssessFee: gridAssessFee.value,
-      ancillaryFee: ancillaryFee.value,
-      otherFee: otherFee.value,
-      otherIncome: otherIncome.value
-    };
-  }
-  const sanitized = sanitizeFeeManualValuesByYear(values, project);
-  const completeness = getFeeManualCompleteness(project, { feeManualValuesByYear: sanitized });
-  if (completeness.complete !== completeness.total) {
-    return {
-      ok: false,
-      message: `逐年扣费收益配置不完整，当前 ${completeness.complete}/${completeness.total} 年。`
-    };
-  }
-  return { ok: true, values: sanitized };
+  return scenarioConfig.parseFeeManualValuesCsv(csvText, project);
 }
 
 async function importFeeManualTemplate() {

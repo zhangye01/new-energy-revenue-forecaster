@@ -26,6 +26,29 @@ python3 -m http.server 8000
 http://127.0.0.1:8000/index.html
 ```
 
+## 演示登录
+
+工具内置的是前端演示登录，用于区分浏览器本地的不同演示用户，不是生产级账号体系。
+
+```text
+账号：demo1、demo2、demo3、demo4、demo5
+密码：demo123
+```
+
+## 开发检查
+
+修改核心计算或页面脚本后，建议先运行：
+
+```bash
+npm run check
+```
+
+该命令会执行 JavaScript 语法检查，并运行全口径收入测算黄金样例，覆盖机制结算、交易策略损益、环境价值兑现、综合费用、配储补充收益和缺失曲线提示。
+
+## 项目文档
+
+业务口径、模型说明、验收用例和烟测清单已整理到 [docs/](./docs/README.md)。继续开发前建议先阅读业务交接包和验收用例，避免页面迭代偏离既定口径。
+
 ## 主要功能
 
 - 项目创建：配置省份、风/光类型、陆上/海上、装机容量、配储和测算周期。
@@ -53,4 +76,25 @@ config.js
 map-data.js
 assets/
 vendor/
+src/
+```
+
+工程化与交接文件包括：
+
+```text
+package.json
+tests/
+docs/
+.github/workflows/
+```
+
+以下本地文件不需要发布或提交：
+
+```text
+.playwright-cli/
+ui-demos/
+node_modules/
+*.log
+tmp/
+temp/
 ```

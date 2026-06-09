@@ -1,6 +1,7 @@
 .DS_Store
 .Rhistory
 .playwright-cli/
+ui-demos/
 
 # Local editor and OS files
 .idea/
