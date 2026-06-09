@@ -64,6 +64,18 @@ function assertTestsUseDiscovery() {
   }
 }
 
+function assertStaticCheckIsRequired() {
+  const packageJson = JSON.parse(readText("package.json"));
+  const staticScript = packageJson.scripts?.["check:static"] || "";
+  const checkScript = packageJson.scripts?.check || "";
+  if (staticScript !== "node scripts/static-check.js") {
+    fail("npm run check:static must use scripts/static-check.js");
+  }
+  if (!checkScript.includes("npm run check:static")) {
+    fail("npm run check must include npm run check:static");
+  }
+}
+
 function assertBrowserModulesAreLoaded() {
   const html = readText("index.html");
   const modules = [
@@ -92,6 +104,7 @@ function run() {
   assertModulesHaveTests();
   assertModulesAreInSyntaxCheck();
   assertTestsUseDiscovery();
+  assertStaticCheckIsRequired();
   assertBrowserModulesAreLoaded();
   assertSingleWorkflow();
   if (!process.exitCode) {
