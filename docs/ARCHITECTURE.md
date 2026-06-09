@@ -43,6 +43,7 @@
 | --- | --- |
 | `result-charts.js` | 基准结果总览四张 ECharts 图的 option 构造和图表 token 扩展 |
 | `compare-charts.js` | 多方案对比和敏感性分析图表 option、对比页主题 token 构造 |
+| `history-charts.js` | 历史电价展示五张 ECharts 图的 option 和主题 token 构造 |
 
 ## 4. 主要数据流
 

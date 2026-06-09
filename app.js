@@ -47,9 +47,10 @@ const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
 const resultCharts = window.NE_RESULT_CHARTS;
 const compareCharts = window.NE_COMPARE_CHARTS;
+const historyCharts = window.NE_HISTORY_CHARTS;
 const appStorage = window.NE_APP_STORAGE;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts || !compareCharts || !appStorage) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts || !compareCharts || !historyCharts || !appStorage) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -5375,34 +5376,7 @@ function buildHistorySpotAnalysisDataset(project) {
 }
 
 function historyThemeTokens() {
-  if (appState.theme === "dark") {
-    return {
-      axisText: "#c7d4e6",
-      axisLine: "#476081",
-      splitLine: "rgba(116, 142, 177, 0.22)",
-      legendText: "#c7d4e6",
-      tooltipBg: "rgba(19, 31, 46, 0.95)",
-      tooltipBorder: "#4e6790"
-    };
-  }
-  if (appState.theme === "eye") {
-    return {
-      axisText: "#4d6658",
-      axisLine: "#a2bb9f",
-      splitLine: "rgba(129, 156, 120, 0.22)",
-      legendText: "#435d4d",
-      tooltipBg: "rgba(243, 249, 237, 0.95)",
-      tooltipBorder: "#9db79a"
-    };
-  }
-  return {
-    axisText: "#5b6f89",
-    axisLine: "#bfd0e4",
-    splitLine: "rgba(151, 170, 196, 0.24)",
-    legendText: "#5b6f89",
-    tooltipBg: "rgba(255, 255, 255, 0.96)",
-    tooltipBorder: "#c9d8eb"
-  };
+  return historyCharts.buildHistoryThemeTokens(appState.theme);
 }
 
 function ensureHistoryChart(chartKey, node) {
@@ -6358,20 +6332,7 @@ function setHistoryNoData(message) {
   Object.values(charts).forEach((chart) => {
     if (!chart) return;
     chart.clear();
-    chart.setOption({
-      animation: false,
-      graphic: [{
-        type: "text",
-        left: "center",
-        top: "middle",
-        style: {
-          text: message,
-          fill: tokens.axisText,
-          fontWeight: 700,
-          fontSize: 14
-        }
-      }]
-    }, true);
+    chart.setOption(historyCharts.buildHistoryNoDataOption(message, tokens), true);
   });
   queueHistoryChartsResize();
 }
@@ -6459,20 +6420,11 @@ function renderHistoryPrices() {
   const historyData = historyAnalysis.buildHistorySelectedAnalysis(selectedYears, { lineColors });
   const {
     allValues,
-    trendSeries,
     valueAvg,
     p50,
     p90,
     negativeRatio,
-    histogramBins,
-    histogramLabels,
-    histogramCounts,
     typicalWorkday,
-    typicalWeekend,
-    heatData,
-    heatMin,
-    heatMax,
-    boxplotData,
     maxStdMonth,
     maxStd,
     exportRows
@@ -6494,206 +6446,12 @@ function renderHistoryPrices() {
   setHistoryExportPayload("heatmap", `${exportPrefix}-分时电价热力图.csv`, exportRows.heatmap);
   setHistoryExportPayload("boxplot", `${exportPrefix}-月度电价箱线图.csv`, exportRows.boxplot);
   syncHistoryExportButtons();
-
-  if (charts.monthTrend) {
-    charts.monthTrend.setOption({
-      color: lineColors,
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: tokens.tooltipBg,
-        borderColor: tokens.tooltipBorder,
-        textStyle: { color: tokens.axisText }
-      },
-      legend: {
-        bottom: 0,
-        textStyle: { color: tokens.legendText }
-      },
-      grid: { top: 36, left: 48, right: 18, bottom: 54, containLabel: true },
-      xAxis: {
-        type: "category",
-        data: HISTORY_MONTH_LABELS,
-        axisLabel: { color: tokens.axisText },
-        axisLine: { lineStyle: { color: tokens.axisLine } }
-      },
-      yAxis: {
-        type: "value",
-        name: "元/MWh",
-        nameGap: 24,
-        nameTextStyle: { color: tokens.axisText },
-        axisLabel: { color: tokens.axisText },
-        axisLine: { lineStyle: { color: tokens.axisLine } },
-        splitLine: { lineStyle: { color: tokens.splitLine } }
-      },
-      series: trendSeries
-    }, true);
-  }
-
-  if (charts.typicalDay) {
-    charts.typicalDay.setOption({
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: tokens.tooltipBg,
-        borderColor: tokens.tooltipBorder,
-        textStyle: { color: tokens.axisText }
-      },
-      legend: {
-        bottom: 0,
-        textStyle: { color: tokens.legendText }
-      },
-      grid: { top: 36, left: 50, right: 18, bottom: 54, containLabel: true },
-      xAxis: {
-        type: "category",
-        data: HISTORY_QUARTER_LABELS,
-        axisLabel: {
-          color: tokens.axisText,
-          interval: 7
-        },
-        axisLine: { lineStyle: { color: tokens.axisLine } }
-      },
-      yAxis: {
-        type: "value",
-        name: "元/MWh",
-        nameGap: 24,
-        nameTextStyle: { color: tokens.axisText },
-        axisLabel: { color: tokens.axisText },
-        axisLine: { lineStyle: { color: tokens.axisLine } },
-        splitLine: { lineStyle: { color: tokens.splitLine } }
-      },
-      series: [
-        {
-          name: "工作日",
-          type: "line",
-          smooth: true,
-          symbol: "none",
-          lineStyle: { width: 2 },
-          areaStyle: { opacity: 0.09 },
-          data: typicalWorkday,
-          color: "#2f78e8"
-        },
-        {
-          name: "周末",
-          type: "line",
-          smooth: true,
-          symbol: "none",
-          lineStyle: { width: 2, type: "dashed" },
-          data: typicalWeekend,
-          color: "#52a852"
-        }
-      ]
-    }, true);
-  }
-
-  if (charts.distribution) {
-    charts.distribution.setOption({
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: tokens.tooltipBg,
-        borderColor: tokens.tooltipBorder,
-        textStyle: { color: tokens.axisText }
-      },
-      grid: { top: 30, left: 52, right: 18, bottom: 46, containLabel: true },
-      xAxis: {
-        type: "category",
-        data: histogramLabels,
-        axisLabel: { color: tokens.axisText, interval: 1 },
-        axisLine: { lineStyle: { color: tokens.axisLine } }
-      },
-      yAxis: {
-        type: "value",
-        axisLabel: { color: tokens.axisText },
-        axisLine: { lineStyle: { color: tokens.axisLine } },
-        splitLine: { lineStyle: { color: tokens.splitLine } }
-      },
-      series: [{
-        type: "bar",
-        data: histogramCounts,
-        barMaxWidth: 24,
-        itemStyle: {
-          borderRadius: [4, 4, 0, 0],
-          color: (params) => {
-            const ratio = params.dataIndex / Math.max(histogramBins - 1, 1);
-            if (ratio < 0.22) return "#ff8a1f";
-            if (ratio < 0.72) return "#2f78e8";
-            return "#6c46d1";
-          }
-        }
-      }]
-    }, true);
-  }
-
-  if (charts.heatmap) {
-    charts.heatmap.setOption({
-      tooltip: {
-        position: "top",
-        backgroundColor: tokens.tooltipBg,
-        borderColor: tokens.tooltipBorder,
-        textStyle: { color: tokens.axisText },
-        formatter: (params) => `${HISTORY_MONTH_LABELS[params.value[1]]} ${HISTORY_HEAT_HOUR_LABELS[params.value[0]]}<br>${params.value[2]} 元/MWh`
-      },
-      grid: { top: 30, left: 48, right: 20, bottom: 52, containLabel: true },
-      xAxis: {
-        type: "category",
-        data: HISTORY_HEAT_HOUR_LABELS,
-        axisLabel: { color: tokens.axisText, interval: 1 },
-        axisLine: { lineStyle: { color: tokens.axisLine } }
-      },
-      yAxis: {
-        type: "category",
-        data: HISTORY_MONTH_LABELS,
-        axisLabel: { color: tokens.axisText },
-        axisLine: { lineStyle: { color: tokens.axisLine } }
-      },
-      visualMap: {
-        min: Number.isFinite(heatMin) ? Math.floor(heatMin) : 0,
-        max: Number.isFinite(heatMax) ? Math.ceil(heatMax) : 500,
-        orient: "horizontal",
-        left: "center",
-        bottom: 0,
-        text: ["高", "低"],
-        textStyle: { color: tokens.axisText },
-        inRange: {
-          color: ["#2d60b0", "#7ab5df", "#f0dd9b", "#f39d41", "#df4a49"]
-        }
-      },
-      series: [{
-        type: "heatmap",
-        data: heatData,
-        emphasis: { itemStyle: { borderColor: "#ffffff", borderWidth: 1 } }
-      }]
-    }, true);
-  }
-
-  if (charts.boxplot) {
-    charts.boxplot.setOption({
-      tooltip: {
-        trigger: "item",
-        backgroundColor: tokens.tooltipBg,
-        borderColor: tokens.tooltipBorder,
-        textStyle: { color: tokens.axisText }
-      },
-      grid: { top: 30, left: 48, right: 18, bottom: 38, containLabel: true },
-      xAxis: {
-        type: "category",
-        data: HISTORY_MONTH_LABELS,
-        axisLabel: { color: tokens.axisText },
-        axisLine: { lineStyle: { color: tokens.axisLine } }
-      },
-      yAxis: {
-        type: "value",
-        axisLabel: { color: tokens.axisText },
-        axisLine: { lineStyle: { color: tokens.axisLine } },
-        splitLine: { lineStyle: { color: tokens.splitLine } }
-      },
-      series: [{
-        type: "boxplot",
-        data: boxplotData,
-        itemStyle: {
-          color: "rgba(63, 125, 226, 0.18)",
-          borderColor: "#2f78e8"
-        }
-      }]
-    }, true);
-  }
+  const historyChartOptions = historyCharts.buildHistoryChartOptions(historyData, tokens);
+  if (charts.monthTrend) charts.monthTrend.setOption(historyChartOptions.monthTrend, true);
+  if (charts.typicalDay) charts.typicalDay.setOption(historyChartOptions.typicalDay, true);
+  if (charts.distribution) charts.distribution.setOption(historyChartOptions.distribution, true);
+  if (charts.heatmap) charts.heatmap.setOption(historyChartOptions.heatmap, true);
+  if (charts.boxplot) charts.boxplot.setOption(historyChartOptions.boxplot, true);
 
   queueHistoryChartsResize();
 
