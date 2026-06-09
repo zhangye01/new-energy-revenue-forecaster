@@ -209,6 +209,7 @@
   }
 
   return {
+    resolveBrowserStorage: resolveGlobalValue,
     readRawFromStorage,
     writeRawToStorage,
     readJsonFromStorage,

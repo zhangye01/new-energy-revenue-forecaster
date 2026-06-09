@@ -3,6 +3,8 @@
 const assert = require("node:assert/strict");
 const appStorage = require("../src/domain/app-storage");
 
+assert.equal(appStorage.resolveBrowserStorage("localStorage"), null);
+
 function createMemoryStorage(options = {}) {
   const map = new Map();
   return {

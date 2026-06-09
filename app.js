@@ -714,6 +714,17 @@ function closeOverviewPolicyDetail() {
   }
 }
 
+function getBrowserStorage(name) {
+  return appStorage.resolveBrowserStorage(name);
+}
+
+function resetAuthState() {
+  appState.auth.loggedIn = false;
+  appState.auth.accountName = "";
+  appState.auth.account = "";
+  appState.auth.lastLoginAt = "";
+}
+
 function persistAuthState() {
   const payload = {
     loggedIn: appState.auth.loggedIn,
@@ -721,48 +732,31 @@ function persistAuthState() {
     account: appState.auth.account,
     lastLoginAt: appState.auth.lastLoginAt
   };
-  const raw = JSON.stringify(payload);
-  if (typeof localStorage !== "undefined") {
-    try {
-      localStorage.setItem(AUTH_STORAGE_KEY, raw);
-    } catch (error) {
-      console.warn("写入localStorage登录态失败。", error);
-    }
-  }
-  if (typeof sessionStorage !== "undefined") {
-    try {
-      sessionStorage.setItem(AUTH_STORAGE_KEY, raw);
-    } catch (error) {
-      console.warn("写入sessionStorage登录态失败。", error);
-    }
-  }
+  appStorage.writeJsonToStorages(AUTH_STORAGE_KEY, payload, [
+    getBrowserStorage("localStorage"),
+    getBrowserStorage("sessionStorage")
+  ], {
+    onError: (error) => console.warn("写入浏览器登录态失败。", error)
+  });
 }
 
 function initAuth() {
-  let raw = "";
-  if (typeof localStorage !== "undefined") {
-    try {
-      raw = localStorage.getItem(AUTH_STORAGE_KEY) || "";
-    } catch (error) {
-      console.warn("读取localStorage登录态失败。", error);
+  let parseFailed = false;
+  const result = appStorage.readJsonFromFirstStorage(AUTH_STORAGE_KEY, [
+    getBrowserStorage("localStorage"),
+    getBrowserStorage("sessionStorage")
+  ], {
+    onReadError: (error) => console.warn("读取浏览器登录态失败。", error),
+    onParseError: (error) => {
+      parseFailed = true;
+      console.warn("解析浏览器登录态失败。", error);
     }
+  });
+  if (!result.found) {
+    if (parseFailed) resetAuthState();
+    return;
   }
-  if (!raw && typeof sessionStorage !== "undefined") {
-    try {
-      raw = sessionStorage.getItem(AUTH_STORAGE_KEY) || "";
-    } catch (error) {
-      console.warn("读取sessionStorage登录态失败。", error);
-    }
-  }
-  if (!raw) return;
-  try {
-    applyAuthPayload(JSON.parse(raw));
-  } catch {
-    appState.auth.loggedIn = false;
-    appState.auth.accountName = "";
-    appState.auth.account = "";
-    appState.auth.lastLoginAt = "";
-  }
+  applyAuthPayload(result.value);
 }
 
 function applyAuthPayload(payload) {
@@ -793,27 +787,27 @@ function sidebarGroupDefaults() {
 }
 
 function persistSidebarGroups() {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(getSidebarGroupStorageKey(), JSON.stringify(appState.sidebarGroups));
+  appStorage.writeJsonToStorage(getBrowserStorage("localStorage"), getSidebarGroupStorageKey(), appState.sidebarGroups, {
+    onError: (error) => console.warn("写入侧边栏状态失败。", error)
+  });
 }
 
 function initSidebarGroups() {
   appState.sidebarGroups = sidebarGroupDefaults();
   if (!appState.auth.loggedIn) return;
-  if (typeof localStorage === "undefined") return;
-  const raw = localStorage.getItem(getSidebarGroupStorageKey());
-  if (!raw) return;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      for (const key of Object.keys(appState.sidebarGroups)) {
-        if (typeof parsed[key] === "boolean") {
-          appState.sidebarGroups[key] = parsed[key];
-        }
+  const result = appStorage.readJsonFromStorage(getBrowserStorage("localStorage"), getSidebarGroupStorageKey(), {
+    onReadError: (error) => console.warn("读取侧边栏状态失败。", error),
+    onParseError: () => {
+      appState.sidebarGroups = sidebarGroupDefaults();
+    }
+  });
+  const parsed = result.value;
+  if (parsed && typeof parsed === "object") {
+    for (const key of Object.keys(appState.sidebarGroups)) {
+      if (typeof parsed[key] === "boolean") {
+        appState.sidebarGroups[key] = parsed[key];
       }
     }
-  } catch {
-    appState.sidebarGroups = sidebarGroupDefaults();
   }
 }
 
@@ -1213,16 +1207,18 @@ async function handleChangePassword(event) {
 }
 
 function initTheme() {
-  const saved = typeof localStorage !== "undefined" ? localStorage.getItem("ne_ui_theme") : null;
+  const saved = appStorage.readRawFromStorage(getBrowserStorage("localStorage"), "ne_ui_theme", {
+    onError: (error) => console.warn("读取主题偏好失败。", error)
+  });
   applyTheme(normalizeTheme(saved));
 }
 
 function toggleTheme() {
   const next = getNextTheme(appState.theme);
   applyTheme(next);
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem("ne_ui_theme", next);
-  }
+  appStorage.writeRawToStorage(getBrowserStorage("localStorage"), "ne_ui_theme", next, {
+    onError: (error) => console.warn("写入主题偏好失败。", error)
+  });
 }
 
 function makeId(prefix) {
@@ -1747,7 +1743,7 @@ function persistAppDataNow(options = {}) {
   let localSucceeded = false;
   let localAttempted = false;
 
-  const shouldTryLocal = typeof localStorage !== "undefined"
+  const shouldTryLocal = Boolean(getBrowserStorage("localStorage"))
     && appDataStorageMode !== "idb_only"
     && (forceLocal || Date.now() - lastLocalStoragePersistAt >= LOCAL_STORAGE_PERSIST_INTERVAL_MS);
 
