@@ -45,6 +45,7 @@ const projectModel = window.NE_PROJECT_MODEL;
 const energyDataRules = window.NE_ENERGY_DATA;
 const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
+const energyCharts = window.NE_ENERGY_CHARTS;
 const resultCharts = window.NE_RESULT_CHARTS;
 const scenarioCharts = window.NE_SCENARIO_CHARTS;
 const compareCharts = window.NE_COMPARE_CHARTS;
@@ -52,7 +53,7 @@ const historyCharts = window.NE_HISTORY_CHARTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !energyCharts || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -4827,23 +4828,7 @@ function setEnergyChartEmpty(chart, message) {
   if (!chart) return;
   const tokens = historyThemeTokens();
   chart.clear();
-  chart.setOption({
-    animation: false,
-    xAxis: { show: false, type: "category", data: [] },
-    yAxis: { show: false, type: "value" },
-    series: [],
-    graphic: [{
-      type: "text",
-      left: "center",
-      top: "middle",
-      style: {
-        text: message,
-        fill: tokens.axisText,
-        fontWeight: 700,
-        fontSize: 14
-      }
-    }]
-  }, true);
+  chart.setOption(energyCharts.buildEnergyChartEmptyOption(message, tokens), true);
 }
 
 function setEnergyChartsNoData(noteMessage, annualMessage = noteMessage, typicalMessage = noteMessage) {
@@ -4880,20 +4865,8 @@ function renderEnergyCurveChart() {
   }
   const energyState = getEnergyCompletionState(project);
   const energyData = energyState.energyData;
-  const forecastYears = Number.isInteger(project.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
-  const annualRows = Array.from({ length: forecastYears }, (_, index) => {
-    const year = project.startYear + index;
-    const annualHours = Number(
-      energyData.annualSummary?.[year]?.annualHours
-      ?? energyData.annualInputByYear?.[year]
-      ?? 0
-    );
-    return {
-      year,
-      annualHours: Number.isFinite(annualHours) ? annualHours : 0
-    };
-  });
-  const hasAnnualValues = annualRows.some((item) => item.annualHours > 0);
+  const annualRows = energyCharts.buildAnnualRows(project, energyData);
+  const hasAnnualValues = energyCharts.hasAnnualValues(annualRows);
   const hasConfiguredTypicalCurve = energyState.hasTypicalCurve;
   const previewMeta = hasConfiguredTypicalCurve ? getEnergyCurvePreviewProfile(project) : null;
   const typicalProfile = previewMeta?.profile || null;
@@ -4903,168 +4876,28 @@ function renderEnergyCurveChart() {
   const tokens = historyThemeTokens();
 
   if (hasAnnualValues) {
-    annualChart.setOption({
-      animationDuration: 320,
-      color: ["#2d7dd2"],
-      grid: { left: 72, right: 24, top: 36, bottom: 62, containLabel: true },
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: tokens.tooltipBg,
-        borderColor: tokens.tooltipBorder,
-        textStyle: { color: tokens.axisText },
-        valueFormatter: (value) => `${Number(value || 0).toFixed(2)} h`
-      },
-      xAxis: {
-        type: "category",
-        data: annualRows.map((item) => `${item.year}`),
-        axisLabel: { color: tokens.axisText, margin: 12 },
-        axisLine: { lineStyle: { color: tokens.axisLine } }
-      },
-      yAxis: {
-        type: "value",
-        name: "小时数 h",
-        nameLocation: "middle",
-        nameGap: 52,
-        nameRotate: 90,
-        nameTextStyle: {
-          color: tokens.axisText,
-          fontWeight: 600,
-          fontSize: 13,
-          padding: [0, 0, 10, 0]
-        },
-        axisLabel: {
-          color: tokens.axisText,
-          formatter: (value) => `${Number(value).toFixed(0)}`,
-          margin: 12
-        },
-        splitLine: { lineStyle: { color: tokens.splitLine } }
-      },
-      series: [{
-        type: "bar",
-        barMaxWidth: 36,
-        itemStyle: { borderRadius: [6, 6, 0, 0] },
-        data: annualRows.map((item) => Number(item.annualHours.toFixed(2)))
-      }]
-    }, true);
+    annualChart.setOption(energyCharts.buildAnnualHoursOption(annualRows, tokens), true);
   } else {
     setEnergyChartEmpty(annualChart, "请先导出逐年总量模板并上传结果。");
   }
 
-  if (Array.isArray(typicalProfile) && typicalProfile.length === 8760) {
-    const totalWeight = typicalProfile.reduce((sum, value) => {
-      const numericValue = Number(value);
-      return Number.isFinite(numericValue) && numericValue >= 0 ? sum + numericValue : sum;
-    }, 0);
-    const hoursScale = totalWeight > 0 ? 8760 / totalWeight : 0;
-    const monthHourlyHours = Array.from({ length: 12 }, () => Array(24).fill(0));
-    typicalProfile.forEach((value, index) => {
-      const numericValue = Number(value);
-      if (!Number.isFinite(numericValue) || numericValue < 0) return;
-      const dayOfYear = Math.floor(index / 24) + 1;
-      const hourIndex = index % 24;
-      const { month } = dayOfYearToMonthDay(dayOfYear);
-      monthHourlyHours[month - 1][hourIndex] += numericValue * hoursScale;
-    });
-    const monthLabels = Array.from({ length: 12 }, (_, index) => `${index + 1}月`);
-    const hourLabels = Array.from({ length: 24 }, (_, index) => `${index + 1}`);
-    const monthColors = [
-      "#4f8ff7",
-      "#66b5ff",
-      "#44c3b6",
-      "#6ed28a",
-      "#f2b24f",
-      "#f58c4c",
-      "#ec6e5b",
-      "#d7658d",
-      "#9a6af0",
-      "#7f8cff",
-      "#4ec0f1",
-      "#42a86b"
-    ];
-    chart.setOption({
-      animationDuration: 320,
-      color: monthColors,
-      legend: {
-        type: "plain",
-        top: 4,
-        left: "center",
-        width: "92%",
-        itemWidth: 18,
-        itemHeight: 10,
-        itemGap: 12,
-        textStyle: {
-          color: tokens.axisText,
-          fontSize: 12
-        }
-      },
-      grid: { left: 72, right: 30, top: 76, bottom: 70, containLabel: true },
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: tokens.tooltipBg,
-        borderColor: tokens.tooltipBorder,
-        textStyle: { color: tokens.axisText },
-        valueFormatter: (value) => `${Number(value || 0).toFixed(2)} h`
-      },
-      xAxis: {
-        type: "category",
-        name: "小时",
-        nameLocation: "middle",
-        nameGap: 38,
-        nameTextStyle: {
-          color: tokens.axisText,
-          fontWeight: 600,
-          fontSize: 13
-        },
-        data: hourLabels,
-        axisLabel: { color: tokens.axisText, margin: 12 },
-        axisLine: { lineStyle: { color: tokens.axisLine } },
-        splitLine: { show: false }
-      },
-      yAxis: {
-        type: "value",
-        name: "小时数 h",
-        nameLocation: "middle",
-        nameGap: 56,
-        nameRotate: 90,
-        nameTextStyle: {
-          color: tokens.axisText,
-          fontWeight: 600,
-          fontSize: 13,
-          padding: [0, 0, 10, 0]
-        },
-        axisLabel: {
-          color: tokens.axisText,
-          formatter: (value) => `${Number(value).toFixed(0)}`,
-          margin: 12
-        },
-        splitLine: { lineStyle: { color: tokens.splitLine } }
-      },
-      series: monthLabels.map((label, monthIndex) => ({
-        name: label,
-        type: "line",
-        smooth: true,
-        showSymbol: false,
-        lineStyle: { width: 2 },
-        data: monthHourlyHours[monthIndex].map((value) => Number(value.toFixed(2)))
-      }))
-    }, true);
+  const typicalOption = energyCharts.buildTypicalDayCurveOption(typicalProfile, tokens);
+  if (typicalOption) {
+    chart.setOption(typicalOption, true);
   } else {
     setEnergyChartEmpty(chart, "第二步未完成：请导入典型年8760模板，或调用所选省份典型曲线。");
   }
 
+  const chartText = energyCharts.buildEnergyCurveText({
+    hasAnnualValues,
+    hasConfiguredTypicalCurve,
+    sourceLabel: previewMeta?.sourceLabel || ""
+  });
   if (refs.energyCurveSubtitle) {
-    refs.energyCurveSubtitle.textContent = previewMeta?.sourceLabel
-      ? `当前来源：${previewMeta.sourceLabel}；横轴为1-24时，图例区分1-12月。`
-      : "横轴为1-24时，纵轴为小时数，图例区分1-12月。";
+    refs.energyCurveSubtitle.textContent = chartText.subtitle;
   }
   if (refs.energyCurveNote) {
-    if (!hasAnnualValues) {
-      refs.energyCurveNote.textContent = "请先完成逐年总量模板导入；完成后左图展示年度小时数。";
-    } else if (!hasConfiguredTypicalCurve) {
-      refs.energyCurveNote.textContent = "逐年总量已导入；第二步完成后，右图将展示生效典型年24小时曲线。";
-    } else {
-      refs.energyCurveNote.textContent = `左图展示测算周期内逐年总小时数；右图展示${previewMeta?.sourceLabel || "典型年按月份拆解的24小时曲线"}。`;
-    }
+    refs.energyCurveNote.textContent = chartText.note;
   }
 }
 
@@ -5403,73 +5236,6 @@ function syncCompareSensitivityControls() {
 
 function sensitivityAxisLabels(settings = compareSensitivitySettings) {
   return compareAnalysis.sensitivityAxisLabels(settings);
-}
-
-function renderSensitivityChart(chartKey, node, values, baseRevenueWan, lineColor) {
-  if (resolveVisiblePageId(appState.activePage) !== "compare-page") return;
-  const chart = ensureCompareChart(chartKey, node);
-  if (!chart) return;
-  const tokens = compareThemeTokens();
-  chart.setOption({
-    animationDuration: 320,
-    grid: { top: 24, left: 52, right: 18, bottom: 38 },
-    tooltip: {
-      trigger: "axis",
-      backgroundColor: tokens.tooltipBg,
-      borderColor: tokens.tooltipBorder,
-      borderWidth: 1,
-      textStyle: { color: tokens.axisText },
-      formatter: (params) => {
-        const current = params?.[0];
-        if (!current) return "";
-        return `${current.axisValue}<br/>首年总收益：${asNum(Number(current.value || 0), 1)} 万元`;
-      }
-    },
-    xAxis: {
-      type: "category",
-      data: sensitivityAxisLabels(),
-      axisLabel: { color: tokens.axisText },
-      axisLine: { lineStyle: { color: tokens.axisLine } }
-    },
-    yAxis: {
-      type: "value",
-      name: "万元",
-      nameTextStyle: { color: tokens.axisText },
-      axisLabel: {
-        color: tokens.axisText,
-        formatter: (value) => `${Number(value).toFixed(0)}`
-      },
-      axisLine: { lineStyle: { color: tokens.axisLine } },
-      splitLine: { lineStyle: { color: tokens.splitLine } }
-    },
-    series: [{
-      type: "line",
-      smooth: 0.32,
-      symbol: "circle",
-      symbolSize: 7,
-      data: values,
-      lineStyle: { width: 3, color: lineColor },
-      itemStyle: { color: lineColor, borderColor: "#ffffff", borderWidth: 1.5 },
-      areaStyle: {
-        color: new window.echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: `${lineColor}33` },
-          { offset: 1, color: `${lineColor}08` }
-        ])
-      },
-      markLine: {
-        symbol: ["none", "none"],
-        lineStyle: {
-          type: "dashed",
-          color: tokens.baseline
-        },
-        label: {
-          color: tokens.baseline,
-          formatter: `基准 ${asNum(baseRevenueWan, 1)} 万元`
-        },
-        data: [{ yAxis: Number(baseRevenueWan.toFixed(1)) }]
-      }
-    }]
-  }, true);
 }
 
 function buildCompareSensitivityFactors(baselineFirst, baselineRevenueWan, settings = compareSensitivitySettings) {
