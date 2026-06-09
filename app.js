@@ -46,8 +46,9 @@ const energyDataRules = window.NE_ENERGY_DATA;
 const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
 const resultCharts = window.NE_RESULT_CHARTS;
+const compareCharts = window.NE_COMPARE_CHARTS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !resultCharts || !compareCharts) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -6086,52 +6087,7 @@ function renderScenarioVisualization() {
 }
 
 function compareThemeTokens() {
-  if (appState.theme === "dark") {
-    return {
-      axisText: "#c0d0e5",
-      axisLine: "#4d637f",
-      splitLine: "rgba(111, 136, 170, 0.2)",
-      legendText: "#c0d0e5",
-      tooltipBg: "rgba(24, 36, 52, 0.96)",
-      tooltipBorder: "#48617d",
-      baseline: "#f29d52",
-      primary: "#6ca9ff",
-      secondary: "#7fd0c7",
-      tertiary: "#95d086",
-      negative: "#eb8b6e",
-      palette: ["#6ca9ff", "#68c9bc", "#95d086", "#f29d52", "#c995ff"]
-    };
-  }
-  if (appState.theme === "eye") {
-    return {
-      axisText: "#4a6250",
-      axisLine: "#aec1af",
-      splitLine: "rgba(140, 166, 141, 0.24)",
-      legendText: "#4a6250",
-      tooltipBg: "rgba(244, 249, 239, 0.96)",
-      tooltipBorder: "#abc0ad",
-      baseline: "#cf8f48",
-      primary: "#4f88bc",
-      secondary: "#5f9d79",
-      tertiary: "#7fa15c",
-      negative: "#d07f62",
-      palette: ["#4f88bc", "#5f9d79", "#7fa15c", "#cf8f48", "#9a7fca"]
-    };
-  }
-  return {
-    axisText: "#5b6f89",
-    axisLine: "#bfd0e4",
-    splitLine: "rgba(151, 170, 196, 0.24)",
-    legendText: "#5b6f89",
-    tooltipBg: "rgba(255, 255, 255, 0.96)",
-    tooltipBorder: "#c9d8eb",
-    baseline: "#ea9150",
-    primary: "#3f82e6",
-    secondary: "#3fa096",
-    tertiary: "#76aa57",
-    negative: "#d77762",
-    palette: ["#3f82e6", "#3fa096", "#76aa57", "#ea9150", "#9b79de"]
-  };
+  return compareCharts.buildCompareThemeTokens(appState.theme);
 }
 
 function ensureCompareChart(chartKey, node) {
@@ -6181,23 +6137,7 @@ function renderCompareChartPlaceholder(chartKey, node, message) {
   if (!chart) return;
   const tokens = compareThemeTokens();
   chart.clear();
-  chart.setOption({
-    animation: false,
-    xAxis: { show: false, type: "value" },
-    yAxis: { show: false, type: "value" },
-    series: [],
-    graphic: [{
-      type: "text",
-      left: "center",
-      top: "middle",
-      style: {
-        text: message,
-        fill: tokens.axisText,
-        fontSize: 14,
-        fontWeight: 600
-      }
-    }]
-  }, true);
+  chart.setOption(compareCharts.buildComparePlaceholderOption(message, tokens), true);
 }
 
 function sanitizeCompareSensitivitySettings() {
@@ -6301,65 +6241,7 @@ function renderSensitivityTornadoChart(factors, baselineRevenueWan) {
     renderCompareChartPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, "基准方案未测算，暂无法展示。");
     return;
   }
-  const rangeLabel = `${settings.rangePercent}%`;
-  const displayCount = settings.topN === "all" ? factors.length : Math.min(Number(settings.topN) || 8, factors.length);
-  const topFactors = factors.slice(0, displayCount).reverse();
-  chart.setOption({
-    animationDuration: 340,
-    grid: { top: 30, left: 132, right: 28, bottom: 34, containLabel: true },
-    legend: {
-      top: 0,
-      textStyle: { color: tokens.legendText, fontWeight: 700 }
-    },
-    tooltip: {
-      trigger: "axis",
-      backgroundColor: tokens.tooltipBg,
-      borderColor: tokens.tooltipBorder,
-      borderWidth: 1,
-      textStyle: { color: tokens.axisText },
-      formatter: (params) => {
-        if (!params?.length) return "";
-        const lines = [`${escapeHtml(params[0].axisValue)}`];
-        params.forEach((item) => {
-          const value = Number(item.value || 0);
-          lines.push(`${item.marker}${escapeHtml(item.seriesName)}：${value >= 0 ? "+" : ""}${asNum(value, 2)} 万元`);
-        });
-        lines.push(`基准首年收益：${asNum(baselineRevenueWan, 1)} 万元`);
-        return lines.join("<br/>");
-      }
-    },
-    xAxis: {
-      type: "value",
-      name: "相对基准变化 万元",
-      nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
-      axisLabel: { color: tokens.axisText },
-      axisLine: { lineStyle: { color: tokens.axisLine } },
-      splitLine: { lineStyle: { color: tokens.splitLine } }
-    },
-    yAxis: {
-      type: "category",
-      data: topFactors.map((factor) => factor.name),
-      axisLabel: { color: tokens.axisText },
-      axisLine: { lineStyle: { color: tokens.axisLine } },
-      axisTick: { show: false }
-    },
-    series: [
-      {
-        name: `-${rangeLabel}`,
-        type: "bar",
-        barWidth: 12,
-        itemStyle: { color: tokens.negative },
-        data: topFactors.map((factor) => factor.lowDelta)
-      },
-      {
-        name: `+${rangeLabel}`,
-        type: "bar",
-        barWidth: 12,
-        itemStyle: { color: tokens.primary },
-        data: topFactors.map((factor) => factor.highDelta)
-      }
-    ]
-  }, true);
+  chart.setOption(compareCharts.buildSensitivityTornadoOption(factors, baselineRevenueWan, settings, tokens), true);
 }
 
 function renderSensitivityFactorList(allFactors, enabledFactors) {
@@ -6423,53 +6305,7 @@ function renderSensitivityResponseChart(factors, baselineRevenueWan) {
   }
   activeSensitivityFactorKey = selected.key;
   if (refs.compareSensitivityResponseLabel) refs.compareSensitivityResponseLabel.textContent = selected.name;
-  chart.setOption({
-    animationDuration: 340,
-    grid: { top: 36, left: 56, right: 24, bottom: 44, containLabel: true },
-    tooltip: {
-      trigger: "axis",
-      backgroundColor: tokens.tooltipBg,
-      borderColor: tokens.tooltipBorder,
-      borderWidth: 1,
-      textStyle: { color: tokens.axisText },
-      formatter: (params) => {
-        const item = params?.[0];
-        if (!item) return "";
-        return `${item.axisValue}<br/>首年收益：${asNum(Number(item.value || 0), 1)} 万元<br/>相对基准：${asNum(Number(item.value || 0) - baselineRevenueWan, 1)} 万元`;
-      }
-    },
-    xAxis: {
-      type: "category",
-      data: sensitivityAxisLabels(),
-      axisLabel: { color: tokens.axisText },
-      axisLine: { lineStyle: { color: tokens.axisLine } },
-      axisTick: { show: false }
-    },
-    yAxis: {
-      type: "value",
-      name: "万元",
-      nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
-      axisLabel: { color: tokens.axisText },
-      axisLine: { lineStyle: { color: tokens.axisLine } },
-      splitLine: { lineStyle: { color: tokens.splitLine } }
-    },
-    series: [{
-      name: selected.name,
-      type: "line",
-      smooth: true,
-      symbolSize: 6,
-      lineStyle: { width: 3, color: tokens.primary },
-      itemStyle: { color: tokens.primary },
-      areaStyle: { color: `${tokens.primary}1f` },
-      data: selected.series,
-      markLine: {
-        symbol: ["none", "none"],
-        lineStyle: { type: "dashed", color: tokens.baseline },
-        label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineRevenueWan, 1)} 万元` },
-        data: [{ yAxis: Number(baselineRevenueWan.toFixed(1)) }]
-      }
-    }]
-  }, true);
+  chart.setOption(compareCharts.buildSensitivityResponseOption(selected, baselineRevenueWan, sensitivityAxisLabels(), tokens), true);
 }
 
 function renderSensitivityTable(factors) {
@@ -6496,62 +6332,7 @@ function renderCompareTrendChart(available) {
   const chart = ensureCompareChart("scenarioTrend", refs.compareTrendChart);
   if (!chart) return;
   const tokens = compareThemeTokens();
-  const years = available[0]?.result?.annualRows?.map((row) => String(row.year)) || [];
-  chart.setOption({
-    animationDuration: 340,
-    grid: { top: 28, left: 56, right: 28, bottom: 52 },
-    tooltip: {
-      trigger: "axis",
-      backgroundColor: tokens.tooltipBg,
-      borderColor: tokens.tooltipBorder,
-      borderWidth: 1,
-      textStyle: { color: tokens.axisText },
-      formatter: (params) => {
-        if (!params?.length) return "";
-        const lines = [`${params[0].axisValue} 年`];
-        params.forEach((item) => {
-          lines.push(`${item.marker}${escapeHtml(item.seriesName)}：${asNum(Number(item.value || 0), 1)} 万元`);
-        });
-        return lines.join("<br/>");
-      }
-    },
-    legend: {
-      bottom: 0,
-      textStyle: { color: tokens.legendText }
-    },
-    xAxis: {
-      type: "category",
-      data: years,
-      axisLabel: { color: tokens.axisText },
-      axisLine: { lineStyle: { color: tokens.axisLine } }
-    },
-    yAxis: {
-      type: "value",
-      name: "万元",
-      nameTextStyle: { color: tokens.axisText },
-      axisLabel: {
-        color: tokens.axisText,
-        formatter: (value) => `${Number(value).toFixed(0)}`
-      },
-      axisLine: { lineStyle: { color: tokens.axisLine } },
-      splitLine: { lineStyle: { color: tokens.splitLine } }
-    },
-    series: available.map((item, index) => ({
-      name: item.scenario.name,
-      type: "line",
-      smooth: 0.24,
-      symbol: "circle",
-      symbolSize: 7,
-      data: item.result.annualRows.map((row) => Number((row.fullRevenue / 10000).toFixed(1))),
-      lineStyle: {
-        width: item.scenario.isBaseline ? 3.5 : 2.5,
-        color: tokens.palette[index % tokens.palette.length]
-      },
-      itemStyle: {
-        color: tokens.palette[index % tokens.palette.length]
-      }
-    }))
-  }, true);
+  chart.setOption(compareCharts.buildScenarioTrendOption(available, tokens), true);
 }
 
 function renderScenarioRankingChart(available, baseline) {
@@ -6563,62 +6344,7 @@ function renderScenarioRankingChart(available, baseline) {
     renderCompareChartPlaceholder("scenarioRanking", refs.compareRankingChart, "暂无方案结果，无法生成收益排名。");
     return;
   }
-  const ranked = [...available]
-    .sort((a, b) => a.result.totalFullRevenue - b.result.totalFullRevenue);
-  const baselineWan = baseline?.result?.totalFullRevenue ? baseline.result.totalFullRevenue / 10000 : 0;
-  chart.setOption({
-    animationDuration: 340,
-    grid: { top: 24, left: 120, right: 34, bottom: 34, containLabel: true },
-    tooltip: {
-      trigger: "axis",
-      backgroundColor: tokens.tooltipBg,
-      borderColor: tokens.tooltipBorder,
-      borderWidth: 1,
-      textStyle: { color: tokens.axisText },
-      formatter: (params) => {
-        const item = params?.[0];
-        if (!item) return "";
-        const scenarioName = item.axisValue;
-        const current = ranked.find((entry) => entry.scenario.name === scenarioName);
-        const deltaWan = current ? (current.result.totalFullRevenue - baseline.result.totalFullRevenue) / 10000 : 0;
-        return `${escapeHtml(scenarioName)}<br/>周期总收益：${asNum(Number(item.value || 0), 1)} 万元<br/>相对基准：${deltaWan >= 0 ? "+" : ""}${asNum(deltaWan, 1)} 万元`;
-      }
-    },
-    xAxis: {
-      type: "value",
-      name: "万元",
-      nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
-      axisLabel: { color: tokens.axisText },
-      axisLine: { lineStyle: { color: tokens.axisLine } },
-      splitLine: { lineStyle: { color: tokens.splitLine } }
-    },
-    yAxis: {
-      type: "category",
-      data: ranked.map((item) => item.scenario.name),
-      axisLabel: { color: tokens.axisText },
-      axisLine: { lineStyle: { color: tokens.axisLine } },
-      axisTick: { show: false }
-    },
-    series: [{
-      name: "周期总收益",
-      type: "bar",
-      barWidth: 16,
-      data: ranked.map((item) => ({
-        value: Number((item.result.totalFullRevenue / 10000).toFixed(2)),
-        itemStyle: {
-          color: item.scenario.isBaseline ? tokens.baseline : tokens.primary
-        }
-      })),
-      markLine: baseline
-        ? {
-            symbol: ["none", "none"],
-            lineStyle: { type: "dashed", color: tokens.baseline },
-            label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineWan, 1)} 万元` },
-            data: [{ xAxis: Number(baselineWan.toFixed(2)) }]
-          }
-        : undefined
-    }]
-  }, true);
+  chart.setOption(compareCharts.buildScenarioRankingOption(available, baseline, tokens), true);
 }
 
 function renderScenarioFocusList(available, baseline) {
@@ -6657,54 +6383,7 @@ function renderScenarioBridgeChart(focusItem, baseline) {
   }
   const focusTotals = compareAnalysis.resultComponentTotals(focusItem.result);
   const baseTotals = compareAnalysis.resultComponentTotals(baseline.result);
-  const items = [
-    { label: "现货收入", key: "spotRevenue", color: tokens.primary },
-    { label: "差价机制", key: "mechanismRevenue", color: tokens.baseline },
-    { label: "交易策略", key: "ltPnlRevenue", color: "#7569d8" },
-    { label: "环境价值", key: "envRevenue", color: tokens.tertiary },
-    { label: "配储补充", key: "storageSupplementRevenue", color: "#a36cc1" },
-    { label: "综合费用", key: "comprehensiveFee", color: tokens.negative },
-    { label: "其他收入", key: "otherIncome", color: tokens.secondary }
-  ].map((item) => ({
-    ...item,
-    value: Number(((focusTotals[item.key] - baseTotals[item.key]) / 10000).toFixed(2))
-  }));
-  chart.setOption({
-    animationDuration: 340,
-    grid: { top: 28, left: 54, right: 20, bottom: 76, containLabel: true },
-    tooltip: {
-      trigger: "axis",
-      backgroundColor: tokens.tooltipBg,
-      borderColor: tokens.tooltipBorder,
-      borderWidth: 1,
-      textStyle: { color: tokens.axisText },
-      valueFormatter: (value) => `${Number(value) >= 0 ? "+" : ""}${asNum(Number(value || 0), 2)} 万元`
-    },
-    xAxis: {
-      type: "category",
-      data: items.map((item) => item.label),
-      axisLabel: { color: tokens.axisText, interval: 0, rotate: 28 },
-      axisLine: { lineStyle: { color: tokens.axisLine } },
-      axisTick: { show: false }
-    },
-    yAxis: {
-      type: "value",
-      name: "相对基准 万元",
-      nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
-      axisLabel: { color: tokens.axisText },
-      axisLine: { lineStyle: { color: tokens.axisLine } },
-      splitLine: { lineStyle: { color: tokens.splitLine } }
-    },
-    series: [{
-      name: "差异贡献",
-      type: "bar",
-      barWidth: 18,
-      data: items.map((item) => ({
-        value: item.value,
-        itemStyle: { color: item.value >= 0 ? item.color : tokens.negative }
-      }))
-    }]
-  }, true);
+  chart.setOption(compareCharts.buildScenarioBridgeOption(focusTotals, baseTotals, tokens), true);
 }
 
 function disposeCompareCharts() {
