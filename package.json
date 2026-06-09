@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "check:syntax": "node --check config.js && node --check runtime.js && node --check src/domain/csv-utils.js && node --check src/domain/export-builders.js && node --check src/domain/energy-profiles.js && node --check src/domain/energy-data.js && node --check src/domain/price-forecast.js && node --check src/domain/revenue-rules.js && node --check src/domain/revenue-calculator.js && node --check src/domain/result-report.js && node --check src/ui/result-charts.js && node --check src/ui/compare-charts.js && node --check src/ui/history-charts.js && node --check src/domain/compare-analysis.js && node --check src/domain/history-analysis.js && node --check src/domain/workflow-status.js && node --check src/domain/scenario-config.js && node --check src/domain/scenario-model.js && node --check src/domain/project-settings.js && node --check src/domain/project-model.js && node --check src/domain/app-storage.js && node --check app.js",
-    "test": "node tests/csv-utils.test.js && node tests/export-builders.test.js && node tests/energy-profiles.test.js && node tests/energy-data.test.js && node tests/price-forecast.test.js && node tests/revenue-rules.test.js && node tests/revenue-calculator.test.js && node tests/scenario-golden.test.js && node tests/baseline-flow.test.js && node tests/result-report.test.js && node tests/result-charts.test.js && node tests/compare-analysis.test.js && node tests/compare-charts.test.js && node tests/history-analysis.test.js && node tests/history-charts.test.js && node tests/workflow-status.test.js && node tests/scenario-config.test.js && node tests/scenario-model.test.js && node tests/project-settings.test.js && node tests/project-model.test.js && node tests/app-storage.test.js",
+    "check:syntax": "node scripts/check-syntax.js",
+    "test": "node scripts/run-tests.js",
     "check:architecture": "node scripts/architecture-check.js",
     "check": "npm run check:syntax && npm test && npm run check:architecture"
   }

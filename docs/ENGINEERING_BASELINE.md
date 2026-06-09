@@ -12,6 +12,8 @@
 | CI | GitHub Actions 必须运行 `npm run check` |
 | 主控文件规模 | `app.js` 不允许超过 9000 行 |
 | 新模块测试 | `src/domain/*.js` 和 `src/ui/*.js` 新增模块必须有对应 `tests/*.test.js` |
+| 检查脚本 | 语法检查和测试必须自动发现文件，不允许在 `package.json` 手写长串 |
+| CI 入口 | `.github/workflows/` 保持一个检查 workflow，避免重复跑同一套门禁 |
 | 业务公式 | 公式变更必须同步业务交接包、模型说明和自动测试 |
 | 页面流程 | 流程变更必须同步烟测清单 |
 | 发布风险 | 推送 GitHub 前必须确认没有本地运行痕迹、个人文件、密钥或临时输出 |
@@ -48,8 +50,8 @@ npm run check
 
 检查包含：
 
-1. JavaScript 语法检查。
-2. 业务模块和图表模块单元测试。
+1. JavaScript 语法检查：`scripts/check-syntax.js` 自动扫描根脚本、`src/domain/`、`src/ui/` 和 `scripts/`。
+2. 业务模块和图表模块单元测试：`scripts/run-tests.js` 自动扫描 `tests/*.test.js`。
 3. 架构守护检查。
 
 如果改动涉及页面交互，还需要按 [最小回归检查清单](./SMOKE_CHECKLIST.md) 做人工烟测或浏览器烟测。

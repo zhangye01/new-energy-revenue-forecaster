@@ -51,15 +51,17 @@ function assertModulesHaveTests() {
 function assertModulesAreInSyntaxCheck() {
   const packageJson = JSON.parse(readText("package.json"));
   const syntaxScript = packageJson.scripts?.["check:syntax"] || "";
-  const modules = [
-    ...listJsFiles("src/domain"),
-    ...listJsFiles("src/ui")
-  ];
-  modules.forEach((modulePath) => {
-    if (!syntaxScript.includes(`node --check ${modulePath}`)) {
-      fail(`${modulePath} is not included in npm run check:syntax`);
-    }
-  });
+  if (syntaxScript !== "node scripts/check-syntax.js") {
+    fail("npm run check:syntax must use scripts/check-syntax.js automatic discovery");
+  }
+}
+
+function assertTestsUseDiscovery() {
+  const packageJson = JSON.parse(readText("package.json"));
+  const testScript = packageJson.scripts?.test || "";
+  if (testScript !== "node scripts/run-tests.js") {
+    fail("npm test must use scripts/run-tests.js automatic discovery");
+  }
 }
 
 function assertBrowserModulesAreLoaded() {
@@ -75,11 +77,23 @@ function assertBrowserModulesAreLoaded() {
   });
 }
 
+function assertSingleWorkflow() {
+  const workflowDir = path.join(ROOT, ".github", "workflows");
+  if (!fs.existsSync(workflowDir)) return;
+  const workflows = fs.readdirSync(workflowDir)
+    .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"));
+  if (workflows.length > 1) {
+    fail(`multiple GitHub Actions workflows found: ${workflows.join(", ")}. Keep one check workflow unless there is a clear split.`);
+  }
+}
+
 function run() {
   assertAppJsBudget();
   assertModulesHaveTests();
   assertModulesAreInSyntaxCheck();
+  assertTestsUseDiscovery();
   assertBrowserModulesAreLoaded();
+  assertSingleWorkflow();
   if (!process.exitCode) {
     console.log("architecture checks passed");
   }

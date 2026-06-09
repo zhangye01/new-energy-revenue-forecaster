@@ -59,13 +59,15 @@ npm run check
 
 这个命令会做两件事：
 
-1. `node --check`：检查静态脚本语法。
-2. `npm test`：运行核心业务模块测试和黄金样例测试。
+1. `npm run check:syntax`：自动扫描并检查静态脚本语法。
+2. `npm test`：自动扫描并运行 `tests/*.test.js`。
 3. `npm run check:architecture`：检查模块测试、脚本加载和 `app.js` 规模是否越界。
+
+新增测试文件后，不需要手动修改 `package.json`；`scripts/run-tests.js` 会自动发现。新增源码模块后，也不需要手动扩展语法检查列表；`scripts/check-syntax.js` 会自动发现。
 
 如果只改文案或 README，也建议至少跑一次 `npm run check`，避免脚本顺序或全局变量引用被意外破坏。
 
-GitHub Actions 已配置同一套检查。推送到 `main` 或提交 PR 时，CI 必须通过后再合并或发布。
+GitHub Actions 已配置同一套检查。推送到 `main` 或提交 PR 时，CI 必须通过后再合并或发布。`.github/workflows/` 保持一个检查 workflow，除非后续确实拆出部署或发布任务。
 
 ## 6. 发布到 GitHub Pages
 
