@@ -55,7 +55,8 @@ assert.deepEqual(collectStylesheetHrefsFromHtml([
   "<link rel=\"stylesheet\" href=\"./styles/theme.css?v=1\">",
   "<link rel=\"stylesheet\" href=\"./styles/base.css?v=1\">",
   "<link rel=\"stylesheet\" href=\"./styles/pages/scenario.css?v=1\">",
+  "<link rel=\"stylesheet\" href=\"./styles/pages/compare.css?v=1\">",
   "<link href=\"./styles.css?v=1\" rel=\"stylesheet\">"
-].join("\n")), ["styles/theme.css", "styles/base.css", "styles/pages/scenario.css", "styles.css"]);
+].join("\n")), ["styles/theme.css", "styles/base.css", "styles/pages/scenario.css", "styles/pages/compare.css", "styles.css"]);
 
 console.log("architecture check tests passed");

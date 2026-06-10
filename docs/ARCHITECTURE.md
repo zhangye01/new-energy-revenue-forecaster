@@ -108,7 +108,7 @@ src/storage/app-storage.js
 
 ### P1：整理样式边界
 
-当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/pages/scenario.css` 放置全口径收入配置页样式，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 后续建议继续拆为：
+当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/pages/scenario.css` 放置全口径收入配置页样式，`styles/pages/compare.css` 放置多方案对比页样式，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 后续建议继续拆为：
 
 ```text
 styles/components.css
