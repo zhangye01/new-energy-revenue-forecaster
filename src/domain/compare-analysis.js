@@ -239,11 +239,56 @@
     return bestNonBaseline?.scenario?.id || baseline?.scenario?.id || "";
   }
 
+  function buildCompareRenderState(input = {}) {
+    const {
+      available = [],
+      activeCompareScenarioId = "",
+      activeSensitivityFactorKey = "",
+      sensitivitySettings = {}
+    } = input;
+    const baseline = getBaselineCompareItem(available);
+    const baselineFirst = getFirstAnnualRow(baseline);
+    const baselineRevenueWan = baselineFirst ? baselineFirst.fullRevenue / 10000 : 0;
+    const allSensitivityFactors = buildCompareSensitivityFactors(
+      baselineFirst,
+      baselineRevenueWan,
+      sensitivitySettings
+    );
+    const sensitivitySelection = resolveSensitivitySelection(
+      allSensitivityFactors,
+      sensitivitySettings.selectedKeys,
+      activeSensitivityFactorKey
+    );
+    const sensitivityFactors = sensitivitySelection.factors;
+    const { bestScenario, maxGapWan } = baseline
+      ? summarizeScenarioComparison(available, baseline)
+      : { bestScenario: null, maxGapWan: 0 };
+    const resolvedActiveCompareScenarioId = resolveActiveCompareScenarioId(
+      available,
+      baseline,
+      activeCompareScenarioId
+    );
+    const focusScenario = available.find((item) => item.scenario.id === resolvedActiveCompareScenarioId) || baseline;
+    return {
+      baseline,
+      baselineFirst,
+      baselineRevenueWan,
+      allSensitivityFactors,
+      sensitivitySelection,
+      sensitivityFactors,
+      bestScenario,
+      maxGapWan,
+      activeCompareScenarioId: resolvedActiveCompareScenarioId,
+      focusScenario
+    };
+  }
+
   return Object.freeze({
     sanitizeCompareSensitivitySettings,
     sensitivityAxisLabels,
     buildSensitivitySeries,
     buildCompareSensitivityFactors,
+    buildCompareRenderState,
     buildAvailableScenarioResults,
     resultComponentTotals,
     detectTopDriver,

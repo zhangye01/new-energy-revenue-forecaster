@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const {
   buildAvailableScenarioResults,
+  buildCompareRenderState,
   buildCompareSensitivityFactors,
   buildSensitivitySeries,
   detectTopDriver,
@@ -151,5 +152,43 @@ assert.equal(scenarioSummary.bestScenario.scenario.id, "up");
 assert.equal(scenarioSummary.maxGapWan, 30);
 assert.equal(resolveActiveCompareScenarioId(available, baseline, "base"), "base");
 assert.equal(resolveActiveCompareScenarioId(available, baseline, "missing"), "up");
+
+const renderState = buildCompareRenderState({
+  available,
+  activeCompareScenarioId: "missing",
+  activeSensitivityFactorKey: "missing",
+  sensitivitySettings: {
+    rangePercent: 20,
+    stepPercent: 10,
+    responseScalePercent: 100,
+    selectedKeys: ["fee"]
+  }
+});
+assert.equal(renderState.baseline.scenario.id, "base");
+assert.equal(renderState.baselineRevenueWan, 20);
+assert.equal(renderState.bestScenario.scenario.id, "up");
+assert.equal(renderState.maxGapWan, 30);
+assert.equal(renderState.activeCompareScenarioId, "up");
+assert.equal(renderState.focusScenario.scenario.id, "up");
+assert.deepEqual(renderState.sensitivitySelection.selectedKeys, ["fee"]);
+assert.equal(renderState.sensitivitySelection.activeFactorKey, "fee");
+assert.deepEqual(renderState.sensitivityFactors.map((factor) => factor.key), ["fee"]);
+assert.equal(renderState.allSensitivityFactors.length, 10);
+
+assert.deepEqual(
+  buildCompareRenderState({ available: [] }),
+  {
+    baseline: null,
+    baselineFirst: null,
+    baselineRevenueWan: 0,
+    allSensitivityFactors: [],
+    sensitivitySelection: { selectedKeys: [], activeFactorKey: "", factors: [] },
+    sensitivityFactors: [],
+    bestScenario: null,
+    maxGapWan: 0,
+    activeCompareScenarioId: "",
+    focusScenario: null
+  }
+);
 
 console.log("compare analysis tests passed");

@@ -4721,11 +4721,6 @@ function sensitivityAxisLabels(settings = compareSensitivitySettings) {
   return compareAnalysis.sensitivityAxisLabels(settings);
 }
 
-function buildCompareSensitivityFactors(baselineFirst, baselineRevenueWan, settings = compareSensitivitySettings) {
-  sanitizeCompareSensitivitySettings();
-  return compareAnalysis.buildCompareSensitivityFactors(baselineFirst, baselineRevenueWan, settings);
-}
-
 function renderSensitivityTornadoChart(factors, baselineRevenueWan) {
   const chart = ensureCompareChart("sensitivityTornado", refs.compareSensitivityTornadoChart);
   if (!chart) return;
@@ -5839,54 +5834,47 @@ function renderCompare() {
     return;
   }
 
-  const baseline = compareAnalysis.getBaselineCompareItem(available);
-  const baselineFirst = compareAnalysis.getFirstAnnualRow(baseline);
-  const baselineRevenueWan = baselineFirst ? baselineFirst.fullRevenue / 10000 : 0;
-
   syncCompareSensitivityControls();
-  const allSensitivityFactors = buildCompareSensitivityFactors(baselineFirst, baselineRevenueWan, compareSensitivitySettings);
-  const sensitivitySelection = compareAnalysis.resolveSensitivitySelection(
-    allSensitivityFactors,
-    compareSensitivitySettings.selectedKeys,
-    activeSensitivityFactorKey
-  );
-  compareSensitivitySettings.selectedKeys = sensitivitySelection.selectedKeys;
-  activeSensitivityFactorKey = sensitivitySelection.activeFactorKey;
-  const sensitivityFactors = sensitivitySelection.factors;
-  renderSensitivityTornadoChart(sensitivityFactors, baselineRevenueWan);
-  renderSensitivityFactorList(allSensitivityFactors, sensitivityFactors);
-  renderSensitivityResponseChart(sensitivityFactors, baselineRevenueWan);
-  renderSensitivityTable(sensitivityFactors);
+  const compareState = compareAnalysis.buildCompareRenderState({
+    available,
+    activeCompareScenarioId,
+    activeSensitivityFactorKey,
+    sensitivitySettings: compareSensitivitySettings
+  });
+  compareSensitivitySettings.selectedKeys = compareState.sensitivitySelection.selectedKeys;
+  activeSensitivityFactorKey = compareState.sensitivitySelection.activeFactorKey;
+  activeCompareScenarioId = compareState.activeCompareScenarioId;
+  renderSensitivityTornadoChart(compareState.sensitivityFactors, compareState.baselineRevenueWan);
+  renderSensitivityFactorList(compareState.allSensitivityFactors, compareState.sensitivityFactors);
+  renderSensitivityResponseChart(compareState.sensitivityFactors, compareState.baselineRevenueWan);
+  renderSensitivityTable(compareState.sensitivityFactors);
 
-  const { bestScenario, maxGapWan } = compareAnalysis.summarizeScenarioComparison(available, baseline);
   comparePage.applyCompareView({
     refs,
     setCompareMetric,
     view: comparePage.buildCompareOverviewView({
       available,
-      baseline,
-      baselineFirst,
-      baselineRevenueWan,
+      baseline: compareState.baseline,
+      baselineFirst: compareState.baselineFirst,
+      baselineRevenueWan: compareState.baselineRevenueWan,
       comparePeriod,
-      sensitivityFactors,
+      sensitivityFactors: compareState.sensitivityFactors,
       sensitivitySettings: compareSensitivitySettings,
-      bestScenario,
-      maxGapWan,
+      bestScenario: compareState.bestScenario,
+      maxGapWan: compareState.maxGapWan,
       asCompactMoney,
       asNum
     })
   });
 
-  activeCompareScenarioId = compareAnalysis.resolveActiveCompareScenarioId(available, baseline, activeCompareScenarioId);
-  const focusScenario = available.find((item) => item.scenario.id === activeCompareScenarioId) || baseline;
-  renderScenarioRankingChart(available, baseline);
+  renderScenarioRankingChart(available, compareState.baseline);
   renderCompareTrendChart(available);
-  renderScenarioFocusList(available, baseline);
-  renderScenarioBridgeChart(focusScenario, baseline);
+  renderScenarioFocusList(available, compareState.baseline);
+  renderScenarioBridgeChart(compareState.focusScenario, compareState.baseline);
   if (refs.compareBody) {
     refs.compareBody.innerHTML = comparePage.buildCompareTableRowsHtml({
       available,
-      baseline,
+      baseline: compareState.baseline,
       detectTopDriver: compareAnalysis.detectTopDriver,
       asCompactMoney
     });
