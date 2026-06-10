@@ -46,6 +46,7 @@
 | `province-defaults.js` | 省份默认参数展示 view model、选择器排序、消息文案和参数卡片 HTML 构造 |
 | `energy-workspace.js` | 结算电量配置页工作台 view model、状态文案、按钮禁用和模板状态计算 |
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
+| `result-page.js` | 基准结果总览报告文案、指标卡、假设说明和明细表 HTML 构造 |
 | `result-charts.js` | 基准结果总览四张 ECharts 图的 option 构造和图表 token 扩展 |
 | `scenario-charts.js` | 全口径收入配置页参数可视化三张 ECharts 图的 option 和主题 token 构造 |
 | `compare-charts.js` | 多方案对比和敏感性分析图表 option、对比页主题 token 构造 |

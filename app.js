@@ -48,6 +48,7 @@ const exportBuilders = window.NE_EXPORT_BUILDERS;
 const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
 const energyCharts = window.NE_ENERGY_CHARTS;
+const resultPage = window.NE_RESULT_PAGE;
 const resultCharts = window.NE_RESULT_CHARTS;
 const scenarioCharts = window.NE_SCENARIO_CHARTS;
 const compareCharts = window.NE_COMPARE_CHARTS;
@@ -55,7 +56,7 @@ const historyCharts = window.NE_HISTORY_CHARTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !resultPage || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -6554,184 +6555,44 @@ function resetResultDom() {
   if (refs.hourlyPreviewHint) refs.hourlyPreviewHint.textContent = "等待测算";
 }
 
-function renderEmptyResultMetrics() {
-  if (!refs.resultMetricGrid) return;
-  refs.resultMetricGrid.innerHTML = [
-    "首年全口径收入",
-    "首年度电净价",
-    "周期全口径收入",
-    "周期平均度电净价",
-    "周期总上网电量",
-    "生效场景"
-  ].map((label) => `
-    <article class="metric-card">
-      <div class="label">${label}</div>
-      <div class="value">-</div>
-    </article>
-  `).join("");
-}
-
 function renderResults() {
   const project = getActiveProject();
   resetResultDom();
   setResultReportView(activeResultReportView);
-  if (!project) {
-    updatePrintReportHeader(null, null);
-    if (refs.resultExecutiveSummary) {
-      refs.resultExecutiveSummary.textContent = "请先选择项目并完成基准场景测算，生成可导出的结果简报。";
-    }
-    if (refs.resultReportMeta) {
-      refs.resultReportMeta.innerHTML = "<span>项目：-</span><span>方案：-</span><span>周期：-</span><span>口径：-</span>";
-    }
-    renderResultChartsPlaceholder("请选择项目后发起测算");
-    return;
-  }
-
-  const scenario = getActiveScenario(project);
+  const scenario = project ? getActiveScenario(project) : null;
   updatePrintReportHeader(project, scenario);
-  if (refs.resultReportMeta) {
-    refs.resultReportMeta.innerHTML = `
-      <span>项目：${escapeHtml(project.name || "-")}</span>
-      <span>方案：${escapeHtml(scenario?.name || "-")}</span>
-      <span>周期：${escapeHtml(getForecastPeriodDisplayRange(project))}</span>
-      <span>口径：${escapeHtml(getAssetTypeLabel(project.assetType))} / ${escapeHtml(getSiteTypeLabel(project.siteType))} / ${escapeHtml(getStorageConfigText(project))}</span>
-    `;
-  }
-  const result = project.resultsByScenario[scenario?.id || ""];
-  if (!result) {
-    if (refs.resultExecutiveSummary) {
-      refs.resultExecutiveSummary.textContent = "当前基准场景尚未生成测算结果。点击“发起基准测算”后，将自动形成简报摘要、图表与明细附表。";
-    }
-    renderEmptyResultMetrics();
-    renderResultChartsPlaceholder("请先发起基准测算");
+  const result = project ? project.resultsByScenario[scenario?.id || ""] : null;
+  const cfg = scenario?.config || {};
+  const view = resultPage.buildResultPageViewModel({
+    project,
+    scenario,
+    result,
+    summaryData: result ? resultReport.buildResultSummaryData(result) : null,
+    labels: {
+      projectName: project?.name || "-",
+      scenarioName: scenario?.name || "-",
+      periodText: project ? getForecastPeriodDisplayRange(project) : "-",
+      assetTypeLabel: project ? getAssetTypeLabel(project.assetType) : "-",
+      siteTypeLabel: project ? getSiteTypeLabel(project.siteType) : "-",
+      storageText: project ? getStorageConfigText(project) : "-"
+    },
+    envValueMode: getEnvValueMode(cfg),
+    feeConfigMode: getFeeConfigMode(cfg)
+  });
+
+  if (refs.resultReportMeta && view.metaHtml) refs.resultReportMeta.innerHTML = view.metaHtml;
+  if (refs.resultExecutiveSummary && view.executiveSummary) refs.resultExecutiveSummary.textContent = view.executiveSummary;
+  if (refs.resultMetricGrid && view.metricHtml) refs.resultMetricGrid.innerHTML = view.metricHtml;
+  if (refs.resultInsightList && view.insightHtml) refs.resultInsightList.innerHTML = view.insightHtml;
+  if (refs.resultAssumptionList && view.assumptionHtml) refs.resultAssumptionList.innerHTML = view.assumptionHtml;
+  if (refs.annualResultBody && view.annualRowsHtml) refs.annualResultBody.innerHTML = view.annualRowsHtml;
+  if (refs.hourlyResultBody && view.hourlyRowsHtml) refs.hourlyResultBody.innerHTML = view.hourlyRowsHtml;
+  if (refs.hourlyPreviewHint && view.hourlyPreviewHint) refs.hourlyPreviewHint.textContent = view.hourlyPreviewHint;
+  if (view.chartPlaceholder) {
+    renderResultChartsPlaceholder(view.chartPlaceholder);
     return;
   }
-
-  const summaryData = resultReport.buildResultSummaryData(result);
-  const { rows, first, maxRevenueRow, minRevenueRow, unitLift, liftText, leadingPositive, leadingNegative } = summaryData;
-  if (!first) {
-    renderResultChartsPlaceholder("暂无年度测算结果");
-    return;
-  }
-  if (refs.resultExecutiveSummary) {
-    const positiveText = leadingPositive ? `主要补充贡献来自${leadingPositive.label}（${asCompactMoney(leadingPositive.amount)}）` : "补充收益项贡献较小";
-    const negativeText = leadingNegative ? `主要扣减来自${leadingNegative.label}（${asCompactMoney(leadingNegative.amount)}）` : "未形成显著扣减项";
-    refs.resultExecutiveSummary.textContent = `基准场景下，${project.name}测算周期为${getForecastPeriodDisplayRange(project)}，周期全口径收入合计${asCompactMoney(result.totalFullRevenue)}，平均度电净价${asNum(result.avgFullRevenuePrice, 2)}元/MWh。首年度电净价较捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，${positiveText}，${negativeText}。`;
-  }
-
-  const metricItems = [
-    { label: "首年全口径收入", value: asCompactMoney(first.fullRevenue), note: `度电净价 ${asNum(first.fullRevenuePrice, 2)} 元/MWh` },
-    { label: "首年度电净价", value: `${asNum(first.fullRevenuePrice, 2)} 元/MWh`, note: `较捕获电价${liftText} ${asNum(Math.abs(unitLift), 2)}` },
-    { label: "周期全口径收入", value: asCompactMoney(result.totalFullRevenue), note: `测算周期 ${getForecastPeriodDisplayRange(project)}` },
-    { label: "周期平均度电净价", value: `${asNum(result.avgFullRevenuePrice, 2)} 元/MWh`, note: `总电量 ${asNum(result.totalEnergy, 0)} MWh` },
-    { label: "首年捕获电价", value: `${asNum(first.capturePrice, 2)} 元/MWh`, note: `现货均价 ${asNum(first.spotAvgPrice, 2)} 元/MWh` },
-    { label: "年度收入区间", value: `${asNum(minRevenueRow.fullRevenue / 10000, 1)}-${asNum(maxRevenueRow.fullRevenue / 10000, 1)} 万元`, note: `${minRevenueRow.year} 至 ${maxRevenueRow.year}` }
-  ];
-
-  if (refs.resultMetricGrid) refs.resultMetricGrid.innerHTML = metricItems.map((item) => `
-    <article class="metric-card">
-      <div class="label">${item.label}</div>
-      <div class="value">${item.value}</div>
-      <small>${item.note}</small>
-    </article>
-  `).join("");
-
-  if (refs.resultInsightList) {
-    const insightItems = [
-      {
-        title: "首年结果",
-        body: `首年全口径收入${asCompactMoney(first.fullRevenue)}，度电净价${asNum(first.fullRevenuePrice, 2)}元/MWh。`
-      },
-      {
-        title: "价格增量",
-        body: `较首年捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，捕获价差为${asNum(first.captureSpread, 2)}元/MWh。`
-      },
-      {
-        title: "主要贡献项",
-        body: leadingPositive ? `${leadingPositive.label}全周期贡献${asCompactMoney(leadingPositive.amount)}。` : "补充收益项贡献较小。"
-      },
-      {
-        title: "主要扣减项",
-        body: leadingNegative ? `${leadingNegative.label}全周期影响${asCompactMoney(leadingNegative.amount)}。` : "当前未形成显著扣减项。"
-      }
-    ];
-    refs.resultInsightList.innerHTML = insightItems.map((item) => `
-      <article class="result-insight-item">
-        <strong>${escapeHtml(item.title)}</strong>
-        <span>${escapeHtml(item.body)}</span>
-      </article>
-    `).join("");
-  }
-
-  if (refs.resultAssumptionList) {
-    const cfg = scenario?.config || {};
-    const firstMarketRatio = summaryData.firstMarketRatio;
-    const assumptionItems = [
-      {
-        title: "差价机制口径",
-        body: cfg.mechanismEnabled
-          ? `机制电量按有效月份折算，首年机制电量占比${asPercent(first.mechanismRatio)}，机制电价${asNum(cfg.mechanismPrice, 1)}元/MWh。`
-          : "当前基准场景未启用差价机制。"
-      },
-      {
-        title: "市场化交易电量",
-        body: `交易策略损益与环境价值兑现均基于非纳入机制电量，首年市场化交易电量占比${asPercent(firstMarketRatio)}。`
-      },
-      {
-        title: "环境价值兑现",
-        body: getEnvValueMode(cfg) === "manual"
-          ? "环境价值采用逐年导入配置，逐年校核三类兑现空间合计不超过市场化交易电量空间。"
-          : "环境价值采用当前全周期默认配置，绿证、绿电溢价、碳收益不重复兑现。"
-      },
-      {
-        title: "费用与补充收益",
-        body: getFeeConfigMode(cfg) === "manual"
-          ? "综合费用与其他收入采用逐年导入配置；配储补充收益按当前储能收益口径计入。"
-          : "综合费用与其他收入按当前默认全周期配置执行；配储补充收益按当前储能收益口径计入。"
-      }
-    ];
-    refs.resultAssumptionList.innerHTML = assumptionItems.map((item) => `
-      <article class="result-assumption-item">
-        <strong>${escapeHtml(item.title)}</strong>
-        <span>${escapeHtml(item.body)}</span>
-      </article>
-    `).join("");
-  }
-
   renderResultCharts(project, scenario, result);
-
-  if (refs.annualResultBody) refs.annualResultBody.innerHTML = rows.map((row) => `
-    <tr>
-      <td>${row.year}</td>
-      <td>${asNum(row.annualHours, 2)}</td>
-      <td>${asNum(row.energyMwh, 2)}</td>
-      <td>${asNum(row.spotAvgPrice, 2)}</td>
-      <td>${asNum(row.capturePrice, 2)}</td>
-      <td>${asMoney(row.spotRevenue)}</td>
-      <td>${asMoney(row.mechanismRevenue)}</td>
-      <td>${asMoney(row.ltPnlRevenue)}</td>
-      <td>${asMoney(row.envRevenue)}</td>
-      <td>${asMoney(row.storageSupplementRevenue)}</td>
-      <td>${asMoney(-row.comprehensiveFee)}</td>
-      <td>${asMoney(row.otherIncome)}</td>
-      <td>${asMoney(row.fullRevenue)}</td>
-      <td>${asNum(row.fullRevenuePrice, 2)}</td>
-    </tr>
-  `).join("");
-
-  const previewLimit = 240;
-  const previewRows = result.hourlyPreview.slice(0, previewLimit);
-  if (refs.hourlyResultBody) refs.hourlyResultBody.innerHTML = previewRows.map((row) => `
-    <tr>
-      <td>${row.time}</td>
-      <td>${asNum(row.equivalentHours, 6)}</td>
-      <td>${asNum(row.energyMwh, 4)}</td>
-      <td>${asNum(row.spotPrice, 2)}</td>
-      <td>${asMoney(row.spotRevenue)}</td>
-      <td>${asMoney(row.fullRevenue)}</td>
-    </tr>
-  `).join("");
-  if (refs.hourlyPreviewHint) refs.hourlyPreviewHint.textContent = `首年小时明细附件：展开后预览前 ${previewRows.length} 条，共 ${result.hourlyPreview.length} 条；导出为完整8760。`;
 }
 
 function renderCompare() {
