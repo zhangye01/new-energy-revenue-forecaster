@@ -8,7 +8,7 @@
 | --- | --- |
 | 发布形态 | GitHub Pages 静态部署，无构建工具 |
 | 主控文件 | `app.js` 低于 6005 行门槛，主控继续收敛为启动与调度层 |
-| 样式文件 | 主题令牌已拆入 `styles/theme.css`，壳层基础样式已拆入 `styles/base.css`，首页、帮助页、全口径收入配置页、多方案对比页和历史电价页样式已拆入 `styles/pages/`；`styles.css` 低于 1990 行门槛，后续新增样式需优先复用或分区 |
+| 样式文件 | 主题令牌已拆入 `styles/theme.css`，壳层基础样式已拆入 `styles/base.css`，首页、帮助页、结算电量配置页、全口径收入配置页、多方案对比页和历史电价页样式已拆入 `styles/pages/`；`styles.css` 低于 1480 行门槛，后续新增样式需优先复用或分区 |
 | 自动检查 | `npm run check` 覆盖语法、测试、架构、静态页面、smoke 契约、静态服务访问和发布卫生 |
 | 业务测试 | 核心计算、导入导出、图表 option、页面 view model 已有 Node 测试 |
 | 主要残余风险 | `app.js` 仍偏大、真实浏览器自动化不足、页面/组件 CSS 继续增长 |
@@ -22,7 +22,7 @@
 | S1 | 给 `app.js` 留出维护缓冲 | 已迁出项目 seed builder、创建项目表单同步、创建项目表单校验、项目记录工厂、场景管理、对比页、预测版本列表、测算前置校验、结算电量展示、电量派生状态和多组事件绑定 | `app.js` 已降到 6005 行以内，单函数低于 75 行 |
 | S2 | 提高页面回归可靠性 | 已补静态服务访问 smoke，后续扩展为关键流程浏览器 smoke 方案 | 页面静态资源可通过 HTTP 服务访问；登录、项目、导入、预测、测算主链路后续可重复验证 |
 | S3 | 固化业务变更入口 | 为全口径收入、结果总览、多方案对比补充更多黄金样例 | 业务口径变化时测试先失败，避免只靠人工看页面 |
-| S4 | 控制样式增长 | 已拆出 `styles/theme.css`、`styles/base.css`、`styles/pages/home.css`、`styles/pages/help.css`、`styles/pages/scenario.css`、`styles/pages/compare.css` 与 `styles/pages/history.css`，并给 `styles.css` 增加 1990 行架构门禁和 CSS 加载顺序门禁 | 新页面样式有明确归属，减少选择器互相污染 |
+| S4 | 控制样式增长 | 已拆出 `styles/theme.css`、`styles/base.css`、`styles/pages/home.css`、`styles/pages/help.css`、`styles/pages/energy.css`、`styles/pages/scenario.css`、`styles/pages/compare.css` 与 `styles/pages/history.css`，并给 `styles.css` 增加 1480 行架构门禁和 CSS 加载顺序门禁 | 新页面样式有明确归属，减少选择器互相污染 |
 | S5 | 发布与安全收口 | 强化发布前检查、README 使用说明和 Pages 可用性检查 | 外部用户可直接打开工具，仓库不带本地运行痕迹 |
 
 ## 3. 中期计划
@@ -32,7 +32,7 @@
 | 方向 | 判断条件 | 推荐动作 |
 | --- | --- | --- |
 | 控制器拆分 | `app.js` 仍超过 6000 行，或新增页面要频繁改主控 | 按页面建立控制器模块，`app.js` 退化为启动与调度层 |
-| CSS 拆分 | `styles.css` 接近 1990 行，或同类组件出现重复样式 | 继续按组件、页面、打印逐步拆分 CSS 文件 |
+| CSS 拆分 | `styles.css` 接近 1480 行，或同类组件出现重复样式 | 继续按组件、页面、打印逐步拆分 CSS 文件 |
 | 构建工具 | 模块数量继续增长，脚本顺序成为主要风险 | 评估 Vite + ESM，先做迁移 PoC，不直接大改 |
 | 类型约束 | 字段口径频繁变动，测试仍难覆盖结构错误 | 评估 TypeScript 或 JSDoc schema，先从 `src/domain/` 开始 |
 | 数据持久化 | 需要多人协作、账号隔离或云端共享 | 设计后端数据契约，再接入真实鉴权与存储 |
