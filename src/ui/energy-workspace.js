@@ -144,6 +144,34 @@
     if (target) target.value = value;
   }
 
+  function getTargetValue(target) {
+    return target?.value || "";
+  }
+
+  function readCreateProjectFormRawInput(input = {}) {
+    const {
+      refs = {},
+      documentRef = null,
+      existingProject = null
+    } = input;
+    const query = (selector) => documentRef?.querySelector?.(selector) || null;
+    return {
+      name: getTargetValue(query("#create-project-name")),
+      province: getTargetValue(refs.createProvince),
+      assetType: getTargetValue(query("#create-asset-type")),
+      siteType: getTargetValue(query("#create-site-type")),
+      hasStorage: getTargetValue(query("#create-has-storage")),
+      storagePower: getTargetValue(refs.createStoragePowerMw),
+      storageDuration: getTargetValue(refs.createStorageDurationH),
+      storageNote: getTargetValue(refs.createStorageNote),
+      capacity: getTargetValue(query("#create-capacity-mw")),
+      startYear: getTargetValue(query("#create-start-year")),
+      forecastYears: getTargetValue(query("#create-forecast-years")),
+      energyMode: existingProject?.energyData?.mode || existingProject?.energyMode || "annual_hours",
+      note: getTargetValue(query("#create-note"))
+    };
+  }
+
   function applyCreateProjectFormValues(input = {}) {
     const {
       refs = {},
@@ -504,6 +532,7 @@
     buildEnergySummaryNote,
     buildEnergyWorkspaceViewModel,
     collectCompleteAnnualEnergyRows,
+    readCreateProjectFormRawInput,
     shouldRefreshEnergyMessage,
     resolveModeLabel
   });

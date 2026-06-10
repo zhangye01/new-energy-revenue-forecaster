@@ -12,6 +12,7 @@ const {
   buildEnergySummaryNote,
   buildEnergyWorkspaceViewModel,
   collectCompleteAnnualEnergyRows,
+  readCreateProjectFormRawInput,
   resolveModeLabel,
   shouldRefreshEnergyMessage
 } = require("../src/ui/energy-workspace");
@@ -209,6 +210,37 @@ const createFormRefs = {
   createStorageDurationH: new FakeTarget(),
   createStorageNote: new FakeTarget()
 };
+createFormTargets["#create-project-name"].value = "江苏项目";
+createFormRefs.createProvince.value = "jiangsu";
+createFormTargets["#create-asset-type"].value = "wind";
+createFormTargets["#create-site-type"].value = "offshore";
+createFormTargets["#create-has-storage"].value = "yes";
+createFormRefs.createStoragePowerMw.value = "64";
+createFormRefs.createStorageDurationH.value = "2";
+createFormRefs.createStorageNote.value = "两小时";
+createFormTargets["#create-capacity-mw"].value = "200";
+createFormTargets["#create-start-year"].value = "2026";
+createFormTargets["#create-forecast-years"].value = "30";
+createFormTargets["#create-note"].value = "备注";
+assert.deepEqual(readCreateProjectFormRawInput({
+  refs: createFormRefs,
+  documentRef: new FakeDocument(createFormTargets),
+  existingProject: { energyMode: "annual_hours", energyData: { mode: "province_typical_curve" } }
+}), {
+  name: "江苏项目",
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: "yes",
+  storagePower: "64",
+  storageDuration: "2",
+  storageNote: "两小时",
+  capacity: "200",
+  startYear: "2026",
+  forecastYears: "30",
+  energyMode: "province_typical_curve",
+  note: "备注"
+});
 assert.equal(applyCreateProjectFormValues({
   refs: createFormRefs,
   documentRef: new FakeDocument(createFormTargets),

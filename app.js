@@ -3203,21 +3203,11 @@ function createProjectFromForm(options = {}) {
   } = options;
   const resolvedWorkspaceBucket = PROJECT_WORKSPACE_BUCKET_SET.has(workspaceBucket) ? workspaceBucket : "history";
   const existingProject = forceCreate ? null : getActiveProject();
-  const formState = projectModel.buildCreateProjectFormInput({
-    name: document.querySelector("#create-project-name").value,
-    province: refs.createProvince.value,
-    assetType: document.querySelector("#create-asset-type").value,
-    siteType: document.querySelector("#create-site-type").value,
-    hasStorage: document.querySelector("#create-has-storage").value,
-    storagePower: refs.createStoragePowerMw?.value,
-    storageDuration: refs.createStorageDurationH?.value,
-    storageNote: refs.createStorageNote?.value,
-    capacity: document.querySelector("#create-capacity-mw").value,
-    startYear: document.querySelector("#create-start-year").value,
-    forecastYears: document.querySelector("#create-forecast-years").value,
-    energyMode: existingProject?.energyData?.mode || existingProject?.energyMode || "annual_hours",
-    note: document.querySelector("#create-note").value
-  }, {
+  const formState = projectModel.buildCreateProjectFormInput(energyWorkspace.readCreateProjectFormRawInput({
+    refs,
+    documentRef: document,
+    existingProject
+  }), {
     autoUniqueName,
     forceCreate,
     currentYear: new Date().getFullYear(),
