@@ -225,6 +225,50 @@
     return { subtitle, note };
   }
 
+  function buildEnergyCurveChartViewModel(input = {}) {
+    const {
+      project = null,
+      createReady = false,
+      energyState = {},
+      previewMeta = null
+    } = input;
+    if (!project) {
+      return {
+        state: "empty",
+        noteMessage: "请先进入项目，再查看上网电量图形展示。",
+        annualMessage: "请先进入项目，再查看逐年上网电量小时数。",
+        typicalMessage: "请先进入项目，再查看典型年日内曲线（月度）。"
+      };
+    }
+    if (!createReady) {
+      return {
+        state: "empty",
+        noteMessage: "请先完成步骤1基础信息保存，再查看上网电量图形展示。",
+        annualMessage: "请先完成步骤1基础信息保存，再查看逐年上网电量小时数。",
+        typicalMessage: "请先完成步骤1基础信息保存，再查看典型年日内曲线（月度）。"
+      };
+    }
+    const energyData = energyState.energyData || {};
+    const annualRows = buildAnnualRows(project, energyData);
+    const annualValuesReady = hasAnnualValues(annualRows);
+    const hasConfiguredTypicalCurve = Boolean(energyState.hasTypicalCurve);
+    const typicalProfile = hasConfiguredTypicalCurve ? previewMeta?.profile || null : null;
+    const chartText = buildEnergyCurveText({
+      hasAnnualValues: annualValuesReady,
+      hasConfiguredTypicalCurve,
+      sourceLabel: previewMeta?.sourceLabel || ""
+    });
+    return {
+      state: "ready",
+      annualRows,
+      hasAnnualValues: annualValuesReady,
+      typicalProfile,
+      chartText,
+      annualEmptyMessage: "请先导出逐年总量模板并上传结果。",
+      typicalEmptyMessage: "第二步未完成：请导入典型年8760模板，或调用所选省份典型曲线。"
+    };
+  }
+
   return Object.freeze({
     buildEnergyChartEmptyOption,
     buildAnnualRows,
@@ -232,6 +276,7 @@
     buildAnnualHoursOption,
     buildTypicalMonthHourlyHours,
     buildTypicalDayCurveOption,
-    buildEnergyCurveText
+    buildEnergyCurveText,
+    buildEnergyCurveChartViewModel
   });
 });

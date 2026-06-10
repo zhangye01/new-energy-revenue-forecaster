@@ -283,10 +283,74 @@
     };
   }
 
+  function collectCompleteAnnualEnergyRows(project = {}, energyData = {}) {
+    const forecastYears = Number.isInteger(project.forecastYears) && project.forecastYears > 0
+      ? project.forecastYears
+      : 0;
+    const rows = [];
+    for (let i = 0; i < forecastYears; i += 1) {
+      const year = project.startYear + i;
+      const item = energyData.annualSummary?.[year];
+      if (item?.status === "完整" && Array.isArray(energyData.hourlyByYear?.[year]) && energyData.hourlyByYear[year].length === 8760) {
+        rows.push({
+          year,
+          annualHours: Number(item.annualHours) || 0,
+          energyMwh: Number(item.energyMwh) || 0
+        });
+      }
+    }
+    return rows;
+  }
+
+  function buildEnergySummaryNote(input = {}) {
+    const {
+      project = null,
+      createReady = false,
+      energyState = {},
+      sourceLabel = "",
+      missingYears = []
+    } = input;
+    if (!project) {
+      return "请先在“我的项目”中进入一个项目，再查看结算电量配置摘要。";
+    }
+    if (!createReady) {
+      return "请先完成步骤1基础信息保存，再查看结算电量配置摘要。";
+    }
+    const {
+      completeYears = 0,
+      totalYears = 0,
+      annualInputYears = 0,
+      hasTypicalCurve = false,
+      energyData = {}
+    } = energyState;
+    if (!totalYears) {
+      return "当前预测周期未设定，暂无法生成结算电量配置摘要。";
+    }
+    if (!annualInputYears) {
+      return "当前尚未导入逐年总量模板数据。请先完成步骤1逐年总量导入。";
+    }
+    if (!hasTypicalCurve) {
+      return `已录入 ${annualInputYears}/${totalYears} 年逐年总量；第二步待完成，当前尚未选择典型曲线来源。请上传典型年8760小时模板，或调用所选省份典型曲线。`;
+    }
+    const annualRows = collectCompleteAnnualEnergyRows(project, energyData);
+    if (!annualRows.length) {
+      return "逐年总量与典型曲线已识别，但尚未生成完整年度曲线，请重新导入逐年总量或重新调用典型曲线。";
+    }
+    const sourceText = energyData.typicalCurveSource === "province_typical_curve"
+      ? `来源：已调用 ${sourceLabel} 典型曲线`
+      : "来源：已导入典型年8760小时模板";
+    const hoursValues = annualRows.map((item) => item.annualHours);
+    const energyValues = annualRows.map((item) => item.energyMwh);
+    const missingText = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "；预测周期内年份已全部覆盖";
+    return `${sourceText}；已完成 ${completeYears}/${totalYears} 年电量导入；年度小时范围 ${Math.min(...hoursValues).toFixed(2)}-${Math.max(...hoursValues).toFixed(2)} h；年度上网电量范围 ${Math.min(...energyValues).toFixed(2)}-${Math.max(...energyValues).toFixed(2)} MWh${missingText}。`;
+  }
+
   return Object.freeze({
     BLOCKED_MESSAGE,
     bindCreateEnergyEvents,
+    buildEnergySummaryNote,
     buildEnergyWorkspaceViewModel,
+    collectCompleteAnnualEnergyRows,
     shouldRefreshEnergyMessage,
     resolveModeLabel
   });

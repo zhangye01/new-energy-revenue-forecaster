@@ -4167,56 +4167,13 @@ function renderEnergySummary() {
   removeLegacyEnergySummaryTable();
   const project = getActiveProject();
   if (!refs.energySummaryNote) return;
-  if (!project) {
-    refs.energySummaryNote.textContent = "请先在“我的项目”中进入一个项目，再查看结算电量配置摘要。";
-    return;
-  }
-  if (!isProjectCreateCompleted(project)) {
-    refs.energySummaryNote.textContent = "请先完成步骤1基础信息保存，再查看结算电量配置摘要。";
-    return;
-  }
-  const energyState = getEnergyCompletionState(project);
-  const { completeYears, totalYears, annualInputYears, hasTypicalCurve, energyData } = energyState;
-  if (!totalYears) {
-    refs.energySummaryNote.textContent = "当前预测周期未设定，暂无法生成结算电量配置摘要。";
-    return;
-  }
-  if (!annualInputYears) {
-    refs.energySummaryNote.textContent = "当前尚未导入逐年总量模板数据。请先完成步骤1逐年总量导入。";
-    return;
-  }
-  if (!hasTypicalCurve) {
-    refs.energySummaryNote.textContent =
-      `已录入 ${annualInputYears}/${totalYears} 年逐年总量；第二步待完成，当前尚未选择典型曲线来源。` +
-      "请上传典型年8760小时模板，或调用所选省份典型曲线。";
-    return;
-  }
-  const annualRows = [];
-  for (let i = 0; i < project.forecastYears; i += 1) {
-    const year = project.startYear + i;
-    const item = energyData.annualSummary?.[year];
-    if (item?.status === "完整" && Array.isArray(energyData.hourlyByYear?.[year]) && energyData.hourlyByYear[year].length === 8760) {
-      annualRows.push({
-        year,
-        annualHours: Number(item.annualHours) || 0,
-        energyMwh: Number(item.energyMwh) || 0
-      });
-    }
-  }
-  if (!annualRows.length) {
-    refs.energySummaryNote.textContent = "逐年总量与典型曲线已识别，但尚未生成完整年度曲线，请重新导入逐年总量或重新调用典型曲线。";
-    return;
-  }
-  const sourceText = energyData.typicalCurveSource === "province_typical_curve"
-    ? `来源：已调用 ${describeProvinceTypicalCurve(project)} 典型曲线`
-    : "来源：已导入典型年8760小时模板";
-  const hoursValues = annualRows.map((item) => item.annualHours);
-  const energyValues = annualRows.map((item) => item.energyMwh);
-  const missingYears = listMissingEnergyYears(project, 8);
-  const missingText = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "；预测周期内年份已全部覆盖";
-  refs.energySummaryNote.textContent =
-    `${sourceText}；已完成 ${completeYears}/${totalYears} 年电量导入；年度小时范围 ${Math.min(...hoursValues).toFixed(2)}-${Math.max(...hoursValues).toFixed(2)} h；` +
-    `年度上网电量范围 ${Math.min(...energyValues).toFixed(2)}-${Math.max(...energyValues).toFixed(2)} MWh${missingText}。`;
+  refs.energySummaryNote.textContent = energyWorkspace.buildEnergySummaryNote({
+    project,
+    createReady: Boolean(project && isProjectCreateCompleted(project)),
+    energyState: project ? getEnergyCompletionState(project) : {},
+    sourceLabel: project ? describeProvinceTypicalCurve(project) : "",
+    missingYears: project ? listMissingEnergyYears(project, 8) : []
+  });
 }
 
 function setEnergyTemplateStatus(element, status = {}) {
@@ -4393,58 +4350,37 @@ function renderEnergyCurveChart() {
   if (!refs.energyCurveChart || !refs.energyAnnualChart) return;
   if (typeof window === "undefined" || !window.echarts) return;
   const project = getActiveProject();
-  if (!project) {
-    setEnergyChartsNoData(
-      "请先进入项目，再查看上网电量图形展示。",
-      "请先进入项目，再查看逐年上网电量小时数。",
-      "请先进入项目，再查看典型年日内曲线（月度）。"
-    );
+  const createReady = Boolean(project && isProjectCreateCompleted(project));
+  const energyState = project ? getEnergyCompletionState(project) : {};
+  const chartModel = energyCharts.buildEnergyCurveChartViewModel({
+    project,
+    createReady,
+    energyState,
+    previewMeta: project && energyState.hasTypicalCurve ? getEnergyCurvePreviewProfile(project) : null
+  });
+  if (chartModel.state === "empty") {
+    setEnergyChartsNoData(chartModel.noteMessage, chartModel.annualMessage, chartModel.typicalMessage);
     return;
   }
-  if (!isProjectCreateCompleted(project)) {
-    setEnergyChartsNoData(
-      "请先完成步骤1基础信息保存，再查看上网电量图形展示。",
-      "请先完成步骤1基础信息保存，再查看逐年上网电量小时数。",
-      "请先完成步骤1基础信息保存，再查看典型年日内曲线（月度）。"
-    );
-    return;
-  }
-  const energyState = getEnergyCompletionState(project);
-  const energyData = energyState.energyData;
-  const annualRows = energyCharts.buildAnnualRows(project, energyData);
-  const hasAnnualValues = energyCharts.hasAnnualValues(annualRows);
-  const hasConfiguredTypicalCurve = energyState.hasTypicalCurve;
-  const previewMeta = hasConfiguredTypicalCurve ? getEnergyCurvePreviewProfile(project) : null;
-  const typicalProfile = previewMeta?.profile || null;
   const chart = ensureEnergyCurveChart();
   const annualChart = ensureEnergyAnnualChart();
   if (!chart || !annualChart) return;
   const tokens = historyThemeTokens();
 
-  if (hasAnnualValues) {
-    annualChart.setOption(energyCharts.buildAnnualHoursOption(annualRows, tokens), true);
+  if (chartModel.hasAnnualValues) {
+    annualChart.setOption(energyCharts.buildAnnualHoursOption(chartModel.annualRows, tokens), true);
   } else {
-    setEnergyChartEmpty(annualChart, "请先导出逐年总量模板并上传结果。");
+    setEnergyChartEmpty(annualChart, chartModel.annualEmptyMessage);
   }
 
-  const typicalOption = energyCharts.buildTypicalDayCurveOption(typicalProfile, tokens);
+  const typicalOption = energyCharts.buildTypicalDayCurveOption(chartModel.typicalProfile, tokens);
   if (typicalOption) {
     chart.setOption(typicalOption, true);
   } else {
-    setEnergyChartEmpty(chart, "第二步未完成：请导入典型年8760模板，或调用所选省份典型曲线。");
+    setEnergyChartEmpty(chart, chartModel.typicalEmptyMessage);
   }
-
-  const chartText = energyCharts.buildEnergyCurveText({
-    hasAnnualValues,
-    hasConfiguredTypicalCurve,
-    sourceLabel: previewMeta?.sourceLabel || ""
-  });
-  if (refs.energyCurveSubtitle) {
-    refs.energyCurveSubtitle.textContent = chartText.subtitle;
-  }
-  if (refs.energyCurveNote) {
-    refs.energyCurveNote.textContent = chartText.note;
-  }
+  if (refs.energyCurveSubtitle) refs.energyCurveSubtitle.textContent = chartModel.chartText.subtitle;
+  if (refs.energyCurveNote) refs.energyCurveNote.textContent = chartModel.chartText.note;
 }
 
 function buildHistorySpotAnalysisDataset(project) {

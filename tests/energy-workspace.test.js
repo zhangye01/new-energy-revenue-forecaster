@@ -4,7 +4,9 @@ const assert = require("node:assert/strict");
 const {
   BLOCKED_MESSAGE,
   bindCreateEnergyEvents,
+  buildEnergySummaryNote,
   buildEnergyWorkspaceViewModel,
+  collectCompleteAnnualEnergyRows,
   resolveModeLabel,
   shouldRefreshEnergyMessage
 } = require("../src/ui/energy-workspace");
@@ -201,5 +203,85 @@ assert.equal(readyProject.historyButton.enabled, true);
 assert.equal(readyProject.templateStatuses.province.text, "已调用 江苏海上风电 典型曲线");
 assert.equal(readyProject.step2Actions.provinceApplyText, "重新调用当前省份曲线");
 assert.equal(readyProject.message.tone, "success");
+
+assert.equal(
+  buildEnergySummaryNote(),
+  "请先在“我的项目”中进入一个项目，再查看结算电量配置摘要。"
+);
+assert.equal(
+  buildEnergySummaryNote({ project: baseProject, createReady: false }),
+  "请先完成步骤1基础信息保存，再查看结算电量配置摘要。"
+);
+assert.equal(
+  buildEnergySummaryNote({
+    project: baseProject,
+    createReady: true,
+    energyState: { totalYears: 3, annualInputYears: 0 }
+  }),
+  "当前尚未导入逐年总量模板数据。请先完成步骤1逐年总量导入。"
+);
+assert.equal(
+  buildEnergySummaryNote({
+    project: baseProject,
+    createReady: true,
+    energyState: { totalYears: 3, annualInputYears: 2, hasTypicalCurve: false }
+  }),
+  "已录入 2/3 年逐年总量；第二步待完成，当前尚未选择典型曲线来源。请上传典型年8760小时模板，或调用所选省份典型曲线。"
+);
+
+const completeEnergyData = {
+  typicalCurveSource: "province_typical_curve",
+  annualSummary: {
+    2026: { status: "完整", annualHours: 2100.123, energyMwh: 1000.456 },
+    2027: { status: "缺失", annualHours: 0, energyMwh: 0 },
+    2028: { status: "完整", annualHours: 2300, energyMwh: 1200 }
+  },
+  hourlyByYear: {
+    2026: Array(8760).fill(1),
+    2027: Array(8760).fill(1),
+    2028: Array(8760).fill(1)
+  }
+};
+const summaryProject = {
+  ...baseProject,
+  startYear: 2026,
+  forecastYears: 3
+};
+assert.deepEqual(
+  collectCompleteAnnualEnergyRows(summaryProject, completeEnergyData),
+  [
+    { year: 2026, annualHours: 2100.123, energyMwh: 1000.456 },
+    { year: 2028, annualHours: 2300, energyMwh: 1200 }
+  ]
+);
+assert.equal(
+  buildEnergySummaryNote({
+    project: summaryProject,
+    createReady: true,
+    energyState: {
+      completeYears: 2,
+      totalYears: 3,
+      annualInputYears: 3,
+      hasTypicalCurve: true,
+      energyData: completeEnergyData
+    },
+    sourceLabel: "江苏海上风电",
+    missingYears: [2027]
+  }),
+  "来源：已调用 江苏海上风电 典型曲线；已完成 2/3 年电量导入；年度小时范围 2100.12-2300.00 h；年度上网电量范围 1000.46-1200.00 MWh；待补年份：2027。"
+);
+assert.equal(
+  buildEnergySummaryNote({
+    project: summaryProject,
+    createReady: true,
+    energyState: {
+      totalYears: 3,
+      annualInputYears: 3,
+      hasTypicalCurve: true,
+      energyData: { typicalCurveSource: "typical_curve_8760", annualSummary: {}, hourlyByYear: {} }
+    }
+  }),
+  "逐年总量与典型曲线已识别，但尚未生成完整年度曲线，请重新导入逐年总量或重新调用典型曲线。"
+);
 
 console.log("energy workspace tests passed");

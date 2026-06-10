@@ -8,6 +8,7 @@ const {
   buildAnnualHoursOption,
   buildTypicalMonthHourlyHours,
   buildTypicalDayCurveOption,
+  buildEnergyCurveChartViewModel,
   buildEnergyCurveText
 } = require("../src/ui/energy-charts");
 
@@ -74,5 +75,46 @@ assert.equal(buildEnergyCurveText({
   hasConfiguredTypicalCurve: true,
   sourceLabel: "江苏典型曲线"
 }).note, "左图展示测算周期内逐年总小时数；右图展示江苏典型曲线。");
+
+assert.deepEqual(buildEnergyCurveChartViewModel(), {
+  state: "empty",
+  noteMessage: "请先进入项目，再查看上网电量图形展示。",
+  annualMessage: "请先进入项目，再查看逐年上网电量小时数。",
+  typicalMessage: "请先进入项目，再查看典型年日内曲线（月度）。"
+});
+
+assert.deepEqual(buildEnergyCurveChartViewModel({
+  project: { startYear: 2026, forecastYears: 2 },
+  createReady: false
+}), {
+  state: "empty",
+  noteMessage: "请先完成步骤1基础信息保存，再查看上网电量图形展示。",
+  annualMessage: "请先完成步骤1基础信息保存，再查看逐年上网电量小时数。",
+  typicalMessage: "请先完成步骤1基础信息保存，再查看典型年日内曲线（月度）。"
+});
+
+const chartModel = buildEnergyCurveChartViewModel({
+  project: { startYear: 2026, forecastYears: 2 },
+  createReady: true,
+  energyState: {
+    hasTypicalCurve: true,
+    energyData: {
+      annualSummary: { 2026: { annualHours: 2300 } }
+    }
+  },
+  previewMeta: {
+    profile,
+    sourceLabel: "江苏典型曲线"
+  }
+});
+assert.equal(chartModel.state, "ready");
+assert.equal(chartModel.hasAnnualValues, true);
+assert.equal(chartModel.typicalProfile, profile);
+assert.deepEqual(chartModel.annualRows, [
+  { year: 2026, annualHours: 2300 },
+  { year: 2027, annualHours: 0 }
+]);
+assert.equal(chartModel.chartText.subtitle, "当前来源：江苏典型曲线；横轴为1-24时，图例区分1-12月。");
+assert.equal(chartModel.annualEmptyMessage, "请先导出逐年总量模板并上传结果。");
 
 console.log("energy charts tests passed");
