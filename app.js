@@ -5206,41 +5206,16 @@ function syncScenarioFieldLocks() {
   const scenario = project ? getActiveScenario(project) : null;
   const locked = Boolean(scenario?.locked);
   setScenarioFormDisabled(locked);
-  const canUseStorageRevenue = Boolean(project?.hasStorage);
-  if (refs.scenarioStorageRevenueSection) {
-    refs.scenarioStorageRevenueSection.hidden = !canUseStorageRevenue;
-  }
-
-  const mechanismEnabled = document.querySelector("#mechanism-enabled").value === "yes";
-  const mechanismFields = [
-    "#mechanism-ratio",
-    "#mechanism-price",
-    "#mechanism-start-ym",
-    "#mechanism-end-ym"
-  ];
-  mechanismFields.forEach((selector) => {
-    const target = document.querySelector(selector);
-    target.disabled = locked || !mechanismEnabled;
+  scenarioForm.applyScenarioFieldLocks({
+    refs,
+    querySelector: (selector) => document.querySelector(selector),
+    locked,
+    canUseStorageRevenue: Boolean(project?.hasStorage)
   });
 
   syncEnvValueControls(project, scenario, locked);
   syncLtPricingControls(project, scenario, locked);
   syncFeeConfigControls(project, scenario, locked);
-  [
-    refs.storageArbitragePrice,
-    refs.storageCapacityCompPrice,
-    refs.storageAncillaryRevenuePrice,
-    refs.storageOtherRevenuePrice
-  ].forEach((field) => {
-    if (!field) return;
-    field.disabled = locked || !canUseStorageRevenue;
-    if (!canUseStorageRevenue) {
-      field.value = "0";
-    }
-  });
-  refs.scenarioLockHint.textContent = locked
-    ? "当前为锁定场景，已禁止编辑。可切换场景或解锁基准场景。"
-    : "当前场景可编辑。";
   updateMarketTradeEnergyDisplay(project, scenario);
 }
 

@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const scenarioConfig = require("../src/domain/scenario-config");
 const {
   applyScenarioManagerView,
+  applyScenarioFieldLocks,
   bindForecastScenarioEvents,
   bindScenarioDerivedFieldEvents,
   buildScenarioManagerView,
@@ -17,6 +18,9 @@ class FakeTarget {
     this.value = value;
     this.dataset = dataset;
     this.handlers = {};
+    this.disabled = false;
+    this.hidden = false;
+    this.textContent = "";
   }
 
   addEventListener(name, handler) {
@@ -235,6 +239,45 @@ assert.equal(loadHarness.fields.get("#carbon-realize-ratio").value, "40.0");
 assert.equal(loadRefs.ltPricingMode.value, "manual");
 assert.equal(loadRefs.feeConfigMode.value, "manual");
 assert.equal(loadRefs.storageArbitragePrice.value, 18);
+
+const lockHarness = makeFields({
+  "#mechanism-enabled": "no",
+  "#mechanism-ratio": "36",
+  "#mechanism-price": "365",
+  "#mechanism-start-ym": "2026-01",
+  "#mechanism-end-ym": "2029-12"
+});
+const lockRefs = {
+  scenarioStorageRevenueSection: new FakeTarget(),
+  storageArbitragePrice: new FakeTarget("18"),
+  storageCapacityCompPrice: new FakeTarget("7"),
+  storageAncillaryRevenuePrice: new FakeTarget("10"),
+  storageOtherRevenuePrice: new FakeTarget("3"),
+  scenarioLockHint: new FakeTarget()
+};
+applyScenarioFieldLocks({
+  refs: lockRefs,
+  querySelector: lockHarness.querySelector,
+  locked: false,
+  canUseStorageRevenue: false
+});
+assert.equal(lockHarness.fields.get("#mechanism-ratio").disabled, true);
+assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, true);
+assert.equal(lockRefs.storageArbitragePrice.disabled, true);
+assert.equal(lockRefs.storageArbitragePrice.value, "0");
+assert.equal(lockRefs.scenarioLockHint.textContent, "当前场景可编辑。");
+
+lockHarness.fields.get("#mechanism-enabled").value = "yes";
+applyScenarioFieldLocks({
+  refs: lockRefs,
+  querySelector: lockHarness.querySelector,
+  locked: true,
+  canUseStorageRevenue: true
+});
+assert.equal(lockHarness.fields.get("#mechanism-price").disabled, true);
+assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, false);
+assert.equal(lockRefs.storageCapacityCompPrice.disabled, true);
+assert.equal(lockRefs.scenarioLockHint.textContent, "当前为锁定场景，已禁止编辑。可切换场景或解锁基准场景。");
 
 const saveHarness = makeFields({
   "#mechanism-enabled": "yes",

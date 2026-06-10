@@ -287,6 +287,47 @@
     if (refs.storageOtherRevenuePrice) refs.storageOtherRevenuePrice.value = config.storageOtherRevenuePrice || 0;
   }
 
+  function applyScenarioFieldLocks(input = {}) {
+    const {
+      refs = {},
+      querySelector = () => null,
+      locked = false,
+      canUseStorageRevenue = false
+    } = input;
+    if (refs.scenarioStorageRevenueSection) {
+      refs.scenarioStorageRevenueSection.hidden = !canUseStorageRevenue;
+    }
+
+    const mechanismEnabled = selectValue(querySelector, "#mechanism-enabled") === "yes";
+    [
+      "#mechanism-ratio",
+      "#mechanism-price",
+      "#mechanism-start-ym",
+      "#mechanism-end-ym"
+    ].forEach((selector) => {
+      const target = getField(querySelector, selector);
+      if (target) target.disabled = locked || !mechanismEnabled;
+    });
+
+    [
+      refs.storageArbitragePrice,
+      refs.storageCapacityCompPrice,
+      refs.storageAncillaryRevenuePrice,
+      refs.storageOtherRevenuePrice
+    ].forEach((field) => {
+      if (!field) return;
+      field.disabled = locked || !canUseStorageRevenue;
+      if (!canUseStorageRevenue) {
+        field.value = "0";
+      }
+    });
+    if (refs.scenarioLockHint) {
+      refs.scenarioLockHint.textContent = locked
+        ? "当前为锁定场景，已禁止编辑。可切换场景或解锁基准场景。"
+        : "当前场景可编辑。";
+    }
+  }
+
   function buildScenarioConfigFromForm(input = {}) {
     const {
       project = {},
@@ -440,6 +481,7 @@
 
   return Object.freeze({
     applyScenarioManagerView,
+    applyScenarioFieldLocks,
     bindForecastScenarioEvents,
     bindScenarioDerivedFieldEvents,
     buildScenarioManagerView,
