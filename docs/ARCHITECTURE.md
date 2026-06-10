@@ -53,6 +53,7 @@
 | `compare-charts.js` | 多方案对比和敏感性分析图表 option、对比页主题 token 构造 |
 | `history-page.js` | 历史电价展示页导出计划、KPI 和洞察文案构造 |
 | `history-charts.js` | 历史电价展示五张 ECharts 图的 option 和主题 token 构造 |
+| `shell-events.js` | 全局壳层、弹窗、导航和窗口级事件绑定 |
 
 ## 4. 主要数据流
 

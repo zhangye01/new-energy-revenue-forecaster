@@ -55,10 +55,11 @@ const scenarioCharts = window.NE_SCENARIO_CHARTS;
 const compareCharts = window.NE_COMPARE_CHARTS;
 const historyCharts = window.NE_HISTORY_CHARTS;
 const historyPage = window.NE_HISTORY_PAGE;
+const shellEvents = window.NE_SHELL_EVENTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !historyPage || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !historyPage || !shellEvents || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -7019,11 +7020,13 @@ function bindBenchmarkRangeDrag() {
 }
 
 function bindShellEvents() {
-  if (refs.themeToggleButton) {
-    refs.themeToggleButton.addEventListener("click", toggleTheme);
-  }
-  if (refs.benchmarkBackButton) {
-    refs.benchmarkBackButton.addEventListener("click", () => {
+  shellEvents.bindShellEvents({
+    refs,
+    documentRef: typeof document !== "undefined" ? document : null,
+    windowRef: typeof window !== "undefined" ? window : null,
+    handlers: {
+      toggleTheme,
+      resetBenchmarkMap: () => {
       appState.benchmarkMap = {
         level: "nation",
         provinceKey: null,
@@ -7033,105 +7036,31 @@ function bindShellEvents() {
       };
       void renderBenchmarkMap();
       schedulePersistAppData();
-    });
-  }
-  if (refs.benchmarkZoomInButton) {
-    refs.benchmarkZoomInButton.addEventListener("click", () => {
-      adjustBenchmarkMapZoom(BENCHMARK_MAP_ZOOM_STEP);
-    });
-  }
-  if (refs.benchmarkZoomOutButton) {
-    refs.benchmarkZoomOutButton.addEventListener("click", () => {
-      adjustBenchmarkMapZoom(-BENCHMARK_MAP_ZOOM_STEP);
-    });
-  }
-  if (refs.benchmarkZoomResetButton) {
-    refs.benchmarkZoomResetButton.addEventListener("click", () => {
-      resetBenchmarkMapZoom();
-    });
-  }
-  bindBenchmarkRangeDrag();
-  if (refs.pageHelpButton) {
-    refs.pageHelpButton.addEventListener("click", togglePageHelp);
-  }
-  refs.overviewDots.forEach((dot, index) => {
-    dot.addEventListener("click", () => {
-      goToOverviewSlide(index);
-    });
-  });
-  if (refs.overviewDetailTrigger) {
-    refs.overviewDetailTrigger.addEventListener("click", () => {
+      },
+      zoomBenchmarkIn: () => adjustBenchmarkMapZoom(BENCHMARK_MAP_ZOOM_STEP),
+      zoomBenchmarkOut: () => adjustBenchmarkMapZoom(-BENCHMARK_MAP_ZOOM_STEP),
+      resetBenchmarkZoom: resetBenchmarkMapZoom,
+      bindBenchmarkRangeDrag,
+      togglePageHelp,
+      goToOverviewSlide,
+      openOverviewPolicyDetail: () => {
       openOverviewPolicyDetail(appState.overviewSlideIndex);
-    });
-  }
-  if (refs.loginEntryButton) {
-    refs.loginEntryButton.addEventListener("click", openLoginModal);
-  }
-  refs.groupToggles.forEach((toggle) => {
-    toggle.addEventListener("click", () => {
-      toggleSidebarGroup(toggle.dataset.group || "");
-    });
-  });
-  if (refs.accountTriggerButton) {
-    refs.accountTriggerButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      toggleAccountDropdown();
-    });
-  }
-  if (refs.historyDateToggle) {
-    refs.historyDateToggle.addEventListener("click", (event) => {
-      event.stopPropagation();
+      },
+      openLoginModal,
+      toggleSidebarGroup,
+      toggleAccountDropdown,
+      toggleHistoryDatePanel: () => {
       const nextOpen = refs.historyDatePanel ? refs.historyDatePanel.hidden : false;
       setHistoryDatePanelOpen(nextOpen);
-    });
-  }
-  if (refs.historyDatePanel) {
-    refs.historyDatePanel.addEventListener("click", (event) => {
-      event.stopPropagation();
-    });
-  }
-  if (refs.accountProfileButton) {
-    refs.accountProfileButton.addEventListener("click", handleAccountManage);
-  }
-  if (refs.accountPasswordButton) {
-    refs.accountPasswordButton.addEventListener("click", handleAccountPassword);
-  }
-  if (refs.logoutButton) {
-    refs.logoutButton.addEventListener("click", handleLogout);
-  }
-  if (refs.settingsLogoutButton) {
-    refs.settingsLogoutButton.addEventListener("click", handleLogout);
-  }
-  if (refs.changePasswordForm) {
-    refs.changePasswordForm.addEventListener("submit", handleChangePassword);
-  }
-  if (refs.loginCancelButton) {
-    refs.loginCancelButton.addEventListener("click", closeLoginModal);
-  }
-  if (refs.loginForm) {
-    refs.loginForm.addEventListener("submit", (event) => {
-      void handleLoginSubmit(event);
-    });
-  }
-  if (refs.loginModal) {
-    refs.loginModal.addEventListener("click", (event) => {
-      if (event.target === refs.loginModal) {
-        closeLoginModal();
-      }
-    });
-  }
-  if (refs.policyDetailCloseButton) {
-    refs.policyDetailCloseButton.addEventListener("click", closeOverviewPolicyDetail);
-  }
-  if (refs.policyDetailModal) {
-    refs.policyDetailModal.addEventListener("click", (event) => {
-      if (event.target === refs.policyDetailModal) {
-        closeOverviewPolicyDetail();
-      }
-    });
-  }
-  if (typeof document !== "undefined") {
-    document.addEventListener("click", (event) => {
+      },
+      handleAccountManage,
+      handleAccountPassword,
+      handleLogout,
+      handleChangePassword,
+      closeLoginModal,
+      handleLoginSubmit,
+      closeOverviewPolicyDetail,
+      handleDocumentClick: (event) => {
       if (refs.accountModule && !refs.accountModule.hidden && !refs.accountModule.contains(event.target)) {
         closeAccountDropdown();
       }
@@ -7141,10 +7070,8 @@ function bindShellEvents() {
       if (refs.historyDatePanel && refs.historyDateToggle && !refs.historyDatePanel.hidden && !refs.historyDatePanel.contains(event.target) && !refs.historyDateToggle.contains(event.target)) {
         setHistoryDatePanelOpen(false);
       }
-    });
-  }
-  if (typeof window !== "undefined") {
-    window.addEventListener("beforeunload", () => {
+      },
+      handleBeforeUnload: () => {
       stopOverviewAutoplay();
       disposeHistoryCharts();
       disposeCompareCharts();
@@ -7169,8 +7096,8 @@ function bindShellEvents() {
         delete scenarioVisualCharts[key];
       });
       persistAppDataNow({ forceLocal: true });
-    });
-    window.addEventListener("keydown", (event) => {
+      },
+      handleKeydown: (event) => {
       if (event.key === "Escape" && refs.policyDetailModal && !refs.policyDetailModal.hidden) {
         closeOverviewPolicyDetail();
       } else if (event.key === "Escape" && refs.loginModal && !refs.loginModal.hidden) {
@@ -7179,16 +7106,17 @@ function bindShellEvents() {
         closeAccountDropdown();
         closePageHelp();
       }
-    });
-    window.addEventListener("error", (event) => {
+      },
+      handleWindowError: (event) => {
       const fallbackError = event?.error || event?.message || "系统出现异常，请刷新页面后重试。";
       setTopMeta(normalizeUserFacingError(fallbackError), "error");
-    });
-    window.addEventListener("unhandledrejection", (event) => {
+      },
+      handleUnhandledRejection: (event) => {
       const reason = event?.reason || "系统出现异常，请刷新页面后重试。";
       setTopMeta(normalizeUserFacingError(reason), "error");
-    });
-  }
+      }
+    }
+  });
 }
 
 function bindPolicyHistoryEvents() {
