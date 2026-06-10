@@ -25,6 +25,7 @@ assert.deepEqual(collectHtmlReferences([
   "<link href=\"./styles/base.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/scenario.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/compare.css?v=1\" rel=\"stylesheet\">",
+  "<link href=\"./styles/pages/history.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles.css?v=1\" rel=\"stylesheet\">",
   "<script src=\"./app.js#boot\"></script>",
   "<img src=\"https://example.com/logo.png\">",
@@ -34,6 +35,7 @@ assert.deepEqual(collectHtmlReferences([
   { reference: "styles/base.css", source: "index.html" },
   { reference: "styles/pages/scenario.css", source: "index.html" },
   { reference: "styles/pages/compare.css", source: "index.html" },
+  { reference: "styles/pages/history.css", source: "index.html" },
   { reference: "styles.css", source: "index.html" },
   { reference: "app.js", source: "index.html" },
   { reference: "assets/fallback.png", source: "index.html" },
@@ -45,9 +47,10 @@ assert.deepEqual(collectCssEntryReferences([
   "<link href=\"./styles/base.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/scenario.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/compare.css?v=1\" rel=\"stylesheet\">",
+  "<link href=\"./styles/pages/history.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles.css?v=1\" rel=\"stylesheet\">",
   "<script src=\"./app.js\"></script>"
-].join("\n")), ["styles/theme.css", "styles/base.css", "styles/pages/scenario.css", "styles/pages/compare.css", "styles.css"]);
+].join("\n")), ["styles/theme.css", "styles/base.css", "styles/pages/scenario.css", "styles/pages/compare.css", "styles/pages/history.css", "styles.css"]);
 
 assert.deepEqual(collectCssReferences("styles/theme.css"), []);
 
