@@ -3,7 +3,9 @@
 const assert = require("node:assert/strict");
 const {
   BLOCKED_MESSAGE,
+  applyCreateProjectFormValues,
   bindCreateEnergyEvents,
+  buildCreateProjectFormValues,
   buildEnergySummaryNote,
   buildEnergyWorkspaceViewModel,
   collectCompleteAnnualEnergyRows,
@@ -32,6 +34,16 @@ class FakeTarget {
     };
     this.handlers[name]?.(nextEvent);
     return nextEvent;
+  }
+}
+
+class FakeDocument {
+  constructor(targets) {
+    this.targets = targets;
+  }
+
+  querySelector(selector) {
+    return this.targets[selector] || null;
   }
 }
 
@@ -91,6 +103,116 @@ assert.deepEqual(energyEventCalls, [
   "choice:typical",
   "choice:province"
 ]);
+
+const createProjectFormValues = buildCreateProjectFormValues({
+  project: {
+    name: "江苏海上风电",
+    province: "jiangsu",
+    assetType: "wind",
+    siteType: "offshore",
+    hasStorage: true,
+    storagePowerMw: 64,
+    storageDurationH: 2,
+    storageNote: "两小时储能",
+    capacityMw: 200,
+    startYear: 2026,
+    forecastYears: 25,
+    energyMode: "annual_hours",
+    energyData: { mode: "province_typical_curve" },
+    note: "示例项目"
+  },
+  provinceKeys: new Set(["jiangsu"]),
+  assetTypes: new Set(["wind"]),
+  siteTypes: new Set(["offshore"]),
+  createReady: true
+});
+assert.deepEqual(createProjectFormValues, {
+  projectName: "江苏海上风电",
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: "yes",
+  storagePower: "64",
+  storageDuration: "2",
+  storageNote: "两小时储能",
+  capacity: "200",
+  startYear: "2026",
+  forecastYears: "25",
+  note: "示例项目",
+  energyMode: "province_typical_curve",
+  message: "正在编辑当前项目：江苏海上风电（保存后更新此项目）"
+});
+
+assert.equal(
+  buildCreateProjectFormValues({
+    project: {
+      name: "草稿",
+      hasStorage: false
+    },
+    createReady: false
+  }).hasStorage,
+  ""
+);
+assert.deepEqual(
+  buildCreateProjectFormValues({
+    project: {
+      name: "非法枚举",
+      province: "unknown",
+      assetType: "unknown",
+      siteType: "unknown",
+      hasStorage: false,
+      capacityMw: 100
+    },
+    provinceKeys: ["jiangsu"],
+    assetTypes: ["wind"],
+    siteTypes: ["offshore"]
+  }),
+  {
+    projectName: "非法枚举",
+    province: "",
+    assetType: "",
+    siteType: "",
+    hasStorage: "no",
+    storagePower: "",
+    storageDuration: "",
+    storageNote: "",
+    capacity: "100",
+    startYear: "",
+    forecastYears: "",
+    note: "",
+    energyMode: "hourly_8760",
+    message: "正在编辑当前项目：非法枚举（保存后更新此项目）"
+  }
+);
+
+const createFormTargets = {
+  "#create-project-name": new FakeTarget(),
+  "#create-asset-type": new FakeTarget(),
+  "#create-site-type": new FakeTarget(),
+  "#create-has-storage": new FakeTarget(),
+  "#create-capacity-mw": new FakeTarget(),
+  "#create-start-year": new FakeTarget(),
+  "#create-forecast-years": new FakeTarget(),
+  "#create-note": new FakeTarget()
+};
+const createFormRefs = {
+  createProvince: new FakeTarget(),
+  createStoragePowerMw: new FakeTarget(),
+  createStorageDurationH: new FakeTarget(),
+  createStorageNote: new FakeTarget()
+};
+assert.equal(applyCreateProjectFormValues({
+  refs: createFormRefs,
+  documentRef: new FakeDocument(createFormTargets),
+  values: createProjectFormValues
+}), true);
+assert.equal(createFormTargets["#create-project-name"].value, "江苏海上风电");
+assert.equal(createFormRefs.createProvince.value, "jiangsu");
+assert.equal(createFormTargets["#create-has-storage"].value, "yes");
+assert.equal(createFormRefs.createStoragePowerMw.value, "64");
+assert.equal(createFormTargets["#create-forecast-years"].value, "25");
+assert.equal(createFormTargets["#create-note"].value, "示例项目");
+assert.equal(applyCreateProjectFormValues(), false);
 
 assert.equal(resolveModeLabel(0, ""), "待配置");
 assert.equal(resolveModeLabel(2, ""), "仅逐年总量");

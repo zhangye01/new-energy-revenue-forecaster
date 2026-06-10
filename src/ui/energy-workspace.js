@@ -79,6 +79,94 @@
     }
   }
 
+  function hasAllowedValue(allowedValues, value) {
+    if (!value) return false;
+    if (allowedValues && typeof allowedValues.has === "function") {
+      return allowedValues.has(value);
+    }
+    return Array.isArray(allowedValues) && allowedValues.includes(value);
+  }
+
+  function positiveNumberValue(value) {
+    return Number.isFinite(value) && value > 0 ? String(value) : "";
+  }
+
+  function finiteNumberValue(value) {
+    return Number.isFinite(value) ? String(value) : "";
+  }
+
+  function buildCreateProjectFormValues(input = {}) {
+    const {
+      project = null,
+      provinceKeys = [],
+      assetTypes = [],
+      siteTypes = [],
+      createReady = false
+    } = input;
+    if (!project) return null;
+
+    const provinceKnown = hasAllowedValue(provinceKeys, project.province);
+    const assetTypeKnown = hasAllowedValue(assetTypes, project.assetType);
+    const siteTypeKnown = hasAllowedValue(siteTypes, project.siteType);
+    const hasStorageChosen = typeof project.hasStorage === "boolean" && (
+      createReady
+      || provinceKnown
+      || assetTypeKnown
+      || siteTypeKnown
+      || Number.isFinite(project.capacityMw)
+      || Number.isFinite(project.startYear)
+      || Number.isFinite(project.forecastYears)
+      || Number.isFinite(project.storagePowerMw)
+      || Number.isFinite(project.storageDurationH)
+      || Boolean(String(project.storageNote || "").trim())
+    );
+    const energyMode = project.energyData?.mode || project.energyMode || "hourly_8760";
+
+    return {
+      projectName: project.name || "",
+      province: provinceKnown ? project.province : "",
+      assetType: assetTypeKnown ? project.assetType : "",
+      siteType: siteTypeKnown ? project.siteType : "",
+      hasStorage: hasStorageChosen ? (project.hasStorage ? "yes" : "no") : "",
+      storagePower: positiveNumberValue(project.storagePowerMw),
+      storageDuration: positiveNumberValue(project.storageDurationH),
+      storageNote: project.storageNote || "",
+      capacity: positiveNumberValue(project.capacityMw),
+      startYear: finiteNumberValue(project.startYear),
+      forecastYears: finiteNumberValue(project.forecastYears),
+      note: project.note || "",
+      energyMode,
+      message: `正在编辑当前项目：${project.name}（保存后更新此项目）`
+    };
+  }
+
+  function setInputValue(target, value) {
+    if (target) target.value = value;
+  }
+
+  function applyCreateProjectFormValues(input = {}) {
+    const {
+      refs = {},
+      documentRef = null,
+      values = null
+    } = input;
+    if (!values) return false;
+    const query = (selector) => documentRef?.querySelector?.(selector) || null;
+    setInputValue(query("#create-project-name"), values.projectName);
+    setInputValue(refs.createProvince, values.province);
+    setInputValue(query("#create-asset-type"), values.assetType);
+    setInputValue(query("#create-site-type"), values.siteType);
+    setInputValue(query("#create-has-storage"), values.hasStorage);
+    setInputValue(refs.createStoragePowerMw, values.storagePower);
+    setInputValue(refs.createStorageDurationH, values.storageDuration);
+    setInputValue(refs.createStorageNote, values.storageNote);
+    setInputValue(query("#create-capacity-mw"), values.capacity);
+    setInputValue(query("#create-start-year"), values.startYear);
+    setInputValue(query("#create-forecast-years"), values.forecastYears);
+    setInputValue(query("#create-note"), values.note);
+    return true;
+  }
+
   function templateStatus(text, stateClass, title = "") {
     return { text, stateClass, title };
   }
@@ -347,7 +435,9 @@
 
   return Object.freeze({
     BLOCKED_MESSAGE,
+    applyCreateProjectFormValues,
     bindCreateEnergyEvents,
+    buildCreateProjectFormValues,
     buildEnergySummaryNote,
     buildEnergyWorkspaceViewModel,
     collectCompleteAnnualEnergyRows,

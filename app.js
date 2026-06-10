@@ -3062,47 +3062,21 @@ function syncCreateProjectFormWithActiveProject() {
     return;
   }
   if (createFormSyncedProjectId === project.id) return;
-  const projectName = document.querySelector("#create-project-name");
-  const assetType = document.querySelector("#create-asset-type");
-  const siteType = document.querySelector("#create-site-type");
-  const hasStorage = document.querySelector("#create-has-storage");
-  const storagePower = refs.createStoragePowerMw;
-  const storageDuration = refs.createStorageDurationH;
-  const storageNote = refs.createStorageNote;
-  const capacity = document.querySelector("#create-capacity-mw");
-  const startYear = document.querySelector("#create-start-year");
-  const forecastYears = document.querySelector("#create-forecast-years");
-  const note = document.querySelector("#create-note");
-  if (projectName) projectName.value = project.name || "";
-  if (refs.createProvince) refs.createProvince.value = PROVINCE_KEY_SET.has(project.province) ? project.province : "";
-  if (assetType) assetType.value = ASSET_TYPE_SET.has(project.assetType) ? project.assetType : "";
-  if (siteType) siteType.value = SITE_TYPE_SET.has(project.siteType) ? project.siteType : "";
-  const hasStorageChosen = typeof project.hasStorage === "boolean" && (
-    isProjectCreateCompleted(project)
-    || PROVINCE_KEY_SET.has(project.province)
-    || ASSET_TYPE_SET.has(project.assetType)
-    || SITE_TYPE_SET.has(project.siteType)
-    || Number.isFinite(project.capacityMw)
-    || Number.isFinite(project.startYear)
-    || Number.isFinite(project.forecastYears)
-    || Number.isFinite(project.storagePowerMw)
-    || Number.isFinite(project.storageDurationH)
-    || Boolean(String(project.storageNote || "").trim())
-  );
-  if (hasStorage) hasStorage.value = hasStorageChosen
-    ? (project.hasStorage ? "yes" : "no")
-    : "";
-  if (storagePower) storagePower.value = Number.isFinite(project.storagePowerMw) && project.storagePowerMw > 0 ? String(project.storagePowerMw) : "";
-  if (storageDuration) storageDuration.value = Number.isFinite(project.storageDurationH) && project.storageDurationH > 0 ? String(project.storageDurationH) : "";
-  if (storageNote) storageNote.value = project.storageNote || "";
-  if (capacity) capacity.value = Number.isFinite(project.capacityMw) && project.capacityMw > 0 ? String(project.capacityMw) : "";
-  if (startYear) startYear.value = Number.isFinite(project.startYear) ? String(project.startYear) : "";
-  if (forecastYears) forecastYears.value = Number.isFinite(project.forecastYears) ? String(project.forecastYears) : "";
-  if (note) note.value = project.note || "";
-  const mode = project.energyData?.mode || project.energyMode || "hourly_8760";
-  applyEnergyModeUi(mode);
+  const values = energyWorkspace.buildCreateProjectFormValues({
+    project,
+    provinceKeys: PROVINCE_KEY_SET,
+    assetTypes: ASSET_TYPE_SET,
+    siteTypes: SITE_TYPE_SET,
+    createReady: isProjectCreateCompleted(project)
+  });
+  energyWorkspace.applyCreateProjectFormValues({
+    refs,
+    documentRef: document,
+    values
+  });
+  applyEnergyModeUi(values.energyMode);
   syncCreateStorageFieldsUi();
-  setCreateSaveMessage(`正在编辑当前项目：${project.name}（保存后更新此项目）`, "info");
+  setCreateSaveMessage(values.message, "info");
   createFormSyncedProjectId = project.id;
 }
 
