@@ -45,6 +45,7 @@ const projectModel = window.NE_PROJECT_MODEL;
 const energyDataRules = window.NE_ENERGY_DATA;
 const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
+const policyPanel = window.NE_POLICY_PANEL;
 const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
 const energyCharts = window.NE_ENERGY_CHARTS;
@@ -61,7 +62,7 @@ const shellEvents = window.NE_SHELL_EVENTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !scenarioForm || !compareCharts || !comparePage || !historyCharts || !historyPage || !shellEvents || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !scenarioForm || !compareCharts || !comparePage || !historyCharts || !historyPage || !shellEvents || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -3005,92 +3006,21 @@ async function renderBenchmarkMap() {
 }
 
 function renderPolicyPanel() {
-  if (!PROVINCE_KEY_SET.has(appState.policyFilters.provinceKey) && appState.policyFilters.provinceKey !== "all") {
-    appState.policyFilters.provinceKey = "all";
-  }
-  if (!POLICY_REGION_KEY_SET.has(appState.policyFilters.regionKey) && appState.policyFilters.regionKey !== "all") {
-    appState.policyFilters.regionKey = "all";
-  }
-  if (appState.policyFilters.regionKey === "all" && appState.policyFilters.provinceKey === "all") {
-    appState.policyFilters.regionKey = "east";
-    appState.policyFilters.provinceKey = "shanghai";
-  }
-  const regionOptions = [
-    `<option value="all">全部区域</option>`,
-    ...POLICY_REGIONS.map((region) => `<option value="${region.key}">${region.name}</option>`)
-  ];
-  refs.policyFilterRegion.innerHTML = regionOptions.join("");
-  if (!regionOptions.some((option) => option.includes(`value="${appState.policyFilters.regionKey}"`))) {
-    appState.policyFilters.regionKey = "all";
-  }
+  const view = policyPanel.buildPolicyPanelViewModel({
+    filters: appState.policyFilters,
+    provinceKeySet: PROVINCE_KEY_SET,
+    regionKeySet: POLICY_REGION_KEY_SET,
+    regions: POLICY_REGIONS,
+    provinces: PROVINCES,
+    cards: POLICY_CARDS
+  });
+  appState.policyFilters.provinceKey = view.filters.provinceKey;
+  appState.policyFilters.regionKey = view.filters.regionKey;
+  refs.policyFilterRegion.innerHTML = view.regionOptionsHtml;
   refs.policyFilterRegion.value = appState.policyFilters.regionKey;
-
-  const targetRegion = appState.policyFilters.regionKey;
-  const availableProvinceKeySet = new Set(
-    POLICY_CARDS
-      .filter((card) => targetRegion === "all" || card.regionKey === targetRegion)
-      .map((card) => card.provinceKey)
-  );
-  const provinceOptions = [
-    `<option value="all">全部省份</option>`,
-    ...PROVINCES
-      .filter((province) => availableProvinceKeySet.has(province.key))
-      .map((province) => `<option value="${province.key}">${province.name}</option>`)
-  ];
-  refs.policyFilterProvince.innerHTML = provinceOptions.join("");
-  if (!provinceOptions.some((option) => option.includes(`value="${appState.policyFilters.provinceKey}"`))) {
-    appState.policyFilters.provinceKey = "all";
-  }
+  refs.policyFilterProvince.innerHTML = view.provinceOptionsHtml;
   refs.policyFilterProvince.value = appState.policyFilters.provinceKey;
-
-  const targetProvince = appState.policyFilters.provinceKey;
-  const filtered = POLICY_CARDS
-    .filter((card) => {
-      const byRegion = targetRegion === "all" || card.regionKey === targetRegion;
-      const byProvince = targetProvince === "all" || card.provinceKey === targetProvince;
-      return byProvince && byRegion;
-    });
-
-  if (!filtered.length) {
-    refs.policyCardList.innerHTML = `<div class="info-box">未检索到匹配地区政策，请调整省份或区域筛选。</div>`;
-    return;
-  }
-
-  refs.policyCardList.innerHTML = filtered.map((card) => `
-    <article class="policy-card">
-      <div class="label">${card.regionName} · 地区政策</div>
-      <div class="title">${card.title}</div>
-      <div class="desc">围绕省级市场建设进程、规则口径与价格运行进行统一盘点。</div>
-      <div class="policy-meta-grid">
-        <div class="meta-item">
-          <span class="meta-key">省份</span>
-          <span class="meta-value">${getProvinceName(card.provinceKey)}</span>
-        </div>
-        <div class="meta-item">
-          <span class="meta-key">区域</span>
-          <span class="meta-value">${card.regionName}</span>
-        </div>
-        <div class="meta-item">
-          <span class="meta-key">更新时间</span>
-          <span class="meta-value">${card.updatedAt}</span>
-        </div>
-      </div>
-      <div class="policy-section-grid">
-        <div class="meta-item">
-          <span class="meta-key">电力市场建设里程碑盘点</span>
-          <span class="meta-value policy-section-value">${card.milestoneReview}</span>
-        </div>
-        <div class="meta-item">
-          <span class="meta-key">最新规则体系解读</span>
-          <span class="meta-value policy-section-value">${card.ruleSystemReview}</span>
-        </div>
-        <div class="meta-item full">
-          <span class="meta-key">供需及电价情况简述</span>
-          <span class="meta-value policy-section-value">${card.supplyPriceBrief}</span>
-        </div>
-      </div>
-    </article>
-  `).join("");
+  refs.policyCardList.innerHTML = view.cardListHtml;
 }
 
 function renderHome() {
