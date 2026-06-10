@@ -1,0 +1,239 @@
+/* CSS governance: project list page styles. Load after home.css and before help.css. */
+
+/* Projects page list and actions */
+.project-workspaces {
+  display: grid;
+  gap: 12px;
+}
+
+.project-workspace {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+  align-content: start;
+}
+
+.project-workspace-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+
+.project-workspace-title {
+  color: var(--ink);
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.project-workspace .project-list {
+  display: grid;
+  gap: 10px;
+}
+
+.project-item {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+  background: #fbfcfe;
+}
+
+.project-item.project-item-new {
+  background: #f7fafe;
+}
+
+.project-empty {
+  border: 1px dashed var(--line-strong);
+  border-radius: 6px;
+  min-height: 84px;
+  padding: 10px;
+  background: #f6f8fb;
+  color: var(--muted);
+  display: grid;
+  align-items: center;
+}
+
+.project-item .head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.project-item .meta {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.project-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.project-progress {
+  margin-top: 2px;
+  display: grid;
+  gap: 6px;
+}
+
+.project-progress-head {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.project-step-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.project-step-chip {
+  min-height: 24px;
+  border-radius: 6px;
+  border: 1px solid #d4deeb;
+  background: #f8fbff;
+  color: #5c708a;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-step-chip.completed {
+  border-color: #b7d8bf;
+  background: #effaf1;
+  color: #2b7449;
+}
+
+.project-step-chip.in_progress {
+  border-color: #efcf9d;
+  background: #fff7eb;
+  color: #9a661b;
+}
+
+.project-step-chip.stale {
+  border-color: #e5c1c1;
+  background: #fff2f2;
+  color: #af4d4d;
+}
+
+.project-step-chip.not_started {
+  border-color: #d4deeb;
+  background: #f8fbff;
+  color: #5c708a;
+}
+
+.ghost-button.danger-ghost {
+  border-color: #e3c1c1;
+  color: #ad4a4a;
+  background: #fff6f6;
+}
+
+.ghost-button.danger-ghost:hover {
+  background: #ffecec;
+}
+
+/* Projects dark workspace head */
+body[data-theme="dark"] .project-workspace-head {
+  border-bottom-color: #354962;
+}
+
+/* Projects dark workspace */
+body[data-theme="dark"] .project-workspace {
+  border-color: #425875;
+  background: #1f2d3e;
+}
+
+/* Projects dark item */
+body[data-theme="dark"] .project-item {
+  border-color: #3a4e67;
+  background: #243247;
+}
+
+/* Projects dark new item */
+body[data-theme="dark"] .project-item.project-item-new {
+  background: #25384f;
+}
+
+/* Projects dark empty state */
+body[data-theme="dark"] .project-empty {
+  border-color: #415a79;
+  background: #243247;
+  color: #a9bfdc;
+}
+
+/* Projects dark step chip */
+body[data-theme="dark"] .project-step-chip {
+  border-color: #3a4d67;
+  background: #243247;
+  color: #a9bfdc;
+}
+
+/* Projects dark completed chip */
+body[data-theme="dark"] .project-step-chip.completed {
+  border-color: #3f7258;
+  background: #223a30;
+  color: #8fd0aa;
+}
+
+/* Projects dark in-progress chip */
+body[data-theme="dark"] .project-step-chip.in_progress {
+  border-color: #7d6640;
+  background: #3b3224;
+  color: #dfbf84;
+}
+
+/* Projects dark stale chip */
+body[data-theme="dark"] .project-step-chip.stale {
+  border-color: #7b4a4a;
+  background: #3c2a2a;
+  color: #d8a1a1;
+}
+
+/* Projects dark danger action */
+body[data-theme="dark"] .ghost-button.danger-ghost {
+  border-color: #7b4a4a;
+  background: #3b2c2c;
+  color: #e1a6a6;
+}
+
+/* Projects eye workspace head */
+body[data-theme="eye"] .project-workspace-head {
+  border-bottom-color: #bfd0bf;
+}
+
+/* Projects eye workspace */
+body[data-theme="eye"] .project-workspace {
+  border-color: #c5d5c4;
+  background: #fbfef8;
+}
+
+/* Projects eye item */
+body[data-theme="eye"] .project-item {
+  background: #f5faf1;
+}
+
+/* Projects eye new item */
+body[data-theme="eye"] .project-item.project-item-new {
+  background: #edf4e8;
+}
+
+/* Projects eye empty state */
+body[data-theme="eye"] .project-empty {
+  border-color: #b9cbba;
+  background: #f0f6ea;
+  color: #4e6957;
+}

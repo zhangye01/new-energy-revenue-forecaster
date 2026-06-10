@@ -24,6 +24,7 @@ assert.deepEqual(collectHtmlReferences([
   "<link href=\"./styles/theme.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/base.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/home.css?v=1\" rel=\"stylesheet\">",
+  "<link href=\"./styles/pages/projects.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/help.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/energy.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/scenario.css?v=1\" rel=\"stylesheet\">",
@@ -37,6 +38,7 @@ assert.deepEqual(collectHtmlReferences([
   { reference: "styles/theme.css", source: "index.html" },
   { reference: "styles/base.css", source: "index.html" },
   { reference: "styles/pages/home.css", source: "index.html" },
+  { reference: "styles/pages/projects.css", source: "index.html" },
   { reference: "styles/pages/help.css", source: "index.html" },
   { reference: "styles/pages/energy.css", source: "index.html" },
   { reference: "styles/pages/scenario.css", source: "index.html" },
@@ -52,6 +54,7 @@ assert.deepEqual(collectCssEntryReferences([
   "<link href=\"./styles/theme.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/base.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/home.css?v=1\" rel=\"stylesheet\">",
+  "<link href=\"./styles/pages/projects.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/help.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/energy.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/scenario.css?v=1\" rel=\"stylesheet\">",
@@ -59,7 +62,7 @@ assert.deepEqual(collectCssEntryReferences([
   "<link href=\"./styles/pages/history.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles.css?v=1\" rel=\"stylesheet\">",
   "<script src=\"./app.js\"></script>"
-].join("\n")), ["styles/theme.css", "styles/base.css", "styles/pages/home.css", "styles/pages/help.css", "styles/pages/energy.css", "styles/pages/scenario.css", "styles/pages/compare.css", "styles/pages/history.css", "styles.css"]);
+].join("\n")), ["styles/theme.css", "styles/base.css", "styles/pages/home.css", "styles/pages/projects.css", "styles/pages/help.css", "styles/pages/energy.css", "styles/pages/scenario.css", "styles/pages/compare.css", "styles/pages/history.css", "styles.css"]);
 
 assert.deepEqual(collectCssReferences("styles/theme.css"), []);
 
