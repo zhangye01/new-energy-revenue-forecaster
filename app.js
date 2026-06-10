@@ -5835,57 +5835,21 @@ function setHistoryDatePanelOpen(isOpen) {
 }
 
 function bindBenchmarkRangeDrag() {
-  if (!refs.benchmarkRangeSlider) return;
-
-  const onPointerMove = (event) => {
-    updateBenchmarkRangeDrag(event.clientY, false);
-  };
-
-  const onPointerUp = (event) => {
-    if (benchmarkRangeDragHandle) {
-      updateBenchmarkRangeDrag(event.clientY, true);
+  policyPanel.bindBenchmarkRangeDrag({
+    refs,
+    windowRef: typeof window !== "undefined" ? window : null,
+    handlers: {
+      startDrag: startBenchmarkRangeDrag,
+      updateDrag: updateBenchmarkRangeDrag,
+      stopDrag: stopBenchmarkRangeDrag,
+      valueFromClientY: benchmarkValueFromClientY,
+      isDragActive: () => Boolean(benchmarkRangeDragHandle),
+      getRangeState: () => ({
+        rangeMin: appState.benchmarkMap.rangeMin,
+        rangeMax: appState.benchmarkMap.rangeMax,
+        bounds: benchmarkRangeSliderBounds
+      })
     }
-    stopBenchmarkRangeDrag();
-    if (typeof window !== "undefined") {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-    }
-  };
-
-  const beginDrag = (handleType, event) => {
-    event.preventDefault();
-    startBenchmarkRangeDrag(handleType, event.clientY);
-    if (typeof window !== "undefined") {
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", onPointerUp);
-    }
-  };
-
-  if (refs.benchmarkRangeHandleMax) {
-    refs.benchmarkRangeHandleMax.addEventListener("pointerdown", (event) => {
-      beginDrag("max", event);
-    });
-  }
-
-  if (refs.benchmarkRangeHandleMin) {
-    refs.benchmarkRangeHandleMin.addEventListener("pointerdown", (event) => {
-      beginDrag("min", event);
-    });
-  }
-
-  refs.benchmarkRangeSlider.addEventListener("pointerdown", (event) => {
-    const target = event.target;
-    if (target === refs.benchmarkRangeHandleMax || target === refs.benchmarkRangeHandleMin) return;
-    const value = benchmarkValueFromClientY(event.clientY);
-    if (!Number.isFinite(value)) return;
-    const currentMin = Number.isFinite(appState.benchmarkMap.rangeMin)
-      ? appState.benchmarkMap.rangeMin
-      : benchmarkRangeSliderBounds.min;
-    const currentMax = Number.isFinite(appState.benchmarkMap.rangeMax)
-      ? appState.benchmarkMap.rangeMax
-      : benchmarkRangeSliderBounds.max;
-    const handleType = Math.abs(value - currentMax) <= Math.abs(value - currentMin) ? "max" : "min";
-    beginDrag(handleType, event);
   });
 }
 

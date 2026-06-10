@@ -23,6 +23,58 @@
     return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
   }
 
+  function bindBenchmarkRangeDrag(input = {}) {
+    const {
+      refs = {},
+      windowRef = null,
+      handlers = {}
+    } = input;
+    const slider = refs.benchmarkRangeSlider;
+    if (!slider) return false;
+
+    const onPointerMove = (event) => {
+      handlers.updateDrag?.(event.clientY, false);
+    };
+
+    const onPointerUp = (event) => {
+      if (handlers.isDragActive?.()) {
+        handlers.updateDrag?.(event.clientY, true);
+      }
+      handlers.stopDrag?.();
+      windowRef?.removeEventListener?.("pointermove", onPointerMove);
+      windowRef?.removeEventListener?.("pointerup", onPointerUp);
+    };
+
+    const beginDrag = (handleType, event) => {
+      event.preventDefault?.();
+      handlers.startDrag?.(handleType, event.clientY);
+      windowRef?.addEventListener?.("pointermove", onPointerMove);
+      windowRef?.addEventListener?.("pointerup", onPointerUp);
+    };
+
+    refs.benchmarkRangeHandleMax?.addEventListener("pointerdown", (event) => {
+      beginDrag("max", event);
+    });
+
+    refs.benchmarkRangeHandleMin?.addEventListener("pointerdown", (event) => {
+      beginDrag("min", event);
+    });
+
+    slider.addEventListener("pointerdown", (event) => {
+      const target = event.target;
+      if (target === refs.benchmarkRangeHandleMax || target === refs.benchmarkRangeHandleMin) return;
+      const value = handlers.valueFromClientY?.(event.clientY);
+      if (!Number.isFinite(value)) return;
+      const rangeState = handlers.getRangeState?.() || {};
+      const bounds = rangeState.bounds || {};
+      const currentMin = Number.isFinite(rangeState.rangeMin) ? rangeState.rangeMin : bounds.min;
+      const currentMax = Number.isFinite(rangeState.rangeMax) ? rangeState.rangeMax : bounds.max;
+      const handleType = Math.abs(value - currentMax) <= Math.abs(value - currentMin) ? "max" : "min";
+      beginDrag(handleType, event);
+    });
+    return true;
+  }
+
   function buildPolicyCardHtml(card, provinceName) {
     return `
     <article class="policy-card">
@@ -121,6 +173,7 @@
   }
 
   return Object.freeze({
+    bindBenchmarkRangeDrag,
     buildPolicyCardHtml,
     buildPolicyPanelViewModel
   });
