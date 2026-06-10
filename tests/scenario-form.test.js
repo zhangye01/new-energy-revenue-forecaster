@@ -4,11 +4,119 @@ const assert = require("node:assert/strict");
 const scenarioConfig = require("../src/domain/scenario-config");
 const {
   applyScenarioManagerView,
+  bindForecastScenarioEvents,
   buildScenarioManagerView,
   buildScenarioSaveDraft,
   buildScenarioConfigFromForm,
   loadScenarioToForm
 } = require("../src/ui/scenario-form");
+
+class FakeTarget {
+  constructor(value = "", dataset = {}) {
+    this.value = value;
+    this.dataset = dataset;
+    this.handlers = {};
+  }
+
+  addEventListener(name, handler) {
+    this.handlers[name] = handler;
+  }
+
+  dispatch(name, event = {}) {
+    const nextEvent = {
+      target: this,
+      key: "",
+      prevented: false,
+      preventDefault() {
+        nextEvent.prevented = true;
+      },
+      ...event
+    };
+    this.handlers[name]?.(nextEvent);
+    return nextEvent;
+  }
+}
+
+const scenarioEventCalls = [];
+const scenarioEventRefs = {
+  forecastRunForm: new FakeTarget(),
+  scenarioForm: new FakeTarget(),
+  scenarioSelector: new FakeTarget("base"),
+  scenarioQuickName: new FakeTarget(),
+  duplicateScenarioButton: new FakeTarget(),
+  renameScenarioButton: new FakeTarget(),
+  deleteScenarioButton: new FakeTarget(),
+  toggleBaselineLockButton: new FakeTarget(),
+  applyBatchButton: new FakeTarget(),
+  ltPricingMode: new FakeTarget(),
+  envValueMode: new FakeTarget(),
+  feeConfigMode: new FakeTarget(),
+  exportLtTemplateButton: new FakeTarget(),
+  importLtTemplateButton: new FakeTarget(),
+  exportEnvTemplateButton: new FakeTarget(),
+  importEnvTemplateButton: new FakeTarget(),
+  exportFeeTemplateButton: new FakeTarget(),
+  importFeeTemplateButton: new FakeTarget(),
+  provinceDefaultSelector: new FakeTarget("jiangsu")
+};
+bindForecastScenarioEvents({
+  refs: scenarioEventRefs,
+  handlers: {
+    generateForecastRun: () => scenarioEventCalls.push("generate"),
+    saveScenarioFromForm: () => scenarioEventCalls.push("save"),
+    switchActiveScenario: (id) => scenarioEventCalls.push(`switch:${id}`),
+    renameActiveScenario: () => scenarioEventCalls.push("rename"),
+    duplicateActiveScenario: () => scenarioEventCalls.push("duplicate"),
+    deleteActiveScenario: () => scenarioEventCalls.push("delete"),
+    toggleBaselineLock: () => scenarioEventCalls.push("lock"),
+    applyBatchParameter: () => scenarioEventCalls.push("batch"),
+    syncScenarioFieldLocks: () => scenarioEventCalls.push("sync-locks"),
+    exportManualScenarioTemplate: (type) => scenarioEventCalls.push(`export:${type}`),
+    importManualScenarioTemplate: (type) => scenarioEventCalls.push(`import:${type}`),
+    changeProvinceDefault: (key) => scenarioEventCalls.push(`province:${key}`)
+  }
+});
+assert.equal(scenarioEventRefs.forecastRunForm.dispatch("submit").prevented, true);
+assert.equal(scenarioEventRefs.scenarioForm.dispatch("submit").prevented, true);
+scenarioEventRefs.scenarioSelector.dispatch("change");
+assert.equal(scenarioEventRefs.scenarioQuickName.dispatch("keydown", { key: "Escape" }).prevented, false);
+assert.equal(scenarioEventRefs.scenarioQuickName.dispatch("keydown", { key: "Enter" }).prevented, true);
+scenarioEventRefs.duplicateScenarioButton.dispatch("click");
+scenarioEventRefs.renameScenarioButton.dispatch("click");
+scenarioEventRefs.deleteScenarioButton.dispatch("click");
+scenarioEventRefs.toggleBaselineLockButton.dispatch("click");
+scenarioEventRefs.applyBatchButton.dispatch("click");
+scenarioEventRefs.ltPricingMode.dispatch("change");
+scenarioEventRefs.envValueMode.dispatch("change");
+scenarioEventRefs.feeConfigMode.dispatch("change");
+scenarioEventRefs.exportLtTemplateButton.dispatch("click");
+scenarioEventRefs.importLtTemplateButton.dispatch("click");
+scenarioEventRefs.exportEnvTemplateButton.dispatch("click");
+scenarioEventRefs.importEnvTemplateButton.dispatch("click");
+scenarioEventRefs.exportFeeTemplateButton.dispatch("click");
+scenarioEventRefs.importFeeTemplateButton.dispatch("click");
+scenarioEventRefs.provinceDefaultSelector.dispatch("change");
+assert.deepEqual(scenarioEventCalls, [
+  "generate",
+  "save",
+  "switch:base",
+  "rename",
+  "duplicate",
+  "rename",
+  "delete",
+  "lock",
+  "batch",
+  "sync-locks",
+  "sync-locks",
+  "sync-locks",
+  "export:lt",
+  "import:lt",
+  "export:env",
+  "import:env",
+  "export:fee",
+  "import:fee",
+  "province:jiangsu"
+]);
 
 function makeFields(initial = {}) {
   const fields = new Map();

@@ -6472,68 +6472,29 @@ function bindCreateEnergyEvents() {
 }
 
 function bindForecastScenarioEvents() {
-  refs.forecastRunForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    generateForecastRun();
-  });
-  refs.scenarioForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    saveScenarioFromForm();
-  });
-  refs.scenarioSelector.addEventListener("change", () => switchActiveScenario(refs.scenarioSelector.value));
-  refs.scenarioQuickName.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      renameActiveScenario();
+  scenarioFormView.bindForecastScenarioEvents({
+    refs,
+    handlers: {
+      generateForecastRun,
+      saveScenarioFromForm,
+      switchActiveScenario,
+      renameActiveScenario,
+      duplicateActiveScenario,
+      deleteActiveScenario,
+      toggleBaselineLock,
+      applyBatchParameter,
+      syncScenarioFieldLocks,
+      exportManualScenarioTemplate,
+      importManualScenarioTemplate,
+      changeProvinceDefault: (provinceKey) => {
+        selectedProvinceDefaultKey = provinceKey;
+        if (refs.provinceApplyMessage) {
+          refs.provinceApplyMessage.textContent = "";
+        }
+        renderProvinceLibrary();
+      }
     }
   });
-  refs.duplicateScenarioButton.addEventListener("click", duplicateActiveScenario);
-  refs.renameScenarioButton.addEventListener("click", renameActiveScenario);
-  refs.deleteScenarioButton.addEventListener("click", deleteActiveScenario);
-  refs.toggleBaselineLockButton.addEventListener("click", toggleBaselineLock);
-  refs.applyBatchButton.addEventListener("click", applyBatchParameter);
-  if (refs.ltPricingMode) {
-    refs.ltPricingMode.addEventListener("change", () => {
-      syncScenarioFieldLocks();
-    });
-  }
-  if (refs.exportLtTemplateButton) {
-    refs.exportLtTemplateButton.addEventListener("click", () => exportManualScenarioTemplate("lt"));
-  }
-  if (refs.importLtTemplateButton) {
-    refs.importLtTemplateButton.addEventListener("click", () => importManualScenarioTemplate("lt"));
-  }
-  if (refs.envValueMode) {
-    refs.envValueMode.addEventListener("change", () => {
-      syncScenarioFieldLocks();
-    });
-  }
-  if (refs.exportEnvTemplateButton) {
-    refs.exportEnvTemplateButton.addEventListener("click", () => exportManualScenarioTemplate("env"));
-  }
-  if (refs.importEnvTemplateButton) {
-    refs.importEnvTemplateButton.addEventListener("click", () => importManualScenarioTemplate("env"));
-  }
-  if (refs.feeConfigMode) {
-    refs.feeConfigMode.addEventListener("change", () => {
-      syncScenarioFieldLocks();
-    });
-  }
-  if (refs.exportFeeTemplateButton) {
-    refs.exportFeeTemplateButton.addEventListener("click", () => exportManualScenarioTemplate("fee"));
-  }
-  if (refs.importFeeTemplateButton) {
-    refs.importFeeTemplateButton.addEventListener("click", () => importManualScenarioTemplate("fee"));
-  }
-  if (refs.provinceDefaultSelector) {
-    refs.provinceDefaultSelector.addEventListener("change", () => {
-      selectedProvinceDefaultKey = refs.provinceDefaultSelector.value;
-      if (refs.provinceApplyMessage) {
-        refs.provinceApplyMessage.textContent = "";
-      }
-      renderProvinceLibrary();
-    });
-  }
 }
 
 function bindScenarioDerivedFieldEvents() {

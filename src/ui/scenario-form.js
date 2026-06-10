@@ -53,6 +53,58 @@
       .replaceAll("'", "&#39;");
   }
 
+  function bindForecastScenarioEvents(input = {}) {
+    const {
+      refs = {},
+      handlers = {}
+    } = input;
+    refs.forecastRunForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      handlers.generateForecastRun?.();
+    });
+    refs.scenarioForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      handlers.saveScenarioFromForm?.();
+    });
+    refs.scenarioSelector?.addEventListener("change", () => {
+      handlers.switchActiveScenario?.(refs.scenarioSelector.value);
+    });
+    refs.scenarioQuickName?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      handlers.renameActiveScenario?.();
+    });
+    refs.duplicateScenarioButton?.addEventListener("click", () => handlers.duplicateActiveScenario?.());
+    refs.renameScenarioButton?.addEventListener("click", () => handlers.renameActiveScenario?.());
+    refs.deleteScenarioButton?.addEventListener("click", () => handlers.deleteActiveScenario?.());
+    refs.toggleBaselineLockButton?.addEventListener("click", () => handlers.toggleBaselineLock?.());
+    refs.applyBatchButton?.addEventListener("click", () => handlers.applyBatchParameter?.());
+    [
+      refs.ltPricingMode,
+      refs.envValueMode,
+      refs.feeConfigMode
+    ].forEach((control) => {
+      control?.addEventListener("change", () => {
+        handlers.syncScenarioFieldLocks?.();
+      });
+    });
+    [
+      ["exportLtTemplateButton", "lt", "exportManualScenarioTemplate"],
+      ["importLtTemplateButton", "lt", "importManualScenarioTemplate"],
+      ["exportEnvTemplateButton", "env", "exportManualScenarioTemplate"],
+      ["importEnvTemplateButton", "env", "importManualScenarioTemplate"],
+      ["exportFeeTemplateButton", "fee", "exportManualScenarioTemplate"],
+      ["importFeeTemplateButton", "fee", "importManualScenarioTemplate"]
+    ].forEach(([refKey, templateType, handlerName]) => {
+      refs[refKey]?.addEventListener("click", () => {
+        handlers[handlerName]?.(templateType);
+      });
+    });
+    refs.provinceDefaultSelector?.addEventListener("change", () => {
+      handlers.changeProvinceDefault?.(refs.provinceDefaultSelector.value);
+    });
+  }
+
   function buildScenarioManagerView(input = {}) {
     const {
       project = null,
@@ -355,6 +407,7 @@
 
   return Object.freeze({
     applyScenarioManagerView,
+    bindForecastScenarioEvents,
     buildScenarioManagerView,
     buildScenarioSaveDraft,
     buildScenarioConfigFromForm,
