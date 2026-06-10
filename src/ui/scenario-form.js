@@ -105,6 +105,39 @@
     });
   }
 
+  function bindScenarioDerivedFieldEvents(input = {}) {
+    const {
+      querySelector = () => null,
+      handlers = {}
+    } = input;
+    querySelector("#mechanism-enabled")?.addEventListener("change", () => {
+      handlers.syncScenarioFieldLocks?.();
+    });
+    [
+      "#mechanism-ratio",
+      "#mechanism-start-ym",
+      "#mechanism-end-ym"
+    ].forEach((selector) => {
+      const field = querySelector(selector);
+      if (!field) return;
+      field.addEventListener("input", () => handlers.updateMarketTradeEnergyDisplay?.());
+      field.addEventListener("change", () => handlers.updateMarketTradeEnergyDisplay?.());
+    });
+    querySelector("#carbon-enabled")?.addEventListener("change", () => {
+      handlers.syncScenarioFieldLocks?.();
+    });
+    [
+      "#green-cert-realize-ratio",
+      "#green-premium-realize-ratio",
+      "#carbon-realize-ratio"
+    ].forEach((selector) => {
+      const field = querySelector(selector);
+      if (!field) return;
+      field.addEventListener("input", () => handlers.updateEnvValueSpaceDisplay?.());
+      field.addEventListener("change", () => handlers.updateEnvValueSpaceDisplay?.());
+    });
+  }
+
   function buildScenarioManagerView(input = {}) {
     const {
       project = null,
@@ -408,6 +441,7 @@
   return Object.freeze({
     applyScenarioManagerView,
     bindForecastScenarioEvents,
+    bindScenarioDerivedFieldEvents,
     buildScenarioManagerView,
     buildScenarioSaveDraft,
     buildScenarioConfigFromForm,

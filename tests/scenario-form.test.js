@@ -5,6 +5,7 @@ const scenarioConfig = require("../src/domain/scenario-config");
 const {
   applyScenarioManagerView,
   bindForecastScenarioEvents,
+  bindScenarioDerivedFieldEvents,
   buildScenarioManagerView,
   buildScenarioSaveDraft,
   buildScenarioConfigFromForm,
@@ -116,6 +117,40 @@ assert.deepEqual(scenarioEventCalls, [
   "export:fee",
   "import:fee",
   "province:jiangsu"
+]);
+
+const derivedEventCalls = [];
+const derivedFields = new Map([
+  ["#mechanism-enabled", new FakeTarget()],
+  ["#mechanism-ratio", new FakeTarget()],
+  ["#mechanism-start-ym", new FakeTarget()],
+  ["#mechanism-end-ym", new FakeTarget()],
+  ["#carbon-enabled", new FakeTarget()],
+  ["#green-cert-realize-ratio", new FakeTarget()],
+  ["#green-premium-realize-ratio", new FakeTarget()],
+  ["#carbon-realize-ratio", new FakeTarget()]
+]);
+bindScenarioDerivedFieldEvents({
+  querySelector: (selector) => derivedFields.get(selector),
+  handlers: {
+    syncScenarioFieldLocks: () => derivedEventCalls.push("sync-locks"),
+    updateMarketTradeEnergyDisplay: () => derivedEventCalls.push("market-trade"),
+    updateEnvValueSpaceDisplay: () => derivedEventCalls.push("env-space")
+  }
+});
+derivedFields.get("#mechanism-enabled").dispatch("change");
+derivedFields.get("#mechanism-ratio").dispatch("input");
+derivedFields.get("#mechanism-start-ym").dispatch("change");
+derivedFields.get("#carbon-enabled").dispatch("change");
+derivedFields.get("#green-cert-realize-ratio").dispatch("input");
+derivedFields.get("#carbon-realize-ratio").dispatch("change");
+assert.deepEqual(derivedEventCalls, [
+  "sync-locks",
+  "market-trade",
+  "market-trade",
+  "sync-locks",
+  "env-space",
+  "env-space"
 ]);
 
 function makeFields(initial = {}) {

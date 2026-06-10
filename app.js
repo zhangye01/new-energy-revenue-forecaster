@@ -6498,35 +6498,26 @@ function bindForecastScenarioEvents() {
 }
 
 function bindScenarioDerivedFieldEvents() {
-  document.querySelector("#mechanism-enabled").addEventListener("change", syncScenarioFieldLocks);
-  [
-    "#mechanism-ratio",
-    "#mechanism-start-ym",
-    "#mechanism-end-ym"
-  ].forEach((selector) => {
-    const field = document.querySelector(selector);
-    if (!field) return;
-    field.addEventListener("input", () => updateMarketTradeEnergyDisplay());
-    field.addEventListener("change", () => updateMarketTradeEnergyDisplay());
-  });
-  document.querySelector("#carbon-enabled").addEventListener("change", syncScenarioFieldLocks);
-  [
-    "#green-cert-realize-ratio",
-    "#green-premium-realize-ratio",
-    "#carbon-realize-ratio"
-  ].forEach((selector) => {
-    const field = document.querySelector(selector);
-    if (!field) return;
-    field.addEventListener("input", () => updateEnvValueSpaceDisplay());
-    field.addEventListener("change", () => updateEnvValueSpaceDisplay());
+  scenarioFormView.bindScenarioDerivedFieldEvents({
+    querySelector: (selector) => document.querySelector(selector),
+    handlers: {
+      syncScenarioFieldLocks,
+      updateMarketTradeEnergyDisplay,
+      updateEnvValueSpaceDisplay
+    }
   });
 }
 
 function bindResultActionEvents() {
-  refs.runCalcButton.addEventListener("click", runCalculation);
-  refs.exportAnnualButton.addEventListener("click", exportAnnualCsv);
-  refs.exportHourlyButton.addEventListener("click", exportHourlyCsv);
-  refs.printReportButton.addEventListener("click", printScenarioReport);
+  resultPageView.bindResultActionEvents({
+    refs,
+    handlers: {
+      runCalculation,
+      exportAnnualCsv,
+      exportHourlyCsv,
+      printScenarioReport
+    }
+  });
 }
 
 function bindEvents() {

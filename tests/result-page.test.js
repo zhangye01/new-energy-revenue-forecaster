@@ -2,10 +2,47 @@
 
 const assert = require("node:assert/strict");
 const {
+  bindResultActionEvents,
   buildEmptyMetricCards,
   buildResultMetaHtml,
   buildResultPageViewModel
 } = require("../src/ui/result-page");
+
+class FakeTarget {
+  constructor() {
+    this.handlers = {};
+  }
+
+  addEventListener(name, handler) {
+    this.handlers[name] = handler;
+  }
+
+  dispatch(name) {
+    this.handlers[name]?.({ target: this });
+  }
+}
+
+const resultEventCalls = [];
+const resultEventRefs = {
+  runCalcButton: new FakeTarget(),
+  exportAnnualButton: new FakeTarget(),
+  exportHourlyButton: new FakeTarget(),
+  printReportButton: new FakeTarget()
+};
+bindResultActionEvents({
+  refs: resultEventRefs,
+  handlers: {
+    runCalculation: () => resultEventCalls.push("run"),
+    exportAnnualCsv: () => resultEventCalls.push("annual"),
+    exportHourlyCsv: () => resultEventCalls.push("hourly"),
+    printScenarioReport: () => resultEventCalls.push("print")
+  }
+});
+resultEventRefs.runCalcButton.dispatch("click");
+resultEventRefs.exportAnnualButton.dispatch("click");
+resultEventRefs.exportHourlyButton.dispatch("click");
+resultEventRefs.printReportButton.dispatch("click");
+assert.deepEqual(resultEventCalls, ["run", "annual", "hourly", "print"]);
 
 assert.match(buildEmptyMetricCards(), /首年全口径收入/);
 assert.match(

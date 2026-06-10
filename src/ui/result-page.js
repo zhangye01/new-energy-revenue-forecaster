@@ -59,6 +59,17 @@
   `).join("");
   }
 
+  function bindResultActionEvents(input = {}) {
+    const {
+      refs = {},
+      handlers = {}
+    } = input;
+    refs.runCalcButton?.addEventListener("click", () => handlers.runCalculation?.());
+    refs.exportAnnualButton?.addEventListener("click", () => handlers.exportAnnualCsv?.());
+    refs.exportHourlyButton?.addEventListener("click", () => handlers.exportHourlyCsv?.());
+    refs.printReportButton?.addEventListener("click", () => handlers.printScenarioReport?.());
+  }
+
   function buildResultMetaHtml(labels = {}) {
     return `
       <span>项目：${escapeHtml(labels.projectName || "-")}</span>
@@ -252,6 +263,7 @@
   }
 
   return Object.freeze({
+    bindResultActionEvents,
     buildEmptyMetricCards,
     buildResultMetaHtml,
     buildResultPageViewModel
