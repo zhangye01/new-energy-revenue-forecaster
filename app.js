@@ -6338,67 +6338,38 @@ function bindShellEvents() {
 }
 
 function bindPolicyHistoryEvents() {
-  if (refs.policyFilterProvince) {
-    refs.policyFilterProvince.addEventListener("change", () => {
-      appState.policyFilters.provinceKey = refs.policyFilterProvince.value;
-      renderPolicyPanel();
-      schedulePersistAppData();
-    });
-  }
-  if (refs.policyFilterRegion) {
-    refs.policyFilterRegion.addEventListener("change", () => {
-      appState.policyFilters.regionKey = refs.policyFilterRegion.value;
-      renderPolicyPanel();
-      schedulePersistAppData();
-    });
-  }
-  if (refs.historyStartDate) {
-    refs.historyStartDate.addEventListener("change", () => {
-      const next = sanitizeHistoryAnalysis({
-        ...appState.historyAnalysis,
-        startDate: refs.historyStartDate.value
-      });
-      appState.historyAnalysis = next;
-      renderHistoryPrices();
-      schedulePersistAppData();
-    });
-  }
-  if (refs.historyEndDate) {
-    refs.historyEndDate.addEventListener("change", () => {
-      const next = sanitizeHistoryAnalysis({
-        ...appState.historyAnalysis,
-        endDate: refs.historyEndDate.value
-      });
-      appState.historyAnalysis = next;
-      renderHistoryPrices();
-      schedulePersistAppData();
-    });
-  }
-  if (refs.historyExportMonthTrendButton) {
-    refs.historyExportMonthTrendButton.addEventListener("click", () => {
-      exportHistoryChartData("monthTrend");
-    });
-  }
-  if (refs.historyExportTypicalDayButton) {
-    refs.historyExportTypicalDayButton.addEventListener("click", () => {
-      exportHistoryChartData("typicalDay");
-    });
-  }
-  if (refs.historyExportDistributionButton) {
-    refs.historyExportDistributionButton.addEventListener("click", () => {
-      exportHistoryChartData("distribution");
-    });
-  }
-  if (refs.historyExportHeatmapButton) {
-    refs.historyExportHeatmapButton.addEventListener("click", () => {
-      exportHistoryChartData("heatmap");
-    });
-  }
-  if (refs.historyExportBoxplotButton) {
-    refs.historyExportBoxplotButton.addEventListener("click", () => {
-      exportHistoryChartData("boxplot");
-    });
-  }
+  historyPageView.bindPolicyHistoryEvents({
+    refs,
+    handlers: {
+      changePolicyProvince: (provinceKey) => {
+        appState.policyFilters.provinceKey = provinceKey;
+        renderPolicyPanel();
+        schedulePersistAppData();
+      },
+      changePolicyRegion: (regionKey) => {
+        appState.policyFilters.regionKey = regionKey;
+        renderPolicyPanel();
+        schedulePersistAppData();
+      },
+      changeHistoryStartDate: (startDate) => {
+        appState.historyAnalysis = sanitizeHistoryAnalysis({
+          ...appState.historyAnalysis,
+          startDate
+        });
+        renderHistoryPrices();
+        schedulePersistAppData();
+      },
+      changeHistoryEndDate: (endDate) => {
+        appState.historyAnalysis = sanitizeHistoryAnalysis({
+          ...appState.historyAnalysis,
+          endDate
+        });
+        renderHistoryPrices();
+        schedulePersistAppData();
+      },
+      exportHistoryChart: exportHistoryChartData
+    }
+  });
 }
 
 function bindNavigationEvents() {

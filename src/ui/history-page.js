@@ -20,6 +20,44 @@
     };
   }
 
+  function bindPolicyHistoryEvents(input = {}) {
+    const {
+      refs = {},
+      handlers = {}
+    } = input;
+    if (refs.policyFilterProvince) {
+      refs.policyFilterProvince.addEventListener("change", () => {
+        handlers.changePolicyProvince?.(refs.policyFilterProvince.value);
+      });
+    }
+    if (refs.policyFilterRegion) {
+      refs.policyFilterRegion.addEventListener("change", () => {
+        handlers.changePolicyRegion?.(refs.policyFilterRegion.value);
+      });
+    }
+    if (refs.historyStartDate) {
+      refs.historyStartDate.addEventListener("change", () => {
+        handlers.changeHistoryStartDate?.(refs.historyStartDate.value);
+      });
+    }
+    if (refs.historyEndDate) {
+      refs.historyEndDate.addEventListener("change", () => {
+        handlers.changeHistoryEndDate?.(refs.historyEndDate.value);
+      });
+    }
+    [
+      ["historyExportMonthTrendButton", "monthTrend"],
+      ["historyExportTypicalDayButton", "typicalDay"],
+      ["historyExportDistributionButton", "distribution"],
+      ["historyExportHeatmapButton", "heatmap"],
+      ["historyExportBoxplotButton", "boxplot"]
+    ].forEach(([refKey, exportType]) => {
+      refs[refKey]?.addEventListener("click", () => {
+        handlers.exportHistoryChart?.(exportType);
+      });
+    });
+  }
+
   function buildHistoryExportPlan(input = {}) {
     const {
       provinceLabel = "-",
@@ -118,6 +156,7 @@
   }
 
   return Object.freeze({
+    bindPolicyHistoryEvents,
     buildHistoryExportPlan,
     buildHistoryInsightText,
     buildHistoryKpis,

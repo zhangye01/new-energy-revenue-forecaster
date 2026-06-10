@@ -2,11 +2,70 @@
 
 const assert = require("node:assert/strict");
 const {
+  bindPolicyHistoryEvents,
   buildHistoryExportPlan,
   buildHistoryInsightText,
   buildHistoryKpis,
   buildHistoryReadyViewModel
 } = require("../src/ui/history-page");
+
+class FakeTarget {
+  constructor(value = "") {
+    this.value = value;
+    this.handlers = {};
+  }
+
+  addEventListener(name, handler) {
+    this.handlers[name] = handler;
+  }
+
+  dispatch(name) {
+    this.handlers[name]?.({ target: this });
+  }
+}
+
+const historyEventCalls = [];
+const historyEventRefs = {
+  policyFilterProvince: new FakeTarget("jiangsu"),
+  policyFilterRegion: new FakeTarget("east"),
+  historyStartDate: new FakeTarget("2026-01-01"),
+  historyEndDate: new FakeTarget("2026-12-31"),
+  historyExportMonthTrendButton: new FakeTarget(),
+  historyExportTypicalDayButton: new FakeTarget(),
+  historyExportDistributionButton: new FakeTarget(),
+  historyExportHeatmapButton: new FakeTarget(),
+  historyExportBoxplotButton: new FakeTarget()
+};
+bindPolicyHistoryEvents({
+  refs: historyEventRefs,
+  handlers: {
+    changePolicyProvince: (value) => historyEventCalls.push(`province:${value}`),
+    changePolicyRegion: (value) => historyEventCalls.push(`region:${value}`),
+    changeHistoryStartDate: (value) => historyEventCalls.push(`start:${value}`),
+    changeHistoryEndDate: (value) => historyEventCalls.push(`end:${value}`),
+    exportHistoryChart: (type) => historyEventCalls.push(`export:${type}`)
+  }
+});
+historyEventRefs.policyFilterProvince.dispatch("change");
+historyEventRefs.policyFilterRegion.dispatch("change");
+historyEventRefs.historyStartDate.dispatch("change");
+historyEventRefs.historyEndDate.dispatch("change");
+historyEventRefs.historyExportMonthTrendButton.dispatch("click");
+historyEventRefs.historyExportTypicalDayButton.dispatch("click");
+historyEventRefs.historyExportDistributionButton.dispatch("click");
+historyEventRefs.historyExportHeatmapButton.dispatch("click");
+historyEventRefs.historyExportBoxplotButton.dispatch("click");
+assert.deepEqual(historyEventCalls, [
+  "province:jiangsu",
+  "region:east",
+  "start:2026-01-01",
+  "end:2026-12-31",
+  "export:monthTrend",
+  "export:typicalDay",
+  "export:distribution",
+  "export:heatmap",
+  "export:boxplot"
+]);
 
 const exportPlan = buildHistoryExportPlan({
   provinceLabel: "江苏",
