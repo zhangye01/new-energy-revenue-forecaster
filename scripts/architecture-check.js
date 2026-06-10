@@ -6,8 +6,8 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const APP_JS_MAX_LINES = 6005;
 const APP_JS_MAX_FUNCTION_LINES = 75;
-const STYLES_CSS_MAX_LINES = 5100;
-const REQUIRED_CSS_ORDER = ["styles/theme.css", "styles.css"];
+const STYLES_CSS_MAX_LINES = 4450;
+const REQUIRED_CSS_ORDER = ["styles/theme.css", "styles/base.css", "styles.css"];
 const FORBIDDEN_APP_JS_PATTERNS = [
   {
     name: "stale energy mode UI sync",
