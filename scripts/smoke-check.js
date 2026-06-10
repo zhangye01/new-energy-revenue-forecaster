@@ -18,6 +18,15 @@ const REQUIRED_PAGE_IDS = [
   "help-page",
   "settings-page"
 ];
+const REQUIRED_STATUS_DOT_IDS = [
+  "status-create-page",
+  "status-energy-page",
+  "status-history-page",
+  "status-forecast-page",
+  "status-scenario-page",
+  "status-results-page",
+  "status-compare-page"
+];
 const CRITICAL_IDS = [
   "login-entry-button",
   "login-modal",
@@ -26,10 +35,12 @@ const CRITICAL_IDS = [
   "project-list",
   "create-project-form",
   "create-save-only-button",
+  "create-to-energy-button",
   "energy-project-context",
   "energy-import-message",
   "energy-annual-chart",
   "energy-curve-chart",
+  "energy-to-history-button",
   "history-source-province",
   "history-month-trend-chart",
   "history-typical-day-chart",
@@ -43,7 +54,13 @@ const CRITICAL_IDS = [
   "scenario-visual-unit-chart",
   "result-metric-grid",
   "result-annual-stack-chart",
+  "run-calc-button",
+  "export-annual-button",
+  "export-hourly-button",
   "print-report-button",
+  "compare-sensitivity-target",
+  "compare-sensitivity-range",
+  "compare-sensitivity-step",
   "compare-sensitivity-tornado-chart",
   "compare-sensitivity-body",
   "compare-ranking-chart",
@@ -146,6 +163,7 @@ function run() {
   const dataPages = collectDataPages(html);
   const scripts = collectScriptSources(html);
   assertIdsExist(ids, REQUIRED_PAGE_IDS, "page contract");
+  assertIdsExist(ids, REQUIRED_STATUS_DOT_IDS, "workflow status contract");
   assertIdsExist(ids, CRITICAL_IDS, "critical UI contract");
   assertNavTargetsExist(ids, dataPages);
   assertScriptOrder(scripts);
