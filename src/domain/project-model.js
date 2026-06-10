@@ -145,6 +145,41 @@
     return project;
   }
 
+  function createProjectRecord(input = {}, options = {}) {
+    const nowIso = resolveNowIso(options);
+    const energyMode = normalizeEnergyMode(input.energyMode);
+    return {
+      id: typeof options.id === "string" && options.id ? options.id : resolveMakeId(options)("proj"),
+      ownerAccount: typeof options.ownerAccount === "string" ? options.ownerAccount.trim() : "",
+      workspaceBucket: PROJECT_WORKSPACE_BUCKET_SET.has(options.workspaceBucket) ? options.workspaceBucket : "history",
+      name: input.name || "新建项目",
+      province: input.province || "",
+      assetType: input.assetType || "",
+      siteType: input.siteType || "",
+      hasStorage: Boolean(input.hasStorage),
+      storagePowerMw: Number.isFinite(input.storagePowerMw) ? input.storagePowerMw : null,
+      storageDurationH: Number.isFinite(input.storageDurationH) ? input.storageDurationH : null,
+      storageNote: typeof input.storageNote === "string" ? input.storageNote : "",
+      capacityMw: Number.isFinite(input.capacityMw) ? input.capacityMw : 0,
+      startYear: Number.isInteger(input.startYear) ? input.startYear : resolveCurrentYear(options),
+      forecastYears: Number.isInteger(input.forecastYears) ? clamp(input.forecastYears, 1, 30) : 30,
+      energyMode,
+      note: typeof input.note === "string" ? input.note : "",
+      createdAt: nowIso,
+      statuses: isPlainObject(options.statuses) ? { ...options.statuses } : {},
+      energyData: createEmptyEnergyDataState(energyMode),
+      energyTemplateExports: createEmptyEnergyTemplateExports(),
+      historySpotImport: isPlainObject(options.historySpotImport) ? { ...options.historySpotImport } : {},
+      priceRuns: [],
+      activeRunId: null,
+      activationLogs: [],
+      spotMarketConfig: isPlainObject(options.spotMarketConfig) ? { ...options.spotMarketConfig } : {},
+      scenarios: [],
+      activeScenarioId: null,
+      resultsByScenario: {}
+    };
+  }
+
   function resolveNowIso(options = {}) {
     if (typeof options.nowIso === "function") return options.nowIso();
     if (typeof options.nowIso === "string" && options.nowIso) return options.nowIso;
@@ -362,6 +397,7 @@
     buildCreateProjectFormInput,
     normalizeCreateProjectFormInput,
     validateCreateProjectFormInput,
+    createProjectRecord,
     createMockHistoryProject,
     createEmptyWorkspaceProject,
     createEmptyEnergyDataState,

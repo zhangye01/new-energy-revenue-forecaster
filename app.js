@@ -3301,41 +3301,18 @@ function createProjectFromForm(options = {}) {
     return project;
   }
 
-  const project = {
+  const project = projectModel.createProjectRecord({
+    ...formState.input,
+    name
+  }, {
     id: makeId("proj"),
     ownerAccount: String(appState.auth.account || "").trim(),
     workspaceBucket: resolvedWorkspaceBucket,
-    name,
-    province,
-    assetType,
-    siteType,
-    hasStorage,
-    storagePowerMw,
-    storageDurationH,
-    storageNote,
-    capacityMw,
-    startYear,
-    forecastYears,
-    energyMode,
-    note,
-    createdAt: new Date().toISOString(),
+    nowIso: new Date().toISOString(),
     statuses: statusMapTemplate(),
-    energyData: createEmptyEnergyDataState(energyMode),
-    energyTemplateExports: {
-      hourly_8760: "",
-      annual_hours: "",
-      typical_curve_8760: "",
-      province_typical_curve: ""
-    },
     historySpotImport: createEmptyHistorySpotImport(),
-    priceRuns: [],
-    activeRunId: null,
-    activationLogs: [],
-    spotMarketConfig: createDefaultSpotMarketConfig(),
-    scenarios: [],
-    activeScenarioId: null,
-    resultsByScenario: {}
-  };
+    spotMarketConfig: createDefaultSpotMarketConfig()
+  });
 
   project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
   project.statuses["energy-page"] = project.statuses["create-page"] === "completed" ? "in_progress" : "not_started";

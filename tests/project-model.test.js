@@ -6,6 +6,7 @@ const {
   buildCreateProjectFormInput,
   normalizeCreateProjectFormInput,
   validateCreateProjectFormInput,
+  createProjectRecord,
   createMockHistoryProject,
   createEmptyWorkspaceProject,
   createEmptyEnergyDataState,
@@ -168,6 +169,31 @@ assert.deepEqual(buildCreateProjectFormInput({
   topMeta: "预测周期需为1-30年。",
   message: "保存失败：请填写有效的预测周期（1-30年）。"
 });
+
+const createdRecord = createProjectRecord(createInput, {
+  id: "proj-created",
+  ownerAccount: " demo ",
+  workspaceBucket: "new",
+  nowIso: "2026-06-10T02:00:00.000Z",
+  statuses: { "create-page": "in_progress" },
+  historySpotImport: { sourceType: "mock" },
+  spotMarketConfig: { energyBasis: "settlement_generation_hourly" }
+});
+assert.equal(createdRecord.id, "proj-created");
+assert.equal(createdRecord.ownerAccount, "demo");
+assert.equal(createdRecord.workspaceBucket, "new");
+assert.equal(createdRecord.name, "江苏海上风电");
+assert.equal(createdRecord.storagePowerMw, 64);
+assert.equal(createdRecord.energyMode, "province_typical_curve");
+assert.deepEqual(createdRecord.energyData, createEmptyEnergyDataState("province_typical_curve"));
+assert.deepEqual(createdRecord.energyTemplateExports, createEmptyEnergyTemplateExports());
+assert.deepEqual(createdRecord.statuses, { "create-page": "in_progress" });
+assert.deepEqual(createdRecord.historySpotImport, { sourceType: "mock" });
+assert.deepEqual(createdRecord.spotMarketConfig, { energyBasis: "settlement_generation_hourly" });
+assert.deepEqual(createdRecord.priceRuns, []);
+assert.deepEqual(createdRecord.scenarios, []);
+assert.equal(createdRecord.createdAt, "2026-06-10T02:00:00.000Z");
+assert.equal(createProjectRecord({ name: "默认工作区" }).workspaceBucket, "history");
 
 const mockHistoryProject = createMockHistoryProject({
   id: "proj-demo",
