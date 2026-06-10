@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const APP_JS_MAX_LINES = 6400;
+const APP_JS_MAX_LINES = 6350;
 const APP_JS_MAX_FUNCTION_LINES = 120;
 
 function readText(relativePath) {
