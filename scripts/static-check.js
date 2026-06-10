@@ -117,4 +117,13 @@ function run() {
   console.log(`static checks passed (${idCount} ids, ${uniqueReferences.size} references)`);
 }
 
-run();
+if (require.main === module) {
+  run();
+}
+
+module.exports = {
+  collectHtmlReferences,
+  isLocalReference,
+  normalizeReference,
+  stripReference
+};
