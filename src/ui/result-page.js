@@ -70,6 +70,33 @@
     refs.printReportButton?.addEventListener("click", () => handlers.printScenarioReport?.());
   }
 
+  function hasAllowedView(allowedViews, value) {
+    if (allowedViews && typeof allowedViews.has === "function") {
+      return allowedViews.has(value);
+    }
+    return Array.isArray(allowedViews) && allowedViews.includes(value);
+  }
+
+  function applyResultReportView(input = {}) {
+    const {
+      refs = {},
+      view = "annual",
+      allowedViews = ["annual", "price", "detail"]
+    } = input;
+    const nextView = hasAllowedView(allowedViews, view) ? view : "annual";
+    refs.resultReportTabs?.forEach((button) => {
+      const isActive = button.dataset.resultView === nextView;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+    refs.resultReportPanes?.forEach((pane) => {
+      const isActive = pane.dataset.resultPane === nextView;
+      pane.hidden = !isActive;
+      pane.classList.toggle("active", isActive);
+    });
+    return nextView;
+  }
+
   function buildResultMetaHtml(labels = {}) {
     return `
       <span>项目：${escapeHtml(labels.projectName || "-")}</span>
@@ -263,6 +290,7 @@
   }
 
   return Object.freeze({
+    applyResultReportView,
     bindResultActionEvents,
     buildEmptyMetricCards,
     buildResultMetaHtml,

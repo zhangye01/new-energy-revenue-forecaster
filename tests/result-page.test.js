@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  applyResultReportView,
   bindResultActionEvents,
   buildEmptyMetricCards,
   buildResultMetaHtml,
@@ -9,12 +10,29 @@ const {
 } = require("../src/ui/result-page");
 
 class FakeTarget {
-  constructor() {
+  constructor(dataset = {}) {
+    this.dataset = dataset;
     this.handlers = {};
+    this.attributes = {};
+    this.hidden = false;
+    this.classes = new Set();
+    this.classList = {
+      toggle: (name, enabled) => {
+        if (enabled) {
+          this.classes.add(name);
+        } else {
+          this.classes.delete(name);
+        }
+      }
+    };
   }
 
   addEventListener(name, handler) {
     this.handlers[name] = handler;
+  }
+
+  setAttribute(name, value) {
+    this.attributes[name] = value;
   }
 
   dispatch(name) {
@@ -43,6 +61,36 @@ resultEventRefs.exportAnnualButton.dispatch("click");
 resultEventRefs.exportHourlyButton.dispatch("click");
 resultEventRefs.printReportButton.dispatch("click");
 assert.deepEqual(resultEventCalls, ["run", "annual", "hourly", "print"]);
+
+const annualTab = new FakeTarget({ resultView: "annual" });
+const priceTab = new FakeTarget({ resultView: "price" });
+const annualPane = new FakeTarget({ resultPane: "annual" });
+const pricePane = new FakeTarget({ resultPane: "price" });
+assert.equal(applyResultReportView({
+  refs: {
+    resultReportTabs: [annualTab, priceTab],
+    resultReportPanes: [annualPane, pricePane]
+  },
+  view: "bad",
+  allowedViews: new Set(["annual", "price"])
+}), "annual");
+assert.equal(annualTab.classes.has("active"), true);
+assert.equal(annualTab.attributes["aria-selected"], "true");
+assert.equal(priceTab.classes.has("active"), false);
+assert.equal(priceTab.attributes["aria-selected"], "false");
+assert.equal(annualPane.hidden, false);
+assert.equal(pricePane.hidden, true);
+assert.equal(applyResultReportView({
+  refs: {
+    resultReportTabs: [annualTab, priceTab],
+    resultReportPanes: [annualPane, pricePane]
+  },
+  view: "price",
+  allowedViews: ["annual", "price"]
+}), "price");
+assert.equal(priceTab.classes.has("active"), true);
+assert.equal(pricePane.hidden, false);
+assert.equal(annualPane.hidden, true);
 
 assert.match(buildEmptyMetricCards(), /首年全口径收入/);
 assert.match(

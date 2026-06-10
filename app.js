@@ -5371,17 +5371,10 @@ function runCalculation() {
 }
 
 function setResultReportView(view) {
-  const nextView = RESULT_REPORT_VIEW_SET.has(view) ? view : "annual";
-  activeResultReportView = nextView;
-  refs.resultReportTabs?.forEach((button) => {
-    const isActive = button.dataset.resultView === nextView;
-    button.classList.toggle("active", isActive);
-    button.setAttribute("aria-selected", isActive ? "true" : "false");
-  });
-  refs.resultReportPanes?.forEach((pane) => {
-    const isActive = pane.dataset.resultPane === nextView;
-    pane.hidden = !isActive;
-    pane.classList.toggle("active", isActive);
+  activeResultReportView = resultPage.applyResultReportView({
+    refs,
+    view,
+    allowedViews: RESULT_REPORT_VIEW_SET
   });
   queueResultChartsResize();
 }
