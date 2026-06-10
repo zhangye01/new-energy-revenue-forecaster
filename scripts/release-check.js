@@ -90,10 +90,14 @@ function assertGitignoreEntries() {
 
 function assertNoForbiddenTrackedFiles(files) {
   files.forEach((file) => {
-    if (FORBIDDEN_TRACKED_PATTERNS.some((pattern) => pattern.test(file))) {
+    if (isForbiddenTrackedFile(file)) {
       fail(`forbidden file is tracked: ${file}`);
     }
   });
+}
+
+function isForbiddenTrackedFile(file) {
+  return FORBIDDEN_TRACKED_PATTERNS.some((pattern) => pattern.test(file));
 }
 
 function isTextFile(file) {
@@ -104,18 +108,24 @@ function shouldScanForSecrets(file) {
   return !GENERATED_DATA_PATTERNS.some((pattern) => pattern.test(file));
 }
 
+function findSensitiveTextIssues(file, content) {
+  const issues = [];
+  if (PERSONAL_PATH_PATTERN.test(content)) {
+    issues.push(`${file} contains an absolute personal filesystem path`);
+  }
+  if (!shouldScanForSecrets(file)) return issues;
+  SECRET_PATTERNS.forEach(({ name, pattern }) => {
+    if (pattern.test(content)) {
+      issues.push(`${file} contains a possible ${name}`);
+    }
+  });
+  return issues;
+}
+
 function assertNoSensitiveText(files) {
   files.filter(isTextFile).forEach((file) => {
     const content = readText(file);
-    if (PERSONAL_PATH_PATTERN.test(content)) {
-      fail(`${file} contains an absolute personal filesystem path`);
-    }
-    if (!shouldScanForSecrets(file)) return;
-    SECRET_PATTERNS.forEach(({ name, pattern }) => {
-      if (pattern.test(content)) {
-        fail(`${file} contains a possible ${name}`);
-      }
-    });
+    findSensitiveTextIssues(file, content).forEach(fail);
   });
 }
 
@@ -128,4 +138,13 @@ function run() {
   console.log(`release checks passed (${trackedFiles.length} tracked files)`);
 }
 
-run();
+if (require.main === module) {
+  run();
+}
+
+module.exports = {
+  findSensitiveTextIssues,
+  isForbiddenTrackedFile,
+  isTextFile,
+  shouldScanForSecrets
+};
