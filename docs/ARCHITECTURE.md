@@ -50,6 +50,7 @@
 | `result-page.js` | 基准结果总览报告文案、指标卡、假设说明和明细表 HTML 构造 |
 | `result-charts.js` | 基准结果总览四张 ECharts 图的 option 构造和图表 token 扩展 |
 | `scenario-charts.js` | 全口径收入配置页参数可视化三张 ECharts 图的 option 和主题 token 构造 |
+| `scenario-form.js` | 全口径收入配置页表单读写和场景配置构造 |
 | `compare-charts.js` | 多方案对比和敏感性分析图表 option、对比页主题 token 构造 |
 | `history-page.js` | 历史电价展示页导出计划、KPI 和洞察文案构造 |
 | `history-charts.js` | 历史电价展示五张 ECharts 图的 option 和主题 token 构造 |

@@ -52,6 +52,7 @@ const projectListView = window.NE_PROJECT_LIST_VIEW;
 const resultPage = window.NE_RESULT_PAGE;
 const resultCharts = window.NE_RESULT_CHARTS;
 const scenarioCharts = window.NE_SCENARIO_CHARTS;
+const scenarioForm = window.NE_SCENARIO_FORM;
 const compareCharts = window.NE_COMPARE_CHARTS;
 const historyCharts = window.NE_HISTORY_CHARTS;
 const historyPage = window.NE_HISTORY_PAGE;
@@ -59,7 +60,7 @@ const shellEvents = window.NE_SHELL_EVENTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !historyPage || !shellEvents || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !scenarioForm || !compareCharts || !historyCharts || !historyPage || !shellEvents || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -5504,37 +5505,17 @@ function renderProvinceLibrary() {
 }
 
 function loadScenarioToForm(project, scenario) {
-  document.querySelector("#scenario-name").value = scenario.name;
-  document.querySelector("#mechanism-enabled").value = scenario.config.mechanismEnabled ? "yes" : "no";
-  document.querySelector("#mechanism-ratio").value = (scenario.config.mechanismRatio * 100).toFixed(1);
-  document.querySelector("#mechanism-price").value = scenario.config.mechanismPrice;
-  document.querySelector("#mechanism-start-ym").value = scenario.config.mechanismStartYm;
-  document.querySelector("#mechanism-end-ym").value = scenario.config.mechanismEndYm;
-  if (refs.ltPricingMode) refs.ltPricingMode.value = LT_PRICING_MODE_SET.has(scenario.config.ltPricingMode) ? scenario.config.ltPricingMode : "auto";
-  document.querySelector("#lt-year1-pnl").value = scenario.config.ltYear1Pnl;
-  document.querySelector("#lt-target-pnl").value = scenario.config.ltTargetPnl;
-  {
-    const ltConvergeStep = Number(scenario.config.ltConvergeSpeed);
-    document.querySelector("#lt-converge-speed").value = Number.isFinite(ltConvergeStep) ? String(ltConvergeStep) : "0";
-  }
-  document.querySelector("#green-cert-price").value = scenario.config.greenCertPrice;
-  document.querySelector("#green-cert-realize-ratio").value = asNum(Number(scenario.config.greenCertRealizeRatio || 0) * 100, 1);
-  document.querySelector("#green-premium-price").value = scenario.config.greenPremiumPrice;
-  document.querySelector("#green-premium-realize-ratio").value = asNum(Number(scenario.config.greenPremiumRealizeRatio || 0) * 100, 1);
-  if (refs.envValueMode) refs.envValueMode.value = ENV_VALUE_MODE_SET.has(scenario.config.envValueMode) ? scenario.config.envValueMode : "global";
-  document.querySelector("#carbon-enabled").value = scenario.config.carbonEnabled ? "yes" : "no";
-  document.querySelector("#carbon-price").value = scenario.config.carbonPrice;
-  document.querySelector("#carbon-realize-ratio").value = asNum(Number(scenario.config.carbonRealizeRatio || 0) * 100, 1);
-  document.querySelector("#market-op-fee").value = scenario.config.marketOpFee;
-  document.querySelector("#grid-assess-fee").value = scenario.config.gridAssessFee;
-  document.querySelector("#ancillary-fee").value = scenario.config.ancillaryFee;
-  document.querySelector("#other-fee").value = scenario.config.otherFee;
-  document.querySelector("#other-income").value = scenario.config.otherIncome;
-  if (refs.feeConfigMode) refs.feeConfigMode.value = FEE_CONFIG_MODE_SET.has(scenario.config.feeConfigMode) ? scenario.config.feeConfigMode : "global";
-  if (refs.storageArbitragePrice) refs.storageArbitragePrice.value = scenario.config.storageArbitragePrice;
-  if (refs.storageCapacityCompPrice) refs.storageCapacityCompPrice.value = scenario.config.storageCapacityCompPrice;
-  if (refs.storageAncillaryRevenuePrice) refs.storageAncillaryRevenuePrice.value = scenario.config.storageAncillaryRevenuePrice;
-  if (refs.storageOtherRevenuePrice) refs.storageOtherRevenuePrice.value = scenario.config.storageOtherRevenuePrice;
+  scenarioForm.loadScenarioToForm({
+    scenario,
+    refs,
+    querySelector: (selector) => document.querySelector(selector),
+    asNum,
+    modes: {
+      ltPricingMode: LT_PRICING_MODE_SET.has(scenario.config.ltPricingMode) ? scenario.config.ltPricingMode : "auto",
+      envValueMode: ENV_VALUE_MODE_SET.has(scenario.config.envValueMode) ? scenario.config.envValueMode : "global",
+      feeConfigMode: FEE_CONFIG_MODE_SET.has(scenario.config.feeConfigMode) ? scenario.config.feeConfigMode : "global"
+    }
+  });
   updateMarketTradeEnergyDisplay(project, scenario);
   updateLtManualStatus(project, scenario);
   updateEnvManualStatus(project, scenario);
@@ -6241,39 +6222,19 @@ function saveScenarioFromForm() {
     }
   }
 
-  const config = {
-    mechanismEnabled,
-    mechanismRatio: clamp(Number(document.querySelector("#mechanism-ratio").value) / 100, 0, 1),
-    mechanismPrice: Number(document.querySelector("#mechanism-price").value),
-    mechanismStartYm,
-    mechanismEndYm,
+  const config = scenarioForm.buildScenarioConfigFromForm({
+    project,
+    refs,
+    querySelector: (selector) => document.querySelector(selector),
+    clamp,
     ltPricingMode,
     ltManualPricesByYear,
-    ltYear1Pnl: Number(document.querySelector("#lt-year1-pnl").value),
-    ltTargetPnl: Number(document.querySelector("#lt-target-pnl").value),
-    ltConvergeSpeedUnit: "fixed_step",
-    ltConvergeSpeed: clamp(Number(document.querySelector("#lt-converge-speed").value), 0, 2000),
     envValueMode,
     envManualValuesByYear,
-    greenCertPrice: Number(document.querySelector("#green-cert-price").value),
-    greenCertRealizeRatio: clamp(envAllocationDraft.greenCertRatio, 0, 1),
-    greenPremiumPrice: Number(document.querySelector("#green-premium-price").value),
-    greenPremiumRealizeRatio: clamp(envAllocationDraft.greenPremiumRatio, 0, 1),
-    carbonEnabled: project.siteType === "offshore" && document.querySelector("#carbon-enabled").value === "yes",
-    carbonPrice: project.siteType === "offshore" ? Number(document.querySelector("#carbon-price").value) : 0,
-    carbonRealizeRatio: project.siteType === "offshore" && document.querySelector("#carbon-enabled").value === "yes" ? clamp(envAllocationDraft.carbonRatio, 0, 1) : 0,
+    envAllocationDraft,
     feeConfigMode,
-    feeManualValuesByYear,
-    marketOpFee: Number(document.querySelector("#market-op-fee").value),
-    gridAssessFee: Number(document.querySelector("#grid-assess-fee").value),
-    ancillaryFee: Number(document.querySelector("#ancillary-fee").value),
-    otherFee: Number(document.querySelector("#other-fee").value),
-    otherIncome: Number(document.querySelector("#other-income").value),
-    storageArbitragePrice: project.hasStorage ? Number(refs.storageArbitragePrice?.value || 0) : 0,
-    storageCapacityCompPrice: project.hasStorage ? Number(refs.storageCapacityCompPrice?.value || 0) : 0,
-    storageAncillaryRevenuePrice: project.hasStorage ? Number(refs.storageAncillaryRevenuePrice?.value || 0) : 0,
-    storageOtherRevenuePrice: project.hasStorage ? Number(refs.storageOtherRevenuePrice?.value || 0) : 0
-  };
+    feeManualValuesByYear
+  });
   scenario.config = config;
   scenario.updatedAt = new Date().toISOString();
 
