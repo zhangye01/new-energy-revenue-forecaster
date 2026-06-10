@@ -3189,7 +3189,6 @@ function createProjectFromForm(options = {}) {
     workspaceBucket = "history",
     forceCreate = false
   } = options;
-  const resolvedWorkspaceBucket = PROJECT_WORKSPACE_BUCKET_SET.has(workspaceBucket) ? workspaceBucket : "history";
   const existingProject = forceCreate ? null : getActiveProject();
   const formState = projectModel.buildCreateProjectFormInput(energyWorkspace.readCreateProjectFormRawInput({
     refs,
@@ -3220,27 +3219,20 @@ function createProjectFromForm(options = {}) {
     }, targetPage);
   }
 
-  const project = projectModel.createProjectRecord({
+  const project = projectModel.createProjectRecordWithBaseline({
     ...formState.input,
     name
   }, {
     id: makeId("proj"),
     ownerAccount: String(appState.auth.account || "").trim(),
-    workspaceBucket: resolvedWorkspaceBucket,
+    workspaceBucket,
     nowIso: new Date().toISOString(),
     statuses: statusMapTemplate(),
     historySpotImport: createEmptyHistorySpotImport(),
-    spotMarketConfig: createDefaultSpotMarketConfig()
+    spotMarketConfig: createDefaultSpotMarketConfig(),
+    isProjectCreateCompleted,
+    createBaselineScenario: (targetProject) => createBaselineScenario(targetProject, { nowIso: targetProject.createdAt })
   });
-
-  project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
-  project.statuses["energy-page"] = project.statuses["create-page"] === "completed" ? "in_progress" : "not_started";
-
-  const baselineScenario = createBaselineScenario(project, {
-    nowIso: project.createdAt
-  });
-  project.scenarios.push(baselineScenario);
-  project.activeScenarioId = baselineScenario.id;
 
   if (appendToBottom) {
     appState.projects.push(project);

@@ -180,6 +180,23 @@
     };
   }
 
+  function createProjectRecordWithBaseline(input = {}, options = {}) {
+    const project = createProjectRecord(input, options);
+    const createReady = typeof options.isProjectCreateCompleted === "function"
+      ? Boolean(options.isProjectCreateCompleted(project))
+      : false;
+    project.statuses["create-page"] = createReady ? "completed" : "in_progress";
+    project.statuses["energy-page"] = createReady ? "in_progress" : "not_started";
+    const baselineScenario = typeof options.createBaselineScenario === "function"
+      ? options.createBaselineScenario(project)
+      : options.baselineScenario;
+    if (isPlainObject(baselineScenario)) {
+      project.scenarios.push(baselineScenario);
+      project.activeScenarioId = baselineScenario.id || null;
+    }
+    return project;
+  }
+
   function resolveNowIso(options = {}) {
     if (typeof options.nowIso === "function") return options.nowIso();
     if (typeof options.nowIso === "string" && options.nowIso) return options.nowIso;
@@ -431,6 +448,7 @@
     hasProjectBaseInputChanged,
     applyCreateProjectInput,
     createProjectRecord,
+    createProjectRecordWithBaseline,
     createMockHistoryProject,
     createEmptyWorkspaceProject,
     createEmptyEnergyDataState,

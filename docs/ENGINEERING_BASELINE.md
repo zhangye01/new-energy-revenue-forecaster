@@ -10,7 +10,7 @@
 | --- | --- |
 | 自动检查 | `npm run check` 必须通过 |
 | CI | GitHub Actions 必须运行 `npm run check` |
-| 主控文件规模 | `app.js` 不允许超过 6015 行 |
+| 主控文件规模 | `app.js` 不允许超过 6005 行 |
 | 主控函数规模 | `app.js` 单个顶层函数不允许超过 90 行 |
 | 样式文件规模 | `styles.css` 不允许超过 5500 行，超过前必须先分区或拆分 |
 | 新模块测试 | `src/domain/*.js` 和 `src/ui/*.js` 新增模块必须有对应 `tests/*.test.js` |

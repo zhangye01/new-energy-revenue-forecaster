@@ -9,6 +9,7 @@ const {
   hasProjectBaseInputChanged,
   applyCreateProjectInput,
   createProjectRecord,
+  createProjectRecordWithBaseline,
   createMockHistoryProject,
   createEmptyWorkspaceProject,
   createEmptyEnergyDataState,
@@ -283,6 +284,31 @@ assert.deepEqual(createdRecord.priceRuns, []);
 assert.deepEqual(createdRecord.scenarios, []);
 assert.equal(createdRecord.createdAt, "2026-06-10T02:00:00.000Z");
 assert.equal(createProjectRecord({ name: "默认工作区" }).workspaceBucket, "history");
+
+const recordWithBaseline = createProjectRecordWithBaseline(createInput, {
+  id: "proj-baseline",
+  nowIso: "2026-06-10T04:00:00.000Z",
+  statuses: {},
+  isProjectCreateCompleted: (targetProject) => targetProject.capacityMw > 0,
+  createBaselineScenario: (targetProject) => ({
+    id: `scenario-${targetProject.id}`,
+    name: "基准场景"
+  })
+});
+assert.equal(recordWithBaseline.statuses["create-page"], "completed");
+assert.equal(recordWithBaseline.statuses["energy-page"], "in_progress");
+assert.equal(recordWithBaseline.activeScenarioId, "scenario-proj-baseline");
+assert.deepEqual(recordWithBaseline.scenarios, [{
+  id: "scenario-proj-baseline",
+  name: "基准场景"
+}]);
+
+const incompleteRecordWithBaseline = createProjectRecordWithBaseline({ name: "缺装机" }, {
+  isProjectCreateCompleted: () => false
+});
+assert.equal(incompleteRecordWithBaseline.statuses["create-page"], "in_progress");
+assert.equal(incompleteRecordWithBaseline.statuses["energy-page"], "not_started");
+assert.deepEqual(incompleteRecordWithBaseline.scenarios, []);
 
 const mockHistoryProject = createMockHistoryProject({
   id: "proj-demo",
