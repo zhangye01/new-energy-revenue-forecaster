@@ -32,6 +32,101 @@
     if (node) node.innerHTML = html;
   }
 
+  function buildCompareAvailabilityView(input = {}) {
+    const {
+      available = [],
+      comparePeriod = "-"
+    } = input;
+    return {
+      metrics: [
+        { refKey: "compareMetricPeriod", value: comparePeriod },
+        {
+          refKey: "compareMetricCompareCount",
+          value: `${available.length} 个`,
+          hint: available.length ? "已完成测算" : "等待测算"
+        },
+        {
+          refKey: "compareMetricScenarioCount",
+          value: `${available.length} 个`,
+          hint: available.length >= 2 ? "可横向对比" : "至少 2 个方案"
+        }
+      ]
+    };
+  }
+
+  function buildCompareOverviewView(input = {}) {
+    const {
+      available = [],
+      baseline = null,
+      baselineFirst = null,
+      baselineRevenueWan = 0,
+      comparePeriod = "-",
+      sensitivityFactors = [],
+      sensitivitySettings = {},
+      bestScenario = null,
+      maxGapWan = 0,
+      asCompactMoney = (value) => String(value),
+      asNum = (value, digits = 1) => {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric.toFixed(digits) : "-";
+      }
+    } = input;
+    const baselineName = baseline?.scenario?.name || "-";
+    const baselineRevenueText = baselineFirst ? asCompactMoney(baselineFirst.fullRevenue) : "-";
+    return {
+      labels: {
+        compareBaselineLabel: `基准：${baselineName}`,
+        compareScenarioLabel: available.length >= 2 ? `${available.length} 个方案已纳入对比` : "当前仅基准方案已测算"
+      },
+      messages: {
+        compareSensitivityMessage: `基于基准方案“${baselineName}”的首年总收益 ${baselineRevenueText}，按 ±${sensitivitySettings.rangePercent}% / ${sensitivitySettings.stepPercent}% 步长，对 ${sensitivityFactors.length} 个已启用变量做扰动。`,
+        compareScenarioMessage: available.length >= 2
+          ? `当前已纳入 ${available.length} 个已测算方案，方案名称沿用全口径收入配置页中的命名；以下对比均以“${baselineName}”作为基准。`
+          : `当前仅“${baselineName}”完成测算。可在全口径收入配置页新增并命名方案，完成测算后自动加入对比。`
+      },
+      metrics: [
+        { refKey: "compareMetricBaselineScenario", value: baselineName, hint: "当前基准方案" },
+        {
+          refKey: "compareMetricBaselineRevenue",
+          value: `${asNum(baselineRevenueWan, 1)} 万元`,
+          hint: `首年总收益 / 周期 ${comparePeriod}`
+        },
+        {
+          refKey: "compareMetricSensitiveFactors",
+          value: `${sensitivityFactors.length} 项`,
+          hint: sensitivityFactors[0] ? `最高敏感：${sensitivityFactors[0].name}` : "等待基准结果"
+        },
+        {
+          refKey: "compareMetricBestScenario",
+          value: bestScenario?.scenario?.name || "-",
+          hint: bestScenario ? `周期总收益 ${asCompactMoney(bestScenario.result.totalFullRevenue)}` : ""
+        },
+        {
+          refKey: "compareMetricMaxGap",
+          value: `${asNum(maxGapWan, 1)} 万元`,
+          hint: `相对 ${baselineName}`
+        }
+      ]
+    };
+  }
+
+  function applyCompareView(input = {}) {
+    const {
+      refs = {},
+      view = {},
+      setCompareMetric = () => {}
+    } = input;
+    (view.metrics || []).forEach((metric) => {
+      setCompareMetric(refs[metric.refKey], metric.value, metric.hint);
+    });
+    Object.entries(view.labels || {}).forEach(([refKey, text]) => {
+      setText(refs[refKey], text);
+    });
+    Object.entries(view.messages || {}).forEach(([refKey, text]) => {
+      setText(refs[refKey], text);
+    });
+  }
+
   function resetComparePageState(input = {}) {
     const {
       refs = {},
@@ -190,6 +285,9 @@
   }
 
   return Object.freeze({
+    applyCompareView,
+    buildCompareAvailabilityView,
+    buildCompareOverviewView,
     buildCompareTableRowsHtml,
     buildScenarioFocusListHtml,
     buildSensitivityFactorListHtml,

@@ -5944,9 +5944,11 @@ function renderCompare() {
   ensureScenarioMetadata(project);
   const available = compareAnalysis.buildAvailableScenarioResults(project);
   const comparePeriod = getForecastPeriodDisplayRange(project);
-  setCompareMetric(refs.compareMetricPeriod, comparePeriod);
-  setCompareMetric(refs.compareMetricCompareCount, `${available.length} 个`, available.length ? "已完成测算" : "等待测算");
-  setCompareMetric(refs.compareMetricScenarioCount, `${available.length} 个`, available.length >= 2 ? "可横向对比" : "至少 2 个方案");
+  comparePage.applyCompareView({
+    refs,
+    setCompareMetric,
+    view: comparePage.buildCompareAvailabilityView({ available, comparePeriod })
+  });
   if (!available.length) {
     comparePage.renderCompareNoResultsState({
       refs,
@@ -5958,11 +5960,6 @@ function renderCompare() {
   const baseline = compareAnalysis.getBaselineCompareItem(available);
   const baselineFirst = compareAnalysis.getFirstAnnualRow(baseline);
   const baselineRevenueWan = baselineFirst ? baselineFirst.fullRevenue / 10000 : 0;
-  const baselineCountLabel = available.length >= 2 ? `${available.length} 个方案已纳入对比` : "当前仅基准方案已测算";
-  if (refs.compareBaselineLabel) refs.compareBaselineLabel.textContent = `基准：${baseline.scenario.name}`;
-  if (refs.compareScenarioLabel) refs.compareScenarioLabel.textContent = baselineCountLabel;
-  setCompareMetric(refs.compareMetricBaselineScenario, baseline.scenario.name, "当前基准方案");
-  setCompareMetric(refs.compareMetricBaselineRevenue, `${asNum(baselineRevenueWan, 1)} 万元`, `首年总收益 / 周期 ${comparePeriod}`);
 
   syncCompareSensitivityControls();
   const allSensitivityFactors = buildCompareSensitivityFactors(baselineFirst, baselineRevenueWan, compareSensitivitySettings);
@@ -5974,27 +5971,29 @@ function renderCompare() {
   compareSensitivitySettings.selectedKeys = sensitivitySelection.selectedKeys;
   activeSensitivityFactorKey = sensitivitySelection.activeFactorKey;
   const sensitivityFactors = sensitivitySelection.factors;
-  setCompareMetric(
-    refs.compareMetricSensitiveFactors,
-    `${sensitivityFactors.length} 项`,
-    sensitivityFactors[0] ? `最高敏感：${sensitivityFactors[0].name}` : "等待基准结果"
-  );
-  if (refs.compareSensitivityMessage) {
-    refs.compareSensitivityMessage.textContent = `基于基准方案“${baseline.scenario.name}”的首年总收益 ${asCompactMoney(baselineFirst.fullRevenue)}，按 ±${compareSensitivitySettings.rangePercent}% / ${compareSensitivitySettings.stepPercent}% 步长，对 ${sensitivityFactors.length} 个已启用变量做扰动。`;
-  }
   renderSensitivityTornadoChart(sensitivityFactors, baselineRevenueWan);
   renderSensitivityFactorList(allSensitivityFactors, sensitivityFactors);
   renderSensitivityResponseChart(sensitivityFactors, baselineRevenueWan);
   renderSensitivityTable(sensitivityFactors);
 
   const { bestScenario, maxGapWan } = compareAnalysis.summarizeScenarioComparison(available, baseline);
-  setCompareMetric(refs.compareMetricBestScenario, bestScenario?.scenario?.name || "-", bestScenario ? `周期总收益 ${asCompactMoney(bestScenario.result.totalFullRevenue)}` : "");
-  setCompareMetric(refs.compareMetricMaxGap, `${asNum(maxGapWan, 1)} 万元`, `相对 ${baseline.scenario.name}`);
-  if (refs.compareScenarioMessage) {
-    refs.compareScenarioMessage.textContent = available.length >= 2
-      ? `当前已纳入 ${available.length} 个已测算方案，方案名称沿用全口径收入配置页中的命名；以下对比均以“${baseline.scenario.name}”作为基准。`
-      : `当前仅“${baseline.scenario.name}”完成测算。可在全口径收入配置页新增并命名方案，完成测算后自动加入对比。`;
-  }
+  comparePage.applyCompareView({
+    refs,
+    setCompareMetric,
+    view: comparePage.buildCompareOverviewView({
+      available,
+      baseline,
+      baselineFirst,
+      baselineRevenueWan,
+      comparePeriod,
+      sensitivityFactors,
+      sensitivitySettings: compareSensitivitySettings,
+      bestScenario,
+      maxGapWan,
+      asCompactMoney,
+      asNum
+    })
+  });
 
   activeCompareScenarioId = compareAnalysis.resolveActiveCompareScenarioId(available, baseline, activeCompareScenarioId);
   const focusScenario = available.find((item) => item.scenario.id === activeCompareScenarioId) || baseline;

@@ -2,6 +2,9 @@
 
 const assert = require("node:assert/strict");
 const {
+  applyCompareView,
+  buildCompareAvailabilityView,
+  buildCompareOverviewView,
   buildCompareTableRowsHtml,
   buildScenarioFocusListHtml,
   buildSensitivityFactorListHtml,
@@ -14,6 +17,19 @@ const tokens = {
   primary: "#3f82e6",
   palette: ["#3f82e6", "#3fa096", "#76aa57"]
 };
+
+const availabilityView = buildCompareAvailabilityView({
+  available: [{ scenario: { id: "base" }, result: {} }],
+  comparePeriod: "2026-2056"
+});
+assert.deepEqual(
+  availabilityView.metrics.map((metric) => [metric.refKey, metric.value, metric.hint]),
+  [
+    ["compareMetricPeriod", "2026-2056", undefined],
+    ["compareMetricCompareCount", "1 个", "已完成测算"],
+    ["compareMetricScenarioCount", "1 个", "至少 2 个方案"]
+  ]
+);
 
 const factorHtml = buildSensitivityFactorListHtml({
   tokens,
@@ -71,6 +87,33 @@ assert.match(tableHtml, /交易&lt;策略&gt;/);
 assert.match(tableHtml, /280.57 元\/MWh/);
 assert.match(tableHtml, /\+20万元/);
 
+const overviewView = buildCompareOverviewView({
+  available,
+  baseline: available[0],
+  baselineFirst: available[0].result.annualRows[0],
+  baselineRevenueWan: 40,
+  comparePeriod: "2026-2056",
+  sensitivityFactors: [{ name: "利用小时" }],
+  sensitivitySettings: { rangePercent: 20, stepPercent: 5 },
+  bestScenario: available[1],
+  maxGapWan: 20,
+  asCompactMoney: (value) => `${Math.round(value / 10000)}万元`,
+  asNum: (value, digits = 1) => Number(value).toFixed(digits)
+});
+assert.equal(overviewView.labels.compareBaselineLabel, "基准：基准<场景>");
+assert.match(overviewView.messages.compareSensitivityMessage, /首年总收益 40万元/);
+assert.match(overviewView.messages.compareScenarioMessage, /2 个已测算方案/);
+assert.deepEqual(
+  overviewView.metrics.map((metric) => [metric.refKey, metric.value]),
+  [
+    ["compareMetricBaselineScenario", "基准<场景>"],
+    ["compareMetricBaselineRevenue", "40.0 万元"],
+    ["compareMetricSensitiveFactors", "1 项"],
+    ["compareMetricBestScenario", "乐观"],
+    ["compareMetricMaxGap", "20.0 万元"]
+  ]
+);
+
 function makeNode() {
   return {
     textContent: "old",
@@ -119,6 +162,17 @@ assert.equal(refs.compareSensitivityMessage.textContent, "请先在基准结果�
 assert.equal(metricCalls.length, 8);
 assert.equal(metricCalls[2].value, "0 项");
 assert.equal(synced, true);
+
+metricCalls.length = 0;
+applyCompareView({
+  refs,
+  view: overviewView,
+  setCompareMetric: (node, value, hint) => metricCalls.push({ node, value, hint })
+});
+assert.equal(refs.compareBaselineLabel.textContent, "基准：基准<场景>");
+assert.match(refs.compareScenarioMessage.textContent, /2 个已测算方案/);
+assert.equal(metricCalls.length, 5);
+assert.equal(metricCalls[3].value, "乐观");
 
 const placeholders = [];
 const renderPlaceholder = (key, node, message) => placeholders.push({ key, node, message });
