@@ -34,6 +34,7 @@ const energyProfiles = window.NE_ENERGY_PROFILES;
 const priceForecast = window.NE_PRICE_FORECAST;
 const revenueRules = window.NE_REVENUE_RULES;
 const revenueCalculator = window.NE_REVENUE_CALCULATOR;
+const resultCalculation = window.NE_RESULT_CALCULATION;
 const resultReport = window.NE_RESULT_REPORT;
 const compareAnalysis = window.NE_COMPARE_ANALYSIS;
 const historyAnalysis = window.NE_HISTORY_ANALYSIS;
@@ -67,7 +68,7 @@ const shellEvents = window.NE_SHELL_EVENTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !shellEvents || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !shellEvents || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -5568,34 +5569,15 @@ function runCalculation() {
   if (!project) return;
   const scenario = getActiveScenario(project);
   const run = getActiveRun(project);
-  if (!scenario) {
-    setTopMeta("请先在全口径收入配置页保存至少一个配置方案。");
+  const readiness = resultCalculation.validateCalculationReadiness({
+    project,
+    scenario,
+    run,
+    scenarioConfig
+  });
+  if (!readiness.ok) {
+    setTopMeta(readiness.message);
     return;
-  }
-  if (!run) {
-    setTopMeta("请先在电价预测工作台生成并生效一个电价版本。");
-    return;
-  }
-  if (getLtPricingMode(scenario.config) === "manual") {
-    const completeness = getLtManualCompleteness(project, scenario.config);
-    if (completeness.complete !== completeness.total) {
-      setTopMeta(`请先导入完整的逐年交易策略损益值（当前 ${completeness.complete}/${completeness.total} 年）。`);
-      return;
-    }
-  }
-  if (getEnvValueMode(scenario.config) === "manual") {
-    const completeness = getEnvManualCompleteness(project, scenario.config);
-    if (completeness.complete !== completeness.total) {
-      setTopMeta(`请先导入完整的逐年环境价值兑现配置（当前 ${completeness.complete}/${completeness.total} 年）。`);
-      return;
-    }
-  }
-  if (getFeeConfigMode(scenario.config) === "manual") {
-    const completeness = getFeeManualCompleteness(project, scenario.config);
-    if (completeness.complete !== completeness.total) {
-      setTopMeta(`请先导入完整的逐年扣费收益配置（当前 ${completeness.complete}/${completeness.total} 年）。`);
-      return;
-    }
   }
 
   const energyPrepared = ensureHourlyEnergyForCalculation(project);
