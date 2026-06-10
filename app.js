@@ -3339,10 +3339,6 @@ function normalizeCsvHeaderRow(row) {
   return csvUtils.normalizeCsvHeaderRow(row);
 }
 
-function normalizeEnergyMode(mode) {
-  return projectModel.normalizeEnergyMode(mode);
-}
-
 function ensureProjectEnergyTemplateExports(project) {
   if (!project || !isPlainObject(project)) {
     return { hourly_8760: "", annual_hours: "", typical_curve_8760: "", province_typical_curve: "" };
@@ -3387,7 +3383,7 @@ function detectEnergyModeByHeader(headerRow) {
 }
 
 function applyEnergyModeUi(mode) {
-  normalizeEnergyMode(mode);
+  projectModel.normalizeEnergyMode(mode);
 }
 
 function setEnergyImportMessage(text, tone = "info", options = {}) {
@@ -3560,7 +3556,7 @@ function importEnergyDataFromText(mode, csvText, sourceLabel = "") {
     appState,
     services: {
       isProjectCreateCompleted,
-      normalizeEnergyMode,
+      normalizeEnergyMode: projectModel.normalizeEnergyMode,
       validateAndBuildEnergyData,
       alignDefaultForecastYearsToAnnualTemplate,
       ensureProjectEnergyTemplateExports,
@@ -3588,7 +3584,7 @@ function exportEnergyTemplate(mode = "hourly_8760") {
     setEnergyImportMessage("请先完成步骤1基础信息保存，再导出模板。", "warn");
     return;
   }
-  const normalizedMode = normalizeEnergyMode(mode);
+  const normalizedMode = projectModel.normalizeEnergyMode(mode);
   const rows = energyDataRules.buildEnergyTemplateRows(project, normalizedMode);
 
   downloadCsv(buildEnergyTemplateFilename(project, normalizedMode), rows);
@@ -3629,7 +3625,7 @@ async function importEnergyFromFile(mode, inputElement) {
 function downloadEnergySampleFile(mode = "annual_hours") {
   const project = getActiveProject();
   if (!project) return;
-  const normalizedMode = normalizeEnergyMode(mode);
+  const normalizedMode = projectModel.normalizeEnergyMode(mode);
   const rows = [];
   if (normalizedMode === "annual_hours") {
     rows.push(["year", "annual_hours_h"]);
