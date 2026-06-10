@@ -3167,92 +3167,50 @@ function createProjectFromForm(options = {}) {
   } = options;
   const resolvedWorkspaceBucket = PROJECT_WORKSPACE_BUCKET_SET.has(workspaceBucket) ? workspaceBucket : "history";
   const existingProject = forceCreate ? null : getActiveProject();
-  let name = document.querySelector("#create-project-name").value.trim();
-  const province = refs.createProvince.value;
-  const assetType = document.querySelector("#create-asset-type").value;
-  const siteType = document.querySelector("#create-site-type").value;
-  const hasStorage = document.querySelector("#create-has-storage").value === "yes";
-  const storagePowerRaw = String(refs.createStoragePowerMw?.value || "").trim();
-  const storageDurationRaw = String(refs.createStorageDurationH?.value || "").trim();
-  const storageNoteRaw = String(refs.createStorageNote?.value || "").trim();
-  const capacityRaw = document.querySelector("#create-capacity-mw").value.trim();
-  const startYearRaw = document.querySelector("#create-start-year").value.trim();
-  const forecastYearsRaw = document.querySelector("#create-forecast-years").value.trim();
-  const storagePowerInput = Number(storagePowerRaw);
-  const storageDurationInput = Number(storageDurationRaw);
-  const capacityInput = Number(capacityRaw);
-  const startYearInput = Number(startYearRaw);
-  const forecastYearsInput = Number(forecastYearsRaw);
-  const currentYear = new Date().getFullYear();
-  const storagePowerMw = hasStorage && Number.isFinite(storagePowerInput) && storagePowerInput > 0 ? storagePowerInput : null;
-  const storageDurationH = hasStorage && Number.isFinite(storageDurationInput) && storageDurationInput > 0 ? storageDurationInput : null;
-  const storageNote = hasStorage ? storageNoteRaw : "";
-  const capacityMw = Number.isFinite(capacityInput) && capacityInput > 0 ? capacityInput : 0;
-  const startYear = Number.isFinite(startYearInput) && startYearInput >= 2026 ? Math.floor(startYearInput) : currentYear;
-  const forecastYears = clamp(
-    Number.isFinite(forecastYearsInput) && forecastYearsInput > 0 ? Math.floor(forecastYearsInput) : 30,
-    1,
-    30
-  );
-  const defaultEnergyMode = normalizeEnergyMode(existingProject?.energyData?.mode || existingProject?.energyMode || "annual_hours");
-  const energyMode = defaultEnergyMode;
-  const note = document.querySelector("#create-note").value.trim();
-
-  if (!name && autoUniqueName) {
-    name = "新建项目";
-  }
-  if (!name) {
-    setTopMeta("项目名称不能为空");
-    setCreateSaveMessage("保存失败：请先填写项目名称。", "warn");
+  const formState = projectModel.buildCreateProjectFormInput({
+    name: document.querySelector("#create-project-name").value,
+    province: refs.createProvince.value,
+    assetType: document.querySelector("#create-asset-type").value,
+    siteType: document.querySelector("#create-site-type").value,
+    hasStorage: document.querySelector("#create-has-storage").value,
+    storagePower: refs.createStoragePowerMw?.value,
+    storageDuration: refs.createStorageDurationH?.value,
+    storageNote: refs.createStorageNote?.value,
+    capacity: document.querySelector("#create-capacity-mw").value,
+    startYear: document.querySelector("#create-start-year").value,
+    forecastYears: document.querySelector("#create-forecast-years").value,
+    energyMode: existingProject?.energyData?.mode || existingProject?.energyMode || "annual_hours",
+    note: document.querySelector("#create-note").value
+  }, {
+    autoUniqueName,
+    forceCreate,
+    currentYear: new Date().getFullYear(),
+    provinceKeys: PROVINCE_KEY_SET,
+    assetTypes: ASSET_TYPE_SET,
+    siteTypes: SITE_TYPE_SET
+  });
+  if (formState.error) {
+    setTopMeta(formState.error.topMeta);
+    setCreateSaveMessage(formState.error.message, "warn");
     return null;
   }
-  if (!forceCreate) {
-    if (!PROVINCE_KEY_SET.has(province)) {
-      setTopMeta("请选择省份。");
-      setCreateSaveMessage("保存失败：请选择省份。", "warn");
-      return null;
-    }
-    if (!ASSET_TYPE_SET.has(assetType)) {
-      setTopMeta("请选择风/光类型。");
-      setCreateSaveMessage("保存失败：请选择风/光类型。", "warn");
-      return null;
-    }
-    if (!SITE_TYPE_SET.has(siteType)) {
-      setTopMeta("请选择陆/海类型。");
-      setCreateSaveMessage("保存失败：请选择陆/海类型。", "warn");
-      return null;
-    }
-    if (!["yes", "no"].includes(document.querySelector("#create-has-storage").value)) {
-      setTopMeta("请选择是否配建储能。");
-      setCreateSaveMessage("保存失败：请选择是否配建储能。", "warn");
-      return null;
-    }
-    if (hasStorage && (!Number.isFinite(storagePowerInput) || storagePowerInput <= 0)) {
-      setTopMeta("请填写有效的储能功率（MW）。");
-      setCreateSaveMessage("保存失败：储能功率未填写或格式无效。", "warn");
-      return null;
-    }
-    if (hasStorage && (!Number.isFinite(storageDurationInput) || storageDurationInput <= 0)) {
-      setTopMeta("请填写有效的储能时长（h）。");
-      setCreateSaveMessage("保存失败：储能时长未填写或格式无效。", "warn");
-      return null;
-    }
-    if (!Number.isFinite(capacityInput) || capacityInput <= 0) {
-      setTopMeta("请填写有效的装机容量（MW）。");
-      setCreateSaveMessage("保存失败：装机容量未填写或格式无效。", "warn");
-      return null;
-    }
-    if (!Number.isFinite(startYearInput) || startYearInput < 2026) {
-      setTopMeta("开始年份需为2026及以后。");
-      setCreateSaveMessage("保存失败：请填写有效的开始年份（>=2026）。", "warn");
-      return null;
-    }
-    if (!Number.isFinite(forecastYearsInput) || forecastYearsInput < 1) {
-      setTopMeta("预测周期需为1-30年。");
-      setCreateSaveMessage("保存失败：请填写有效的预测周期（1-30年）。", "warn");
-      return null;
-    }
-  }
+  const {
+    hasStorage,
+    storagePowerMw,
+    storageDurationH,
+    storageNote,
+    capacityMw,
+    startYear,
+    forecastYears,
+    energyMode,
+    note
+  } = formState.input;
+  let {
+    name,
+    province,
+    assetType,
+    siteType
+  } = formState.input;
   if (!existingProject && autoUniqueName) {
     name = resolveUniqueProjectName(name);
   }

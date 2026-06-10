@@ -3,6 +3,9 @@
 const assert = require("node:assert/strict");
 const {
   normalizeEnergyMode,
+  buildCreateProjectFormInput,
+  normalizeCreateProjectFormInput,
+  validateCreateProjectFormInput,
   createMockHistoryProject,
   createEmptyWorkspaceProject,
   createEmptyEnergyDataState,
@@ -17,6 +20,8 @@ const options = {
   currentYear: 2026,
   nowIso: "2026-06-09T00:00:00.000Z",
   provinceKeys: ["jiangsu", "shandong"],
+  assetTypes: ["wind", "photovoltaic"],
+  siteTypes: ["onshore", "offshore"],
   makeId: (prefix) => `${prefix}-test`,
   resolveUniqueName: (name) => `${name}2`
 };
@@ -36,6 +41,132 @@ assert.deepEqual(createEmptyEnergyTemplateExports(), {
   annual_hours: "",
   typical_curve_8760: "",
   province_typical_curve: ""
+});
+
+const createInput = normalizeCreateProjectFormInput({
+  name: " 江苏海上风电 ",
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: "yes",
+  storagePower: "64",
+  storageDuration: "2",
+  storageNote: " 两小时 ",
+  capacity: "200",
+  startYear: "2026.9",
+  forecastYears: "40",
+  energyMode: "province_typical_curve",
+  note: " 备注 "
+}, options);
+assert.equal(createInput.name, "江苏海上风电");
+assert.equal(createInput.hasStorage, true);
+assert.equal(createInput.storageChoice, "yes");
+assert.equal(createInput.storagePowerMw, 64);
+assert.equal(createInput.storageDurationH, 2);
+assert.equal(createInput.storageNote, "两小时");
+assert.equal(createInput.capacityMw, 200);
+assert.equal(createInput.startYear, 2026);
+assert.equal(createInput.forecastYears, 30);
+assert.equal(createInput.energyMode, "province_typical_curve");
+assert.equal(createInput.note, "备注");
+assert.equal(validateCreateProjectFormInput(createInput, {
+  provinceKeys: new Set(["jiangsu"]),
+  assetTypes: new Set(["wind"]),
+  siteTypes: new Set(["offshore"])
+}), null);
+
+assert.equal(normalizeCreateProjectFormInput({
+  name: "",
+  hasStorage: "",
+  startYear: "",
+  forecastYears: "",
+  energyMode: "bad"
+}, { currentYear: 2028, autoUniqueName: true }).name, "新建项目");
+assert.deepEqual(buildCreateProjectFormInput({
+  name: "强制草稿",
+  hasStorage: "",
+  startYear: "",
+  forecastYears: "",
+  energyMode: "bad"
+}, {
+  currentYear: 2028,
+  forceCreate: true
+}).input, {
+  name: "强制草稿",
+  province: "",
+  assetType: "",
+  siteType: "",
+  storageChoice: "",
+  hasStorage: false,
+  storagePowerInput: 0,
+  storageDurationInput: 0,
+  capacityInput: 0,
+  startYearInput: 0,
+  forecastYearsInput: 0,
+  storagePowerMw: null,
+  storageDurationH: null,
+  storageNote: "",
+  capacityMw: 0,
+  startYear: 2028,
+  forecastYears: 30,
+  energyMode: "annual_hours",
+  note: ""
+});
+
+assert.deepEqual(buildCreateProjectFormInput({
+  name: "",
+  province: "jiangsu"
+}, options).error, {
+  topMeta: "项目名称不能为空",
+  message: "保存失败：请先填写项目名称。"
+});
+assert.deepEqual(buildCreateProjectFormInput({
+  name: "缺省份",
+  province: "bad"
+}, options).error, {
+  topMeta: "请选择省份。",
+  message: "保存失败：请选择省份。"
+});
+assert.deepEqual(buildCreateProjectFormInput({
+  name: "缺储能选择",
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: "",
+  capacity: "200",
+  startYear: "2026",
+  forecastYears: "20"
+}, options).error, {
+  topMeta: "请选择是否配建储能。",
+  message: "保存失败：请选择是否配建储能。"
+});
+assert.deepEqual(buildCreateProjectFormInput({
+  name: "缺储能功率",
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: "yes",
+  storagePower: "",
+  storageDuration: "2",
+  capacity: "200",
+  startYear: "2026",
+  forecastYears: "20"
+}, options).error, {
+  topMeta: "请填写有效的储能功率（MW）。",
+  message: "保存失败：储能功率未填写或格式无效。"
+});
+assert.deepEqual(buildCreateProjectFormInput({
+  name: "缺周期",
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: "no",
+  capacity: "200",
+  startYear: "2026",
+  forecastYears: "0"
+}, options).error, {
+  topMeta: "预测周期需为1-30年。",
+  message: "保存失败：请填写有效的预测周期（1-30年）。"
 });
 
 const mockHistoryProject = createMockHistoryProject({

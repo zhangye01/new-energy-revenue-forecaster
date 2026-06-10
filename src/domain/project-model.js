@@ -23,6 +23,18 @@
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
   }
 
+  function trimText(value) {
+    return typeof value === "string" ? value.trim() : String(value || "").trim();
+  }
+
+  function hasAllowedValue(allowedValues, value) {
+    if (!value) return false;
+    if (allowedValues && typeof allowedValues.has === "function") {
+      return allowedValues.has(value);
+    }
+    return Array.isArray(allowedValues) && allowedValues.includes(value);
+  }
+
   function normalizeEnergyMode(mode) {
     return ENERGY_MODE_SET.has(mode) ? mode : "annual_hours";
   }
@@ -147,6 +159,125 @@
     return typeof options.makeId === "function" ? options.makeId : ((prefix) => `${prefix}-${Date.now()}`);
   }
 
+  function normalizeCreateProjectFormInput(rawInput = {}, options = {}) {
+    const currentYear = resolveCurrentYear(options);
+    let name = trimText(rawInput.name);
+    if (!name && options.autoUniqueName) {
+      name = "新建项目";
+    }
+    const storageChoice = trimText(rawInput.hasStorage);
+    const hasStorage = storageChoice === "yes";
+    const storagePowerRaw = trimText(rawInput.storagePower);
+    const storageDurationRaw = trimText(rawInput.storageDuration);
+    const storageNoteRaw = trimText(rawInput.storageNote);
+    const capacityRaw = trimText(rawInput.capacity);
+    const startYearRaw = trimText(rawInput.startYear);
+    const forecastYearsRaw = trimText(rawInput.forecastYears);
+    const storagePowerInput = Number(storagePowerRaw);
+    const storageDurationInput = Number(storageDurationRaw);
+    const capacityInput = Number(capacityRaw);
+    const startYearInput = Number(startYearRaw);
+    const forecastYearsInput = Number(forecastYearsRaw);
+    return {
+      name,
+      province: trimText(rawInput.province),
+      assetType: trimText(rawInput.assetType),
+      siteType: trimText(rawInput.siteType),
+      storageChoice,
+      hasStorage,
+      storagePowerInput,
+      storageDurationInput,
+      capacityInput,
+      startYearInput,
+      forecastYearsInput,
+      storagePowerMw: hasStorage && Number.isFinite(storagePowerInput) && storagePowerInput > 0 ? storagePowerInput : null,
+      storageDurationH: hasStorage && Number.isFinite(storageDurationInput) && storageDurationInput > 0 ? storageDurationInput : null,
+      storageNote: hasStorage ? storageNoteRaw : "",
+      capacityMw: Number.isFinite(capacityInput) && capacityInput > 0 ? capacityInput : 0,
+      startYear: Number.isFinite(startYearInput) && startYearInput >= 2026 ? Math.floor(startYearInput) : currentYear,
+      forecastYears: clamp(
+        Number.isFinite(forecastYearsInput) && forecastYearsInput > 0 ? Math.floor(forecastYearsInput) : 30,
+        1,
+        30
+      ),
+      energyMode: normalizeEnergyMode(rawInput.energyMode),
+      note: trimText(rawInput.note)
+    };
+  }
+
+  function validateCreateProjectFormInput(input = {}, options = {}) {
+    if (!input.name) {
+      return {
+        topMeta: "项目名称不能为空",
+        message: "保存失败：请先填写项目名称。"
+      };
+    }
+    if (options.forceCreate) return null;
+    if (!hasAllowedValue(options.provinceKeys, input.province)) {
+      return {
+        topMeta: "请选择省份。",
+        message: "保存失败：请选择省份。"
+      };
+    }
+    if (!hasAllowedValue(options.assetTypes, input.assetType)) {
+      return {
+        topMeta: "请选择风/光类型。",
+        message: "保存失败：请选择风/光类型。"
+      };
+    }
+    if (!hasAllowedValue(options.siteTypes, input.siteType)) {
+      return {
+        topMeta: "请选择陆/海类型。",
+        message: "保存失败：请选择陆/海类型。"
+      };
+    }
+    if (!["yes", "no"].includes(input.storageChoice)) {
+      return {
+        topMeta: "请选择是否配建储能。",
+        message: "保存失败：请选择是否配建储能。"
+      };
+    }
+    if (input.hasStorage && (!Number.isFinite(input.storagePowerInput) || input.storagePowerInput <= 0)) {
+      return {
+        topMeta: "请填写有效的储能功率（MW）。",
+        message: "保存失败：储能功率未填写或格式无效。"
+      };
+    }
+    if (input.hasStorage && (!Number.isFinite(input.storageDurationInput) || input.storageDurationInput <= 0)) {
+      return {
+        topMeta: "请填写有效的储能时长（h）。",
+        message: "保存失败：储能时长未填写或格式无效。"
+      };
+    }
+    if (!Number.isFinite(input.capacityInput) || input.capacityInput <= 0) {
+      return {
+        topMeta: "请填写有效的装机容量（MW）。",
+        message: "保存失败：装机容量未填写或格式无效。"
+      };
+    }
+    if (!Number.isFinite(input.startYearInput) || input.startYearInput < 2026) {
+      return {
+        topMeta: "开始年份需为2026及以后。",
+        message: "保存失败：请填写有效的开始年份（>=2026）。"
+      };
+    }
+    if (!Number.isFinite(input.forecastYearsInput) || input.forecastYearsInput < 1) {
+      return {
+        topMeta: "预测周期需为1-30年。",
+        message: "保存失败：请填写有效的预测周期（1-30年）。"
+      };
+    }
+    return null;
+  }
+
+  function buildCreateProjectFormInput(rawInput = {}, options = {}) {
+    const input = normalizeCreateProjectFormInput(rawInput, options);
+    return {
+      input,
+      error: validateCreateProjectFormInput(input, options)
+    };
+  }
+
   function sanitizeProjectBase(rawProject, index = 0, options = {}) {
     if (!isPlainObject(rawProject)) return null;
     const makeId = resolveMakeId(options);
@@ -228,6 +359,9 @@
 
   return Object.freeze({
     normalizeEnergyMode,
+    buildCreateProjectFormInput,
+    normalizeCreateProjectFormInput,
+    validateCreateProjectFormInput,
     createMockHistoryProject,
     createEmptyWorkspaceProject,
     createEmptyEnergyDataState,
