@@ -2,11 +2,17 @@
 
 const assert = require("node:assert/strict");
 const {
+  buildAvailableScenarioResults,
   buildCompareSensitivityFactors,
   buildSensitivitySeries,
   detectTopDriver,
+  getBaselineCompareItem,
+  getFirstAnnualRow,
+  resolveActiveCompareScenarioId,
+  resolveSensitivitySelection,
   resultComponentTotals,
   sanitizeCompareSensitivitySettings,
+  summarizeScenarioComparison,
   sensitivityAxisLabels
 } = require("../src/domain/compare-analysis");
 
@@ -100,5 +106,50 @@ assert.equal(
   "差价机制"
 );
 assert.equal(detectTopDriver({ annualRows: [] }), "-");
+
+const compareProject = {
+  scenarios: [
+    { id: "draft", name: "未测算" },
+    { id: "base", name: "基准", isBaseline: true },
+    { id: "up", name: "乐观" }
+  ],
+  resultsByScenario: {
+    base: {
+      totalFullRevenue: 1000000,
+      annualRows: [
+        { energyMwh: 0, fullRevenue: 100 },
+        { energyMwh: 10, fullRevenue: 200000 }
+      ]
+    },
+    up: {
+      totalFullRevenue: 1300000,
+      annualRows: [{ energyMwh: 10, fullRevenue: 300000 }]
+    }
+  }
+};
+const available = buildAvailableScenarioResults(compareProject);
+assert.equal(available.length, 2);
+assert.equal(available[0].scenario.id, "base");
+const baseline = getBaselineCompareItem(available);
+assert.equal(baseline.scenario.id, "base");
+assert.equal(getFirstAnnualRow(baseline).fullRevenue, 200000);
+
+const selection = resolveSensitivitySelection(
+  [
+    { key: "spot" },
+    { key: "fee" }
+  ],
+  ["missing", "fee"],
+  "missing"
+);
+assert.deepEqual(selection.selectedKeys, ["fee"]);
+assert.equal(selection.activeFactorKey, "fee");
+assert.deepEqual(selection.factors.map((factor) => factor.key), ["fee"]);
+
+const scenarioSummary = summarizeScenarioComparison(available, baseline);
+assert.equal(scenarioSummary.bestScenario.scenario.id, "up");
+assert.equal(scenarioSummary.maxGapWan, 30);
+assert.equal(resolveActiveCompareScenarioId(available, baseline, "base"), "base");
+assert.equal(resolveActiveCompareScenarioId(available, baseline, "missing"), "up");
 
 console.log("compare analysis tests passed");

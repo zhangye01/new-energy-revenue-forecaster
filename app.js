@@ -5942,12 +5942,7 @@ function renderCompare() {
     return;
   }
   ensureScenarioMetadata(project);
-  const available = project.scenarios
-    .map((scenario) => ({
-      scenario,
-      result: project.resultsByScenario[scenario.id]
-    }))
-    .filter((item) => item.result);
+  const available = compareAnalysis.buildAvailableScenarioResults(project);
   const comparePeriod = getForecastPeriodDisplayRange(project);
   setCompareMetric(refs.compareMetricPeriod, comparePeriod);
   setCompareMetric(refs.compareMetricCompareCount, `${available.length} 个`, available.length ? "已完成测算" : "等待测算");
@@ -5960,8 +5955,8 @@ function renderCompare() {
     return;
   }
 
-  const baseline = available.find((item) => item.scenario.isBaseline) || available[0];
-  const baselineFirst = baseline.result.annualRows.find((row) => row.energyMwh > 0) || baseline.result.annualRows[0];
+  const baseline = compareAnalysis.getBaselineCompareItem(available);
+  const baselineFirst = compareAnalysis.getFirstAnnualRow(baseline);
   const baselineRevenueWan = baselineFirst ? baselineFirst.fullRevenue / 10000 : 0;
   const baselineCountLabel = available.length >= 2 ? `${available.length} 个方案已纳入对比` : "当前仅基准方案已测算";
   if (refs.compareBaselineLabel) refs.compareBaselineLabel.textContent = `基准：${baseline.scenario.name}`;
@@ -5971,20 +5966,14 @@ function renderCompare() {
 
   syncCompareSensitivityControls();
   const allSensitivityFactors = buildCompareSensitivityFactors(baselineFirst, baselineRevenueWan, compareSensitivitySettings);
-  const allFactorKeys = allSensitivityFactors.map((factor) => factor.key);
-  if (!compareSensitivitySettings.selectedKeys.length) {
-    compareSensitivitySettings.selectedKeys = allFactorKeys;
-  } else {
-    compareSensitivitySettings.selectedKeys = compareSensitivitySettings.selectedKeys.filter((key) => allFactorKeys.includes(key));
-    if (!compareSensitivitySettings.selectedKeys.length) {
-      compareSensitivitySettings.selectedKeys = allFactorKeys;
-    }
-  }
-  const selectedFactorSet = new Set(compareSensitivitySettings.selectedKeys);
-  const sensitivityFactors = allSensitivityFactors.filter((factor) => selectedFactorSet.has(factor.key));
-  if (!activeSensitivityFactorKey || !sensitivityFactors.some((factor) => factor.key === activeSensitivityFactorKey)) {
-    activeSensitivityFactorKey = sensitivityFactors[0]?.key || "";
-  }
+  const sensitivitySelection = compareAnalysis.resolveSensitivitySelection(
+    allSensitivityFactors,
+    compareSensitivitySettings.selectedKeys,
+    activeSensitivityFactorKey
+  );
+  compareSensitivitySettings.selectedKeys = sensitivitySelection.selectedKeys;
+  activeSensitivityFactorKey = sensitivitySelection.activeFactorKey;
+  const sensitivityFactors = sensitivitySelection.factors;
   setCompareMetric(
     refs.compareMetricSensitiveFactors,
     `${sensitivityFactors.length} 项`,
@@ -5998,14 +5987,7 @@ function renderCompare() {
   renderSensitivityResponseChart(sensitivityFactors, baselineRevenueWan);
   renderSensitivityTable(sensitivityFactors);
 
-  const bestScenario = available.reduce((best, current) => {
-    if (!best) return current;
-    return current.result.totalFullRevenue > best.result.totalFullRevenue ? current : best;
-  }, null);
-  const maxGapWan = available.reduce((maxValue, item) => {
-    const gap = Math.abs(item.result.totalFullRevenue - baseline.result.totalFullRevenue) / 10000;
-    return Math.max(maxValue, gap);
-  }, 0);
+  const { bestScenario, maxGapWan } = compareAnalysis.summarizeScenarioComparison(available, baseline);
   setCompareMetric(refs.compareMetricBestScenario, bestScenario?.scenario?.name || "-", bestScenario ? `周期总收益 ${asCompactMoney(bestScenario.result.totalFullRevenue)}` : "");
   setCompareMetric(refs.compareMetricMaxGap, `${asNum(maxGapWan, 1)} 万元`, `相对 ${baseline.scenario.name}`);
   if (refs.compareScenarioMessage) {
@@ -6014,12 +5996,7 @@ function renderCompare() {
       : `当前仅“${baseline.scenario.name}”完成测算。可在全口径收入配置页新增并命名方案，完成测算后自动加入对比。`;
   }
 
-  if (!activeCompareScenarioId || !available.some((item) => item.scenario.id === activeCompareScenarioId)) {
-    const bestNonBaseline = available
-      .filter((item) => item.scenario.id !== baseline.scenario.id)
-      .sort((a, b) => b.result.totalFullRevenue - a.result.totalFullRevenue)[0];
-    activeCompareScenarioId = bestNonBaseline?.scenario?.id || baseline.scenario.id;
-  }
+  activeCompareScenarioId = compareAnalysis.resolveActiveCompareScenarioId(available, baseline, activeCompareScenarioId);
   const focusScenario = available.find((item) => item.scenario.id === activeCompareScenarioId) || baseline;
   renderScenarioRankingChart(available, baseline);
   renderCompareTrendChart(available);

@@ -177,12 +177,80 @@
     return map[0].name;
   }
 
+  function buildAvailableScenarioResults(project = {}) {
+    const scenarios = Array.isArray(project.scenarios) ? project.scenarios : [];
+    const resultsByScenario = project.resultsByScenario || {};
+    return scenarios
+      .map((scenario) => ({
+        scenario,
+        result: resultsByScenario[scenario.id]
+      }))
+      .filter((item) => item.result);
+  }
+
+  function getBaselineCompareItem(available = []) {
+    return available.find((item) => item.scenario?.isBaseline) || available[0] || null;
+  }
+
+  function getFirstAnnualRow(item) {
+    const rows = item?.result?.annualRows || [];
+    return rows.find((row) => row.energyMwh > 0) || rows[0] || null;
+  }
+
+  function resolveSensitivitySelection(allFactors = [], selectedKeys = [], activeFactorKey = "") {
+    const allFactorKeys = allFactors.map((factor) => factor.key);
+    let nextSelectedKeys = Array.isArray(selectedKeys) && selectedKeys.length
+      ? selectedKeys.filter((key) => allFactorKeys.includes(key))
+      : allFactorKeys;
+    if (!nextSelectedKeys.length) {
+      nextSelectedKeys = allFactorKeys;
+    }
+    const selectedFactorSet = new Set(nextSelectedKeys);
+    const factors = allFactors.filter((factor) => selectedFactorSet.has(factor.key));
+    const nextActiveFactorKey = activeFactorKey && factors.some((factor) => factor.key === activeFactorKey)
+      ? activeFactorKey
+      : factors[0]?.key || "";
+    return {
+      selectedKeys: nextSelectedKeys,
+      activeFactorKey: nextActiveFactorKey,
+      factors
+    };
+  }
+
+  function summarizeScenarioComparison(available = [], baseline = null) {
+    const bestScenario = available.reduce((best, current) => {
+      if (!best) return current;
+      return current.result.totalFullRevenue > best.result.totalFullRevenue ? current : best;
+    }, null);
+    const maxGapWan = available.reduce((maxValue, item) => {
+      const gap = Math.abs(item.result.totalFullRevenue - baseline.result.totalFullRevenue) / 10000;
+      return Math.max(maxValue, gap);
+    }, 0);
+    return { bestScenario, maxGapWan };
+  }
+
+  function resolveActiveCompareScenarioId(available = [], baseline = null, activeScenarioId = "") {
+    if (activeScenarioId && available.some((item) => item.scenario.id === activeScenarioId)) {
+      return activeScenarioId;
+    }
+    const bestNonBaseline = available
+      .filter((item) => item.scenario.id !== baseline?.scenario?.id)
+      .sort((a, b) => b.result.totalFullRevenue - a.result.totalFullRevenue)[0];
+    return bestNonBaseline?.scenario?.id || baseline?.scenario?.id || "";
+  }
+
   return Object.freeze({
     sanitizeCompareSensitivitySettings,
     sensitivityAxisLabels,
     buildSensitivitySeries,
     buildCompareSensitivityFactors,
+    buildAvailableScenarioResults,
     resultComponentTotals,
-    detectTopDriver
+    detectTopDriver,
+    getBaselineCompareItem,
+    getFirstAnnualRow,
+    resolveActiveCompareScenarioId,
+    resolveSensitivitySelection,
+    summarizeScenarioComparison
   });
 });
