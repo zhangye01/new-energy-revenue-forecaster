@@ -12,6 +12,7 @@
 | CI | GitHub Actions 必须运行 `npm run check` |
 | 主控文件规模 | `app.js` 不允许超过 6200 行 |
 | 主控函数规模 | `app.js` 单个顶层函数不允许超过 120 行 |
+| 样式文件规模 | `styles.css` 不允许超过 5500 行，超过前必须先分区或拆分 |
 | 新模块测试 | `src/domain/*.js` 和 `src/ui/*.js` 新增模块必须有对应 `tests/*.test.js` |
 | 检查脚本 | 语法检查和测试必须自动发现文件，不允许在 `package.json` 手写长串 |
 | 静态完整性 | `index.html` 引用的本地脚本、样式、图片和 CSS 资源必须存在，DOM id 不允许重复 |
@@ -55,7 +56,7 @@ npm run check
 
 1. JavaScript 语法检查：`scripts/check-syntax.js` 自动扫描根脚本、`src/domain/`、`src/ui/` 和 `scripts/`。
 2. 业务模块和图表模块单元测试：`scripts/run-tests.js` 自动扫描 `tests/*.test.js`。
-3. 架构守护检查：`scripts/architecture-check.js` 检查分层、脚本顺序、`app.js` 行数和函数规模。
+3. 架构守护检查：`scripts/architecture-check.js` 检查分层、脚本顺序、`app.js` 行数和函数规模、`styles.css` 行数。
 4. 静态页面完整性检查：`scripts/static-check.js` 检查 `index.html` / `styles.css` 的本地资源引用、重复 id 和标题结构。
 5. 页面 smoke 契约检查：`scripts/smoke-check.js` 检查核心页面、关键 DOM 节点和启动脚本顺序。
 6. 发布仓库卫生检查：`scripts/release-check.js` 检查被 Git 追踪的本地缓存、个人绝对路径和高置信度密钥格式。

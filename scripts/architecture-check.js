@@ -6,6 +6,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const APP_JS_MAX_LINES = 6200;
 const APP_JS_MAX_FUNCTION_LINES = 120;
+const STYLES_CSS_MAX_LINES = 5500;
 
 function readText(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), "utf8");
@@ -89,6 +90,13 @@ function assertAppJsFunctionBudget() {
   oversized.forEach((item) => {
     fail(`app.js function ${item.name} has ${item.lines} lines (${item.start}-${item.end}); maximum is ${APP_JS_MAX_FUNCTION_LINES}.`);
   });
+}
+
+function assertStylesCssBudget() {
+  const count = lineCount("styles.css");
+  if (count > STYLES_CSS_MAX_LINES) {
+    fail(`styles.css has ${count} lines; maximum is ${STYLES_CSS_MAX_LINES}. Split or reorganize styles before adding more.`);
+  }
 }
 
 function assertModulesHaveTests() {
@@ -183,6 +191,7 @@ function assertSingleWorkflow() {
 function run() {
   assertAppJsBudget();
   assertAppJsFunctionBudget();
+  assertStylesCssBudget();
   assertModulesHaveTests();
   assertModulesAreInSyntaxCheck();
   assertTestsUseDiscovery();
