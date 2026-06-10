@@ -45,6 +45,7 @@ const projectModel = window.NE_PROJECT_MODEL;
 const energyDataRules = window.NE_ENERGY_DATA;
 const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
+const energyWorkspace = window.NE_ENERGY_WORKSPACE;
 const energyCharts = window.NE_ENERGY_CHARTS;
 const resultCharts = window.NE_RESULT_CHARTS;
 const scenarioCharts = window.NE_SCENARIO_CHARTS;
@@ -53,7 +54,7 @@ const historyCharts = window.NE_HISTORY_CHARTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !energyCharts || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !energyWorkspace || !energyCharts || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -4548,240 +4549,115 @@ function renderEnergySummary() {
     `年度上网电量范围 ${Math.min(...energyValues).toFixed(2)}-${Math.max(...energyValues).toFixed(2)} MWh${missingText}。`;
 }
 
-function renderEnergyWorkspaceState() {
-  const project = getActiveProject();
-  const hasProject = Boolean(project);
-  const createReady = hasProject && isProjectCreateCompleted(project);
-  const blockedMessage = "请先完成步骤1基础信息保存，再执行结算电量配置。";
-  const setTemplateStatus = (element, stateText, stateClass, titleText = "") => {
-    if (!element) return;
-    element.textContent = stateText;
-    element.classList.remove("ready", "pending", "blocked");
-    if (stateClass) {
-      element.classList.add(stateClass);
-    }
-    if (titleText) {
-      element.title = titleText;
-    } else {
-      element.removeAttribute("title");
-    }
-  };
-  const setEnergyMetricValue = (element, text) => {
-    if (!element) return;
-    element.textContent = text;
-  };
-  const setHistoryEntryButtonState = (enabled, hint = "") => {
-    if (!refs.energyToHistoryButton) return;
-    refs.energyToHistoryButton.disabled = !enabled;
-    if (hint) {
-      refs.energyToHistoryButton.title = hint;
-    } else {
-      refs.energyToHistoryButton.removeAttribute("title");
-    }
-  };
-  const setControlDisabled = (element, disabled) => {
-    if (element) {
-      element.disabled = disabled;
-    }
-  };
-  const setEnergyControlState = ({
-    annualExport = true,
-    annualFile = true,
-    annualImport = true,
-    typicalExport = true,
-    typicalFile = true,
-    typicalImport = true,
-    provinceApply = true
-  }) => {
-    setControlDisabled(refs.exportEnergyAnnualTemplateButton, annualExport);
-    setControlDisabled(refs.energyAnnualFileInput, annualFile);
-    setControlDisabled(refs.importEnergyAnnualFileButton, annualImport);
-    setControlDisabled(refs.exportEnergyTypicalTemplateButton, typicalExport);
-    setControlDisabled(refs.energyTypicalFileInput, typicalFile);
-    setControlDisabled(refs.importEnergyTypicalFileButton, typicalImport);
-    setControlDisabled(refs.applyEnergyProvinceCurveButton, provinceApply);
-  };
-  const resetStep2ActionPresentation = () => {
-    if (refs.exportEnergyTypicalTemplateButton) {
-      refs.exportEnergyTypicalTemplateButton.textContent = "导出典型年8760模板";
-    }
-    if (refs.importEnergyTypicalFileButton) {
-      refs.importEnergyTypicalFileButton.textContent = "读取文件并导入";
-      setEnergyButtonVariant(refs.importEnergyTypicalFileButton, "primary");
-    }
-    if (refs.applyEnergyProvinceCurveButton) {
-      refs.applyEnergyProvinceCurveButton.textContent = "调用所选省份典型曲线";
-      setEnergyButtonVariant(refs.applyEnergyProvinceCurveButton, "ghost");
-    }
-    setEnergyPaneCurrentState(refs.energyStep2TypicalPane, refs.energyStep2TypicalPaneStatus, "");
-    setEnergyPaneCurrentState(refs.energyStep2ProvincePane, refs.energyStep2ProvincePaneStatus, "");
-  };
-
-  if (!refs.energyImportMessage) return;
-
-  if (!hasProject) {
-    resetStep2ActionPresentation();
-    appState.energyStep2Choice = sanitizeEnergyStep2Choice(appState.energyStep2Choice);
-    renderEnergyStep2ChoiceState();
-    renderEnergyStep2ChoiceSummary(null);
-    refs.energyImportMessage.removeAttribute("data-project-id");
-    if (refs.energyProjectContext) {
-      refs.energyProjectContext.textContent = "请选择项目并完成基础信息保存后，再执行上网电量配置。";
-    }
-    setTemplateStatus(refs.energyTemplateAnnualStatus, "待进入项目", "blocked");
-    setTemplateStatus(refs.energyTemplateTypicalStatus, "待进入项目", "blocked");
-    setTemplateStatus(refs.energyTemplateProvinceStatus, "待进入项目", "blocked");
-    setEnergyMetricValue(refs.energyPeriodLabel, "-");
-    setEnergyMetricValue(refs.energyModeLabel, "-");
-    setEnergyMetricValue(refs.energyCompleteYearsLabel, "0/0");
-    setEnergyMetricValue(refs.energyTotalMwhLabel, "0.00");
-    setHistoryEntryButtonState(false, "请先进入项目并完成上网电量配置。");
-    setEnergyImportMessage("请先在“我的项目”进入一个项目，再执行模板导出与文件导入。", "info", { toast: false });
-    setEnergyControlState({});
-    applyEnergyModeUi("annual_hours");
-    return;
+function setEnergyTemplateStatus(element, status = {}) {
+  if (!element) return;
+  element.textContent = status.text || "";
+  element.classList.remove("ready", "pending", "blocked");
+  if (status.stateClass) {
+    element.classList.add(status.stateClass);
   }
-
-  const energyData = ensureProjectEnergyDataState(project);
-  const exports = ensureProjectEnergyTemplateExports(project);
-  const energyState = getEnergyCompletionState(project);
-  resetStep2ActionPresentation();
-  const isProjectSwitched = refs.energyImportMessage.dataset.projectId !== project.id;
-  if (isProjectSwitched) {
-    if (energyData.typicalCurveSource === "province_typical_curve") {
-      appState.energyStep2Choice = "province";
-    } else {
-      appState.energyStep2Choice = "typical";
-    }
+  if (status.title) {
+    element.title = status.title;
+  } else {
+    element.removeAttribute("title");
   }
+}
+
+function setEnergyMetricValue(element, text) {
+  if (element) element.textContent = text;
+}
+
+function setHistoryEntryButtonState(state = {}) {
+  if (!refs.energyToHistoryButton) return;
+  refs.energyToHistoryButton.disabled = !state.enabled;
+  if (state.title) {
+    refs.energyToHistoryButton.title = state.title;
+  } else {
+    refs.energyToHistoryButton.removeAttribute("title");
+  }
+}
+
+function setEnergyControlDisabled(element, disabled) {
+  if (element) element.disabled = disabled;
+}
+
+function setEnergyControlState(state = {}) {
+  setEnergyControlDisabled(refs.exportEnergyAnnualTemplateButton, state.annualExport);
+  setEnergyControlDisabled(refs.energyAnnualFileInput, state.annualFile);
+  setEnergyControlDisabled(refs.importEnergyAnnualFileButton, state.annualImport);
+  setEnergyControlDisabled(refs.exportEnergyTypicalTemplateButton, state.typicalExport);
+  setEnergyControlDisabled(refs.energyTypicalFileInput, state.typicalFile);
+  setEnergyControlDisabled(refs.importEnergyTypicalFileButton, state.typicalImport);
+  setEnergyControlDisabled(refs.applyEnergyProvinceCurveButton, state.provinceApply);
+}
+
+function applyEnergyStep2ActionPresentation(actions = {}) {
+  if (refs.exportEnergyTypicalTemplateButton) {
+    refs.exportEnergyTypicalTemplateButton.textContent = actions.typicalExportText || "导出典型年8760模板";
+  }
+  if (refs.importEnergyTypicalFileButton) {
+    refs.importEnergyTypicalFileButton.textContent = actions.typicalImportText || "读取文件并导入";
+    setEnergyButtonVariant(refs.importEnergyTypicalFileButton, actions.typicalImportVariant || "primary");
+  }
+  if (refs.applyEnergyProvinceCurveButton) {
+    refs.applyEnergyProvinceCurveButton.textContent = actions.provinceApplyText || "调用所选省份典型曲线";
+    setEnergyButtonVariant(refs.applyEnergyProvinceCurveButton, actions.provinceApplyVariant || "ghost");
+  }
+  setEnergyPaneCurrentState(refs.energyStep2TypicalPane, refs.energyStep2TypicalPaneStatus, actions.typicalPaneMessage || "");
+  setEnergyPaneCurrentState(refs.energyStep2ProvincePane, refs.energyStep2ProvincePaneStatus, actions.provincePaneMessage || "");
+}
+
+function applyEnergyWorkspaceModel(model, project) {
+  applyEnergyStep2ActionPresentation(model.step2Actions);
+  appState.energyStep2Choice = sanitizeEnergyStep2Choice(model.nextStep2Choice);
   renderEnergyStep2ChoiceState();
   renderEnergyStep2ChoiceSummary(project);
-  const { completeYears, totalYears, annualInputYears, totalEnergyMwh } = energyState;
-  const periodText = createReady ? getForecastPeriodDisplayRange(project) : "待保存";
-  const projectContextText = createReady
-    ? `当前项目：${project.name} | ${getProvinceName(project.province)} / ${getAssetTypeLabel(project.assetType)} / ${getSiteTypeLabel(project.siteType)} / ${getStorageConfigText(project)} | 预测周期 ${periodText}`
-    : `当前项目：${project.name}。基础信息尚未完成，请先补齐省份、风/光类型、陆/海类型、配储信息、装机容量、开始年份和预测周期。`;
-  let modeLabel = "待配置";
-  if (annualInputYears > 0) {
-    if (energyData.typicalCurveSource === "province_typical_curve") {
-      modeLabel = "逐年总量 + 省份典型曲线";
-    } else if (energyData.typicalCurveSource === "typical_curve_8760") {
-      modeLabel = "逐年总量 + 典型年8760小时模板";
-    } else {
-      modeLabel = "仅逐年总量";
-    }
+  applyEnergyModeUi(model.mode);
+  if (model.resetMessageProjectId) {
+    refs.energyImportMessage.removeAttribute("data-project-id");
+  } else if (model.projectIdForMessage) {
+    refs.energyImportMessage.dataset.projectId = model.projectIdForMessage;
   }
-  applyEnergyModeUi(energyData.mode);
-  refs.energyImportMessage.dataset.projectId = project.id;
-  if (refs.energyProjectContext) {
-    refs.energyProjectContext.textContent = projectContextText;
+  if (refs.energyProjectContext) refs.energyProjectContext.textContent = model.projectContext;
+  setEnergyTemplateStatus(refs.energyTemplateAnnualStatus, model.templateStatuses.annual);
+  setEnergyTemplateStatus(refs.energyTemplateTypicalStatus, model.templateStatuses.typical);
+  setEnergyTemplateStatus(refs.energyTemplateProvinceStatus, model.templateStatuses.province);
+  setEnergyMetricValue(refs.energyPeriodLabel, model.metrics.period);
+  setEnergyMetricValue(refs.energyModeLabel, model.metrics.mode);
+  setEnergyMetricValue(refs.energyCompleteYearsLabel, model.metrics.completeYears);
+  setEnergyMetricValue(refs.energyTotalMwhLabel, model.metrics.totalMwh);
+  setHistoryEntryButtonState(model.historyButton);
+  setEnergyControlState(model.controls);
+  if (model.message) {
+    setEnergyImportMessage(model.message.text, model.message.tone, { toast: false });
   }
-  setEnergyMetricValue(refs.energyPeriodLabel, periodText);
-  setEnergyMetricValue(refs.energyModeLabel, modeLabel);
-  setEnergyMetricValue(refs.energyCompleteYearsLabel, `${completeYears}/${totalYears || 0}`);
-  setEnergyMetricValue(refs.energyTotalMwhLabel, totalEnergyMwh.toFixed(2));
-  const energyReadyForHistory = energyState.ready;
-  setHistoryEntryButtonState(
-    energyReadyForHistory,
-    energyReadyForHistory ? "进入下一步，查看历史现货电价分析。" : "请先完成全部预测年份的结算电量配置。"
-  );
+}
 
-  if (!createReady) {
-    setTemplateStatus(refs.energyTemplateAnnualStatus, "待基础信息保存", "blocked");
-    setTemplateStatus(refs.energyTemplateTypicalStatus, "待基础信息保存", "blocked");
-    setTemplateStatus(refs.energyTemplateProvinceStatus, "待基础信息保存", "blocked");
-    setEnergyControlState({});
-    setEnergyImportMessage(blockedMessage, "warn", { toast: false });
-    return;
-  }
-
-  const annualReady = totalYears > 0 && annualInputYears === totalYears;
-  const hasTypicalCurve = energyState.hasTypicalCurve;
-  setTemplateStatus(
-    refs.energyTemplateAnnualStatus,
-    annualInputYears > 0 ? `已录入 ${annualInputYears}/${totalYears} 年` : (exports.annual_hours ? `已导出 ${formatExportStatusTime(exports.annual_hours)}` : "未导出"),
-    annualReady ? "ready" : ((annualInputYears > 0 || exports.annual_hours) ? "pending" : "pending"),
-    exports.annual_hours || ""
-  );
-  setTemplateStatus(
-    refs.energyTemplateTypicalStatus,
-    energyData.typicalCurveSource === "typical_curve_8760"
-      ? "已导入典型年8760小时模板"
-      : (exports.typical_curve_8760 ? `已导出 ${formatExportStatusTime(exports.typical_curve_8760)}` : "待导出"),
-    energyData.typicalCurveSource === "typical_curve_8760" ? "ready" : (exports.typical_curve_8760 ? "pending" : "pending"),
-    exports.typical_curve_8760 || ""
-  );
-  setTemplateStatus(
-    refs.energyTemplateProvinceStatus,
-    energyData.typicalCurveSource === "province_typical_curve"
-      ? `已调用 ${describeProvinceTypicalCurve(project)} 典型曲线`
-      : (exports.province_typical_curve ? `最近调用 ${formatExportStatusTime(exports.province_typical_curve)}` : "待调用"),
-    energyData.typicalCurveSource === "province_typical_curve" ? "ready" : "pending",
-    exports.province_typical_curve || ""
-  );
-
-  if (annualReady) {
-    if (energyData.typicalCurveSource === "typical_curve_8760") {
-      if (refs.exportEnergyTypicalTemplateButton) {
-        refs.exportEnergyTypicalTemplateButton.textContent = "重新导出模板";
-      }
-      if (refs.importEnergyTypicalFileButton) {
-        refs.importEnergyTypicalFileButton.textContent = "读取文件并更新典型曲线";
-        setEnergyButtonVariant(refs.importEnergyTypicalFileButton, "ghost");
-      }
-      setEnergyPaneCurrentState(
-        refs.energyStep2TypicalPane,
-        refs.energyStep2TypicalPaneStatus,
-        "当前正在使用这套典型年8760模板；如需替换，可重新上传覆盖。"
-      );
-    } else if (energyData.typicalCurveSource === "province_typical_curve") {
-      if (refs.applyEnergyProvinceCurveButton) {
-        refs.applyEnergyProvinceCurveButton.textContent = "重新调用当前省份曲线";
-      }
-      setEnergyPaneCurrentState(
-        refs.energyStep2ProvincePane,
-        refs.energyStep2ProvincePaneStatus,
-        `当前正在使用 ${describeProvinceTypicalCurve(project)} 典型曲线；如需刷新，可重新调用。`
-      );
-    }
-  }
-
-    setEnergyControlState({
-      annualExport: false,
-      annualFile: false,
-      annualImport: false,
-      typicalExport: false,
-      typicalFile: !annualReady,
-      typicalImport: !annualReady,
-      provinceApply: !annualReady
-    });
-
-  const currentMessage = String(refs.energyImportMessage.textContent || "").trim();
-  if (
-    isProjectSwitched
-    || !currentMessage
-    || currentMessage === blockedMessage
-    || currentMessage.includes("请先在“我的项目”进入一个项目")
-    || currentMessage.includes("请先创建")
-    || currentMessage.includes("支持自动识别")
-    || currentMessage.includes("当前识别模式")
-    || currentMessage.includes("当前已生成")
-    || currentMessage.includes("当前生成")
-  ) {
-    if (!annualInputYears) {
-      setEnergyImportMessage("步骤1必做：请先导出并上传逐年总量模板，填写测算周期内各年的总小时数。", "info", { toast: false });
-    } else if (!annualReady) {
-      setEnergyImportMessage(`逐年总量已录入 ${annualInputYears}/${totalYears} 年，请先补齐全部年度总小时数。`, "warn", { toast: false });
-    } else if (!hasTypicalCurve) {
-      setEnergyImportMessage("步骤2二选一：请上传典型年8760小时模板，或直接调用所选省份典型曲线。", "info", { toast: false });
-    } else if (energyReadyForHistory) {
-      setEnergyImportMessage(`逐年总量与典型曲线来源已配置完成，可进入历史电价分析。当前已生成 ${completeYears}/${totalYears} 年上网电量。`, "success", { toast: false });
-    } else {
-      const missingYears = listMissingEnergyYears(project, 6);
-      const missingHint = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "";
-      setEnergyImportMessage(`已完成逐年总量与典型曲线配置，当前生成 ${completeYears}/${totalYears} 年上网电量${missingHint}。`, "warn", { toast: false });
-    }
-  }
+function renderEnergyWorkspaceState() {
+  if (!refs.energyImportMessage) return;
+  const project = getActiveProject();
+  const createReady = Boolean(project && isProjectCreateCompleted(project));
+  const energyState = project ? getEnergyCompletionState(project) : {};
+  const model = energyWorkspace.buildEnergyWorkspaceViewModel({
+    project,
+    createReady,
+    energyState,
+    exports: project ? ensureProjectEnergyTemplateExports(project) : {},
+    currentMessage: refs.energyImportMessage.textContent || "",
+    isProjectSwitched: Boolean(project && refs.energyImportMessage.dataset.projectId !== project.id),
+    activeStep2Choice: appState.energyStep2Choice,
+    missingYears: project ? listMissingEnergyYears(project, 6) : [],
+    labels: {
+      periodText: project && createReady ? getForecastPeriodDisplayRange(project) : "待保存",
+      provinceName: project ? getProvinceName(project.province) : "",
+      assetTypeLabel: project ? getAssetTypeLabel(project.assetType) : "",
+      siteTypeLabel: project ? getSiteTypeLabel(project.siteType) : "",
+      storageText: project ? getStorageConfigText(project) : "",
+      provinceCurveText: project ? describeProvinceTypicalCurve(project) : ""
+    },
+    formatExportTime: formatExportStatusTime
+  });
+  applyEnergyWorkspaceModel(model, project);
 }
 
 function ensureEnergyCurveChart() {
@@ -6805,14 +6681,35 @@ function renderResultCharts(project, scenario, result) {
   queueResultChartsResize();
 }
 
-function renderResults() {
-  const project = getActiveProject();
+function resetResultDom() {
   if (refs.resultMetricGrid) refs.resultMetricGrid.innerHTML = "";
   if (refs.resultInsightList) refs.resultInsightList.innerHTML = "";
   if (refs.resultAssumptionList) refs.resultAssumptionList.innerHTML = "";
   if (refs.annualResultBody) refs.annualResultBody.innerHTML = "";
   if (refs.hourlyResultBody) refs.hourlyResultBody.innerHTML = "";
   if (refs.hourlyPreviewHint) refs.hourlyPreviewHint.textContent = "等待测算";
+}
+
+function renderEmptyResultMetrics() {
+  if (!refs.resultMetricGrid) return;
+  refs.resultMetricGrid.innerHTML = [
+    "首年全口径收入",
+    "首年度电净价",
+    "周期全口径收入",
+    "周期平均度电净价",
+    "周期总上网电量",
+    "生效场景"
+  ].map((label) => `
+    <article class="metric-card">
+      <div class="label">${label}</div>
+      <div class="value">-</div>
+    </article>
+  `).join("");
+}
+
+function renderResults() {
+  const project = getActiveProject();
+  resetResultDom();
   setResultReportView(activeResultReportView);
   if (!project) {
     updatePrintReportHeader(null, null);
@@ -6841,21 +6738,7 @@ function renderResults() {
     if (refs.resultExecutiveSummary) {
       refs.resultExecutiveSummary.textContent = "当前基准场景尚未生成测算结果。点击“发起基准测算”后，将自动形成简报摘要、图表与明细附表。";
     }
-    if (refs.resultMetricGrid) {
-      refs.resultMetricGrid.innerHTML = [
-        "首年全口径收入",
-        "首年度电净价",
-        "周期全口径收入",
-        "周期平均度电净价",
-        "周期总上网电量",
-        "生效场景"
-      ].map((label) => `
-        <article class="metric-card">
-          <div class="label">${label}</div>
-          <div class="value">-</div>
-        </article>
-      `).join("");
-    }
+    renderEmptyResultMetrics();
     renderResultChartsPlaceholder("请先发起基准测算");
     return;
   }
