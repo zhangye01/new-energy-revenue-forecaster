@@ -111,7 +111,6 @@ const LT_PRICING_MODE_SET = new Set(["auto", "manual"]);
 const ENV_VALUE_MODE_SET = new Set(["global", "manual"]);
 const FEE_CONFIG_MODE_SET = new Set(["global", "manual"]);
 const RESULT_REPORT_VIEW_SET = new Set(["annual", "price", "detail"]);
-const ENV_VALUE_RATIO_KEYS = new Set(["greenCertRealizeRatio", "greenPremiumRealizeRatio", "carbonRealizeRatio"]);
 const MAP_LEVEL_SET = new Set(["nation", "province"]);
 const HISTORY_MONTH_LABELS = historyAnalysis.HISTORY_MONTH_LABELS;
 const HISTORY_HEAT_HOUR_LABELS = historyAnalysis.HISTORY_HEAT_HOUR_LABELS;
@@ -5573,15 +5572,6 @@ function toggleBaselineLock() {
   renderAll();
 }
 
-function parseBatchValue(spec, rawText) {
-  const num = Number(rawText);
-  if (!Number.isFinite(num)) return null;
-  if (spec.type === "percent") {
-    return clamp(num / 100, spec.min / 100, spec.max / 100);
-  }
-  return clamp(num, spec.min, spec.max);
-}
-
 function applyBatchParameter() {
   const project = getActiveProject();
   if (!project) return;
@@ -5589,65 +5579,21 @@ function applyBatchParameter() {
   const key = refs.batchParamKey.value;
   const spec = BATCH_PARAM_SPECS[key];
   if (!spec) return;
-  const parsed = parseBatchValue(spec, refs.batchParamValue.value.trim());
-  if (parsed === null) {
-    refs.scenarioMessage.textContent = "批量参数值无效，请输入数字。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-    return;
-  }
-  const scope = refs.batchTargetScope.value;
-  let updated = 0;
-  let skippedBaseline = 0;
-  let skippedLocked = 0;
-  let skippedSpace = 0;
-  for (const scenario of project.scenarios) {
-    if (scope === "non_baseline" && scenario.isBaseline) {
-      skippedBaseline += 1;
-      continue;
-    }
-    if (scenario.locked) {
-      skippedLocked += 1;
-      continue;
-    }
-    if (key === "carbonPrice" && project.siteType !== "offshore") {
-      scenario.config.carbonPrice = 0;
-      scenario.config.carbonEnabled = false;
-      scenario.config.carbonRealizeRatio = 0;
-    } else if (key === "carbonRealizeRatio" && project.siteType !== "offshore") {
-      scenario.config.carbonRealizeRatio = 0;
-    } else if (ENV_VALUE_RATIO_KEYS.has(key)) {
-      const nextConfig = { ...scenario.config, [key]: parsed };
-      if (project.siteType !== "offshore") {
-        nextConfig.carbonRealizeRatio = 0;
-      }
-      const allocation = getEnvValueAllocation(project, nextConfig);
-      if (allocation.totalRatio > 1 + 0.000001) {
-        skippedSpace += 1;
-        continue;
-      }
-      scenario.config[key] = parsed;
-    } else {
-      scenario.config[key] = parsed;
-    }
-    scenario.updatedAt = new Date().toISOString();
-    updated += 1;
-  }
-
-  if (!updated) {
-    refs.scenarioMessage.textContent = "没有可更新的场景（可能被锁定或范围过滤）。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
+  const result = scenarioModel.applyBatchParameter(project, {
+    key,
+    spec,
+    rawValue: refs.batchParamValue.value.trim(),
+    scope: refs.batchTargetScope.value,
+    nowIso: () => new Date().toISOString(),
+    getEnvValueAllocation
+  });
+  if (!result.ok || !result.updated) {
+    setScenarioImportMessage(result.message, "error");
     return;
   }
 
   markDownstreamStale(project, "scenario-page");
-  refs.scenarioMessage.textContent = `批量更新完成：${updated} 个场景已更新，跳过基准 ${skippedBaseline} 个，跳过锁定 ${skippedLocked} 个。`;
-  if (skippedSpace) {
-    refs.scenarioMessage.textContent += ` 另有 ${skippedSpace} 个场景因环境价值兑现空间超过100%未更新。`;
-  }
-  refs.scenarioMessage.style.borderColor = "#8fb48d";
-  refs.scenarioMessage.style.background = "#f1fbf1";
+  setScenarioImportMessage(result.message, "success");
   renderAll();
 }
 

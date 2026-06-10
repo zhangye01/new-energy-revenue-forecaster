@@ -2,8 +2,10 @@
 
 const assert = require("node:assert/strict");
 const {
+  applyBatchParameter,
   defaultScenarioConfig,
   normalizeLtConvergeStep,
+  parseBatchValue,
   sanitizeScenario
 } = require("../src/domain/scenario-model");
 
@@ -114,5 +116,114 @@ assert.equal(sanitized.config.carbonPrice, 0);
 assert.equal(sanitized.config.feeConfigMode, "manual");
 assert.deepEqual(Object.keys(sanitized.config.feeManualValuesByYear), ["2026", "2028"]);
 assert.equal(sanitized.config.storageArbitragePrice, 0);
+
+assert.equal(parseBatchValue({ type: "percent", min: 0, max: 100 }, "36"), 0.36);
+assert.equal(parseBatchValue({ type: "number", min: 0, max: 100 }, "120"), 100);
+assert.equal(parseBatchValue({ type: "number", min: 0, max: 100 }, "bad"), null);
+
+const batchProject = {
+  siteType: "offshore",
+  scenarios: [
+    {
+      id: "base",
+      isBaseline: true,
+      locked: false,
+      updatedAt: "",
+      config: {
+        greenCertRealizeRatio: 0.4,
+        greenPremiumRealizeRatio: 0.2,
+        carbonRealizeRatio: 0.1
+      }
+    },
+    {
+      id: "locked",
+      isBaseline: false,
+      locked: true,
+      updatedAt: "",
+      config: {
+        greenCertRealizeRatio: 0.2,
+        greenPremiumRealizeRatio: 0.2,
+        carbonRealizeRatio: 0.1
+      }
+    },
+    {
+      id: "open",
+      isBaseline: false,
+      locked: false,
+      updatedAt: "",
+      config: {
+        greenCertRealizeRatio: 0.2,
+        greenPremiumRealizeRatio: 0.2,
+        carbonRealizeRatio: 0.1
+      }
+    }
+  ]
+};
+const batchResult = applyBatchParameter(batchProject, {
+  key: "greenCertRealizeRatio",
+  spec: { type: "percent", min: 0, max: 100 },
+  rawValue: "40",
+  scope: "non_baseline",
+  nowIso: () => "2026-06-10T00:00:00.000Z",
+  getEnvValueAllocation: (_project, config) => ({
+    totalRatio: config.greenCertRealizeRatio + config.greenPremiumRealizeRatio + config.carbonRealizeRatio
+  })
+});
+assert.equal(batchResult.ok, true);
+assert.equal(batchResult.updated, 1);
+assert.equal(batchResult.skippedBaseline, 1);
+assert.equal(batchResult.skippedLocked, 1);
+assert.equal(batchProject.scenarios[0].config.greenCertRealizeRatio, 0.4);
+assert.equal(batchProject.scenarios[2].config.greenCertRealizeRatio, 0.4);
+assert.equal(batchProject.scenarios[2].updatedAt, "2026-06-10T00:00:00.000Z");
+assert.match(batchResult.message, /批量更新完成：1 个场景已更新/);
+
+const skipSpaceResult = applyBatchParameter(batchProject, {
+  key: "greenPremiumRealizeRatio",
+  spec: { type: "percent", min: 0, max: 100 },
+  rawValue: "90",
+  scope: "all",
+  getEnvValueAllocation: (_project, config) => ({
+    totalRatio: config.greenCertRealizeRatio + config.greenPremiumRealizeRatio + config.carbonRealizeRatio
+  })
+});
+assert.equal(skipSpaceResult.updated, 0);
+assert.equal(skipSpaceResult.skippedSpace, 2);
+assert.match(skipSpaceResult.message, /没有可更新的场景/);
+
+const onshoreProject = {
+  siteType: "onshore",
+  scenarios: [
+    {
+      isBaseline: false,
+      locked: false,
+      updatedAt: "",
+      config: {
+        carbonPrice: 5,
+        carbonEnabled: true,
+        carbonRealizeRatio: 0.5
+      }
+    }
+  ]
+};
+const carbonResult = applyBatchParameter(onshoreProject, {
+  key: "carbonPrice",
+  spec: { type: "number", min: 0, max: 2000 },
+  rawValue: "8",
+  nowIso: "fixed-time"
+});
+assert.equal(carbonResult.updated, 1);
+assert.equal(onshoreProject.scenarios[0].config.carbonPrice, 0);
+assert.equal(onshoreProject.scenarios[0].config.carbonEnabled, false);
+assert.equal(onshoreProject.scenarios[0].config.carbonRealizeRatio, 0);
+assert.equal(onshoreProject.scenarios[0].updatedAt, "fixed-time");
+
+const badBatch = applyBatchParameter(batchProject, {
+  key: "marketOpFee",
+  spec: { type: "number", min: 0, max: 2000 },
+  rawValue: "bad"
+});
+assert.equal(badBatch.ok, false);
+assert.equal(badBatch.message, "批量参数值无效，请输入数字。");
 
 console.log("scenario model tests passed");

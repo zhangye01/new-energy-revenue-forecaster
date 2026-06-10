@@ -188,9 +188,97 @@
     return next;
   }
 
+  function parseBatchValue(spec, rawText) {
+    const num = Number(rawText);
+    if (!Number.isFinite(num)) return null;
+    if (spec?.type === "percent") {
+      return clamp(num / 100, Number(spec.min) / 100, Number(spec.max) / 100);
+    }
+    return clamp(num, Number(spec?.min), Number(spec?.max));
+  }
+
+  function buildBatchResultMessage(result) {
+    if (!result.updated) {
+      return "没有可更新的场景（可能被锁定或范围过滤）。";
+    }
+    let message = `批量更新完成：${result.updated} 个场景已更新，跳过基准 ${result.skippedBaseline} 个，跳过锁定 ${result.skippedLocked} 个。`;
+    if (result.skippedSpace) {
+      message += ` 另有 ${result.skippedSpace} 个场景因环境价值兑现空间超过100%未更新。`;
+    }
+    return message;
+  }
+
+  function applyBatchParameter(project = {}, input = {}) {
+    const {
+      key = "",
+      spec = null,
+      rawValue = "",
+      scope = "",
+      nowIso = () => new Date().toISOString(),
+      getEnvValueAllocation = () => ({ totalRatio: 0 })
+    } = input;
+    if (!spec) return { ok: false, message: "批量参数项无效。" };
+    const parsed = parseBatchValue(spec, rawValue);
+    if (parsed === null) {
+      return { ok: false, message: "批量参数值无效，请输入数字。" };
+    }
+
+    const envValueRatioKeys = new Set([
+      "greenCertRealizeRatio",
+      "greenPremiumRealizeRatio",
+      "carbonRealizeRatio"
+    ]);
+    const result = {
+      ok: true,
+      updated: 0,
+      skippedBaseline: 0,
+      skippedLocked: 0,
+      skippedSpace: 0,
+      message: ""
+    };
+
+    (project.scenarios || []).forEach((scenario) => {
+      if (scope === "non_baseline" && scenario.isBaseline) {
+        result.skippedBaseline += 1;
+        return;
+      }
+      if (scenario.locked) {
+        result.skippedLocked += 1;
+        return;
+      }
+      if (key === "carbonPrice" && project.siteType !== "offshore") {
+        scenario.config.carbonPrice = 0;
+        scenario.config.carbonEnabled = false;
+        scenario.config.carbonRealizeRatio = 0;
+      } else if (key === "carbonRealizeRatio" && project.siteType !== "offshore") {
+        scenario.config.carbonRealizeRatio = 0;
+      } else if (envValueRatioKeys.has(key)) {
+        const nextConfig = { ...scenario.config, [key]: parsed };
+        if (project.siteType !== "offshore") {
+          nextConfig.carbonRealizeRatio = 0;
+        }
+        const allocation = getEnvValueAllocation(project, nextConfig);
+        if (allocation.totalRatio > 1 + 0.000001) {
+          result.skippedSpace += 1;
+          return;
+        }
+        scenario.config[key] = parsed;
+      } else {
+        scenario.config[key] = parsed;
+      }
+      scenario.updatedAt = typeof nowIso === "function" ? nowIso() : nowIso;
+      result.updated += 1;
+    });
+
+    result.message = buildBatchResultMessage(result);
+    return result;
+  }
+
   return Object.freeze({
+    applyBatchParameter,
     defaultScenarioConfig,
     normalizeLtConvergeStep,
+    parseBatchValue,
     sanitizeScenario
   });
 });
