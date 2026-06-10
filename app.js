@@ -2976,25 +2976,7 @@ function initProvinceSelect() {
 }
 
 function syncCreateStorageFieldsUi() {
-  const storageEnabled = refs.createHasStorage?.value === "yes";
-  if (refs.createStoragePowerField) {
-    refs.createStoragePowerField.hidden = !storageEnabled;
-  }
-  if (refs.createStorageDurationField) {
-    refs.createStorageDurationField.hidden = !storageEnabled;
-  }
-  if (refs.createStorageNoteField) {
-    refs.createStorageNoteField.hidden = !storageEnabled;
-  }
-  if (refs.createStoragePowerMw) {
-    refs.createStoragePowerMw.disabled = !storageEnabled;
-  }
-  if (refs.createStorageDurationH) {
-    refs.createStorageDurationH.disabled = !storageEnabled;
-  }
-  if (refs.createStorageNote) {
-    refs.createStorageNote.disabled = !storageEnabled;
-  }
+  energyWorkspace.applyCreateStorageFieldsState({ refs });
 }
 
 function resetCreateProjectFormForNew() {
@@ -3079,32 +3061,13 @@ function syncCreateProjectFormWithActiveProject() {
 }
 
 function renderCreateWorkspaceState() {
-  if (!refs.createToEnergyButton) return;
   const project = getActiveProject();
   const ready = Boolean(project) && isProjectCreateCompleted(project);
-  refs.createToEnergyButton.disabled = !ready;
-  if (ready) {
-    refs.createToEnergyButton.removeAttribute("title");
-  } else {
-    refs.createToEnergyButton.title = "请先保存并完成项目基础信息。";
-  }
+  energyWorkspace.applyCreateWorkspaceEntryState({ refs, ready });
 }
 
 function setCreateSaveMessage(text, tone = "info") {
-  if (!refs.createSaveMessage) return;
-  refs.createSaveMessage.textContent = text;
-  if (tone === "success") {
-    refs.createSaveMessage.style.borderColor = "#8fb48d";
-    refs.createSaveMessage.style.background = "#f1fbf1";
-    return;
-  }
-  if (tone === "warn") {
-    refs.createSaveMessage.style.borderColor = "#d6bb90";
-    refs.createSaveMessage.style.background = "#fff8ed";
-    return;
-  }
-  refs.createSaveMessage.style.borderColor = "#97b5d8";
-  refs.createSaveMessage.style.background = "#f6faff";
+  energyWorkspace.applyCreateSaveMessage({ refs, text, tone });
 }
 
 function initBatchParamSelect() {

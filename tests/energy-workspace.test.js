@@ -4,6 +4,9 @@ const assert = require("node:assert/strict");
 const {
   BLOCKED_MESSAGE,
   applyCreateProjectFormValues,
+  applyCreateSaveMessage,
+  applyCreateStorageFieldsState,
+  applyCreateWorkspaceEntryState,
   bindCreateEnergyEvents,
   buildCreateProjectFormValues,
   buildEnergySummaryNote,
@@ -17,6 +20,7 @@ class FakeTarget {
   constructor(dataset = {}) {
     this.dataset = dataset;
     this.handlers = {};
+    this.style = {};
   }
 
   addEventListener(name, handler) {
@@ -34,6 +38,10 @@ class FakeTarget {
     };
     this.handlers[name]?.(nextEvent);
     return nextEvent;
+  }
+
+  removeAttribute(name) {
+    delete this[name];
   }
 }
 
@@ -213,6 +221,44 @@ assert.equal(createFormRefs.createStoragePowerMw.value, "64");
 assert.equal(createFormTargets["#create-forecast-years"].value, "25");
 assert.equal(createFormTargets["#create-note"].value, "示例项目");
 assert.equal(applyCreateProjectFormValues(), false);
+
+const storageRefs = {
+  createHasStorage: new FakeTarget(),
+  createStoragePowerField: new FakeTarget(),
+  createStorageDurationField: new FakeTarget(),
+  createStorageNoteField: new FakeTarget(),
+  createStoragePowerMw: new FakeTarget(),
+  createStorageDurationH: new FakeTarget(),
+  createStorageNote: new FakeTarget()
+};
+storageRefs.createHasStorage.value = "yes";
+assert.equal(applyCreateStorageFieldsState({ refs: storageRefs }), true);
+assert.equal(storageRefs.createStoragePowerField.hidden, false);
+assert.equal(storageRefs.createStoragePowerMw.disabled, false);
+storageRefs.createHasStorage.value = "no";
+assert.equal(applyCreateStorageFieldsState({ refs: storageRefs }), false);
+assert.equal(storageRefs.createStorageDurationField.hidden, true);
+assert.equal(storageRefs.createStorageDurationH.disabled, true);
+
+const createToEnergyButton = new FakeTarget();
+assert.equal(applyCreateWorkspaceEntryState({ refs: { createToEnergyButton }, ready: false }), true);
+assert.equal(createToEnergyButton.disabled, true);
+assert.equal(createToEnergyButton.title, "请先保存并完成项目基础信息。");
+assert.equal(applyCreateWorkspaceEntryState({ refs: { createToEnergyButton }, ready: true }), true);
+assert.equal(createToEnergyButton.disabled, false);
+assert.equal(createToEnergyButton.title, undefined);
+assert.equal(applyCreateWorkspaceEntryState(), false);
+
+const createSaveMessage = new FakeTarget();
+assert.equal(applyCreateSaveMessage({ refs: { createSaveMessage }, text: "保存成功", tone: "success" }), true);
+assert.equal(createSaveMessage.textContent, "保存成功");
+assert.equal(createSaveMessage.style.borderColor, "#8fb48d");
+assert.equal(createSaveMessage.style.background, "#f1fbf1");
+applyCreateSaveMessage({ refs: { createSaveMessage }, text: "需处理", tone: "warn" });
+assert.equal(createSaveMessage.style.borderColor, "#d6bb90");
+applyCreateSaveMessage({ refs: { createSaveMessage }, text: "提示" });
+assert.equal(createSaveMessage.style.background, "#f6faff");
+assert.equal(applyCreateSaveMessage(), false);
 
 assert.equal(resolveModeLabel(0, ""), "待配置");
 assert.equal(resolveModeLabel(2, ""), "仅逐年总量");

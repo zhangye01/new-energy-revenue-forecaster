@@ -167,6 +167,66 @@
     return true;
   }
 
+  function applyCreateStorageFieldsState(input = {}) {
+    const { refs = {} } = input;
+    const storageEnabled = refs.createHasStorage?.value === "yes";
+    [
+      refs.createStoragePowerField,
+      refs.createStorageDurationField,
+      refs.createStorageNoteField
+    ].forEach((field) => {
+      if (field) field.hidden = !storageEnabled;
+    });
+    [
+      refs.createStoragePowerMw,
+      refs.createStorageDurationH,
+      refs.createStorageNote
+    ].forEach((field) => {
+      if (field) field.disabled = !storageEnabled;
+    });
+    return storageEnabled;
+  }
+
+  function applyCreateWorkspaceEntryState(input = {}) {
+    const {
+      refs = {},
+      ready = false,
+      disabledTitle = "请先保存并完成项目基础信息。"
+    } = input;
+    if (!refs.createToEnergyButton) return false;
+    refs.createToEnergyButton.disabled = !ready;
+    if (ready) {
+      refs.createToEnergyButton.removeAttribute?.("title");
+    } else {
+      refs.createToEnergyButton.title = disabledTitle;
+    }
+    return true;
+  }
+
+  function getCreateSaveMessageStyle(tone = "info") {
+    if (tone === "success") {
+      return { borderColor: "#8fb48d", background: "#f1fbf1" };
+    }
+    if (tone === "warn") {
+      return { borderColor: "#d6bb90", background: "#fff8ed" };
+    }
+    return { borderColor: "#97b5d8", background: "#f6faff" };
+  }
+
+  function applyCreateSaveMessage(input = {}) {
+    const {
+      refs = {},
+      text = "",
+      tone = "info"
+    } = input;
+    if (!refs.createSaveMessage) return false;
+    refs.createSaveMessage.textContent = text;
+    const style = getCreateSaveMessageStyle(tone);
+    refs.createSaveMessage.style.borderColor = style.borderColor;
+    refs.createSaveMessage.style.background = style.background;
+    return true;
+  }
+
   function templateStatus(text, stateClass, title = "") {
     return { text, stateClass, title };
   }
@@ -436,6 +496,9 @@
   return Object.freeze({
     BLOCKED_MESSAGE,
     applyCreateProjectFormValues,
+    applyCreateSaveMessage,
+    applyCreateStorageFieldsState,
+    applyCreateWorkspaceEntryState,
     bindCreateEnergyEvents,
     buildCreateProjectFormValues,
     buildEnergySummaryNote,
