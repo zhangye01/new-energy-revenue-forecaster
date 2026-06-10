@@ -4,7 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const APP_JS_MAX_LINES = 9000;
+const APP_JS_MAX_LINES = 7000;
+const APP_JS_MAX_FUNCTION_LINES = 180;
 
 function readText(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), "utf8");
@@ -32,6 +33,63 @@ function assertAppJsBudget() {
   if (count > APP_JS_MAX_LINES) {
     fail(`app.js has ${count} lines; maximum is ${APP_JS_MAX_LINES}. Split page logic before adding more.`);
   }
+}
+
+function collectTopLevelFunctionSizes(relativePath) {
+  const lines = readText(relativePath).split(/\r?\n/);
+  const stack = [];
+  const functions = [];
+  const declarationPattern = /^function\s+([A-Za-z0-9_$]+)/;
+
+  lines.forEach((line, index) => {
+    const match = line.match(declarationPattern);
+    if (match) {
+      stack.push({
+        name: match[1],
+        start: index + 1,
+        depth: 0,
+        seenOpeningBrace: false
+      });
+    }
+
+    for (const char of line) {
+      if (char === "{") {
+        stack.forEach((item) => {
+          if (item.seenOpeningBrace) item.depth += 1;
+        });
+        const current = stack[stack.length - 1];
+        if (current && !current.seenOpeningBrace) {
+          current.seenOpeningBrace = true;
+          current.depth = 1;
+        }
+      } else if (char === "}") {
+        for (let i = stack.length - 1; i >= 0; i -= 1) {
+          const item = stack[i];
+          if (item.seenOpeningBrace) item.depth -= 1;
+          if (item.seenOpeningBrace && item.depth === 0) {
+            functions.push({
+              name: item.name,
+              start: item.start,
+              end: index + 1,
+              lines: index + 1 - item.start + 1
+            });
+            stack.splice(i, 1);
+          }
+        }
+      }
+    }
+  });
+
+  return functions;
+}
+
+function assertAppJsFunctionBudget() {
+  const oversized = collectTopLevelFunctionSizes("app.js")
+    .filter((item) => item.lines > APP_JS_MAX_FUNCTION_LINES)
+    .sort((a, b) => b.lines - a.lines);
+  oversized.forEach((item) => {
+    fail(`app.js function ${item.name} has ${item.lines} lines (${item.start}-${item.end}); maximum is ${APP_JS_MAX_FUNCTION_LINES}.`);
+  });
 }
 
 function assertModulesHaveTests() {
@@ -88,6 +146,18 @@ function assertReleaseCheckIsRequired() {
   }
 }
 
+function assertSmokeCheckIsRequired() {
+  const packageJson = JSON.parse(readText("package.json"));
+  const smokeScript = packageJson.scripts?.["check:smoke"] || "";
+  const checkScript = packageJson.scripts?.check || "";
+  if (smokeScript !== "node scripts/smoke-check.js") {
+    fail("npm run check:smoke must use scripts/smoke-check.js");
+  }
+  if (!checkScript.includes("npm run check:smoke")) {
+    fail("npm run check must include npm run check:smoke");
+  }
+}
+
 function assertBrowserModulesAreLoaded() {
   const html = readText("index.html");
   const modules = [
@@ -113,11 +183,13 @@ function assertSingleWorkflow() {
 
 function run() {
   assertAppJsBudget();
+  assertAppJsFunctionBudget();
   assertModulesHaveTests();
   assertModulesAreInSyntaxCheck();
   assertTestsUseDiscovery();
   assertStaticCheckIsRequired();
   assertReleaseCheckIsRequired();
+  assertSmokeCheckIsRequired();
   assertBrowserModulesAreLoaded();
   assertSingleWorkflow();
   if (!process.exitCode) {
