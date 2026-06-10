@@ -50,6 +50,7 @@ const policyPanel = window.NE_POLICY_PANEL;
 const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
 const energyCharts = window.NE_ENERGY_CHARTS;
+const forecastPage = window.NE_FORECAST_PAGE;
 const projectListView = window.NE_PROJECT_LIST_VIEW;
 const resultPage = window.NE_RESULT_PAGE;
 const resultPrint = window.NE_RESULT_PRINT;
@@ -66,7 +67,7 @@ const shellEvents = window.NE_SHELL_EVENTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !shellEvents || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !shellEvents || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -4127,61 +4128,23 @@ function forceActivateRun(runId) {
 
 function renderForecastRuns() {
   const project = getActiveProject();
-  if (!project) {
-    refs.forecastRunBody.innerHTML = "";
-    refs.forecastActivationBody.innerHTML = "";
-    refs.forecastGateMessage.textContent = "质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。";
-    return;
-  }
-  if (!project.priceRuns.length) {
-    refs.forecastRunBody.innerHTML = `<tr><td colspan="12">还没有电价预测版本，请先生成。</td></tr>`;
-    refs.forecastActivationBody.innerHTML = `<tr><td colspan="4">暂无激活日志。</td></tr>`;
-    refs.forecastGateMessage.textContent = "质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。";
-    return;
-  }
-  const latest = project.priceRuns[0];
-  refs.forecastGateMessage.textContent =
-    `硬门槛：MAPE ≤ 15%，sMAPE ≤ 18%，缺失点=0。软门槛：MAE ≤ ${QUALITY_GATE.soft.mae}，RMSE ≤ ${QUALITY_GATE.soft.rmse}。最新运行 ${latest.id} 状态：${statusLabel(latest)}。`;
-
-  refs.forecastRunBody.innerHTML = project.priceRuns.map((run) => `
-    <tr>
-      <td>${run.id}</td>
-      <td>${run.algorithmLabel || run.algorithmName || run.algorithmFamily}</td>
-      <td>${run.algorithmVersion}</td>
-      <td>${run.featureVersion}</td>
-      <td>${formatForecastGranularity(run)}</td>
-      <td>${run.trainStart}-${run.trainEnd}</td>
-      <td>${(run.mape * 100).toFixed(2)}%</td>
-      <td>${(run.smape * 100).toFixed(2)}%</td>
-      <td>${run.mae.toFixed(2)}</td>
-      <td>${run.rmse.toFixed(2)}</td>
-      <td>${statusLabel(run)}${project.activeRunId === run.id ? " / 生效中" : ""}</td>
-      <td>
-        ${canActivateRun(run)
-          ? `<button class="ghost-button" data-active-run="${run.id}">设为生效</button>`
-          : `<button class="ghost-button" data-force-run="${run.id}">强制发布</button>`
-        }
-      </td>
-    </tr>
-  `).join("");
-
-  document.querySelectorAll("[data-active-run]").forEach((button) => {
-    button.addEventListener("click", () => setActiveRun(button.dataset.activeRun));
+  forecastPage.applyForecastRunsView({
+    refs,
+    view: forecastPage.buildForecastRunsView({
+      project,
+      qualityGate: QUALITY_GATE,
+      statusLabel,
+      formatForecastGranularity,
+      canActivateRun
+    })
   });
-  document.querySelectorAll("[data-force-run]").forEach((button) => {
-    button.addEventListener("click", () => forceActivateRun(button.dataset.forceRun));
+  forecastPage.bindForecastRunActions({
+    documentRef: typeof document !== "undefined" ? document : null,
+    handlers: {
+      setActiveRun,
+      forceActivateRun
+    }
   });
-
-  refs.forecastActivationBody.innerHTML = project.activationLogs.length
-    ? project.activationLogs.map((log) => `
-      <tr>
-        <td>${new Date(log.changedAt).toLocaleString("zh-CN", { hour12: false })}</td>
-        <td>${log.fromRunId}</td>
-        <td>${log.toRunId}</td>
-        <td>${escapeHtml(log.reason)}</td>
-      </tr>
-    `).join("")
-    : `<tr><td colspan="4">暂无激活日志。</td></tr>`;
 }
 
 function removeLegacyEnergySummaryTable() {
