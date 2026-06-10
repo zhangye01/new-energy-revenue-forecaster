@@ -6418,66 +6418,48 @@ function bindNavigationEvents() {
 }
 
 function bindCompareEvents() {
-  if (Array.isArray(refs.compareTabButtons)) {
-    refs.compareTabButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        const nextView = sanitizeCompareView(button.dataset.compareView);
+  comparePage.bindCompareEvents({
+    refs,
+    handlers: {
+      changeCompareView: (rawView) => {
+        const nextView = sanitizeCompareView(rawView);
         if (appState.compareView === nextView) return;
         appState.compareView = nextView;
         renderCompareWorkspaceState();
         queueCompareChartsResize();
         schedulePersistAppData();
-      });
-    });
-  }
-  if (refs.compareSensitivityFactorList) {
-    refs.compareSensitivityFactorList.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-sensitivity-factor]");
-      if (!button) return;
-      activeSensitivityFactorKey = button.dataset.sensitivityFactor || "";
-      renderCompare();
-    });
-    refs.compareSensitivityFactorList.addEventListener("change", (event) => {
-      const input = event.target.closest("[data-sensitivity-variable]");
-      if (!input) return;
-      const key = input.dataset.sensitivityVariable || "";
-      const current = new Set(compareSensitivitySettings.selectedKeys);
-      if (input.checked) {
-        current.add(key);
-      } else {
-        current.delete(key);
+      },
+      selectSensitivityFactor: (key) => {
+        activeSensitivityFactorKey = key;
+        renderCompare();
+      },
+      toggleSensitivityVariable: (key, checked) => {
+        const current = new Set(compareSensitivitySettings.selectedKeys);
+        if (checked) {
+          current.add(key);
+        } else {
+          current.delete(key);
+        }
+        compareSensitivitySettings.selectedKeys = Array.from(current);
+        if (!compareSensitivitySettings.selectedKeys.includes(activeSensitivityFactorKey)) {
+          activeSensitivityFactorKey = compareSensitivitySettings.selectedKeys[0] || "";
+        }
+        renderCompare();
+      },
+      changeSensitivityControls: () => {
+        compareSensitivitySettings.rangePercent = Number(refs.compareSensitivityRange?.value) || compareSensitivitySettings.rangePercent;
+        compareSensitivitySettings.stepPercent = Number(refs.compareSensitivityStep?.value) || compareSensitivitySettings.stepPercent;
+        compareSensitivitySettings.responseScalePercent = Number(refs.compareSensitivityScale?.value) || compareSensitivitySettings.responseScalePercent;
+        compareSensitivitySettings.topN = refs.compareSensitivityTopn?.value === "all" ? "all" : Number(refs.compareSensitivityTopn?.value);
+        sanitizeCompareSensitivitySettings();
+        renderCompare();
+      },
+      selectScenarioFocus: (scenarioId) => {
+        activeCompareScenarioId = scenarioId;
+        renderCompare();
       }
-      compareSensitivitySettings.selectedKeys = Array.from(current);
-      if (!compareSensitivitySettings.selectedKeys.includes(activeSensitivityFactorKey)) {
-        activeSensitivityFactorKey = compareSensitivitySettings.selectedKeys[0] || "";
-      }
-      renderCompare();
-    });
-  }
-  [
-    refs.compareSensitivityRange,
-    refs.compareSensitivityStep,
-    refs.compareSensitivityScale,
-    refs.compareSensitivityTopn
-  ].forEach((control) => {
-    if (!control) return;
-    control.addEventListener("change", () => {
-      compareSensitivitySettings.rangePercent = Number(refs.compareSensitivityRange?.value) || compareSensitivitySettings.rangePercent;
-      compareSensitivitySettings.stepPercent = Number(refs.compareSensitivityStep?.value) || compareSensitivitySettings.stepPercent;
-      compareSensitivitySettings.responseScalePercent = Number(refs.compareSensitivityScale?.value) || compareSensitivitySettings.responseScalePercent;
-      compareSensitivitySettings.topN = refs.compareSensitivityTopn?.value === "all" ? "all" : Number(refs.compareSensitivityTopn?.value);
-      sanitizeCompareSensitivitySettings();
-      renderCompare();
-    });
+    }
   });
-  if (refs.compareScenarioFocusList) {
-    refs.compareScenarioFocusList.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-compare-focus-scenario]");
-      if (!button) return;
-      activeCompareScenarioId = button.dataset.compareFocusScenario || "";
-      renderCompare();
-    });
-  }
 }
 
 function bindCreateEnergyEvents() {

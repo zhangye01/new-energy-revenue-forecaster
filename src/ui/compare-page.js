@@ -127,6 +127,50 @@
     });
   }
 
+  function bindCompareEvents(input = {}) {
+    const {
+      refs = {},
+      handlers = {}
+    } = input;
+    if (Array.isArray(refs.compareTabButtons)) {
+      refs.compareTabButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          handlers.changeCompareView?.(button.dataset.compareView);
+        });
+      });
+    }
+    if (refs.compareSensitivityFactorList) {
+      refs.compareSensitivityFactorList.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-sensitivity-factor]");
+        if (!button) return;
+        handlers.selectSensitivityFactor?.(button.dataset.sensitivityFactor || "");
+      });
+      refs.compareSensitivityFactorList.addEventListener("change", (event) => {
+        const input = event.target.closest("[data-sensitivity-variable]");
+        if (!input) return;
+        handlers.toggleSensitivityVariable?.(input.dataset.sensitivityVariable || "", Boolean(input.checked));
+      });
+    }
+    [
+      refs.compareSensitivityRange,
+      refs.compareSensitivityStep,
+      refs.compareSensitivityScale,
+      refs.compareSensitivityTopn
+    ].forEach((control) => {
+      if (!control) return;
+      control.addEventListener("change", () => {
+        handlers.changeSensitivityControls?.();
+      });
+    });
+    if (refs.compareScenarioFocusList) {
+      refs.compareScenarioFocusList.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-compare-focus-scenario]");
+        if (!button) return;
+        handlers.selectScenarioFocus?.(button.dataset.compareFocusScenario || "");
+      });
+    }
+  }
+
   function resetComparePageState(input = {}) {
     const {
       refs = {},
@@ -286,6 +330,7 @@
 
   return Object.freeze({
     applyCompareView,
+    bindCompareEvents,
     buildCompareAvailabilityView,
     buildCompareOverviewView,
     buildCompareTableRowsHtml,

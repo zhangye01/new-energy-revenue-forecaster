@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const {
   applyCompareView,
+  bindCompareEvents,
   buildCompareAvailabilityView,
   buildCompareOverviewView,
   buildCompareTableRowsHtml,
@@ -17,6 +18,63 @@ const tokens = {
   primary: "#3f82e6",
   palette: ["#3f82e6", "#3fa096", "#76aa57"]
 };
+
+class FakeTarget {
+  constructor(dataset = {}) {
+    this.dataset = dataset;
+    this.handlers = {};
+    this.checked = false;
+  }
+
+  addEventListener(name, handler) {
+    this.handlers[name] = handler;
+  }
+
+  closest() {
+    return this;
+  }
+
+  dispatch(name, event = {}) {
+    this.handlers[name]?.({ target: this, ...event });
+  }
+}
+
+const compareEventCalls = [];
+const compareTabButton = new FakeTarget({ compareView: "scenario" });
+const sensitivityList = new FakeTarget();
+const sensitivityFactor = new FakeTarget({ sensitivityFactor: "hours" });
+const sensitivityVariable = new FakeTarget({ sensitivityVariable: "price" });
+const sensitivityRange = new FakeTarget();
+const scenarioFocusList = new FakeTarget();
+const scenarioFocus = new FakeTarget({ compareFocusScenario: "up" });
+bindCompareEvents({
+  refs: {
+    compareTabButtons: [compareTabButton],
+    compareSensitivityFactorList: sensitivityList,
+    compareSensitivityRange: sensitivityRange,
+    compareScenarioFocusList: scenarioFocusList
+  },
+  handlers: {
+    changeCompareView: (value) => compareEventCalls.push(`view:${value}`),
+    selectSensitivityFactor: (value) => compareEventCalls.push(`factor:${value}`),
+    toggleSensitivityVariable: (value, checked) => compareEventCalls.push(`variable:${value}:${checked}`),
+    changeSensitivityControls: () => compareEventCalls.push("controls"),
+    selectScenarioFocus: (value) => compareEventCalls.push(`scenario:${value}`)
+  }
+});
+compareTabButton.dispatch("click");
+sensitivityList.dispatch("click", { target: sensitivityFactor });
+sensitivityVariable.checked = true;
+sensitivityList.dispatch("change", { target: sensitivityVariable });
+sensitivityRange.dispatch("change");
+scenarioFocusList.dispatch("click", { target: scenarioFocus });
+assert.deepEqual(compareEventCalls, [
+  "view:scenario",
+  "factor:hours",
+  "variable:price:true",
+  "controls",
+  "scenario:up"
+]);
 
 const availabilityView = buildCompareAvailabilityView({
   available: [{ scenario: { id: "base" }, result: {} }],
