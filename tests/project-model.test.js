@@ -6,6 +6,7 @@ const {
   buildCreateProjectFormInput,
   normalizeCreateProjectFormInput,
   validateCreateProjectFormInput,
+  hasProjectBaseInputChanged,
   createProjectRecord,
   createMockHistoryProject,
   createEmptyWorkspaceProject,
@@ -169,6 +170,59 @@ assert.deepEqual(buildCreateProjectFormInput({
   topMeta: "预测周期需为1-30年。",
   message: "保存失败：请填写有效的预测周期（1-30年）。"
 });
+
+assert.equal(hasProjectBaseInputChanged({
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: true,
+  storagePowerMw: 64,
+  storageDurationH: 2,
+  storageNote: "两小时",
+  capacityMw: 200,
+  startYear: 2026,
+  forecastYears: 30,
+  name: "旧名称",
+  note: "旧备注",
+  energyMode: "annual_hours"
+}, {
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: true,
+  storagePowerMw: 64,
+  storageDurationH: 2,
+  storageNote: "两小时",
+  capacityMw: 200,
+  startYear: 2026,
+  forecastYears: 30,
+  name: "新名称",
+  note: "新备注",
+  energyMode: "province_typical_curve"
+}), false);
+assert.equal(hasProjectBaseInputChanged({
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: false,
+  storagePowerMw: null,
+  storageDurationH: null,
+  storageNote: "",
+  capacityMw: 200,
+  startYear: 2026,
+  forecastYears: 30
+}, {
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: true,
+  storagePowerMw: 64,
+  storageDurationH: 2,
+  storageNote: "两小时",
+  capacityMw: 200,
+  startYear: 2026,
+  forecastYears: 30
+}), true);
 
 const createdRecord = createProjectRecord(createInput, {
   id: "proj-created",

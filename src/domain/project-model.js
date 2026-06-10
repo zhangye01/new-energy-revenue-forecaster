@@ -313,6 +313,19 @@
     };
   }
 
+  function hasProjectBaseInputChanged(project = {}, input = {}) {
+    return project.province !== input.province
+      || project.assetType !== input.assetType
+      || project.siteType !== input.siteType
+      || project.hasStorage !== input.hasStorage
+      || project.storagePowerMw !== input.storagePowerMw
+      || project.storageDurationH !== input.storageDurationH
+      || project.storageNote !== input.storageNote
+      || project.capacityMw !== input.capacityMw
+      || project.startYear !== input.startYear
+      || project.forecastYears !== input.forecastYears;
+  }
+
   function sanitizeProjectBase(rawProject, index = 0, options = {}) {
     if (!isPlainObject(rawProject)) return null;
     const makeId = resolveMakeId(options);
@@ -397,6 +410,7 @@
     buildCreateProjectFormInput,
     normalizeCreateProjectFormInput,
     validateCreateProjectFormInput,
+    hasProjectBaseInputChanged,
     createProjectRecord,
     createMockHistoryProject,
     createEmptyWorkspaceProject,
