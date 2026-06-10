@@ -3023,7 +3023,6 @@ function resetCreateProjectFormForNew() {
   if (capacity) capacity.value = "";
   if (startYear) startYear.value = "";
   if (forecastYears) forecastYears.value = "";
-  applyEnergyModeUi("annual_hours");
   syncCreateStorageFieldsUi();
   if (note) note.value = "";
   setCreateSaveMessage("当前为新建模板，填写后点击保存。", "info");
@@ -3074,7 +3073,6 @@ function syncCreateProjectFormWithActiveProject() {
     documentRef: document,
     values
   });
-  applyEnergyModeUi(values.energyMode);
   syncCreateStorageFieldsUi();
   setCreateSaveMessage(values.message, "info");
   createFormSyncedProjectId = project.id;
@@ -3230,7 +3228,6 @@ function updateExistingProjectFromForm(project, input, targetPage) {
   const movedToHistory = moveProjectToHistoryWorkspaceIfReady(project);
   createFormSyncedProjectId = project.id;
   appState.activeProjectId = project.id;
-  applyEnergyModeUi(input.energyMode);
   if (movedToHistory) {
     setTopMeta("当前项目已完成基础信息校准，已转入历史项目工作区。");
     setCreateSaveMessage(`已更新当前项目：${project.name}。已转入历史项目工作区。`, "success");
@@ -3321,7 +3318,6 @@ function createProjectFromForm(options = {}) {
   createFormSyncedProjectId = project.id;
   appState.activeProjectId = project.id;
   syncProjectProvinceScopedState(project, { force: true });
-  applyEnergyModeUi(project.energyMode);
   moveProjectToHistoryWorkspaceIfReady(project);
   setCreateSaveMessage(`已创建新项目：${project.name}。`, "success");
   setActivePage(targetPage);
@@ -3380,10 +3376,6 @@ function getEnergyModeMeta(mode) {
 
 function detectEnergyModeByHeader(headerRow) {
   return energyDataRules.detectEnergyModeByHeader(headerRow);
-}
-
-function applyEnergyModeUi(mode) {
-  projectModel.normalizeEnergyMode(mode);
 }
 
 function setEnergyImportMessage(text, tone = "info", options = {}) {
@@ -4080,7 +4072,6 @@ function applyEnergyWorkspaceModel(model, project) {
   appState.energyStep2Choice = sanitizeEnergyStep2Choice(model.nextStep2Choice);
   renderEnergyStep2ChoiceState();
   renderEnergyStep2ChoiceSummary(project);
-  applyEnergyModeUi(model.mode);
   if (model.resetMessageProjectId) {
     refs.energyImportMessage.removeAttribute("data-project-id");
   } else if (model.projectIdForMessage) {

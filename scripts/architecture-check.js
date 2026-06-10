@@ -9,9 +9,9 @@ const APP_JS_MAX_FUNCTION_LINES = 120;
 const STYLES_CSS_MAX_LINES = 5500;
 const FORBIDDEN_APP_JS_PATTERNS = [
   {
-    name: "bare energy mode UI sync",
-    pattern: /\bapplyEnergyModeUi\(\s*energyMode\s*\)/,
-    message: "use a scoped value such as project.energyMode or formState.input.energyMode"
+    name: "stale energy mode UI sync",
+    pattern: /\bapplyEnergyModeUi\(/,
+    message: "do not reintroduce the removed no-op; sync through the energy workspace model"
   }
 ];
 

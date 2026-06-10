@@ -39,14 +39,13 @@ assert.deepEqual(sizes, [
 
 assert.deepEqual(findForbiddenAppPatternsFromText([
   "function createProjectFromForm() {",
-  "  applyEnergyModeUi(energyMode);",
   "  applyEnergyModeUi(project.energyMode);",
   "}"
 ].join("\n")), [
   {
-    name: "bare energy mode UI sync",
+    name: "stale energy mode UI sync",
     line: 2,
-    message: "use a scoped value such as project.energyMode or formState.input.energyMode"
+    message: "do not reintroduce the removed no-op; sync through the energy workspace model"
   }
 ]);
 
