@@ -101,12 +101,16 @@ function collectIds(html) {
 }
 
 function collectDataPages(html) {
-  const pageIds = new Set();
-  const pagePattern = /\bdata-page=["']([^"']+)["']/gi;
-  for (const match of html.matchAll(pagePattern)) {
-    pageIds.add(match[1]);
+  return collectAttributeValues(html, "data-page");
+}
+
+function collectAttributeValues(html, attributeName) {
+  const values = new Set();
+  const attrPattern = new RegExp(`\\b${attributeName}=["']([^"']+)["']`, "gi");
+  for (const match of html.matchAll(attrPattern)) {
+    values.add(match[1]);
   }
-  return pageIds;
+  return values;
 }
 
 function collectScriptSources(html) {
@@ -130,6 +134,22 @@ function assertNavTargetsExist(ids, dataPages) {
   dataPages.forEach((pageId) => {
     if (!ids.has(pageId)) {
       fail(`navigation data-page="${pageId}" has no matching page id`);
+    }
+  });
+}
+
+function assertAttributeTargetsExist(ids, values, attributeName) {
+  values.forEach((targetId) => {
+    if (!ids.has(targetId)) {
+      fail(`${attributeName}="${targetId}" has no matching page id`);
+    }
+  });
+}
+
+function assertPairedAttributeValues(sourceValues, targetValues, sourceAttribute, targetAttribute) {
+  sourceValues.forEach((value) => {
+    if (!targetValues.has(value)) {
+      fail(`${sourceAttribute}="${value}" has no matching ${targetAttribute}`);
     }
   });
 }
@@ -161,14 +181,31 @@ function run() {
   const html = readText("index.html");
   const ids = collectIds(html);
   const dataPages = collectDataPages(html);
+  const jumpTargets = collectAttributeValues(html, "data-jump");
+  const resultViews = collectAttributeValues(html, "data-result-view");
+  const resultPanes = collectAttributeValues(html, "data-result-pane");
+  const compareViews = collectAttributeValues(html, "data-compare-view");
+  const comparePanes = collectAttributeValues(html, "data-compare-pane");
   const scripts = collectScriptSources(html);
   assertIdsExist(ids, REQUIRED_PAGE_IDS, "page contract");
   assertIdsExist(ids, REQUIRED_STATUS_DOT_IDS, "workflow status contract");
   assertIdsExist(ids, CRITICAL_IDS, "critical UI contract");
   assertNavTargetsExist(ids, dataPages);
+  assertAttributeTargetsExist(ids, jumpTargets, "data-jump");
+  assertPairedAttributeValues(resultViews, resultPanes, "data-result-view", "data-result-pane");
+  assertPairedAttributeValues(compareViews, comparePanes, "data-compare-view", "data-compare-pane");
   assertScriptOrder(scripts);
   if (FAILURES.length) process.exit(1);
   console.log(`smoke checks passed (${REQUIRED_PAGE_IDS.length} pages, ${CRITICAL_IDS.length} critical ids)`);
 }
 
-run();
+if (require.main === module) {
+  run();
+}
+
+module.exports = {
+  collectAttributeValues,
+  collectDataPages,
+  collectIds,
+  collectScriptSources
+};
