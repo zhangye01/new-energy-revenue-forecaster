@@ -1,0 +1,445 @@
+/* CSS governance: full-revenue scenario configuration page styles. Load after styles/base.css and before styles.css. */
+
+.scenario-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.scenario-page-summary {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.35fr) repeat(3, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.scenario-summary-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel-soft) 72%, var(--panel));
+}
+
+.scenario-summary-card-primary {
+  border-color: color-mix(in srgb, var(--brand) 20%, var(--line));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 9%, var(--panel)), var(--panel-soft));
+}
+
+.scenario-summary-card span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.scenario-summary-card strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.98rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scenario-workspace {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  align-content: start;
+  min-width: 0;
+}
+
+.scenario-workspace-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scenario-workspace-head > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.scenario-workspace-head h3 {
+  font-size: 1.02rem;
+}
+
+.scenario-workspace-head p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.scenario-workspace-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.province-default-selector {
+  width: auto;
+  min-width: 300px;
+  min-height: 38px;
+  padding: 7px 38px 7px 14px;
+  border-color: color-mix(in srgb, var(--brand) 32%, var(--field-border));
+  border-radius: 6px;
+  color: var(--brand);
+  background-color: color-mix(in srgb, var(--brand) 4%, var(--field-bg));
+  font-size: 0.82rem;
+  font-weight: 850;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--brand) 9%, transparent);
+  cursor: pointer;
+}
+
+.province-default-selector:hover {
+  border-color: color-mix(in srgb, var(--brand) 52%, var(--field-border));
+  background-color: color-mix(in srgb, var(--brand) 7%, var(--field-bg));
+}
+
+.province-default-selector:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--brand) 70%, var(--field-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 16%, transparent);
+}
+
+.text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.text-button:hover {
+  border-color: color-mix(in srgb, var(--brand) 20%, var(--line));
+  background: color-mix(in srgb, var(--brand) 7%, transparent);
+}
+
+.scenario-workspace .block-label,
+.scenario-workspace label {
+  min-width: 0;
+}
+
+.scenario-name-edit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.scenario-name-edit-row .ghost-button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.scenario-workspace .table-scroll,
+.scenario-workspace table {
+  min-width: 0;
+}
+
+.scenario-table-wrap {
+  max-height: 320px;
+}
+
+.scenario-batch-subsection {
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.scenario-batch-subsection .panel-head h4 {
+  font-size: 0.95rem;
+}
+
+.scenario-batch-details {
+  border-bottom: 1px solid var(--line);
+}
+
+.scenario-batch-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-weight: 900;
+  cursor: pointer;
+  list-style: none;
+  background: var(--panel);
+  transition: background 0.16s ease;
+}
+
+.scenario-batch-details summary:hover {
+  background: var(--panel-soft);
+}
+
+.scenario-batch-details summary span {
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.scenario-batch-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.scenario-batch-details summary::after {
+  content: "展开";
+  flex: 0 0 auto;
+  min-width: 56px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: #24466f;
+  background: #f6f8fb;
+  font-size: 0.86rem;
+  font-weight: 900;
+  text-align: center;
+  line-height: 36px;
+  box-shadow: none;
+}
+
+.scenario-batch-details[open] summary {
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.scenario-batch-details[open] summary::after {
+  content: "收起";
+}
+
+body[data-theme="dark"] .scenario-batch-details summary::after {
+  background: #263244;
+  color: #c4d7f1;
+}
+
+body[data-theme="eye"] .scenario-batch-details summary::after {
+  border-color: #b9cbba;
+  background: #edf3e9;
+  color: #365b43;
+}
+
+.scenario-batch-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.scenario-batch-action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.scenario-batch-action .ghost-button {
+  width: 100%;
+}
+
+.scenario-workspace-editor .form-grid {
+  gap: 10px 12px;
+}
+
+.scenario-form {
+  display: grid;
+  gap: 12px;
+}
+
+.scenario-form-section {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 88%, var(--panel-soft));
+}
+
+.scenario-form-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line-strong);
+}
+
+.scenario-form-section-title strong {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.scenario-form-section-title span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.scenario-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.scenario-form-grid-compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.scenario-form-grid.scenario-trade-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.scenario-trade-field-wide {
+  grid-column: span 3;
+}
+
+.scenario-trade-field-third {
+  grid-column: span 2;
+}
+
+.scenario-form-grid.scenario-env-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.scenario-env-field-half {
+  grid-column: span 3;
+}
+
+.scenario-env-field-third {
+  grid-column: span 2;
+}
+
+.scenario-trade-manual-panel {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.scenario-trade-manual-panel[hidden] {
+  display: none;
+}
+
+.scenario-trade-manual-actions {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(220px, 1fr) minmax(0, auto);
+  gap: 10px;
+  align-items: end;
+}
+
+.scenario-trade-manual-actions .ghost-button {
+  min-height: 38px;
+}
+
+.scenario-visual-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.scenario-visual-chart-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.scenario-visual-chart-card-wide {
+  grid-column: 1 / -1;
+}
+
+.scenario-visual-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.scenario-visual-chart-head strong {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.scenario-visual-chart-head span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.scenario-visual-chart {
+  width: 100%;
+  min-height: 250px;
+  height: 250px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 82%, var(--panel-soft));
+}
+
+.scenario-visual-chart-tall {
+  min-height: 300px;
+  height: 300px;
+}
+
+.scenario-next-step-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
+  min-width: 0;
+}
+
+.scenario-storage-revenue-section {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 88%, var(--panel-soft));
+}
+
+.scenario-storage-revenue-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.scenario-storage-revenue-section .section-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.scenario-defaults-subsection {
+  align-content: start;
+}
+
+.scenario-defaults-subsection .panel-head {
+  align-items: flex-start;
+}

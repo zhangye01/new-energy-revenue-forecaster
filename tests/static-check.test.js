@@ -23,6 +23,7 @@ assert.equal(normalizeReference("./src/domain/app-storage.js"), "src/domain/app-
 assert.deepEqual(collectHtmlReferences([
   "<link href=\"./styles/theme.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/base.css?v=1\" rel=\"stylesheet\">",
+  "<link href=\"./styles/pages/scenario.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles.css?v=1\" rel=\"stylesheet\">",
   "<script src=\"./app.js#boot\"></script>",
   "<img src=\"https://example.com/logo.png\">",
@@ -30,6 +31,7 @@ assert.deepEqual(collectHtmlReferences([
 ].join("\n")), [
   { reference: "styles/theme.css", source: "index.html" },
   { reference: "styles/base.css", source: "index.html" },
+  { reference: "styles/pages/scenario.css", source: "index.html" },
   { reference: "styles.css", source: "index.html" },
   { reference: "app.js", source: "index.html" },
   { reference: "assets/fallback.png", source: "index.html" },
@@ -39,9 +41,10 @@ assert.deepEqual(collectHtmlReferences([
 assert.deepEqual(collectCssEntryReferences([
   "<link href=\"./styles/theme.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/base.css?v=1\" rel=\"stylesheet\">",
+  "<link href=\"./styles/pages/scenario.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles.css?v=1\" rel=\"stylesheet\">",
   "<script src=\"./app.js\"></script>"
-].join("\n")), ["styles/theme.css", "styles/base.css", "styles.css"]);
+].join("\n")), ["styles/theme.css", "styles/base.css", "styles/pages/scenario.css", "styles.css"]);
 
 assert.deepEqual(collectCssReferences("styles/theme.css"), []);
 

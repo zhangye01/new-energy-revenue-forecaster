@@ -7,7 +7,7 @@
 | 层级 | 文件/目录 | 责任 |
 | --- | --- | --- |
 | 页面结构 | `index.html` | 静态 DOM、页面容器、脚本加载顺序、登录兜底脚本 |
-| 页面样式 | `styles/theme.css`、`styles/base.css`、`styles.css` | 主题令牌、基础布局、壳层样式、组件样式、页面样式、打印样式 |
+| 页面样式 | `styles/theme.css`、`styles/base.css`、`styles/pages/*.css`、`styles.css` | 主题令牌、基础布局、壳层样式、页面样式、组件样式、打印样式 |
 | 运行时引用 | `runtime.js` | DOM 引用集中表、共享 `appState` |
 | 基础配置 | `config.js`、`map-data.js` | 页面标题、流程规则、省份默认参数、地图数据 |
 | 页面主控 | `app.js` | 导航、表单、图表渲染、状态持久化、导入导出、业务模块调度 |
@@ -108,15 +108,14 @@ src/storage/app-storage.js
 
 ### P1：整理样式边界
 
-当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，并由架构检查确保二者先于 `styles.css` 加载。`styles.css` 后续建议继续拆为：
+当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/pages/scenario.css` 放置全口径收入配置页样式，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 后续建议继续拆为：
 
 ```text
 styles/components.css
-styles/pages/*.css
 styles/print.css
 ```
 
-在没有构建工具前，可以继续用多个 `<link rel="stylesheet">` 按顺序加载；新增主题令牌必须进入 `styles/theme.css`，新增壳层基础样式必须进入 `styles/base.css`，新增页面/组件样式必须进入对应分区或后续拆出的 CSS 文件。
+在没有构建工具前，可以继续用多个 `<link rel="stylesheet">` 按顺序加载；新增主题令牌必须进入 `styles/theme.css`，新增壳层基础样式必须进入 `styles/base.css`，新增页面样式必须进入 `styles/pages/`，新增通用组件样式必须进入对应分区或后续拆出的 CSS 文件。
 
 ### P2：评估构建工具
 
