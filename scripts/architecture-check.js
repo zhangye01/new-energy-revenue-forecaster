@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const APP_JS_MAX_LINES = 6040;
+const APP_JS_MAX_LINES = 6025;
 const APP_JS_MAX_FUNCTION_LINES = 90;
 const STYLES_CSS_MAX_LINES = 5500;
 const FORBIDDEN_APP_JS_PATTERNS = [
