@@ -3069,52 +3069,45 @@ function renderProjects() {
     statusText
   });
 
-  document.querySelectorAll("[data-create-new-project]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const created = createEmptyWorkspaceProject();
-      if (created) {
-        setTopMeta("新项目已生成，可进入项目继续配置。");
+  projectListView.bindProjectListActions({
+    root: refs.projectList,
+    handlers: {
+      createProject: () => {
+        const created = createEmptyWorkspaceProject();
+        if (created) {
+          setTopMeta("新项目已生成，可进入项目继续配置。");
+          renderAll();
+        }
+      },
+      openProject: (projectId) => {
+        appState.activeProjectId = projectId;
+        setActivePage("create-page");
+      },
+      duplicateProject: (projectId) => {
+        const source = appState.projects.find((item) => item.id === projectId);
+        if (!source || !projectBelongsToCurrentAccount(source)) return;
+        const clone = cloneData(source);
+        clone.id = makeId("proj");
+        clone.ownerAccount = String(appState.auth.account || "").trim();
+        clone.name = resolveUniqueProjectName(`${source.name}-副本`);
+        clone.createdAt = new Date().toISOString();
+        appState.projects.unshift(clone);
+        renderAll();
+      },
+      deleteProject: (targetId) => {
+        const target = appState.projects.find((item) => item.id === targetId);
+        if (!target || !projectBelongsToCurrentAccount(target)) return;
+        const confirmed = typeof window === "undefined"
+          ? true
+          : window.confirm(`确定删除项目“${target.name}”吗？删除后不可恢复。`);
+        if (!confirmed) return;
+        appState.projects = appState.projects.filter((item) => item.id !== targetId);
+        if (appState.activeProjectId === targetId) {
+          appState.activeProjectId = getProjectsForCurrentAccount()[0]?.id || null;
+        }
         renderAll();
       }
-    });
-  });
-
-  document.querySelectorAll("[data-open-project]").forEach((button) => {
-    button.addEventListener("click", () => {
-      appState.activeProjectId = button.dataset.openProject;
-      setActivePage("create-page");
-    });
-  });
-
-  document.querySelectorAll("[data-duplicate-project]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const source = appState.projects.find((item) => item.id === button.dataset.duplicateProject);
-      if (!source || !projectBelongsToCurrentAccount(source)) return;
-      const clone = cloneData(source);
-      clone.id = makeId("proj");
-      clone.ownerAccount = String(appState.auth.account || "").trim();
-      clone.name = resolveUniqueProjectName(`${source.name}-副本`);
-      clone.createdAt = new Date().toISOString();
-      appState.projects.unshift(clone);
-      renderAll();
-    });
-  });
-
-  document.querySelectorAll("[data-delete-project]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const targetId = button.dataset.deleteProject;
-      const target = appState.projects.find((item) => item.id === targetId);
-      if (!target || !projectBelongsToCurrentAccount(target)) return;
-      const confirmed = typeof window === "undefined"
-        ? true
-        : window.confirm(`确定删除项目“${target.name}”吗？删除后不可恢复。`);
-      if (!confirmed) return;
-      appState.projects = appState.projects.filter((item) => item.id !== targetId);
-      if (appState.activeProjectId === targetId) {
-        appState.activeProjectId = getProjectsForCurrentAccount()[0]?.id || null;
-      }
-      renderAll();
-    });
+    }
   });
 }
 

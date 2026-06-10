@@ -106,8 +106,30 @@
     ].join("");
   }
 
+  function bindProjectListActions(input = {}) {
+    const {
+      root = null,
+      handlers = {}
+    } = input;
+    if (!root || typeof root.querySelectorAll !== "function") return;
+
+    root.querySelectorAll("[data-create-new-project]").forEach((button) => {
+      button.addEventListener("click", () => handlers.createProject?.());
+    });
+    root.querySelectorAll("[data-open-project]").forEach((button) => {
+      button.addEventListener("click", () => handlers.openProject?.(button.dataset.openProject));
+    });
+    root.querySelectorAll("[data-duplicate-project]").forEach((button) => {
+      button.addEventListener("click", () => handlers.duplicateProject?.(button.dataset.duplicateProject));
+    });
+    root.querySelectorAll("[data-delete-project]").forEach((button) => {
+      button.addEventListener("click", () => handlers.deleteProject?.(button.dataset.deleteProject));
+    });
+  }
+
   return Object.freeze({
     buildProjectCardHtml,
-    buildProjectListHtml
+    buildProjectListHtml,
+    bindProjectListActions
   });
 });

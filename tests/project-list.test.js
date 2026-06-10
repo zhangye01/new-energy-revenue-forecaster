@@ -3,8 +3,34 @@
 const assert = require("node:assert/strict");
 const {
   buildProjectCardHtml,
-  buildProjectListHtml
+  buildProjectListHtml,
+  bindProjectListActions
 } = require("../src/ui/project-list");
+
+class FakeButton {
+  constructor(dataset = {}) {
+    this.dataset = dataset;
+    this.handlers = {};
+  }
+
+  addEventListener(name, handler) {
+    this.handlers[name] = handler;
+  }
+
+  click() {
+    this.handlers.click?.();
+  }
+}
+
+class FakeRoot {
+  constructor(map) {
+    this.map = map;
+  }
+
+  querySelectorAll(selector) {
+    return this.map[selector] || [];
+  }
+}
 
 const workflowPages = ["create-page", "energy-page", "result-page"];
 const pageTitles = {
@@ -58,5 +84,30 @@ assert.match(populatedList, /新建项目工作区/);
 assert.match(populatedList, /历史项目工作区/);
 assert.equal((populatedList.match(/复制项目/g) || []).length, 1);
 assert.equal((populatedList.match(/进入项目/g) || []).length, 2);
+
+const createButton = new FakeButton();
+const openButton = new FakeButton({ openProject: "p1" });
+const duplicateButton = new FakeButton({ duplicateProject: "p2" });
+const deleteButton = new FakeButton({ deleteProject: "p3" });
+const actionCalls = [];
+bindProjectListActions({
+  root: new FakeRoot({
+    "[data-create-new-project]": [createButton],
+    "[data-open-project]": [openButton],
+    "[data-duplicate-project]": [duplicateButton],
+    "[data-delete-project]": [deleteButton]
+  }),
+  handlers: {
+    createProject: () => actionCalls.push("create"),
+    openProject: (id) => actionCalls.push(`open:${id}`),
+    duplicateProject: (id) => actionCalls.push(`duplicate:${id}`),
+    deleteProject: (id) => actionCalls.push(`delete:${id}`)
+  }
+});
+createButton.click();
+openButton.click();
+duplicateButton.click();
+deleteButton.click();
+assert.deepEqual(actionCalls, ["create", "open:p1", "duplicate:p2", "delete:p3"]);
 
 console.log("project list tests passed");
