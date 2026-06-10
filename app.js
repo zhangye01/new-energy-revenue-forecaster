@@ -7417,68 +7417,68 @@ function renderAll() {
   }
 }
 
-function bindEvents() {
-  const setHistoryDatePanelOpen = (isOpen) => {
-    if (!refs.historyDatePanel || !refs.historyDateToggle) return;
-    refs.historyDatePanel.hidden = !isOpen;
-    refs.historyDateToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+function setHistoryDatePanelOpen(isOpen) {
+  if (!refs.historyDatePanel || !refs.historyDateToggle) return;
+  refs.historyDatePanel.hidden = !isOpen;
+  refs.historyDateToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+}
+
+function bindBenchmarkRangeDrag() {
+  if (!refs.benchmarkRangeSlider) return;
+
+  const onPointerMove = (event) => {
+    updateBenchmarkRangeDrag(event.clientY, false);
   };
 
-  const bindBenchmarkRangeDrag = () => {
-    if (!refs.benchmarkRangeSlider) return;
-
-    const onPointerMove = (event) => {
-      updateBenchmarkRangeDrag(event.clientY, false);
-    };
-
-    const onPointerUp = (event) => {
-      if (benchmarkRangeDragHandle) {
-        updateBenchmarkRangeDrag(event.clientY, true);
-      }
-      stopBenchmarkRangeDrag();
-      if (typeof window !== "undefined") {
-        window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", onPointerUp);
-      }
-    };
-
-    const beginDrag = (handleType, event) => {
-      event.preventDefault();
-      startBenchmarkRangeDrag(handleType, event.clientY);
-      if (typeof window !== "undefined") {
-        window.addEventListener("pointermove", onPointerMove);
-        window.addEventListener("pointerup", onPointerUp);
-      }
-    };
-
-    if (refs.benchmarkRangeHandleMax) {
-      refs.benchmarkRangeHandleMax.addEventListener("pointerdown", (event) => {
-        beginDrag("max", event);
-      });
+  const onPointerUp = (event) => {
+    if (benchmarkRangeDragHandle) {
+      updateBenchmarkRangeDrag(event.clientY, true);
     }
-
-    if (refs.benchmarkRangeHandleMin) {
-      refs.benchmarkRangeHandleMin.addEventListener("pointerdown", (event) => {
-        beginDrag("min", event);
-      });
+    stopBenchmarkRangeDrag();
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
     }
+  };
 
-    refs.benchmarkRangeSlider.addEventListener("pointerdown", (event) => {
-      const target = event.target;
-      if (target === refs.benchmarkRangeHandleMax || target === refs.benchmarkRangeHandleMin) return;
-      const value = benchmarkValueFromClientY(event.clientY);
-      if (!Number.isFinite(value)) return;
-      const currentMin = Number.isFinite(appState.benchmarkMap.rangeMin)
-        ? appState.benchmarkMap.rangeMin
-        : benchmarkRangeSliderBounds.min;
-      const currentMax = Number.isFinite(appState.benchmarkMap.rangeMax)
-        ? appState.benchmarkMap.rangeMax
-        : benchmarkRangeSliderBounds.max;
-      const handleType = Math.abs(value - currentMax) <= Math.abs(value - currentMin) ? "max" : "min";
-      beginDrag(handleType, event);
+  const beginDrag = (handleType, event) => {
+    event.preventDefault();
+    startBenchmarkRangeDrag(handleType, event.clientY);
+    if (typeof window !== "undefined") {
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+    }
+  };
+
+  if (refs.benchmarkRangeHandleMax) {
+    refs.benchmarkRangeHandleMax.addEventListener("pointerdown", (event) => {
+      beginDrag("max", event);
     });
-  };
+  }
 
+  if (refs.benchmarkRangeHandleMin) {
+    refs.benchmarkRangeHandleMin.addEventListener("pointerdown", (event) => {
+      beginDrag("min", event);
+    });
+  }
+
+  refs.benchmarkRangeSlider.addEventListener("pointerdown", (event) => {
+    const target = event.target;
+    if (target === refs.benchmarkRangeHandleMax || target === refs.benchmarkRangeHandleMin) return;
+    const value = benchmarkValueFromClientY(event.clientY);
+    if (!Number.isFinite(value)) return;
+    const currentMin = Number.isFinite(appState.benchmarkMap.rangeMin)
+      ? appState.benchmarkMap.rangeMin
+      : benchmarkRangeSliderBounds.min;
+    const currentMax = Number.isFinite(appState.benchmarkMap.rangeMax)
+      ? appState.benchmarkMap.rangeMax
+      : benchmarkRangeSliderBounds.max;
+    const handleType = Math.abs(value - currentMax) <= Math.abs(value - currentMin) ? "max" : "min";
+    beginDrag(handleType, event);
+  });
+}
+
+function bindShellEvents() {
   if (refs.themeToggleButton) {
     refs.themeToggleButton.addEventListener("click", toggleTheme);
   }
@@ -7649,6 +7649,9 @@ function bindEvents() {
       setTopMeta(normalizeUserFacingError(reason), "error");
     });
   }
+}
+
+function bindPolicyHistoryEvents() {
   if (refs.policyFilterProvince) {
     refs.policyFilterProvince.addEventListener("change", () => {
       appState.policyFilters.provinceKey = refs.policyFilterProvince.value;
@@ -7710,11 +7713,25 @@ function bindEvents() {
       exportHistoryChartData("boxplot");
     });
   }
+}
 
+function bindNavigationEvents() {
   refs.navItems.forEach((item) => {
     item.addEventListener("click", () => setActivePage(item.dataset.page));
   });
 
+  document.querySelectorAll("[data-jump]").forEach((button) => {
+    button.addEventListener("click", () => setActivePage(button.dataset.jump));
+  });
+  refs.resultReportTabs?.forEach((button) => {
+    button.addEventListener("click", () => setResultReportView(button.dataset.resultView));
+  });
+  document.querySelectorAll(".result-disclosure").forEach((node) => {
+    node.addEventListener("toggle", queueResultChartsResize);
+  });
+}
+
+function bindCompareEvents() {
   if (Array.isArray(refs.compareTabButtons)) {
     refs.compareTabButtons.forEach((button) => {
       button.addEventListener("click", () => {
@@ -7775,17 +7792,9 @@ function bindEvents() {
       renderCompare();
     });
   }
+}
 
-  document.querySelectorAll("[data-jump]").forEach((button) => {
-    button.addEventListener("click", () => setActivePage(button.dataset.jump));
-  });
-  refs.resultReportTabs?.forEach((button) => {
-    button.addEventListener("click", () => setResultReportView(button.dataset.resultView));
-  });
-  document.querySelectorAll(".result-disclosure").forEach((node) => {
-    node.addEventListener("toggle", queueResultChartsResize);
-  });
-
+function bindCreateEnergyEvents() {
   refs.createProjectForm.addEventListener("submit", (event) => {
     event.preventDefault();
     createProjectFromForm({ targetPage: "create-page" });
@@ -7850,6 +7859,9 @@ function bindEvents() {
       });
     });
   }
+}
+
+function bindForecastScenarioEvents() {
   refs.forecastRunForm.addEventListener("submit", (event) => {
     event.preventDefault();
     generateForecastRun();
@@ -7912,6 +7924,9 @@ function bindEvents() {
       renderProvinceLibrary();
     });
   }
+}
+
+function bindScenarioDerivedFieldEvents() {
   document.querySelector("#mechanism-enabled").addEventListener("change", syncScenarioFieldLocks);
   [
     "#mechanism-ratio",
@@ -7934,11 +7949,24 @@ function bindEvents() {
     field.addEventListener("input", () => updateEnvValueSpaceDisplay());
     field.addEventListener("change", () => updateEnvValueSpaceDisplay());
   });
+}
 
+function bindResultActionEvents() {
   refs.runCalcButton.addEventListener("click", runCalculation);
   refs.exportAnnualButton.addEventListener("click", exportAnnualCsv);
   refs.exportHourlyButton.addEventListener("click", exportHourlyCsv);
   refs.printReportButton.addEventListener("click", printScenarioReport);
+}
+
+function bindEvents() {
+  bindShellEvents();
+  bindPolicyHistoryEvents();
+  bindNavigationEvents();
+  bindCompareEvents();
+  bindCreateEnergyEvents();
+  bindForecastScenarioEvents();
+  bindScenarioDerivedFieldEvents();
+  bindResultActionEvents();
 }
 
 async function init() {
