@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const APP_JS_MAX_LINES = 6300;
+const APP_JS_MAX_LINES = 6200;
 const APP_JS_MAX_FUNCTION_LINES = 120;
 
 function readText(relativePath) {
@@ -37,46 +37,41 @@ function assertAppJsBudget() {
 
 function collectTopLevelFunctionSizes(relativePath) {
   const lines = readText(relativePath).split(/\r?\n/);
-  const stack = [];
   const functions = [];
   const declarationPattern = /^function\s+([A-Za-z0-9_$]+)/;
 
   lines.forEach((line, index) => {
     const match = line.match(declarationPattern);
-    if (match) {
-      stack.push({
-        name: match[1],
-        start: index + 1,
-        depth: 0,
-        seenOpeningBrace: false
-      });
-    }
-
-    for (const char of line) {
-      if (char === "{") {
-        stack.forEach((item) => {
-          if (item.seenOpeningBrace) item.depth += 1;
-        });
-        const current = stack[stack.length - 1];
-        if (current && !current.seenOpeningBrace) {
-          current.seenOpeningBrace = true;
-          current.depth = 1;
-        }
-      } else if (char === "}") {
-        for (let i = stack.length - 1; i >= 0; i -= 1) {
-          const item = stack[i];
-          if (item.seenOpeningBrace) item.depth -= 1;
-          if (item.seenOpeningBrace && item.depth === 0) {
+    if (!match) return;
+    let depth = 0;
+    let seenOpeningBrace = false;
+    let foundEnd = false;
+    for (let lineIndex = index; lineIndex < lines.length; lineIndex += 1) {
+      const currentLine = lines[lineIndex];
+      const startAt = lineIndex === index
+        ? currentLine.indexOf("{", currentLine.indexOf(")") + 1)
+        : 0;
+      if (startAt < 0) continue;
+      for (let charIndex = startAt; charIndex < currentLine.length; charIndex += 1) {
+        const char = currentLine[charIndex];
+        if (char === "{") {
+          depth += 1;
+          seenOpeningBrace = true;
+        } else if (char === "}") {
+          depth -= 1;
+          if (seenOpeningBrace && depth === 0) {
             functions.push({
-              name: item.name,
-              start: item.start,
-              end: index + 1,
-              lines: index + 1 - item.start + 1
+              name: match[1],
+              start: index + 1,
+              end: lineIndex + 1,
+              lines: lineIndex - index + 1
             });
-            stack.splice(i, 1);
+            foundEnd = true;
+            break;
           }
         }
       }
+      if (foundEnd) break;
     }
   });
 

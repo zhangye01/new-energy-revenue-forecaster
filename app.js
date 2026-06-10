@@ -3157,6 +3157,91 @@ function getStorageConfigText(project) {
   return "配储";
 }
 
+function updateExistingProjectFromForm(project, input, targetPage) {
+  const oldProvince = project.province;
+  const baseChanged = project.province !== input.province
+    || project.assetType !== input.assetType
+    || project.siteType !== input.siteType
+    || project.hasStorage !== input.hasStorage
+    || project.storagePowerMw !== input.storagePowerMw
+    || project.storageDurationH !== input.storageDurationH
+    || project.storageNote !== input.storageNote
+    || project.capacityMw !== input.capacityMw
+    || project.startYear !== input.startYear
+    || project.forecastYears !== input.forecastYears;
+
+  project.name = input.name;
+  project.province = input.province;
+  project.assetType = input.assetType;
+  project.siteType = input.siteType;
+  project.hasStorage = input.hasStorage;
+  project.storagePowerMw = input.storagePowerMw;
+  project.storageDurationH = input.storageDurationH;
+  project.storageNote = input.storageNote;
+  project.capacityMw = input.capacityMw;
+  project.startYear = input.startYear;
+  project.forecastYears = input.forecastYears;
+  project.energyMode = input.energyMode;
+  project.note = input.note;
+  project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
+  const provinceDefaultsAutoSynced = syncProjectProvinceDefaultsToBaseline(project, {
+    force: shouldAutoSyncProvinceDefaults(project)
+  });
+  syncProjectProvinceScopedState(project, { force: true });
+
+  if (baseChanged) {
+    project.energyData = createEmptyEnergyDataState(input.energyMode);
+    project.historySpotImport = createEmptyHistorySpotImport();
+    clearHistoryAnalysisCacheForProject(project.id);
+    const exports = ensureProjectEnergyTemplateExports(project);
+    exports.hourly_8760 = "";
+    exports.annual_hours = "";
+    exports.typical_curve_8760 = "";
+    exports.province_typical_curve = "";
+    project.statuses["energy-page"] = "in_progress";
+    project.statuses["history-page"] = "not_started";
+    markDownstreamStale(project, "energy-page");
+    setTopMeta("当前项目已更新，请在步骤2重新导入电量。");
+    if (provinceDefaultsAutoSynced) {
+      setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量；${getProvinceName(project.province)}默认参数已同步到基准场景。`, "warn");
+    } else if (oldProvince !== input.province) {
+      setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量，并在全口径收入配置页复核${getProvinceName(project.province)}默认参数。`, "warn");
+    } else {
+      setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量。`, "warn");
+    }
+  } else {
+    if (!project.energyData || typeof project.energyData !== "object") {
+      project.energyData = createEmptyEnergyDataState(input.energyMode);
+    } else {
+      ensureProjectEnergyDataState(project).mode = input.energyMode;
+    }
+    if (project.statuses["energy-page"] === "not_started") {
+      project.statuses["energy-page"] = "in_progress";
+    }
+    setTopMeta("当前项目已保存。");
+    if (provinceDefaultsAutoSynced) {
+      setCreateSaveMessage(`已更新当前项目：${project.name}。${getProvinceName(project.province)}默认参数已同步到基准场景。`, "success");
+    } else {
+      setCreateSaveMessage(`已更新当前项目：${project.name}。`, "success");
+    }
+  }
+
+  ensureProjectEnergyTemplateExports(project);
+  const movedToHistory = moveProjectToHistoryWorkspaceIfReady(project);
+  createFormSyncedProjectId = project.id;
+  appState.activeProjectId = project.id;
+  applyEnergyModeUi(input.energyMode);
+  if (movedToHistory) {
+    setTopMeta("当前项目已完成基础信息校准，已转入历史项目工作区。");
+    setCreateSaveMessage(`已更新当前项目：${project.name}。已转入历史项目工作区。`, "success");
+  }
+  setActivePage(targetPage);
+  if (targetPage === "create-page") {
+    scrollCreateWorkspaceToBottom();
+  }
+  return project;
+}
+
 function createProjectFromForm(options = {}) {
   const {
     targetPage = "create-page",
@@ -3194,111 +3279,16 @@ function createProjectFromForm(options = {}) {
     setCreateSaveMessage(formState.error.message, "warn");
     return null;
   }
-  const {
-    hasStorage,
-    storagePowerMw,
-    storageDurationH,
-    storageNote,
-    capacityMw,
-    startYear,
-    forecastYears,
-    energyMode,
-    note
-  } = formState.input;
-  let {
-    name,
-    province,
-    assetType,
-    siteType
-  } = formState.input;
+  let { name } = formState.input;
   if (!existingProject && autoUniqueName) {
     name = resolveUniqueProjectName(name);
   }
 
   if (existingProject) {
-    const project = existingProject;
-    const oldProvince = project.province;
-    const baseChanged = project.province !== province
-      || project.assetType !== assetType
-      || project.siteType !== siteType
-      || project.hasStorage !== hasStorage
-      || project.storagePowerMw !== storagePowerMw
-      || project.storageDurationH !== storageDurationH
-      || project.storageNote !== storageNote
-      || project.capacityMw !== capacityMw
-      || project.startYear !== startYear
-      || project.forecastYears !== forecastYears;
-
-    project.name = name;
-    project.province = province;
-    project.assetType = assetType;
-    project.siteType = siteType;
-    project.hasStorage = hasStorage;
-    project.storagePowerMw = storagePowerMw;
-    project.storageDurationH = storageDurationH;
-    project.storageNote = storageNote;
-    project.capacityMw = capacityMw;
-    project.startYear = startYear;
-    project.forecastYears = forecastYears;
-    project.energyMode = energyMode;
-    project.note = note;
-    project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
-    const provinceDefaultsAutoSynced = syncProjectProvinceDefaultsToBaseline(project, {
-      force: shouldAutoSyncProvinceDefaults(project)
-    });
-    syncProjectProvinceScopedState(project, { force: true });
-
-    if (baseChanged) {
-      project.energyData = createEmptyEnergyDataState(energyMode);
-      project.historySpotImport = createEmptyHistorySpotImport();
-      clearHistoryAnalysisCacheForProject(project.id);
-      const exports = ensureProjectEnergyTemplateExports(project);
-      exports.hourly_8760 = "";
-      exports.annual_hours = "";
-      exports.typical_curve_8760 = "";
-      exports.province_typical_curve = "";
-      project.statuses["energy-page"] = "in_progress";
-      project.statuses["history-page"] = "not_started";
-      markDownstreamStale(project, "energy-page");
-      setTopMeta("当前项目已更新，请在步骤2重新导入电量。");
-      if (provinceDefaultsAutoSynced) {
-        setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量；${getProvinceName(project.province)}默认参数已同步到基准场景。`, "warn");
-      } else if (oldProvince !== province) {
-        setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量，并在全口径收入配置页复核${getProvinceName(project.province)}默认参数。`, "warn");
-      } else {
-        setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量。`, "warn");
-      }
-    } else {
-      if (!project.energyData || typeof project.energyData !== "object") {
-        project.energyData = createEmptyEnergyDataState(energyMode);
-      } else {
-        ensureProjectEnergyDataState(project).mode = energyMode;
-      }
-      if (project.statuses["energy-page"] === "not_started") {
-        project.statuses["energy-page"] = "in_progress";
-      }
-      setTopMeta("当前项目已保存。");
-      if (provinceDefaultsAutoSynced) {
-        setCreateSaveMessage(`已更新当前项目：${project.name}。${getProvinceName(project.province)}默认参数已同步到基准场景。`, "success");
-      } else {
-        setCreateSaveMessage(`已更新当前项目：${project.name}。`, "success");
-      }
-    }
-
-    ensureProjectEnergyTemplateExports(project);
-    const movedToHistory = moveProjectToHistoryWorkspaceIfReady(project);
-    createFormSyncedProjectId = project.id;
-    appState.activeProjectId = project.id;
-    applyEnergyModeUi(energyMode);
-    if (movedToHistory) {
-      setTopMeta("当前项目已完成基础信息校准，已转入历史项目工作区。");
-      setCreateSaveMessage(`已更新当前项目：${project.name}。已转入历史项目工作区。`, "success");
-    }
-    setActivePage(targetPage);
-    if (targetPage === "create-page") {
-      scrollCreateWorkspaceToBottom();
-    }
-    return project;
+    return updateExistingProjectFromForm(existingProject, {
+      ...formState.input,
+      name
+    }, targetPage);
   }
 
   const project = projectModel.createProjectRecord({
