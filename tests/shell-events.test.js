@@ -1,7 +1,10 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { bindShellEvents } = require("../src/ui/shell-events");
+const {
+  bindShellEvents,
+  createAppShellHandlers
+} = require("../src/ui/shell-events");
 
 class FakeTarget {
   constructor(dataset = {}) {
@@ -97,6 +100,129 @@ assert.deepEqual(calls, [
   "keydown",
   "error",
   "rejection"
+]);
+
+const hiddenTarget = new FakeTarget();
+hiddenTarget.hidden = true;
+hiddenTarget.contains = () => false;
+const openTarget = new FakeTarget();
+openTarget.hidden = false;
+openTarget.contains = () => false;
+const insideTarget = new FakeTarget();
+insideTarget.contains = (target) => target === insideTarget;
+function makeChart() {
+  return {
+    disposed: false,
+    isDisposed() {
+      return this.disposed;
+    },
+    dispose() {
+      this.disposed = true;
+    }
+  };
+}
+
+let energyAnnualChart = makeChart();
+let energyCurveChart = makeChart();
+let benchmarkMapChart = makeChart();
+const scenarioVisualCharts = {
+  a: makeChart(),
+  b: makeChart()
+};
+const shellCalls = [];
+const appState = { overviewSlideIndex: 2, benchmarkMap: { level: "province" } };
+const appHandlers = createAppShellHandlers({
+  refs: {
+    accountModule: openTarget,
+    pageHelp: openTarget,
+    historyDatePanel: openTarget,
+    historyDateToggle: insideTarget,
+    policyDetailModal: openTarget,
+    loginModal: hiddenTarget
+  },
+  appState,
+  benchmarkMapZoomStep: 0.25,
+  scenarioVisualCharts,
+  chartRefs: {
+    energyAnnual: {
+      get: () => energyAnnualChart,
+      set: (chart) => {
+        energyAnnualChart = chart;
+      }
+    },
+    energyCurve: {
+      get: () => energyCurveChart,
+      set: (chart) => {
+        energyCurveChart = chart;
+      }
+    },
+    benchmarkMap: {
+      get: () => benchmarkMapChart,
+      set: (chart) => {
+        benchmarkMapChart = chart;
+      }
+    }
+  },
+  actions: {
+    renderBenchmarkMap: () => shellCalls.push("render-map"),
+    schedulePersistAppData: () => shellCalls.push("persist-later"),
+    adjustBenchmarkMapZoom: (step) => shellCalls.push(`zoom:${step}`),
+    openOverviewPolicyDetail: (index) => shellCalls.push(`policy:${index}`),
+    setHistoryDatePanelOpen: (open) => shellCalls.push(`history-panel:${open}`),
+    closeAccountDropdown: () => shellCalls.push("close-account"),
+    closePageHelp: () => shellCalls.push("close-help"),
+    closeOverviewPolicyDetail: () => shellCalls.push("close-policy"),
+    closeLoginModal: () => shellCalls.push("close-login"),
+    stopOverviewAutoplay: () => shellCalls.push("stop-overview"),
+    disposeHistoryCharts: () => shellCalls.push("dispose-history"),
+    disposeCompareCharts: () => shellCalls.push("dispose-compare"),
+    disposeResultCharts: () => shellCalls.push("dispose-result"),
+    persistAppDataNow: (options) => shellCalls.push(`persist-now:${options.forceLocal}`),
+    normalizeUserFacingError: (error) => `normalized:${error.message || error}`,
+    setTopMeta: (message, level) => shellCalls.push(`top:${level}:${message}`)
+  }
+});
+
+appHandlers.resetBenchmarkMap();
+assert.deepEqual(appState.benchmarkMap, {
+  level: "nation",
+  provinceKey: null,
+  zoom: null,
+  rangeMin: null,
+  rangeMax: null
+});
+appHandlers.zoomBenchmarkIn();
+appHandlers.zoomBenchmarkOut();
+appHandlers.openOverviewPolicyDetail();
+appHandlers.toggleHistoryDatePanel();
+appHandlers.handleDocumentClick({ target: new FakeTarget() });
+appHandlers.handleKeydown({ key: "Escape" });
+appHandlers.handleWindowError({ error: new Error("boom") });
+appHandlers.handleUnhandledRejection({ reason: "bad promise" });
+appHandlers.handleBeforeUnload();
+
+assert.equal(energyAnnualChart, null);
+assert.equal(energyCurveChart, null);
+assert.equal(benchmarkMapChart, null);
+assert.deepEqual(Object.keys(scenarioVisualCharts), []);
+assert.deepEqual(shellCalls, [
+  "render-map",
+  "persist-later",
+  "zoom:0.25",
+  "zoom:-0.25",
+  "policy:2",
+  "history-panel:false",
+  "close-account",
+  "close-help",
+  "history-panel:false",
+  "close-policy",
+  "top:error:normalized:boom",
+  "top:error:normalized:bad promise",
+  "stop-overview",
+  "dispose-history",
+  "dispose-compare",
+  "dispose-result",
+  "persist-now:true"
 ]);
 
 console.log("shell events tests passed");

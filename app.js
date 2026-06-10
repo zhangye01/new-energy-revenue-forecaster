@@ -6539,39 +6539,47 @@ function bindBenchmarkRangeDrag() {
 }
 
 function bindShellEvents() {
-  shellEvents.bindShellEvents({
+  shellEvents.bindAppShellEvents({
     refs,
     documentRef: typeof document !== "undefined" ? document : null,
     windowRef: typeof window !== "undefined" ? window : null,
-    handlers: {
-      toggleTheme,
-      resetBenchmarkMap: () => {
-      appState.benchmarkMap = {
-        level: "nation",
-        provinceKey: null,
-        zoom: null,
-        rangeMin: null,
-        rangeMax: null
-      };
-      void renderBenchmarkMap();
-      schedulePersistAppData();
+    appState,
+    benchmarkMapZoomStep: BENCHMARK_MAP_ZOOM_STEP,
+    scenarioVisualCharts,
+    chartRefs: {
+      energyAnnual: {
+        get: () => energyAnnualChart,
+        set: (chart) => {
+          energyAnnualChart = chart;
+        }
       },
-      zoomBenchmarkIn: () => adjustBenchmarkMapZoom(BENCHMARK_MAP_ZOOM_STEP),
-      zoomBenchmarkOut: () => adjustBenchmarkMapZoom(-BENCHMARK_MAP_ZOOM_STEP),
+      energyCurve: {
+        get: () => energyCurveChart,
+        set: (chart) => {
+          energyCurveChart = chart;
+        }
+      },
+      benchmarkMap: {
+        get: () => benchmarkMapChart,
+        set: (chart) => {
+          benchmarkMapChart = chart;
+        }
+      }
+    },
+    actions: {
+      toggleTheme,
+      renderBenchmarkMap,
+      schedulePersistAppData,
+      adjustBenchmarkMapZoom,
       resetBenchmarkZoom: resetBenchmarkMapZoom,
       bindBenchmarkRangeDrag,
       togglePageHelp,
       goToOverviewSlide,
-      openOverviewPolicyDetail: () => {
-      openOverviewPolicyDetail(appState.overviewSlideIndex);
-      },
+      openOverviewPolicyDetail,
       openLoginModal,
       toggleSidebarGroup,
       toggleAccountDropdown,
-      toggleHistoryDatePanel: () => {
-      const nextOpen = refs.historyDatePanel ? refs.historyDatePanel.hidden : false;
-      setHistoryDatePanelOpen(nextOpen);
-      },
+      setHistoryDatePanelOpen,
       handleAccountManage,
       handleAccountPassword,
       handleLogout,
@@ -6579,61 +6587,15 @@ function bindShellEvents() {
       closeLoginModal,
       handleLoginSubmit,
       closeOverviewPolicyDetail,
-      handleDocumentClick: (event) => {
-      if (refs.accountModule && !refs.accountModule.hidden && !refs.accountModule.contains(event.target)) {
-        closeAccountDropdown();
-      }
-      if (refs.pageHelp && !refs.pageHelp.contains(event.target)) {
-        closePageHelp();
-      }
-      if (refs.historyDatePanel && refs.historyDateToggle && !refs.historyDatePanel.hidden && !refs.historyDatePanel.contains(event.target) && !refs.historyDateToggle.contains(event.target)) {
-        setHistoryDatePanelOpen(false);
-      }
-      },
-      handleBeforeUnload: () => {
-      stopOverviewAutoplay();
-      disposeHistoryCharts();
-      disposeCompareCharts();
-      disposeResultCharts();
-      if (energyAnnualChart && !energyAnnualChart.isDisposed()) {
-        energyAnnualChart.dispose();
-        energyAnnualChart = null;
-      }
-      if (energyCurveChart && !energyCurveChart.isDisposed()) {
-        energyCurveChart.dispose();
-        energyCurveChart = null;
-      }
-      if (benchmarkMapChart && !benchmarkMapChart.isDisposed()) {
-        benchmarkMapChart.dispose();
-        benchmarkMapChart = null;
-      }
-      Object.keys(scenarioVisualCharts).forEach((key) => {
-        const chart = scenarioVisualCharts[key];
-        if (chart && !chart.isDisposed()) {
-          chart.dispose();
-        }
-        delete scenarioVisualCharts[key];
-      });
-      persistAppDataNow({ forceLocal: true });
-      },
-      handleKeydown: (event) => {
-      if (event.key === "Escape" && refs.policyDetailModal && !refs.policyDetailModal.hidden) {
-        closeOverviewPolicyDetail();
-      } else if (event.key === "Escape" && refs.loginModal && !refs.loginModal.hidden) {
-        closeLoginModal();
-      } else if (event.key === "Escape") {
-        closeAccountDropdown();
-        closePageHelp();
-      }
-      },
-      handleWindowError: (event) => {
-      const fallbackError = event?.error || event?.message || "系统出现异常，请刷新页面后重试。";
-      setTopMeta(normalizeUserFacingError(fallbackError), "error");
-      },
-      handleUnhandledRejection: (event) => {
-      const reason = event?.reason || "系统出现异常，请刷新页面后重试。";
-      setTopMeta(normalizeUserFacingError(reason), "error");
-      }
+      closeAccountDropdown,
+      closePageHelp,
+      stopOverviewAutoplay,
+      disposeHistoryCharts,
+      disposeCompareCharts,
+      disposeResultCharts,
+      persistAppDataNow,
+      normalizeUserFacingError,
+      setTopMeta
     }
   });
 }
