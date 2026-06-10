@@ -6,7 +6,8 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "..");
 const APP_JS_MAX_LINES = 6005;
 const APP_JS_MAX_FUNCTION_LINES = 75;
-const STYLES_CSS_MAX_LINES = 5500;
+const STYLES_CSS_MAX_LINES = 5100;
+const REQUIRED_CSS_ORDER = ["styles/theme.css", "styles.css"];
 const FORBIDDEN_APP_JS_PATTERNS = [
   {
     name: "stale energy mode UI sync",
@@ -129,6 +130,35 @@ function assertStylesCssBudget() {
   }
 }
 
+function collectStylesheetHrefsFromHtml(html) {
+  const links = [];
+  const linkPattern = /<link\b[^>]*>/gi;
+  for (const match of html.matchAll(linkPattern)) {
+    const tag = match[0];
+    if (!/\brel=["']stylesheet["']/i.test(tag)) continue;
+    const hrefMatch = tag.match(/\bhref=["']([^"']+)["']/i);
+    if (!hrefMatch) continue;
+    links.push(hrefMatch[1].split("?")[0].replace(/^\.\//, ""));
+  }
+  return links;
+}
+
+function assertCssLoadOrder() {
+  const stylesheets = collectStylesheetHrefsFromHtml(readText("index.html"));
+  REQUIRED_CSS_ORDER.forEach((requiredPath) => {
+    if (!stylesheets.includes(requiredPath)) {
+      fail(`${requiredPath} must be loaded by index.html`);
+    }
+  });
+  const indexes = REQUIRED_CSS_ORDER.map((requiredPath) => stylesheets.indexOf(requiredPath));
+  for (let index = 1; index < indexes.length; index += 1) {
+    if (indexes[index] <= indexes[index - 1]) {
+      fail(`CSS load order must be ${REQUIRED_CSS_ORDER.join(" before ")}`);
+      break;
+    }
+  }
+}
+
 function assertModulesHaveTests() {
   const modules = [
     ...listJsFiles("src/domain"),
@@ -235,6 +265,7 @@ function run() {
   assertAppJsFunctionBudget();
   assertNoForbiddenAppPatterns();
   assertStylesCssBudget();
+  assertCssLoadOrder();
   assertModulesHaveTests();
   assertModulesAreInSyntaxCheck();
   assertTestsUseDiscovery();
@@ -255,5 +286,6 @@ if (require.main === module) {
 
 module.exports = {
   collectTopLevelFunctionSizesFromText,
+  collectStylesheetHrefsFromHtml,
   findForbiddenAppPatternsFromText
 };

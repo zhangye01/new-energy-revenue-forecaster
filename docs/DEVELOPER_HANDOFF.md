@@ -62,7 +62,7 @@ npm run check
 1. `npm run check:syntax`：自动扫描并检查静态脚本语法。
 2. `npm test`：自动扫描并运行 `tests/*.test.js`。
 3. `npm run check:architecture`：检查模块测试、脚本加载和 `app.js` 规模是否越界。
-4. `npm run check:static`：检查 `index.html` / `styles.css` 的本地资源引用、重复 id 和标题结构。
+4. `npm run check:static`：检查 `index.html` / 所有 CSS 入口的本地资源引用、重复 id 和标题结构。
 5. `npm run check:smoke`：检查核心页面、关键 DOM 节点和启动脚本顺序。
 6. `npm run check:serve`：启动临时 HTTP 静态服务，确认 `index.html` 和本地资源可访问。
 7. `npm run check:release`：检查已追踪文件中是否存在本地运行痕迹、个人绝对路径或高置信度密钥格式。

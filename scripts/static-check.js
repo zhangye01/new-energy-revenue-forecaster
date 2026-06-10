@@ -76,6 +76,12 @@ function collectCssReferences(relativePath) {
   return references;
 }
 
+function collectCssEntryReferences(html) {
+  return collectHtmlReferences(html)
+    .map((item) => item.reference)
+    .filter((reference) => reference.endsWith(".css"));
+}
+
 function assertUniqueIds(html) {
   const counts = new Map();
   const idPattern = /\bid=["']([^"']+)["']/gi;
@@ -102,9 +108,10 @@ function run() {
   const html = readText("index.html");
   assertSingleTitle(html);
   const idCount = assertUniqueIds(html);
+  const htmlReferences = collectHtmlReferences(html);
   const references = [
-    ...collectHtmlReferences(html),
-    ...collectCssReferences("styles.css")
+    ...htmlReferences,
+    ...collectCssEntryReferences(html).flatMap((reference) => collectCssReferences(reference))
   ];
   const uniqueReferences = new Map();
   for (const item of references) {
@@ -122,6 +129,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  collectCssEntryReferences,
+  collectCssReferences,
   collectHtmlReferences,
   isLocalReference,
   normalizeReference,

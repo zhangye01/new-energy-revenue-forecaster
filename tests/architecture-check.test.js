@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const {
   collectTopLevelFunctionSizesFromText,
+  collectStylesheetHrefsFromHtml,
   findForbiddenAppPatternsFromText
 } = require("../scripts/architecture-check");
 
@@ -48,5 +49,11 @@ assert.deepEqual(findForbiddenAppPatternsFromText([
     message: "do not reintroduce the removed no-op; sync through the energy workspace model"
   }
 ]);
+
+assert.deepEqual(collectStylesheetHrefsFromHtml([
+  "<link rel=\"icon\" href=\"data:,\">",
+  "<link rel=\"stylesheet\" href=\"./styles/theme.css?v=1\">",
+  "<link href=\"./styles.css?v=1\" rel=\"stylesheet\">"
+].join("\n")), ["styles/theme.css", "styles.css"]);
 
 console.log("architecture check tests passed");
