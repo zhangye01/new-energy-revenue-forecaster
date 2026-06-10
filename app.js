@@ -6434,70 +6434,41 @@ function bindCompareEvents() {
 }
 
 function bindCreateEnergyEvents() {
-  refs.createProjectForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    createProjectFromForm({ targetPage: "create-page" });
-  });
-  if (refs.createHasStorage) {
-    refs.createHasStorage.addEventListener("change", syncCreateStorageFieldsUi);
-  }
-  if (refs.createToEnergyButton) {
-    refs.createToEnergyButton.addEventListener("click", () => {
-      const project = getActiveProject();
-      if (!project || !isProjectCreateCompleted(project)) {
-        setTopMeta("请先完成并保存项目基础信息。");
-        setCreateSaveMessage("请先保存基础信息，再进入结算电量配置。", "warn");
-        return;
-      }
-      setActivePage("energy-page");
-    });
-  }
-  if (refs.energyToHistoryButton) {
-    refs.energyToHistoryButton.addEventListener("click", () => {
-      const project = getActiveProject();
-      const ready = project && hasEnergyHistoryEntryReadiness(project);
-      if (!ready) {
-        setEnergyImportMessage("请先完成全部预测年份的结算电量配置，再进入历史电价分析。", "warn");
-        return;
-      }
-      setActivePage("history-page");
-    });
-  }
-
-  if (refs.exportEnergyAnnualTemplateButton) {
-    refs.exportEnergyAnnualTemplateButton.addEventListener("click", () => {
-      exportEnergyTemplate("annual_hours");
-    });
-  }
-  if (refs.importEnergyAnnualFileButton) {
-    refs.importEnergyAnnualFileButton.addEventListener("click", () => {
-      importEnergyFromFile("annual_hours", refs.energyAnnualFileInput);
-    });
-  }
-  if (refs.exportEnergyTypicalTemplateButton) {
-    refs.exportEnergyTypicalTemplateButton.addEventListener("click", () => {
-      exportEnergyTemplate("typical_curve_8760");
-    });
-  }
-  if (refs.importEnergyTypicalFileButton) {
-    refs.importEnergyTypicalFileButton.addEventListener("click", () => {
-      importEnergyFromFile("typical_curve_8760", refs.energyTypicalFileInput);
-    });
-  }
-  if (refs.applyEnergyProvinceCurveButton) {
-    refs.applyEnergyProvinceCurveButton.addEventListener("click", applyProvinceTypicalCurve);
-  }
-  if (Array.isArray(refs.energyStep2ChoiceButtons)) {
-    refs.energyStep2ChoiceButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        const nextChoice = sanitizeEnergyStep2Choice(button.dataset.energyStep2Choice);
+  energyWorkspaceView.bindCreateEnergyEvents({
+    refs,
+    handlers: {
+      submitCreateProject: () => createProjectFromForm({ targetPage: "create-page" }),
+      syncCreateStorageFields: syncCreateStorageFieldsUi,
+      enterEnergyPage: () => {
+        const project = getActiveProject();
+        if (!project || !isProjectCreateCompleted(project)) {
+          setTopMeta("请先完成并保存项目基础信息。");
+          setCreateSaveMessage("请先保存基础信息，再进入结算电量配置。", "warn");
+          return;
+        }
+        setActivePage("energy-page");
+      },
+      enterHistoryPage: () => {
+        const project = getActiveProject();
+        const ready = project && hasEnergyHistoryEntryReadiness(project);
+        if (!ready) {
+          setEnergyImportMessage("请先完成全部预测年份的结算电量配置，再进入历史电价分析。", "warn");
+          return;
+        }
+        setActivePage("history-page");
+      },
+      exportEnergyTemplate,
+      importEnergyFromFile,
+      applyProvinceTypicalCurve,
+      changeEnergyStep2Choice: (rawChoice) => {
+        const nextChoice = sanitizeEnergyStep2Choice(rawChoice);
         if (appState.energyStep2Choice === nextChoice) return;
         appState.energyStep2Choice = nextChoice;
         renderEnergyStep2ChoiceState();
         schedulePersistAppData();
-      });
-    });
-  }
+      }
+    }
+  });
 }
 
 function bindForecastScenarioEvents() {

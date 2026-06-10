@@ -37,6 +37,48 @@
     };
   }
 
+  function bindCreateEnergyEvents(input = {}) {
+    const {
+      refs = {},
+      handlers = {}
+    } = input;
+    refs.createProjectForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      handlers.submitCreateProject?.();
+    });
+    refs.createHasStorage?.addEventListener("change", () => {
+      handlers.syncCreateStorageFields?.();
+    });
+    refs.createToEnergyButton?.addEventListener("click", () => {
+      handlers.enterEnergyPage?.();
+    });
+    refs.energyToHistoryButton?.addEventListener("click", () => {
+      handlers.enterHistoryPage?.();
+    });
+    refs.exportEnergyAnnualTemplateButton?.addEventListener("click", () => {
+      handlers.exportEnergyTemplate?.("annual_hours");
+    });
+    refs.importEnergyAnnualFileButton?.addEventListener("click", () => {
+      handlers.importEnergyFromFile?.("annual_hours", refs.energyAnnualFileInput);
+    });
+    refs.exportEnergyTypicalTemplateButton?.addEventListener("click", () => {
+      handlers.exportEnergyTemplate?.("typical_curve_8760");
+    });
+    refs.importEnergyTypicalFileButton?.addEventListener("click", () => {
+      handlers.importEnergyFromFile?.("typical_curve_8760", refs.energyTypicalFileInput);
+    });
+    refs.applyEnergyProvinceCurveButton?.addEventListener("click", () => {
+      handlers.applyProvinceTypicalCurve?.();
+    });
+    if (Array.isArray(refs.energyStep2ChoiceButtons)) {
+      refs.energyStep2ChoiceButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          handlers.changeEnergyStep2Choice?.(button.dataset.energyStep2Choice);
+        });
+      });
+    }
+  }
+
   function templateStatus(text, stateClass, title = "") {
     return { text, stateClass, title };
   }
@@ -243,6 +285,7 @@
 
   return Object.freeze({
     BLOCKED_MESSAGE,
+    bindCreateEnergyEvents,
     buildEnergyWorkspaceViewModel,
     shouldRefreshEnergyMessage,
     resolveModeLabel

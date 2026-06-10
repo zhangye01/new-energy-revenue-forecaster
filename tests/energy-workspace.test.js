@@ -3,10 +3,92 @@
 const assert = require("node:assert/strict");
 const {
   BLOCKED_MESSAGE,
+  bindCreateEnergyEvents,
   buildEnergyWorkspaceViewModel,
   resolveModeLabel,
   shouldRefreshEnergyMessage
 } = require("../src/ui/energy-workspace");
+
+class FakeTarget {
+  constructor(dataset = {}) {
+    this.dataset = dataset;
+    this.handlers = {};
+  }
+
+  addEventListener(name, handler) {
+    this.handlers[name] = handler;
+  }
+
+  dispatch(name, event = {}) {
+    const nextEvent = {
+      target: this,
+      prevented: false,
+      preventDefault() {
+        nextEvent.prevented = true;
+      },
+      ...event
+    };
+    this.handlers[name]?.(nextEvent);
+    return nextEvent;
+  }
+}
+
+const energyEventCalls = [];
+const annualFileInput = new FakeTarget();
+const typicalFileInput = new FakeTarget();
+const typicalChoiceButton = new FakeTarget({ energyStep2Choice: "typical" });
+const provinceChoiceButton = new FakeTarget({ energyStep2Choice: "province" });
+const energyEventRefs = {
+  createProjectForm: new FakeTarget(),
+  createHasStorage: new FakeTarget(),
+  createToEnergyButton: new FakeTarget(),
+  energyToHistoryButton: new FakeTarget(),
+  exportEnergyAnnualTemplateButton: new FakeTarget(),
+  importEnergyAnnualFileButton: new FakeTarget(),
+  energyAnnualFileInput: annualFileInput,
+  exportEnergyTypicalTemplateButton: new FakeTarget(),
+  importEnergyTypicalFileButton: new FakeTarget(),
+  energyTypicalFileInput: typicalFileInput,
+  applyEnergyProvinceCurveButton: new FakeTarget(),
+  energyStep2ChoiceButtons: [typicalChoiceButton, provinceChoiceButton]
+};
+bindCreateEnergyEvents({
+  refs: energyEventRefs,
+  handlers: {
+    submitCreateProject: () => energyEventCalls.push("submit-create"),
+    syncCreateStorageFields: () => energyEventCalls.push("sync-storage"),
+    enterEnergyPage: () => energyEventCalls.push("enter-energy"),
+    enterHistoryPage: () => energyEventCalls.push("enter-history"),
+    exportEnergyTemplate: (mode) => energyEventCalls.push(`export:${mode}`),
+    importEnergyFromFile: (mode, input) => energyEventCalls.push(`import:${mode}:${input === annualFileInput ? "annual" : "typical"}`),
+    applyProvinceTypicalCurve: () => energyEventCalls.push("apply-province"),
+    changeEnergyStep2Choice: (choice) => energyEventCalls.push(`choice:${choice}`)
+  }
+});
+assert.equal(energyEventRefs.createProjectForm.dispatch("submit").prevented, true);
+energyEventRefs.createHasStorage.dispatch("change");
+energyEventRefs.createToEnergyButton.dispatch("click");
+energyEventRefs.energyToHistoryButton.dispatch("click");
+energyEventRefs.exportEnergyAnnualTemplateButton.dispatch("click");
+energyEventRefs.importEnergyAnnualFileButton.dispatch("click");
+energyEventRefs.exportEnergyTypicalTemplateButton.dispatch("click");
+energyEventRefs.importEnergyTypicalFileButton.dispatch("click");
+energyEventRefs.applyEnergyProvinceCurveButton.dispatch("click");
+typicalChoiceButton.dispatch("click");
+provinceChoiceButton.dispatch("click");
+assert.deepEqual(energyEventCalls, [
+  "submit-create",
+  "sync-storage",
+  "enter-energy",
+  "enter-history",
+  "export:annual_hours",
+  "import:annual_hours:annual",
+  "export:typical_curve_8760",
+  "import:typical_curve_8760:typical",
+  "apply-province",
+  "choice:typical",
+  "choice:province"
+]);
 
 assert.equal(resolveModeLabel(0, ""), "待配置");
 assert.equal(resolveModeLabel(2, ""), "仅逐年总量");
