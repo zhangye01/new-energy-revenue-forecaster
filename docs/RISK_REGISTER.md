@@ -4,7 +4,7 @@
 
 | ID | 风险 | 等级 | 当前状态 | 处理策略 |
 | --- | --- | --- | --- | --- |
-| R-001 | `app.js` 仍然承担页面主控、表单、事件绑定和部分渲染职责 | 高 | 7200 行，最大函数 131 行；事件绑定、部分表单读写、首页政策面板、场景可视化数据和对比页 HTML 构造已开始迁出 | 继续按页面拆控制器，下一阶段向 7000 行以下推进 |
+| R-001 | `app.js` 仍然承担页面主控、表单、事件绑定和部分渲染职责 | 中 | 6994 行，最大函数 131 行；事件绑定、部分表单读写、首页政策面板、历史页渲染、打印控制、场景可视化数据和对比页 HTML 构造已迁出 | 继续按页面拆控制器，但已低于阶段性 7000 行门槛 |
 | R-002 | 无构建工具，依赖全局 `window.NE_*` 和脚本顺序 | 中 | 静态部署简单；脚本引用已由架构检查和静态检查守护 | 短期继续用门禁守住脚本引用；中期评估 Vite/ESM |
 | R-003 | 页面交互缺少自动化端到端回归 | 中 | Node 测试覆盖核心计算，浏览器流程主要靠人工烟测 | 后续补关键路径 smoke 脚本 |
 | R-004 | 电价预测、历史现货和省级典型曲线仍包含模拟数据逻辑 | 中 | 可演示，但不是正式生产模型 | 对外说明模拟边界；接入真实数据前补数据契约和验收用例 |
@@ -15,14 +15,14 @@
 
 ## 当前风险判断
 
-整体风险：中等，偏可控。
+整体风险：中低，当前已具备继续移交开发的基础工程边界。
 
 已经完成的降风险动作：
 
 - 核心业务规则迁入 `src/domain/`。
 - 结算电量配置页、结果页、全口径收入配置页、对比页、历史页图表 option 迁入 `src/ui/`。
 - 本地业务快照和浏览器存储访问集中到 `app-storage.js`。
-- 页面主控共用工具已迁入 `app-utils.js`，历史电价模拟样本和日期范围切片已迁入 `history-analysis.js`，项目列表、首页政策面板、省份默认参数展示、结算电量工作台、结果总览报告和历史页展示 view model 已分别迁入 `project-list.js`、`policy-panel.js`、`province-defaults.js`、`energy-workspace.js`、`result-page.js` 和 `history-page.js`，结算电量与全口径收入配置页图表 option 已分别迁入 `energy-charts.js` 和 `scenario-charts.js`，全口径收入配置页表单读写已迁入 `scenario-form.js`，场景可视化年度行数据已迁入 `scenario-visual-data.js`，多方案对比页 HTML 构造已迁入 `compare-page.js`，壳层事件绑定已迁入 `shell-events.js`，逐年配置导入流程已收敛为配置驱动逻辑。
+- 页面主控共用工具已迁入 `app-utils.js`，历史电价模拟样本和日期范围切片已迁入 `history-analysis.js`，项目列表、首页政策面板、省份默认参数展示、结算电量工作台、结果总览报告和历史页展示 view model 已分别迁入 `project-list.js`、`policy-panel.js`、`province-defaults.js`、`energy-workspace.js`、`result-page.js` 和 `history-page.js`，结算电量导入流程已迁入 `energy-import-flow.js`，结果打印控制已迁入 `result-print.js`，历史页渲染控制已迁入 `history-renderer.js`，结算电量与全口径收入配置页图表 option 已分别迁入 `energy-charts.js` 和 `scenario-charts.js`，全口径收入配置页表单读写已迁入 `scenario-form.js`，场景可视化年度行数据已迁入 `scenario-visual-data.js`，多方案对比页 HTML 构造已迁入 `compare-page.js`，壳层事件绑定已迁入 `shell-events.js`，逐年配置导入流程已收敛为配置驱动逻辑。
 - 增加业务黄金样例、图表 option、导入导出、项目模型和流程状态测试。
 - 建立业务交接包、数据字典、模型说明、架构图和开发 SOP。
 - 建立 GitHub Actions，推送和 PR 统一运行 `npm run check`。
@@ -30,8 +30,8 @@
 
 ## 进入后续开发前必须继续压降的风险
 
-1. `app.js` 已低于 8000 行，后续继续向 7000 行以下推进。
-2. 全口径收入配置页拆出页面控制逻辑。
+1. `app.js` 已低于 7000 行，后续继续按页面控制器逐步收敛。
+2. 全口径收入配置页仍可继续拆出剩余批量操作和方案管理控制逻辑。
 3. 分组后的事件绑定继续从 `app.js` 迁出到页面控制器，降低主控制器上下文压力。
 4. 关键页面补自动化 smoke。
 5. 若新增真实数据接口或账号体系，先补数据契约、鉴权设计和安全检查。

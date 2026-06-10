@@ -25,6 +25,7 @@
 | `export-builders.js` | CSV 导出文件名、年度结果和小时明细导出行构造 |
 | `energy-profiles.js` | 年总小时拆分、典型曲线归一化、逐年电量扩展 |
 | `energy-data.js` | 电量导入模板校验、模式识别、电量状态重建 |
+| `energy-import-flow.js` | 结算电量导入后的状态更新、提示文案和下游置脏流程 |
 | `app-utils.js` | 页面主控共用的格式化、转义、日期裁剪、对象判断和基础工具函数 |
 | `price-forecast.js` | 三模型模拟现货电价、预测质量校核 |
 | `revenue-rules.js` | 机制月份、交易策略收敛、环境价值、综合费用规则 |
@@ -49,6 +50,7 @@
 | `energy-workspace.js` | 结算电量配置页工作台 view model、状态文案、按钮禁用和模板状态计算 |
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
 | `result-page.js` | 基准结果总览报告文案、指标卡、假设说明和明细表 HTML 构造 |
+| `result-print.js` | 基准结果总览打印前展开、图表刷新和打印后恢复控制 |
 | `result-charts.js` | 基准结果总览四张 ECharts 图的 option 构造和图表 token 扩展 |
 | `scenario-charts.js` | 全口径收入配置页参数可视化三张 ECharts 图的 option 和主题 token 构造 |
 | `scenario-form.js` | 全口径收入配置页表单读写和场景配置构造 |
@@ -56,6 +58,7 @@
 | `compare-charts.js` | 多方案对比和敏感性分析图表 option、对比页主题 token 构造 |
 | `compare-page.js` | 多方案对比页变量列表、方案焦点列表和对比表格 HTML 构造 |
 | `history-page.js` | 历史电价展示页导出计划、KPI 和洞察文案构造 |
+| `history-renderer.js` | 历史电价展示页渲染控制、空态处理、图表和状态回写 |
 | `history-charts.js` | 历史电价展示五张 ECharts 图的 option 和主题 token 构造 |
 | `shell-events.js` | 全局壳层、弹窗、导航和窗口级事件绑定 |
 

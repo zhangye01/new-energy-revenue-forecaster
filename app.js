@@ -43,6 +43,7 @@ const scenarioModel = window.NE_SCENARIO_MODEL;
 const projectSettings = window.NE_PROJECT_SETTINGS;
 const projectModel = window.NE_PROJECT_MODEL;
 const energyDataRules = window.NE_ENERGY_DATA;
+const energyImportFlow = window.NE_ENERGY_IMPORT_FLOW;
 const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
 const policyPanel = window.NE_POLICY_PANEL;
@@ -51,6 +52,7 @@ const energyWorkspace = window.NE_ENERGY_WORKSPACE;
 const energyCharts = window.NE_ENERGY_CHARTS;
 const projectListView = window.NE_PROJECT_LIST_VIEW;
 const resultPage = window.NE_RESULT_PAGE;
+const resultPrint = window.NE_RESULT_PRINT;
 const resultCharts = window.NE_RESULT_CHARTS;
 const scenarioCharts = window.NE_SCENARIO_CHARTS;
 const scenarioForm = window.NE_SCENARIO_FORM;
@@ -59,11 +61,12 @@ const compareCharts = window.NE_COMPARE_CHARTS;
 const comparePage = window.NE_COMPARE_PAGE;
 const historyCharts = window.NE_HISTORY_CHARTS;
 const historyPage = window.NE_HISTORY_PAGE;
+const historyRenderer = window.NE_HISTORY_RENDERER;
 const shellEvents = window.NE_SHELL_EVENTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !shellEvents || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !shellEvents || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -3835,82 +3838,30 @@ function validateAndBuildEnergyData(project, csvText, expectedMode = null) {
 
 function importEnergyDataFromText(mode, csvText, sourceLabel = "") {
   const project = getActiveProject();
-  if (!project) {
-    setEnergyImportMessage("请先创建项目。", "error");
-    return false;
-  }
-  if (!isProjectCreateCompleted(project)) {
-    setEnergyImportMessage("请先完成步骤1基础信息保存，再进行结算电量配置。", "warn");
-    return false;
-  }
-  const normalizedMode = normalizeEnergyMode(mode);
-  const parsed = validateAndBuildEnergyData(project, csvText, normalizedMode);
-
-  if (!parsed.ok) {
-    setEnergyImportMessage(parsed.message, "error");
-    return false;
-  }
-
-  const periodAligned = normalizedMode === "annual_hours"
-    ? alignDefaultForecastYearsToAnnualTemplate(project, parsed.annualInputByYear, sourceLabel)
-    : false;
-  const exportMarks = ensureProjectEnergyTemplateExports(project);
-  // 以文件校验结果为准，避免导出状态丢失时误拦截已准备好的模板导入。
-  if (!exportMarks[normalizedMode]) {
-    exportMarks[normalizedMode] = new Date().toISOString();
-  }
-  const energyData = ensureProjectEnergyDataState(project);
-
-  if (normalizedMode === "annual_hours") {
-    energyData.annualInputByYear = parsed.annualInputByYear;
-    if (!hasEnergyTypicalCurve(project)) {
-      energyData.typicalCurveSource = "";
-      energyData.typicalCurveProfile = [];
+  const result = energyImportFlow.importEnergyDataFromText({
+    project,
+    mode,
+    csvText,
+    sourceLabel,
+    appState,
+    services: {
+      isProjectCreateCompleted,
+      normalizeEnergyMode,
+      validateAndBuildEnergyData,
+      alignDefaultForecastYearsToAnnualTemplate,
+      ensureProjectEnergyTemplateExports,
+      ensureProjectEnergyDataState,
+      hasEnergyTypicalCurve,
+      rebuildProjectEnergyData,
+      countCompleteEnergyYears,
+      markDownstreamStale,
+      getAnnualInputYearCount,
+      listMissingEnergyYears
     }
-    rebuildProjectEnergyData(project);
-  } else if (normalizedMode === "typical_curve_8760") {
-    energyData.typicalCurveProfile = parsed.typicalCurveProfile;
-    energyData.typicalCurveSource = "typical_curve_8760";
-    appState.energyStep2Choice = "typical";
-    rebuildProjectEnergyData(project);
-  } else {
-    energyData.mode = normalizedMode;
-    energyData.hourlyByYear = parsed.hourlyByYear;
-    energyData.annualSummary = parsed.annualSummary;
-    energyData.annualInputByYear = parsed.annualInputByYear || {};
-  }
-
-  const completeYears = countCompleteEnergyYears(project);
-  const allComplete = completeYears === project.forecastYears;
-  project.statuses["energy-page"] = allComplete ? "completed" : "in_progress";
-  if (isProjectCreateCompleted(project) && project.statuses["history-page"] === "not_started") {
-    project.statuses["history-page"] = "in_progress";
-  }
-  markDownstreamStale(project, "energy-page");
-
-  const annualCount = getAnnualInputYearCount(project);
-  if (normalizedMode === "annual_hours") {
-    const annualReady = annualCount === project.forecastYears;
-    const periodText = periodAligned ? `已按模板年份识别当前测算周期为 ${project.forecastYears} 年。` : "";
-    setEnergyImportMessage(
-      annualReady
-        ? `逐年总量导入成功：已录入 ${annualCount}/${project.forecastYears} 年${sourceLabel ? `（来源：${sourceLabel}）` : ""}。${periodText}请继续第二步：导入典型年8760模板，或调用所选省份典型曲线。`
-        : `逐年总量部分导入成功：已录入 ${annualCount}/${project.forecastYears} 年${sourceLabel ? `（来源：${sourceLabel}）` : ""}。${periodText}请先补齐测算周期内全部年度总小时数。`,
-      annualReady ? "success" : "warn"
-    );
-  } else {
-    const missingYears = listMissingEnergyYears(project, 6);
-    const missingText = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "";
-    const curveSourceText = energyData.typicalCurveSource === "province_typical_curve" ? "所选省份典型曲线" : "典型年8760模板";
-    setEnergyImportMessage(
-      allComplete
-        ? `上网电量配置完成：逐年总量 + ${curveSourceText} 已生成 ${completeYears}/${project.forecastYears} 年上网电量${sourceLabel ? `（来源：${sourceLabel}）` : ""}。`
-        : `已导入 ${curveSourceText}，当前完成 ${completeYears}/${project.forecastYears} 年上网电量${missingText}${sourceLabel ? `（来源：${sourceLabel}）` : ""}。`,
-      allComplete ? "success" : "warn"
-    );
-  }
-  renderAll();
-  return true;
+  });
+  setEnergyImportMessage(result.message, result.level);
+  if (result.ok) renderAll();
+  return result.ok;
 }
 
 function exportEnergyTemplate(mode = "hourly_8760") {
@@ -5051,143 +5002,35 @@ function disposeHistoryCharts() {
   });
 }
 
-function setHistoryNoData(message) {
-  resetHistoryExportPayloads();
-  const charts = ensureHistoryCharts();
-  if (!charts) return;
-  const tokens = historyThemeTokens();
-  Object.values(charts).forEach((chart) => {
-    if (!chart) return;
-    chart.clear();
-    chart.setOption(historyCharts.buildHistoryNoDataOption(message, tokens), true);
-  });
-  queueHistoryChartsResize();
-}
-
-function resetHistoryKpis() {
-  if (refs.historyKpiPoints) refs.historyKpiPoints.textContent = "-";
-  if (refs.historyKpiAvg) refs.historyKpiAvg.textContent = "-";
-  if (refs.historyKpiP50) refs.historyKpiP50.textContent = "-";
-  if (refs.historyKpiP90) refs.historyKpiP90.textContent = "-";
-  if (refs.historyKpiNegative) refs.historyKpiNegative.textContent = "-";
-}
-
-function renderHistoryImportState(project, dataset) {
-  const provinceLabel = project?.provinceLabel || getProvinceName(project?.province) || "-";
-  if (refs.historySourceProvince) {
-    refs.historySourceProvince.textContent = `当前省份：${provinceLabel}`;
-  }
-}
-
 function renderHistoryPrices() {
-  if (!refs.historyMonthTrendChart) return;
-  if (resolveVisiblePageId(appState.activePage) !== "history-page") return;
-
-  const controls = sanitizeHistoryAnalysis(appState.historyAnalysis);
-  appState.historyAnalysis = controls;
-  if (!window.echarts) {
-    setHistoryNoData("图表引擎未加载完成，请稍后重试。");
-    resetHistoryKpis();
-    if (refs.historyInsightBox) {
-      refs.historyInsightBox.textContent = "图表引擎未加载完成，请稍后重试。";
-    }
-    return;
-  }
-
-  const project = getActiveProject();
-  if (!project) {
-    renderHistoryImportState(null, null);
-    setHistoryNoData("请先在“我的项目”中进入一个项目，再查看当前省份历史现货展示。");
-    resetHistoryKpis();
-    if (refs.historyInsightBox) {
-      refs.historyInsightBox.textContent = "进入项目后，系统会自动按当前项目省份展示15分钟历史现货样本。";
-    }
-    return;
-  }
-  if (!isProjectCreateCompleted(project)) {
-    renderHistoryImportState(project, null);
-    setHistoryNoData("请先完成项目基础信息保存，系统才会按省份自动展示历史现货样本。");
-    resetHistoryKpis();
-    if (refs.historyInsightBox) {
-      refs.historyInsightBox.textContent = "完成项目基础信息保存后，本页会自动切换到对应省份的历史现货展示范围。";
-    }
-    return;
-  }
-
-  const dataset = buildHistorySpotAnalysisDataset(project);
-  renderHistoryImportState(project, dataset);
-  const range = historyAnalysis.resolveHistoryDateRange(controls, dataset);
-  if (controls.startDate !== range.startDate || controls.endDate !== range.endDate) {
-    appState.historyAnalysis = {
-      startDate: range.startDate,
-      endDate: range.endDate
-    };
-  }
-  if (refs.historyStartDate) {
-    refs.historyStartDate.min = range.minDate;
-    refs.historyStartDate.max = range.maxDate;
-    refs.historyStartDate.value = range.startDate;
-  }
-  if (refs.historyEndDate) {
-    refs.historyEndDate.min = range.minDate;
-    refs.historyEndDate.max = range.maxDate;
-    refs.historyEndDate.value = range.endDate;
-  }
-  const selectedYears = historyAnalysis.selectHistoryYearsByDateRange(dataset, range);
-  if (!selectedYears.length) {
-    setHistoryNoData("当前项目暂无可分析数据。");
-    resetHistoryKpis();
-    if (refs.historyInsightBox) refs.historyInsightBox.textContent = "当前项目暂无可分析数据。";
-    return;
-  }
-
-  const charts = ensureHistoryCharts();
-  const tokens = historyThemeTokens();
-  const lineColors = ["#2f78e8", "#6cb34f", "#ff8a1f", "#8b5cf6", "#0ea5a3"];
-  const historyData = historyAnalysis.buildHistorySelectedAnalysis(selectedYears, { lineColors });
-  const provinceLabel = project.provinceLabel || getProvinceName(project.province) || "-";
-  const assetLabel = getAssetTypeLabel(project.assetType);
-  const siteLabel = getSiteTypeLabel(project.siteType);
-  const historyView = historyPage.buildHistoryReadyViewModel({
-    historyData,
-    range,
-    dataset,
-    project,
-    labels: { provinceLabel, assetLabel, siteLabel },
-    monthLabels: HISTORY_MONTH_LABELS,
-    quarterLabels: HISTORY_QUARTER_LABELS,
-    sanitizePart: sanitizeExportFilenamePart
+  historyRenderer.renderHistoryPrices({
+    refs,
+    appState,
+    windowRef: typeof window !== "undefined" ? window : null,
+    resolveVisiblePageId,
+    sanitizeHistoryAnalysis,
+    resetHistoryExportPayloads,
+    ensureHistoryCharts,
+    historyThemeTokens,
+    historyCharts,
+    queueHistoryChartsResize,
+    getActiveProject,
+    isProjectCreateCompleted,
+    buildHistorySpotAnalysisDataset,
+    historyAnalysis,
+    historyPage,
+    setHistoryExportPayload,
+    syncHistoryExportButtons,
+    getProvinceName,
+    getAssetTypeLabel,
+    getSiteTypeLabel,
+    sanitizeExportFilenamePart,
+    renderStatuses,
+    renderProjects,
+    schedulePersistAppData,
+    historyMonthLabels: HISTORY_MONTH_LABELS,
+    historyQuarterLabels: HISTORY_QUARTER_LABELS
   });
-  historyView.exportPlan.forEach(([key, filename, rows]) => {
-    setHistoryExportPayload(key, filename, rows);
-  });
-  syncHistoryExportButtons();
-  const historyChartOptions = historyCharts.buildHistoryChartOptions(historyData, tokens);
-  if (charts.monthTrend) charts.monthTrend.setOption(historyChartOptions.monthTrend, true);
-  if (charts.typicalDay) charts.typicalDay.setOption(historyChartOptions.typicalDay, true);
-  if (charts.distribution) charts.distribution.setOption(historyChartOptions.distribution, true);
-  if (charts.heatmap) charts.heatmap.setOption(historyChartOptions.heatmap, true);
-  if (charts.boxplot) charts.boxplot.setOption(historyChartOptions.boxplot, true);
-
-  queueHistoryChartsResize();
-
-  const kpis = historyView.kpis;
-  if (refs.historyKpiPoints) refs.historyKpiPoints.textContent = kpis.points;
-  if (refs.historyKpiAvg) refs.historyKpiAvg.textContent = kpis.avg;
-  if (refs.historyKpiP50) refs.historyKpiP50.textContent = kpis.p50;
-  if (refs.historyKpiP90) refs.historyKpiP90.textContent = kpis.p90;
-  if (refs.historyKpiNegative) refs.historyKpiNegative.textContent = kpis.negative;
-  if (refs.historyInsightBox) {
-    refs.historyInsightBox.textContent = historyView.insightText;
-    refs.historyInsightBox.style.borderColor = "#8fb48d";
-    refs.historyInsightBox.style.background = "#f1fbf1";
-  }
-  if (project.statuses["history-page"] !== "completed") {
-    project.statuses["history-page"] = "completed";
-    renderStatuses();
-    renderProjects();
-    schedulePersistAppData();
-  }
 }
 
 function applyProvinceDefaultsToProject(provinceKey) {
@@ -6597,72 +6440,23 @@ function exportHourlyCsv() {
 
 function printScenarioReport() {
   const project = getActiveProject();
-  if (!project) {
-    setTopMeta("请先选择项目，再打印报告。");
-    return;
-  }
-  ensureScenarioMetadata(project);
-  const scenario = getActiveScenario(project);
-  const result = project.resultsByScenario[scenario?.id || ""];
-  if (!result) {
-    setTopMeta("请先在基准结果总览页发起测算，再打印报告。");
-    return;
-  }
-
-  updatePrintReportHeader(project, scenario);
-
-  const previousPage = appState.activePage;
-  if (previousPage !== "results-page") {
-    setActivePage("results-page");
-  }
-  const paneStates = refs.resultReportPanes?.map((pane) => ({
-    pane,
-    hidden: pane.hidden,
-    active: pane.classList.contains("active")
-  })) || [];
-  const disclosureStates = Array.from(document.querySelectorAll("#results-page .result-disclosure")).map((node) => ({
-    node,
-    open: node.open
-  }));
-  refs.resultReportPanes?.forEach((pane) => {
-    pane.hidden = false;
-    pane.classList.add("active");
+  if (project) ensureScenarioMetadata(project);
+  const scenario = project ? getActiveScenario(project) : null;
+  const result = project ? project.resultsByScenario[scenario?.id || ""] : null;
+  resultPrint.printScenarioReport({
+    project,
+    scenario,
+    result,
+    appState,
+    refs,
+    documentRef: typeof document !== "undefined" ? document : null,
+    windowRef: typeof window !== "undefined" ? window : null,
+    resultChartInstances,
+    setTopMeta,
+    updatePrintReportHeader,
+    setActivePage,
+    renderAll
   });
-  disclosureStates.forEach(({ node }) => {
-    if (!node.classList.contains("result-hourly-detail")) {
-      node.open = true;
-    }
-  });
-  Object.values(resultChartInstances).forEach((chart) => {
-    if (chart && !chart.isDisposed()) chart.resize();
-  });
-  document.body.classList.add("print-report-mode");
-
-  const cleanup = () => {
-    document.body.classList.remove("print-report-mode");
-    paneStates.forEach(({ pane, hidden, active }) => {
-      pane.hidden = hidden;
-      pane.classList.toggle("active", active);
-    });
-    disclosureStates.forEach(({ node, open }) => {
-      node.open = open;
-    });
-    if (previousPage !== "results-page") {
-      setActivePage(previousPage);
-    } else {
-      renderAll();
-    }
-  };
-
-  if (typeof window !== "undefined") {
-    window.addEventListener("afterprint", cleanup, { once: true });
-    window.print();
-    window.setTimeout(() => {
-      if (document.body.classList.contains("print-report-mode")) {
-        cleanup();
-      }
-    }, 1800);
-  }
 }
 
 function renderAll() {
