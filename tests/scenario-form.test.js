@@ -1,7 +1,9 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const scenarioConfig = require("../src/domain/scenario-config");
 const {
+  buildScenarioSaveDraft,
   buildScenarioConfigFromForm,
   loadScenarioToForm
 } = require("../src/ui/scenario-form");
@@ -146,5 +148,107 @@ assert.equal(inlandConfig.carbonPrice, 0);
 assert.equal(inlandConfig.carbonRealizeRatio, 0);
 assert.equal(inlandConfig.storageArbitragePrice, 0);
 assert.equal(inlandConfig.greenCertRealizeRatio, 0);
+
+const saveProject = {
+  siteType: "offshore",
+  hasStorage: true,
+  startYear: 2026,
+  forecastYears: 2,
+  scenarios: [
+    { id: "base", name: "基准场景" },
+    { id: "other", name: "乐观场景" }
+  ]
+};
+const saveScenario = {
+  id: "base",
+  name: "基准场景",
+  locked: false,
+  config: {
+    ltManualPricesByYear: { 2026: 8, 2027: 6 },
+    envManualValuesByYear: {},
+    feeManualValuesByYear: { 2026: { marketOpFee: 1 }, 2027: { marketOpFee: 1 } }
+  }
+};
+const saveDraft = buildScenarioSaveDraft({
+  project: saveProject,
+  scenario: saveScenario,
+  refs: {
+    ltPricingMode: { value: "manual" },
+    envValueMode: { value: "global" },
+    feeConfigMode: { value: "manual" },
+    storageArbitragePrice: { value: "18" },
+    storageCapacityCompPrice: { value: "7" },
+    storageAncillaryRevenuePrice: { value: "10" },
+    storageOtherRevenuePrice: { value: "3" }
+  },
+  querySelector: makeFields({
+    "#scenario-name": "基准场景",
+    "#mechanism-enabled": "yes",
+    "#mechanism-ratio": "36",
+    "#mechanism-price": "365",
+    "#mechanism-start-ym": "2026-01",
+    "#mechanism-end-ym": "2027-12",
+    "#lt-year1-pnl": "8",
+    "#lt-target-pnl": "2",
+    "#lt-converge-speed": "1.2",
+    "#green-cert-price": "22",
+    "#green-premium-price": "12",
+    "#carbon-enabled": "yes",
+    "#carbon-price": "4",
+    "#market-op-fee": "6",
+    "#grid-assess-fee": "7",
+    "#ancillary-fee": "14",
+    "#other-fee": "3",
+    "#other-income": "2"
+  }).querySelector,
+  clamp,
+  monthSerial: (ym) => {
+    const match = String(ym).match(/^(\d{4})-(\d{2})$/);
+    return match ? Number(match[1]) * 12 + Number(match[2]) : null;
+  },
+  scenarioConfig,
+  readEnvValueAllocationDraft: () => ({
+    greenCertRatio: 0.4,
+    greenPremiumRatio: 0.2,
+    carbonRatio: 0.4,
+    totalRatio: 1
+  })
+});
+assert.equal(saveDraft.ok, true);
+assert.equal(saveDraft.scenarioName, "基准场景");
+assert.equal(saveDraft.config.ltPricingMode, "manual");
+assert.deepEqual(saveDraft.config.ltManualPricesByYear, { 2026: 8, 2027: 6 });
+assert.equal(saveDraft.config.feeConfigMode, "manual");
+
+const duplicateDraft = buildScenarioSaveDraft({
+  project: saveProject,
+  scenario: saveScenario,
+  querySelector: makeFields({ "#scenario-name": "乐观场景" }).querySelector
+});
+assert.equal(duplicateDraft.ok, false);
+assert.equal(duplicateDraft.message, "场景名称重复，请修改后再保存。");
+
+const invalidEnvDraft = buildScenarioSaveDraft({
+  project: saveProject,
+  scenario: saveScenario,
+  refs: {
+    ltPricingMode: { value: "auto" },
+    envValueMode: { value: "global" },
+    feeConfigMode: { value: "global" }
+  },
+  querySelector: makeFields({
+    "#scenario-name": "基准场景",
+    "#mechanism-enabled": "no"
+  }).querySelector,
+  scenarioConfig,
+  readEnvValueAllocationDraft: () => ({
+    greenCertRatio: 0.7,
+    greenPremiumRatio: 0.3,
+    carbonRatio: 0.1,
+    totalRatio: 1.1
+  })
+});
+assert.equal(invalidEnvDraft.ok, false);
+assert.match(invalidEnvDraft.message, /不能超过 100.0%/);
 
 console.log("scenario form tests passed");

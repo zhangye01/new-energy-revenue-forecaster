@@ -5766,101 +5766,28 @@ function saveScenarioFromForm() {
 
   let scenario = getActiveScenario(project);
   if (!scenario) return;
-  if (scenario.locked) {
-    refs.scenarioMessage.textContent = "当前场景已锁定，不能保存修改。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-    return;
-  }
-  const scenarioName = document.querySelector("#scenario-name").value.trim() || "基准场景";
-  const duplicatedName = project.scenarios.find((item) => item.id !== scenario.id && item.name === scenarioName);
-  if (duplicatedName) {
-    refs.scenarioMessage.textContent = "场景名称重复，请修改后再保存。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-    return;
-  }
-  scenario.name = scenarioName;
 
-  const mechanismEnabled = document.querySelector("#mechanism-enabled").value === "yes";
-  const mechanismStartYm = document.querySelector("#mechanism-start-ym").value;
-  const mechanismEndYm = document.querySelector("#mechanism-end-ym").value;
-  if (mechanismEnabled) {
-    const startSerial = monthSerial(mechanismStartYm);
-    const endSerial = monthSerial(mechanismEndYm);
-    if (startSerial === null || endSerial === null || endSerial < startSerial) {
-      refs.scenarioMessage.textContent = "机制执行年月无效，请检查起止区间。";
-      refs.scenarioMessage.style.borderColor = "#d39191";
-      refs.scenarioMessage.style.background = "#fff2f2";
-      return;
-    }
-  }
-  const ltPricingMode = LT_PRICING_MODE_SET.has(refs.ltPricingMode?.value) ? refs.ltPricingMode.value : "auto";
-  const ltManualPricesByYear = sanitizeLtManualPricesByYear(scenario.config?.ltManualPricesByYear || {}, project);
-  if (ltPricingMode === "manual") {
-    const completeness = getLtManualCompleteness(project, { ltManualPricesByYear });
-    if (completeness.complete !== completeness.total) {
-      refs.scenarioMessage.textContent = `逐年损益值不完整，当前 ${completeness.complete}/${completeness.total} 年。请导入完整测算周期后再保存。`;
-      refs.scenarioMessage.style.borderColor = "#d39191";
-      refs.scenarioMessage.style.background = "#fff2f2";
-      return;
-    }
-  }
-  const envValueMode = ENV_VALUE_MODE_SET.has(refs.envValueMode?.value) ? refs.envValueMode.value : "global";
-  const envManualValuesByYear = sanitizeEnvManualValuesByYear(scenario.config?.envManualValuesByYear || {}, project);
-  const envAllocationDraft = readEnvValueAllocationDraft(project);
-  if (envValueMode === "manual") {
-    const completeness = getEnvManualCompleteness(project, { envManualValuesByYear });
-    if (completeness.complete !== completeness.total) {
-      refs.scenarioMessage.textContent = `逐年环境价值兑现配置不完整，当前 ${completeness.complete}/${completeness.total} 年。请导入完整测算周期后再保存。`;
-      refs.scenarioMessage.style.borderColor = "#d39191";
-      refs.scenarioMessage.style.background = "#fff2f2";
-      return;
-    }
-  } else if (
-    envAllocationDraft.greenCertRatio < 0
-    || envAllocationDraft.greenPremiumRatio < 0
-    || envAllocationDraft.carbonRatio < 0
-    || envAllocationDraft.totalRatio > 1 + 0.000001
-  ) {
-    refs.scenarioMessage.textContent = `环境价值兑现空间分配无效：绿证、绿电溢价、碳收益合计为 ${asPercent(envAllocationDraft.totalRatio)}，不能超过 100.0%。`;
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-    return;
-  }
-  const feeConfigMode = FEE_CONFIG_MODE_SET.has(refs.feeConfigMode?.value) ? refs.feeConfigMode.value : "global";
-  const feeManualValuesByYear = sanitizeFeeManualValuesByYear(scenario.config?.feeManualValuesByYear || {}, project);
-  if (feeConfigMode === "manual") {
-    const completeness = getFeeManualCompleteness(project, { feeManualValuesByYear });
-    if (completeness.complete !== completeness.total) {
-      refs.scenarioMessage.textContent = `逐年扣费收益配置不完整，当前 ${completeness.complete}/${completeness.total} 年。请导入完整测算周期后再保存。`;
-      refs.scenarioMessage.style.borderColor = "#d39191";
-      refs.scenarioMessage.style.background = "#fff2f2";
-      return;
-    }
-  }
-
-  const config = scenarioForm.buildScenarioConfigFromForm({
+  const draft = scenarioForm.buildScenarioSaveDraft({
     project,
+    scenario,
     refs,
     querySelector: (selector) => document.querySelector(selector),
     clamp,
-    ltPricingMode,
-    ltManualPricesByYear,
-    envValueMode,
-    envManualValuesByYear,
-    envAllocationDraft,
-    feeConfigMode,
-    feeManualValuesByYear
+    monthSerial,
+    scenarioConfig,
+    readEnvValueAllocationDraft
   });
-  scenario.config = config;
+  if (!draft.ok) {
+    setScenarioImportMessage(draft.message, "error");
+    return;
+  }
+  scenario.name = draft.scenarioName;
+  scenario.config = draft.config;
   scenario.updatedAt = new Date().toISOString();
 
   project.statuses["scenario-page"] = "completed";
   markDownstreamStale(project, "scenario-page");
-  refs.scenarioMessage.textContent = `场景“${scenario.name}”已保存。`;
-  refs.scenarioMessage.style.borderColor = "#8fb48d";
-  refs.scenarioMessage.style.background = "#f1fbf1";
+  setScenarioImportMessage(`场景“${scenario.name}”已保存。`, "success");
   renderAll();
 }
 

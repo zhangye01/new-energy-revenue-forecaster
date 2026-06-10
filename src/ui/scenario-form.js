@@ -27,9 +27,21 @@
     return getField(querySelector, selector)?.value || "";
   }
 
+  function textValue(querySelector, selector) {
+    return String(getField(querySelector, selector)?.value || "").trim();
+  }
+
   function ratioValue(clamp, value) {
     const numeric = Number(value);
     return clamp(Number.isFinite(numeric) ? numeric : 0, 0, 1);
+  }
+
+  function asPercent(value) {
+    return `${(Number(value) * 100).toFixed(1)}%`;
+  }
+
+  function invalid(message) {
+    return { ok: false, message };
   }
 
   function loadScenarioToForm(input = {}) {
@@ -123,7 +135,108 @@
     };
   }
 
+  function buildScenarioSaveDraft(input = {}) {
+    const {
+      project = {},
+      scenario = {},
+      refs = {},
+      querySelector,
+      clamp = (value) => value,
+      monthSerial = () => null,
+      scenarioConfig = {},
+      readEnvValueAllocationDraft = () => ({})
+    } = input;
+    if (scenario.locked) {
+      return invalid("当前场景已锁定，不能保存修改。");
+    }
+
+    const scenarioName = textValue(querySelector, "#scenario-name") || "基准场景";
+    const duplicatedName = (project.scenarios || []).find((item) => (
+      item.id !== scenario.id && item.name === scenarioName
+    ));
+    if (duplicatedName) {
+      return invalid("场景名称重复，请修改后再保存。");
+    }
+
+    const mechanismEnabled = selectValue(querySelector, "#mechanism-enabled") === "yes";
+    const mechanismStartYm = selectValue(querySelector, "#mechanism-start-ym");
+    const mechanismEndYm = selectValue(querySelector, "#mechanism-end-ym");
+    if (mechanismEnabled) {
+      const startSerial = monthSerial(mechanismStartYm);
+      const endSerial = monthSerial(mechanismEndYm);
+      if (startSerial === null || endSerial === null || endSerial < startSerial) {
+        return invalid("机制执行年月无效，请检查起止区间。");
+      }
+    }
+
+    const ltPricingMode = scenarioConfig.getLtPricingMode
+      ? scenarioConfig.getLtPricingMode({ ltPricingMode: refs.ltPricingMode?.value })
+      : "auto";
+    const ltManualPricesByYear = scenarioConfig.sanitizeLtManualPricesByYear
+      ? scenarioConfig.sanitizeLtManualPricesByYear(scenario.config?.ltManualPricesByYear || {}, project)
+      : {};
+    if (ltPricingMode === "manual") {
+      const completeness = scenarioConfig.getLtManualCompleteness?.(project, { ltManualPricesByYear }) || { complete: 0, total: 0 };
+      if (completeness.complete !== completeness.total) {
+        return invalid(`逐年损益值不完整，当前 ${completeness.complete}/${completeness.total} 年。请导入完整测算周期后再保存。`);
+      }
+    }
+
+    const envValueMode = scenarioConfig.getEnvValueMode
+      ? scenarioConfig.getEnvValueMode({ envValueMode: refs.envValueMode?.value })
+      : "global";
+    const envManualValuesByYear = scenarioConfig.sanitizeEnvManualValuesByYear
+      ? scenarioConfig.sanitizeEnvManualValuesByYear(scenario.config?.envManualValuesByYear || {}, project)
+      : {};
+    const envAllocationDraft = readEnvValueAllocationDraft(project);
+    if (envValueMode === "manual") {
+      const completeness = scenarioConfig.getEnvManualCompleteness?.(project, { envManualValuesByYear }) || { complete: 0, total: 0 };
+      if (completeness.complete !== completeness.total) {
+        return invalid(`逐年环境价值兑现配置不完整，当前 ${completeness.complete}/${completeness.total} 年。请导入完整测算周期后再保存。`);
+      }
+    } else if (
+      envAllocationDraft.greenCertRatio < 0
+      || envAllocationDraft.greenPremiumRatio < 0
+      || envAllocationDraft.carbonRatio < 0
+      || envAllocationDraft.totalRatio > 1 + 0.000001
+    ) {
+      return invalid(`环境价值兑现空间分配无效：绿证、绿电溢价、碳收益合计为 ${asPercent(envAllocationDraft.totalRatio)}，不能超过 100.0%。`);
+    }
+
+    const feeConfigMode = scenarioConfig.getFeeConfigMode
+      ? scenarioConfig.getFeeConfigMode({ feeConfigMode: refs.feeConfigMode?.value })
+      : "global";
+    const feeManualValuesByYear = scenarioConfig.sanitizeFeeManualValuesByYear
+      ? scenarioConfig.sanitizeFeeManualValuesByYear(scenario.config?.feeManualValuesByYear || {}, project)
+      : {};
+    if (feeConfigMode === "manual") {
+      const completeness = scenarioConfig.getFeeManualCompleteness?.(project, { feeManualValuesByYear }) || { complete: 0, total: 0 };
+      if (completeness.complete !== completeness.total) {
+        return invalid(`逐年扣费收益配置不完整，当前 ${completeness.complete}/${completeness.total} 年。请导入完整测算周期后再保存。`);
+      }
+    }
+
+    return {
+      ok: true,
+      scenarioName,
+      config: buildScenarioConfigFromForm({
+        project,
+        refs,
+        querySelector,
+        clamp,
+        ltPricingMode,
+        ltManualPricesByYear,
+        envValueMode,
+        envManualValuesByYear,
+        envAllocationDraft,
+        feeConfigMode,
+        feeManualValuesByYear
+      })
+    };
+  }
+
   return Object.freeze({
+    buildScenarioSaveDraft,
     buildScenarioConfigFromForm,
     loadScenarioToForm
   });
