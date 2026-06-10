@@ -4,7 +4,7 @@
 
 | ID | 风险 | 等级 | 当前状态 | 处理策略 |
 | --- | --- | --- | --- | --- |
-| R-001 | `app.js` 仍然承担页面主控和部分渲染职责 | 中 | 6406 行，最大函数 78 行；项目列表展示、壳层事件处理器、项目 seed builder、全口径收入配置页表单保存、方案管理、批量更新、首页政策面板、历史页渲染、打印控制、场景可视化数据、基准场景规则、对比页展示构造、对比渲染状态、预测版本列表、结果测算前置校验，以及对比、历史、创建、预测、派生字段和结果按钮事件绑定已迁出 | 继续按页面拆控制器，当前已低于阶段性 6450 行门槛 |
+| R-001 | `app.js` 仍然承担页面主控和部分渲染职责 | 中 | 6342 行，最大函数 78 行；项目列表展示、壳层事件处理器、项目 seed builder、全口径收入配置页表单保存、方案管理、批量更新、首页政策面板、历史页渲染、打印控制、场景可视化数据、基准场景规则、对比页展示构造、对比渲染状态、预测版本列表、结果测算前置校验、结算电量摘要和结算电量图表状态，以及对比、历史、创建、预测、派生字段和结果按钮事件绑定已迁出 | 继续按页面拆控制器，当前已低于阶段性 6400 行门槛 |
 | R-002 | 无构建工具，依赖全局 `window.NE_*` 和脚本顺序 | 中 | 静态部署简单；脚本引用已由架构检查和静态检查守护 | 短期继续用门禁守住脚本引用；中期评估 Vite/ESM |
 | R-003 | 页面交互缺少自动化端到端回归 | 中 | Node 测试覆盖核心计算；已新增静态 smoke 契约检查，真实浏览器流程仍主要靠人工烟测 | 后续把关键路径 smoke 升级为浏览器自动化 |
 | R-004 | 电价预测、历史现货和省级典型曲线仍包含模拟数据逻辑 | 中 | 可演示，但不是正式生产模型 | 对外说明模拟边界；接入真实数据前补数据契约和验收用例 |
@@ -22,16 +22,16 @@
 - 核心业务规则迁入 `src/domain/`。
 - 结算电量配置页、结果页、全口径收入配置页、对比页、历史页图表 option 迁入 `src/ui/`。
 - 本地业务快照和浏览器存储访问集中到 `app-storage.js`。
-- 页面主控共用工具已迁入 `app-utils.js`，项目 seed builder 已迁入 `project-model.js`，历史电价模拟样本和日期范围切片已迁入 `history-analysis.js`，项目列表、首页政策面板、省份默认参数展示、结算电量工作台、预测版本列表、结果总览报告和历史页展示 view model 已分别迁入 `project-list.js`、`policy-panel.js`、`province-defaults.js`、`energy-workspace.js`、`forecast-page.js`、`result-page.js` 和 `history-page.js`，结算电量导入流程已迁入 `energy-import-flow.js`，结果打印控制已迁入 `result-print.js`，结果测算前置校验已迁入 `result-calculation.js`，历史页渲染控制和事件绑定已迁入 `history-renderer.js` 与 `history-page.js`，结算电量与全口径收入配置页图表 option 已分别迁入 `energy-charts.js` 和 `scenario-charts.js`，结算电量创建/导入事件绑定已迁入 `energy-workspace.js`，全口径收入配置页表单读写、保存草稿、方案管理展示、预测/场景事件绑定和派生字段事件绑定已迁入 `scenario-form.js`，批量更新和基准场景规则已迁入 `scenario-model.js`，场景可视化年度行数据已迁入 `scenario-visual-data.js`，多方案对比页 HTML、空态、重置展示构造、方案选择、敏感性选项规则、指标视图、渲染状态和事件绑定已迁入 `compare-page.js` 与 `compare-analysis.js`，壳层事件绑定和处理器组装已迁入 `shell-events.js`，逐年配置导入流程已收敛为配置驱动逻辑。
+- 页面主控共用工具已迁入 `app-utils.js`，项目 seed builder 已迁入 `project-model.js`，历史电价模拟样本和日期范围切片已迁入 `history-analysis.js`，项目列表、首页政策面板、省份默认参数展示、结算电量工作台、结算电量摘要、预测版本列表、结果总览报告和历史页展示 view model 已分别迁入 `project-list.js`、`policy-panel.js`、`province-defaults.js`、`energy-workspace.js`、`forecast-page.js`、`result-page.js` 和 `history-page.js`，结算电量导入流程已迁入 `energy-import-flow.js`，结果打印控制已迁入 `result-print.js`，结果测算前置校验已迁入 `result-calculation.js`，历史页渲染控制和事件绑定已迁入 `history-renderer.js` 与 `history-page.js`，结算电量图表状态、结算电量与全口径收入配置页图表 option 已分别迁入 `energy-charts.js` 和 `scenario-charts.js`，结算电量创建/导入事件绑定已迁入 `energy-workspace.js`，全口径收入配置页表单读写、保存草稿、方案管理展示、预测/场景事件绑定和派生字段事件绑定已迁入 `scenario-form.js`，批量更新和基准场景规则已迁入 `scenario-model.js`，场景可视化年度行数据已迁入 `scenario-visual-data.js`，多方案对比页 HTML、空态、重置展示构造、方案选择、敏感性选项规则、指标视图、渲染状态和事件绑定已迁入 `compare-page.js` 与 `compare-analysis.js`，壳层事件绑定和处理器组装已迁入 `shell-events.js`，逐年配置导入流程已收敛为配置驱动逻辑。
 - 增加业务黄金样例、图表 option、导入导出、项目模型和流程状态测试。
 - 建立业务交接包、数据字典、模型说明、架构图和开发 SOP。
 - 建立 GitHub Actions，推送和 PR 统一运行 `npm run check`。
 - 语法检查、测试发现、架构检查、静态页面完整性、页面 smoke 契约和发布仓库卫生检查已纳入同一门禁。
-- `app.js` 已由架构门禁限制在 6450 行以内，单个顶层函数限制在 120 行以内。
+- `app.js` 已由架构门禁限制在 6400 行以内，单个顶层函数限制在 120 行以内。
 
 ## 进入后续开发前必须继续压降的风险
 
-1. `app.js` 已低于 6450 行，后续继续按页面控制器逐步收敛。
+1. `app.js` 已低于 6400 行，后续继续按页面控制器逐步收敛。
 2. 多方案对比页已拆出选择规则和事件绑定，后续可继续迁出剩余图表编排。
 3. 分组后的事件绑定已明显收敛，后续可继续迁出导航事件和图表编排，降低主控制器上下文压力。
 4. 关键页面的静态 smoke 已纳入门禁，后续继续补真实浏览器自动化 smoke。
