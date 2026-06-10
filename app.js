@@ -3321,7 +3321,7 @@ function createProjectFromForm(options = {}) {
   createFormSyncedProjectId = project.id;
   appState.activeProjectId = project.id;
   syncProjectProvinceScopedState(project, { force: true });
-  applyEnergyModeUi(energyMode);
+  applyEnergyModeUi(project.energyMode);
   moveProjectToHistoryWorkspaceIfReady(project);
   setCreateSaveMessage(`已创建新项目：${project.name}。`, "success");
   setActivePage(targetPage);

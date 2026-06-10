@@ -7,6 +7,13 @@ const ROOT = path.resolve(__dirname, "..");
 const APP_JS_MAX_LINES = 6100;
 const APP_JS_MAX_FUNCTION_LINES = 120;
 const STYLES_CSS_MAX_LINES = 5500;
+const FORBIDDEN_APP_JS_PATTERNS = [
+  {
+    name: "bare energy mode UI sync",
+    pattern: /\bapplyEnergyModeUi\(\s*energyMode\s*\)/,
+    message: "use a scoped value such as project.energyMode or formState.input.energyMode"
+  }
+];
 
 function readText(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), "utf8");
@@ -81,6 +88,29 @@ function collectTopLevelFunctionSizesFromText(sourceText) {
 
 function collectTopLevelFunctionSizes(relativePath) {
   return collectTopLevelFunctionSizesFromText(readText(relativePath));
+}
+
+function findForbiddenAppPatternsFromText(sourceText) {
+  const lines = sourceText.split(/\r?\n/);
+  const issues = [];
+  lines.forEach((line, index) => {
+    FORBIDDEN_APP_JS_PATTERNS.forEach((rule) => {
+      if (rule.pattern.test(line)) {
+        issues.push({
+          name: rule.name,
+          line: index + 1,
+          message: rule.message
+        });
+      }
+    });
+  });
+  return issues;
+}
+
+function assertNoForbiddenAppPatterns() {
+  findForbiddenAppPatternsFromText(readText("app.js")).forEach((issue) => {
+    fail(`app.js contains ${issue.name} at line ${issue.line}: ${issue.message}.`);
+  });
 }
 
 function assertAppJsFunctionBudget() {
@@ -191,6 +221,7 @@ function assertSingleWorkflow() {
 function run() {
   assertAppJsBudget();
   assertAppJsFunctionBudget();
+  assertNoForbiddenAppPatterns();
   assertStylesCssBudget();
   assertModulesHaveTests();
   assertModulesAreInSyntaxCheck();
@@ -210,5 +241,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  collectTopLevelFunctionSizesFromText
+  collectTopLevelFunctionSizesFromText,
+  findForbiddenAppPatternsFromText
 };

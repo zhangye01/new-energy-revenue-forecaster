@@ -2,7 +2,8 @@
 
 const assert = require("node:assert/strict");
 const {
-  collectTopLevelFunctionSizesFromText
+  collectTopLevelFunctionSizesFromText,
+  findForbiddenAppPatternsFromText
 } = require("../scripts/architecture-check");
 
 const sizes = collectTopLevelFunctionSizesFromText([
@@ -33,6 +34,19 @@ assert.deepEqual(sizes, [
     start: 11,
     end: 13,
     lines: 3
+  }
+]);
+
+assert.deepEqual(findForbiddenAppPatternsFromText([
+  "function createProjectFromForm() {",
+  "  applyEnergyModeUi(energyMode);",
+  "  applyEnergyModeUi(project.energyMode);",
+  "}"
+].join("\n")), [
+  {
+    name: "bare energy mode UI sync",
+    line: 2,
+    message: "use a scoped value such as project.energyMode or formState.input.energyMode"
   }
 ]);
 
