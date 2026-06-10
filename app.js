@@ -1014,50 +1014,21 @@ function ensureMockHistoryProjectForCurrentAccount() {
 
   const now = new Date();
   const year = Math.max(2026, now.getFullYear());
-  const project = {
+  const nowIso = now.toISOString();
+  const project = projectModel.createMockHistoryProject({
     id: makeId("proj"),
     ownerAccount,
-    workspaceBucket: "history",
     name: resolveUniqueProjectName("江苏海上风电示例项目"),
-    province: "jiangsu",
-    assetType: "wind",
-    siteType: "offshore",
-    hasStorage: true,
-    storagePowerMw: 64,
-    storageDurationH: 2,
-    storageNote: "按装机容量20% / 2h生成的示例配储口径",
-    capacityMw: 320,
     startYear: year,
-    forecastYears: 30,
-    energyMode: "annual_hours",
-    note: "系统自动生成的历史项目示例",
-    createdAt: now.toISOString(),
+    nowIso,
     statuses: statusMapTemplate(),
-    energyData: createEmptyEnergyDataState("annual_hours"),
-    energyTemplateExports: {
-      hourly_8760: "",
-      annual_hours: "",
-      typical_curve_8760: "",
-      province_typical_curve: ""
-    },
     historySpotImport: createEmptyHistorySpotImport(),
-    priceRuns: [],
-    activeRunId: null,
-    activationLogs: [],
     spotMarketConfig: createDefaultSpotMarketConfig(),
-    scenarios: [],
-    activeScenarioId: null,
-    resultsByScenario: {}
-  };
-
-  project.statuses["create-page"] = "completed";
-
-  const baselineScenario = createBaselineScenario(project, {
-    currentYear: year,
-    nowIso: now.toISOString()
+    createBaselineScenario: (projectDraft) => createBaselineScenario(projectDraft, {
+      currentYear: year,
+      nowIso
+    })
   });
-  project.scenarios.push(baselineScenario);
-  project.activeScenarioId = baselineScenario.id;
 
   appState.projects.unshift(project);
   if (!getActiveProject()) {
@@ -3138,47 +3109,20 @@ function resetCreateProjectFormForNew() {
 
 function createEmptyWorkspaceProject() {
   const now = new Date();
-  const project = {
+  const nowIso = now.toISOString();
+  const project = projectModel.createEmptyWorkspaceProject({
     id: makeId("proj"),
     ownerAccount: String(appState.auth.account || "").trim(),
-    workspaceBucket: "new",
     name: resolveUniqueProjectName("新建项目"),
-    province: "",
-    assetType: "",
-    siteType: "",
-    hasStorage: false,
-    storagePowerMw: null,
-    storageDurationH: null,
-    storageNote: "",
-    capacityMw: null,
-    startYear: null,
-    forecastYears: null,
-    energyMode: "annual_hours",
-    note: "",
-    createdAt: now.toISOString(),
+    nowIso,
     statuses: statusMapTemplate(),
-    energyData: createEmptyEnergyDataState("annual_hours"),
-    energyTemplateExports: {
-      hourly_8760: "",
-      annual_hours: "",
-      typical_curve_8760: "",
-      province_typical_curve: ""
-    },
     historySpotImport: createEmptyHistorySpotImport(),
-    priceRuns: [],
-    activeRunId: null,
-    activationLogs: [],
     spotMarketConfig: createDefaultSpotMarketConfig(),
-    scenarios: [],
-    activeScenarioId: null,
-    resultsByScenario: {}
-  };
-  const baselineScenario = createBaselineScenario(project, {
-    currentYear: now.getFullYear(),
-    nowIso: now.toISOString()
+    createBaselineScenario: (projectDraft) => createBaselineScenario(projectDraft, {
+      currentYear: now.getFullYear(),
+      nowIso
+    })
   });
-  project.scenarios.push(baselineScenario);
-  project.activeScenarioId = baselineScenario.id;
   appState.projects.unshift(project);
   createFormSyncedProjectId = null;
   appState.activeProjectId = project.id;

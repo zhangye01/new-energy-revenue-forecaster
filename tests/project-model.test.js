@@ -3,6 +3,8 @@
 const assert = require("node:assert/strict");
 const {
   normalizeEnergyMode,
+  createMockHistoryProject,
+  createEmptyWorkspaceProject,
   createEmptyEnergyDataState,
   createEmptyEnergyTemplateExports,
   sanitizeProjectBase,
@@ -35,6 +37,74 @@ assert.deepEqual(createEmptyEnergyTemplateExports(), {
   typical_curve_8760: "",
   province_typical_curve: ""
 });
+
+const mockHistoryProject = createMockHistoryProject({
+  id: "proj-demo",
+  ownerAccount: " demo ",
+  name: "示例项目",
+  startYear: 2027,
+  nowIso: "2026-06-10T00:00:00.000Z",
+  statuses: { "home-page": "completed" },
+  historySpotImport: { source: "mock" },
+  spotMarketConfig: { market: "jiangsu" },
+  createBaselineScenario: (project) => ({
+    id: "scn-demo",
+    name: `${project.name}-基准`,
+    isBaseline: true
+  })
+});
+assert.equal(mockHistoryProject.id, "proj-demo");
+assert.equal(mockHistoryProject.ownerAccount, "demo");
+assert.equal(mockHistoryProject.workspaceBucket, "history");
+assert.equal(mockHistoryProject.name, "示例项目");
+assert.equal(mockHistoryProject.province, "jiangsu");
+assert.equal(mockHistoryProject.assetType, "wind");
+assert.equal(mockHistoryProject.siteType, "offshore");
+assert.equal(mockHistoryProject.storagePowerMw, 64);
+assert.equal(mockHistoryProject.startYear, 2027);
+assert.equal(mockHistoryProject.forecastYears, 30);
+assert.equal(mockHistoryProject.statuses["home-page"], "completed");
+assert.equal(mockHistoryProject.statuses["create-page"], "completed");
+assert.deepEqual(mockHistoryProject.energyData, createEmptyEnergyDataState("annual_hours"));
+assert.deepEqual(mockHistoryProject.energyTemplateExports, createEmptyEnergyTemplateExports());
+assert.deepEqual(mockHistoryProject.historySpotImport, { source: "mock" });
+assert.deepEqual(mockHistoryProject.spotMarketConfig, { market: "jiangsu" });
+assert.equal(mockHistoryProject.scenarios[0].id, "scn-demo");
+assert.equal(mockHistoryProject.scenarios[0].name, "示例项目-基准");
+assert.equal(mockHistoryProject.activeScenarioId, "scn-demo");
+
+const emptyWorkspaceProject = createEmptyWorkspaceProject({
+  id: "proj-new",
+  ownerAccount: " demo ",
+  name: "新建项目2",
+  nowIso: "2026-06-10T01:00:00.000Z",
+  statuses: { "create-page": "not_started" },
+  historySpotImport: { source: "empty" },
+  spotMarketConfig: { market: "empty" },
+  createBaselineScenario: (project) => ({
+    id: "scn-new",
+    name: `${project.name}-基准`,
+    isBaseline: true
+  })
+});
+assert.equal(emptyWorkspaceProject.id, "proj-new");
+assert.equal(emptyWorkspaceProject.ownerAccount, "demo");
+assert.equal(emptyWorkspaceProject.workspaceBucket, "new");
+assert.equal(emptyWorkspaceProject.name, "新建项目2");
+assert.equal(emptyWorkspaceProject.province, "");
+assert.equal(emptyWorkspaceProject.assetType, "");
+assert.equal(emptyWorkspaceProject.siteType, "");
+assert.equal(emptyWorkspaceProject.hasStorage, false);
+assert.equal(emptyWorkspaceProject.capacityMw, null);
+assert.equal(emptyWorkspaceProject.startYear, null);
+assert.equal(emptyWorkspaceProject.forecastYears, null);
+assert.equal(emptyWorkspaceProject.createdAt, "2026-06-10T01:00:00.000Z");
+assert.deepEqual(emptyWorkspaceProject.energyData, createEmptyEnergyDataState("annual_hours"));
+assert.deepEqual(emptyWorkspaceProject.energyTemplateExports, createEmptyEnergyTemplateExports());
+assert.deepEqual(emptyWorkspaceProject.historySpotImport, { source: "empty" });
+assert.deepEqual(emptyWorkspaceProject.spotMarketConfig, { market: "empty" });
+assert.equal(emptyWorkspaceProject.scenarios[0].id, "scn-new");
+assert.equal(emptyWorkspaceProject.activeScenarioId, "scn-new");
 
 const historyProject = sanitizeProjectBase({
   account: " legacy ",

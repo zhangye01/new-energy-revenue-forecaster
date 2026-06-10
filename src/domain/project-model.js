@@ -47,6 +47,92 @@
     };
   }
 
+  function createMockHistoryProject(options = {}) {
+    const nowIso = resolveNowIso(options);
+    const startYear = Number.isInteger(options.startYear) ? options.startYear : Math.max(2026, resolveCurrentYear(options));
+    const project = {
+      id: typeof options.id === "string" && options.id ? options.id : resolveMakeId(options)("proj"),
+      ownerAccount: typeof options.ownerAccount === "string" ? options.ownerAccount.trim() : "",
+      workspaceBucket: "history",
+      name: typeof options.name === "string" && options.name ? options.name : "江苏海上风电示例项目",
+      province: "jiangsu",
+      assetType: "wind",
+      siteType: "offshore",
+      hasStorage: true,
+      storagePowerMw: 64,
+      storageDurationH: 2,
+      storageNote: "按装机容量20% / 2h生成的示例配储口径",
+      capacityMw: 320,
+      startYear,
+      forecastYears: 30,
+      energyMode: "annual_hours",
+      note: "系统自动生成的历史项目示例",
+      createdAt: nowIso,
+      statuses: isPlainObject(options.statuses) ? { ...options.statuses } : {},
+      energyData: createEmptyEnergyDataState("annual_hours"),
+      energyTemplateExports: createEmptyEnergyTemplateExports(),
+      historySpotImport: isPlainObject(options.historySpotImport) ? { ...options.historySpotImport } : {},
+      priceRuns: [],
+      activeRunId: null,
+      activationLogs: [],
+      spotMarketConfig: isPlainObject(options.spotMarketConfig) ? { ...options.spotMarketConfig } : {},
+      scenarios: [],
+      activeScenarioId: null,
+      resultsByScenario: {}
+    };
+    project.statuses["create-page"] = "completed";
+    const baselineScenario = typeof options.createBaselineScenario === "function"
+      ? options.createBaselineScenario(project)
+      : options.baselineScenario;
+    if (isPlainObject(baselineScenario)) {
+      project.scenarios.push(baselineScenario);
+      project.activeScenarioId = baselineScenario.id || null;
+    }
+    return project;
+  }
+
+  function createEmptyWorkspaceProject(options = {}) {
+    const nowIso = resolveNowIso(options);
+    const project = {
+      id: typeof options.id === "string" && options.id ? options.id : resolveMakeId(options)("proj"),
+      ownerAccount: typeof options.ownerAccount === "string" ? options.ownerAccount.trim() : "",
+      workspaceBucket: "new",
+      name: typeof options.name === "string" && options.name ? options.name : "新建项目",
+      province: "",
+      assetType: "",
+      siteType: "",
+      hasStorage: false,
+      storagePowerMw: null,
+      storageDurationH: null,
+      storageNote: "",
+      capacityMw: null,
+      startYear: null,
+      forecastYears: null,
+      energyMode: "annual_hours",
+      note: "",
+      createdAt: nowIso,
+      statuses: isPlainObject(options.statuses) ? { ...options.statuses } : {},
+      energyData: createEmptyEnergyDataState("annual_hours"),
+      energyTemplateExports: createEmptyEnergyTemplateExports(),
+      historySpotImport: isPlainObject(options.historySpotImport) ? { ...options.historySpotImport } : {},
+      priceRuns: [],
+      activeRunId: null,
+      activationLogs: [],
+      spotMarketConfig: isPlainObject(options.spotMarketConfig) ? { ...options.spotMarketConfig } : {},
+      scenarios: [],
+      activeScenarioId: null,
+      resultsByScenario: {}
+    };
+    const baselineScenario = typeof options.createBaselineScenario === "function"
+      ? options.createBaselineScenario(project)
+      : options.baselineScenario;
+    if (isPlainObject(baselineScenario)) {
+      project.scenarios.push(baselineScenario);
+      project.activeScenarioId = baselineScenario.id || null;
+    }
+    return project;
+  }
+
   function resolveNowIso(options = {}) {
     if (typeof options.nowIso === "function") return options.nowIso();
     if (typeof options.nowIso === "string" && options.nowIso) return options.nowIso;
@@ -142,6 +228,8 @@
 
   return Object.freeze({
     normalizeEnergyMode,
+    createMockHistoryProject,
+    createEmptyWorkspaceProject,
     createEmptyEnergyDataState,
     createEmptyEnergyTemplateExports,
     sanitizeProjectBase,
