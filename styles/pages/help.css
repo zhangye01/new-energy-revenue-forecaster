@@ -1,0 +1,183 @@
+/* CSS governance: help page documentation styles. Load after home.css and before feature page CSS. */
+
+/* Help page content */
+.help-doc {
+  align-content: start;
+}
+
+.help-grid-2,
+.help-grid-3 {
+  display: grid;
+  gap: 10px;
+}
+
+.help-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.help-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.help-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.help-card strong,
+.help-step-body strong,
+.help-faq-item strong {
+  color: var(--ink);
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.help-card p,
+.help-step-body p,
+.help-faq-item p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.help-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.help-flow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.help-step-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.help-step-index {
+  min-width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid #b8c9de;
+  background: #eef5ff;
+  color: #2c5c97;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.86rem;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.help-step-body {
+  display: grid;
+  gap: 4px;
+}
+
+.help-table-scroll {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: auto;
+}
+
+.help-mini-table {
+  min-width: 760px;
+}
+
+.help-mini-table code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--ink);
+  background: rgba(31, 94, 168, 0.08);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.help-faq {
+  display: grid;
+  gap: 10px;
+}
+
+.help-faq-item {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.help-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  background: #7f8ca0;
+}
+
+.help-dot.completed {
+  background: var(--green);
+}
+
+.help-dot.in-progress {
+  background: var(--orange);
+}
+
+.help-dot.stale {
+  background: var(--red);
+}
+
+body[data-theme="dark"] .help-step-index {
+  border-color: #4d6484;
+  background: #273851;
+  color: #c6d9f3;
+}
+
+body[data-theme="dark"] .help-mini-table code {
+  background: rgba(143, 181, 228, 0.16);
+}
+
+body[data-theme="eye"] .help-step-index {
+  border-color: #b7c8b3;
+  background: #edf5e8;
+  color: #2f7b53;
+}
+
+body[data-theme="eye"] .help-mini-table code {
+  background: rgba(47, 123, 83, 0.1);
+}
+
+/* Help responsive 1220px */
+@media (max-width: 1220px) {
+  .help-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 940px) {
+  .help-grid-2,
+  .help-grid-3,
+  .help-flow {
+    grid-template-columns: 1fr;
+  }
+}
