@@ -6110,36 +6110,16 @@ function renderResults() {
 function renderCompare() {
   renderCompareWorkspaceState();
   const project = getActiveProject();
-  if (refs.compareBody) refs.compareBody.innerHTML = "";
-  if (refs.compareSensitivityBody) refs.compareSensitivityBody.innerHTML = "";
-  if (refs.compareSensitivityFactorList) refs.compareSensitivityFactorList.innerHTML = "";
-  if (refs.compareScenarioFocusList) refs.compareScenarioFocusList.innerHTML = "";
-  setCompareMetric(refs.compareMetricBaselineScenario, "-");
-  setCompareMetric(refs.compareMetricBaselineRevenue, "-");
-  setCompareMetric(refs.compareMetricSensitiveFactors, "0 项");
-  setCompareMetric(refs.compareMetricCompareCount, "0 个");
-  setCompareMetric(refs.compareMetricScenarioCount, "0 个");
-  setCompareMetric(refs.compareMetricBestScenario, "-");
-  setCompareMetric(refs.compareMetricMaxGap, "-");
-  setCompareMetric(refs.compareMetricPeriod, "-");
-  if (refs.compareSensitivityResponseLabel) refs.compareSensitivityResponseLabel.textContent = "等待变量选择";
-  if (refs.compareScenarioBridgeLabel) refs.compareScenarioBridgeLabel.textContent = "等待方案选择";
-  if (refs.compareSensitivityVariableSummary) refs.compareSensitivityVariableSummary.textContent = "默认启用全部变量";
-  if (refs.compareBaselineLabel) refs.compareBaselineLabel.textContent = "等待基准方案结果";
-  if (refs.compareScenarioLabel) refs.compareScenarioLabel.textContent = "等待方案结果";
-  if (refs.compareSensitivityMessage) {
-    refs.compareSensitivityMessage.textContent = "请先在基准结果总览完成基准方案测算，再查看敏感性分析。";
-  }
-  if (refs.compareScenarioMessage) {
-    refs.compareScenarioMessage.textContent = "当前仅展示已完成测算的方案结果；新增方案并测算后即可加入对比。";
-  }
-  syncCompareSensitivityControls();
+  comparePage.resetComparePageState({
+    refs,
+    setCompareMetric,
+    syncCompareSensitivityControls
+  });
   if (!project) {
-    renderCompareChartPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, "请选择项目后查看敏感性分析。");
-    renderCompareChartPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, "请选择项目后查看响应曲线。");
-    renderCompareChartPlaceholder("scenarioRanking", refs.compareRankingChart, "请选择项目后查看方案对标。");
-    renderCompareChartPlaceholder("scenarioTrend", refs.compareTrendChart, "请选择项目后查看方案对比。");
-    renderCompareChartPlaceholder("scenarioBridge", refs.compareBridgeChart, "请选择方案查看差异归因。");
+    comparePage.renderCompareNoProjectState({
+      refs,
+      renderPlaceholder: renderCompareChartPlaceholder
+    });
     return;
   }
   ensureScenarioMetadata(project);
@@ -6154,12 +6134,10 @@ function renderCompare() {
   setCompareMetric(refs.compareMetricCompareCount, `${available.length} 个`, available.length ? "已完成测算" : "等待测算");
   setCompareMetric(refs.compareMetricScenarioCount, `${available.length} 个`, available.length >= 2 ? "可横向对比" : "至少 2 个方案");
   if (!available.length) {
-    if (refs.compareBody) refs.compareBody.innerHTML = `<tr><td colspan="7">暂无可对比结果，请先在基准结果总览页完成基准方案测算。</td></tr>`;
-    renderCompareChartPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, "基准方案未测算，暂无法展示。");
-    renderCompareChartPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, "基准方案未测算，暂无法展示。");
-    renderCompareChartPlaceholder("scenarioRanking", refs.compareRankingChart, "暂无方案结果，无法生成收益排名。");
-    renderCompareChartPlaceholder("scenarioTrend", refs.compareTrendChart, "暂无方案结果，无法生成年度走势。");
-    renderCompareChartPlaceholder("scenarioBridge", refs.compareBridgeChart, "请选择方案查看差异归因。");
+    comparePage.renderCompareNoResultsState({
+      refs,
+      renderPlaceholder: renderCompareChartPlaceholder
+    });
     return;
   }
 
