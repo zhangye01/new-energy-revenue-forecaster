@@ -328,6 +328,59 @@
     }).join("");
   }
 
+  function renderCompareReadyState(input = {}) {
+    const {
+      refs = {},
+      setCompareMetric = () => {},
+      available = [],
+      compareState = {},
+      comparePeriod = "-",
+      sensitivitySettings = {},
+      detectTopDriver = () => "-",
+      asCompactMoney = (value) => String(value),
+      asNum = (value, digits = 1) => {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric.toFixed(digits) : "-";
+      },
+      renderers = {}
+    } = input;
+
+    renderers.renderSensitivityTornadoChart?.(compareState.sensitivityFactors, compareState.baselineRevenueWan);
+    renderers.renderSensitivityFactorList?.(compareState.allSensitivityFactors, compareState.sensitivityFactors);
+    renderers.renderSensitivityResponseChart?.(compareState.sensitivityFactors, compareState.baselineRevenueWan);
+    renderers.renderSensitivityTable?.(compareState.sensitivityFactors);
+
+    applyCompareView({
+      refs,
+      setCompareMetric,
+      view: buildCompareOverviewView({
+        available,
+        baseline: compareState.baseline,
+        baselineFirst: compareState.baselineFirst,
+        baselineRevenueWan: compareState.baselineRevenueWan,
+        comparePeriod,
+        sensitivityFactors: compareState.sensitivityFactors,
+        sensitivitySettings,
+        bestScenario: compareState.bestScenario,
+        maxGapWan: compareState.maxGapWan,
+        asCompactMoney,
+        asNum
+      })
+    });
+
+    renderers.renderScenarioRankingChart?.(available, compareState.baseline);
+    renderers.renderCompareTrendChart?.(available);
+    renderers.renderScenarioFocusList?.(available, compareState.baseline);
+    renderers.renderScenarioBridgeChart?.(compareState.focusScenario, compareState.baseline);
+    setHtml(refs.compareBody, buildCompareTableRowsHtml({
+      available,
+      baseline: compareState.baseline,
+      detectTopDriver,
+      asCompactMoney
+    }));
+    renderers.queueCompareChartsResize?.();
+  }
+
   return Object.freeze({
     applyCompareView,
     bindCompareEvents,
@@ -336,6 +389,7 @@
     buildCompareTableRowsHtml,
     buildScenarioFocusListHtml,
     buildSensitivityFactorListHtml,
+    renderCompareReadyState,
     resetComparePageState,
     renderCompareNoProjectState,
     renderCompareNoResultsState

@@ -5451,42 +5451,28 @@ function renderCompare() {
   compareSensitivitySettings.selectedKeys = compareState.sensitivitySelection.selectedKeys;
   activeSensitivityFactorKey = compareState.sensitivitySelection.activeFactorKey;
   activeCompareScenarioId = compareState.activeCompareScenarioId;
-  renderSensitivityTornadoChart(compareState.sensitivityFactors, compareState.baselineRevenueWan);
-  renderSensitivityFactorList(compareState.allSensitivityFactors, compareState.sensitivityFactors);
-  renderSensitivityResponseChart(compareState.sensitivityFactors, compareState.baselineRevenueWan);
-  renderSensitivityTable(compareState.sensitivityFactors);
-
-  comparePage.applyCompareView({
+  comparePage.renderCompareReadyState({
     refs,
     setCompareMetric,
-    view: comparePage.buildCompareOverviewView({
-      available,
-      baseline: compareState.baseline,
-      baselineFirst: compareState.baselineFirst,
-      baselineRevenueWan: compareState.baselineRevenueWan,
-      comparePeriod,
-      sensitivityFactors: compareState.sensitivityFactors,
-      sensitivitySettings: compareSensitivitySettings,
-      bestScenario: compareState.bestScenario,
-      maxGapWan: compareState.maxGapWan,
-      asCompactMoney,
-      asNum
-    })
+    available,
+    compareState,
+    comparePeriod,
+    sensitivitySettings: compareSensitivitySettings,
+    detectTopDriver: compareAnalysis.detectTopDriver,
+    asCompactMoney,
+    asNum,
+    renderers: {
+      renderSensitivityTornadoChart,
+      renderSensitivityFactorList,
+      renderSensitivityResponseChart,
+      renderSensitivityTable,
+      renderScenarioRankingChart,
+      renderCompareTrendChart,
+      renderScenarioFocusList,
+      renderScenarioBridgeChart,
+      queueCompareChartsResize
+    }
   });
-
-  renderScenarioRankingChart(available, compareState.baseline);
-  renderCompareTrendChart(available);
-  renderScenarioFocusList(available, compareState.baseline);
-  renderScenarioBridgeChart(compareState.focusScenario, compareState.baseline);
-  if (refs.compareBody) {
-    refs.compareBody.innerHTML = comparePage.buildCompareTableRowsHtml({
-      available,
-      baseline: compareState.baseline,
-      detectTopDriver: compareAnalysis.detectTopDriver,
-      asCompactMoney
-    });
-  }
-  queueCompareChartsResize();
 }
 
 function toCsvLine(values) {

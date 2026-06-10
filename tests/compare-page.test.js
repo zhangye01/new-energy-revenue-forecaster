@@ -9,6 +9,7 @@ const {
   buildCompareTableRowsHtml,
   buildScenarioFocusListHtml,
   buildSensitivityFactorListHtml,
+  renderCompareReadyState,
   resetComparePageState,
   renderCompareNoProjectState,
   renderCompareNoResultsState
@@ -245,5 +246,53 @@ assert.match(refs.compareBody.innerHTML, /暂无可对比结果/);
 assert.equal(placeholders.length, 5);
 assert.equal(placeholders[2].key, "scenarioRanking");
 assert.match(placeholders[2].message, /暂无方案结果/);
+
+const readyRenderCalls = [];
+const readyMetricCalls = [];
+renderCompareReadyState({
+  refs,
+  setCompareMetric: (node, value, hint) => readyMetricCalls.push({ node, value, hint }),
+  available,
+  compareState: {
+    baseline: available[0],
+    baselineFirst: available[0].result.annualRows[0],
+    baselineRevenueWan: 40,
+    allSensitivityFactors: [{ key: "hours", name: "利用小时", note: "上网电量变化", sensitivity: 20 }],
+    sensitivityFactors: [{ key: "hours", name: "利用小时", note: "上网电量变化", sensitivity: 20 }],
+    bestScenario: available[1],
+    maxGapWan: 20,
+    focusScenario: available[1]
+  },
+  comparePeriod: "2026-2056",
+  sensitivitySettings: { rangePercent: 20, stepPercent: 5 },
+  asCompactMoney: (value) => `${Math.round(value / 10000)}万元`,
+  asNum: (value, digits = 1) => Number(value).toFixed(digits),
+  detectTopDriver: () => "现货收入",
+  renderers: {
+    renderSensitivityTornadoChart: (factors, revenue) => readyRenderCalls.push(`tornado:${factors.length}:${revenue}`),
+    renderSensitivityFactorList: (allFactors, factors) => readyRenderCalls.push(`factor-list:${allFactors.length}:${factors.length}`),
+    renderSensitivityResponseChart: (factors, revenue) => readyRenderCalls.push(`response:${factors.length}:${revenue}`),
+    renderSensitivityTable: (factors) => readyRenderCalls.push(`table:${factors.length}`),
+    renderScenarioRankingChart: (items, baseline) => readyRenderCalls.push(`ranking:${items.length}:${baseline.scenario.id}`),
+    renderCompareTrendChart: (items) => readyRenderCalls.push(`trend:${items.length}`),
+    renderScenarioFocusList: (items, baseline) => readyRenderCalls.push(`focus:${items.length}:${baseline.scenario.id}`),
+    renderScenarioBridgeChart: (focus, baseline) => readyRenderCalls.push(`bridge:${focus.scenario.id}:${baseline.scenario.id}`),
+    queueCompareChartsResize: () => readyRenderCalls.push("resize")
+  }
+});
+assert.deepEqual(readyRenderCalls, [
+  "tornado:1:40",
+  "factor-list:1:1",
+  "response:1:40",
+  "table:1",
+  "ranking:2:base",
+  "trend:2",
+  "focus:2:base",
+  "bridge:up:base",
+  "resize"
+]);
+assert.equal(readyMetricCalls.length, 5);
+assert.match(refs.compareBody.innerHTML, /现货收入/);
+assert.equal(refs.compareBaselineLabel.textContent, "基准：基准<场景>");
 
 console.log("compare page tests passed");
