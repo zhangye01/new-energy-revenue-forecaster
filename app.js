@@ -4759,28 +4759,10 @@ function applyProvinceDefaultsToProject(provinceKey) {
     return;
   }
 
-  const defaults = getProvinceDefaults(provinceKey);
-  scenario.config.mechanismEnabled = defaults.mechanismEnabled;
-  scenario.config.mechanismRatio = defaults.mechanismRatio;
-  scenario.config.mechanismPrice = defaults.mechanismPrice;
-  scenario.config.marketOpFee = defaults.marketOpFee;
-  scenario.config.gridAssessFee = defaults.gridAssessFee;
-  scenario.config.ancillaryFee = defaults.ancillaryFee;
-  scenario.config.otherFee = defaults.otherFee;
-  scenario.config.greenCertPrice = defaults.greenCertPrice;
-  scenario.config.greenCertRealizeRatio = 1;
-  scenario.config.greenPremiumPrice = defaults.greenPremiumPrice;
-  scenario.config.greenPremiumRealizeRatio = 0;
-  scenario.config.carbonRealizeRatio = 0;
-  scenario.config.storageArbitragePrice = project.hasStorage ? defaults.storageArbitragePrice : 0;
-  scenario.config.storageCapacityCompPrice = project.hasStorage ? defaults.storageCapacityCompPrice : 0;
-  scenario.config.storageAncillaryRevenuePrice = project.hasStorage ? defaults.storageAncillaryRevenuePrice : 0;
-  scenario.config.storageOtherRevenuePrice = project.hasStorage ? defaults.storageOtherRevenuePrice : 0;
-  if (project.siteType !== "offshore") {
-    scenario.config.carbonEnabled = false;
-    scenario.config.carbonPrice = 0;
-  }
-  scenario.updatedAt = new Date().toISOString();
+  scenarioModel.applyProvinceDefaultsToScenario(project, scenario, {
+    provinceDefaults: getProvinceDefaults(provinceKey),
+    nowIso: () => new Date().toISOString()
+  });
   project.statuses["scenario-page"] = "completed";
   markDownstreamStale(project, "scenario-page");
 

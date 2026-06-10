@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const {
   applyBatchParameter,
+  applyProvinceDefaultsToScenario,
   createBaselineScenario,
   defaultScenarioConfig,
   normalizeLtConvergeStep,
@@ -118,6 +119,46 @@ assert.equal(sanitized.config.carbonPrice, 0);
 assert.equal(sanitized.config.feeConfigMode, "manual");
 assert.deepEqual(Object.keys(sanitized.config.feeManualValuesByYear), ["2026", "2028"]);
 assert.equal(sanitized.config.storageArbitragePrice, 0);
+
+const applyTarget = {
+  config: {
+    carbonEnabled: true,
+    carbonPrice: 9,
+    storageArbitragePrice: 99
+  }
+};
+applyProvinceDefaultsToScenario(
+  { siteType: "offshore", hasStorage: true },
+  applyTarget,
+  {
+    provinceDefaults,
+    nowIso: "2026-06-10T08:00:00.000Z"
+  }
+);
+assert.equal(applyTarget.config.mechanismEnabled, provinceDefaults.mechanismEnabled);
+assert.equal(applyTarget.config.mechanismRatio, provinceDefaults.mechanismRatio);
+assert.equal(applyTarget.config.mechanismPrice, provinceDefaults.mechanismPrice);
+assert.equal(applyTarget.config.marketOpFee, provinceDefaults.marketOpFee);
+assert.equal(applyTarget.config.greenCertRealizeRatio, 1);
+assert.equal(applyTarget.config.greenPremiumRealizeRatio, 0);
+assert.equal(applyTarget.config.carbonRealizeRatio, 0);
+assert.equal(applyTarget.config.storageArbitragePrice, provinceDefaults.storageArbitragePrice);
+assert.equal(applyTarget.updatedAt, "2026-06-10T08:00:00.000Z");
+
+const noStorageOnshoreTarget = { config: { carbonEnabled: true, carbonPrice: 8 } };
+applyProvinceDefaultsToScenario(
+  { siteType: "onshore", hasStorage: false },
+  noStorageOnshoreTarget,
+  {
+    provinceDefaults,
+    nowIso: () => "2026-06-10T09:00:00.000Z"
+  }
+);
+assert.equal(noStorageOnshoreTarget.config.carbonEnabled, false);
+assert.equal(noStorageOnshoreTarget.config.carbonPrice, 0);
+assert.equal(noStorageOnshoreTarget.config.storageArbitragePrice, 0);
+assert.equal(noStorageOnshoreTarget.config.storageCapacityCompPrice, 0);
+assert.equal(noStorageOnshoreTarget.updatedAt, "2026-06-10T09:00:00.000Z");
 
 const baselineScenario = createBaselineScenario(offshoreStorageProject, {
   provinceDefaults,
