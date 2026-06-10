@@ -188,6 +188,35 @@
     return next;
   }
 
+  function createBaselineScenario(project = {}, options = {}) {
+    const makeId = typeof options.makeId === "function" ? options.makeId : ((prefix) => `${prefix}-baseline`);
+    return {
+      id: makeId("scn"),
+      name: "基准场景",
+      isBaseline: true,
+      locked: false,
+      config: defaultScenarioConfig(project, options),
+      updatedAt: resolveNowIso(options)
+    };
+  }
+
+  function normalizeScenarioMetadata(project = {}) {
+    if (!Array.isArray(project.scenarios) || !project.scenarios.length) {
+      return { baselineId: "", activeScenarioId: project.activeScenarioId || null };
+    }
+    const baselineId = project.scenarios.find((scenario) => scenario.isBaseline)?.id || project.scenarios[0].id;
+    project.scenarios.forEach((scenario) => {
+      scenario.isBaseline = scenario.id === baselineId;
+      if (typeof scenario.locked !== "boolean") {
+        scenario.locked = false;
+      }
+    });
+    if (!project.scenarios.some((scenario) => scenario.id === project.activeScenarioId)) {
+      project.activeScenarioId = project.scenarios[0].id;
+    }
+    return { baselineId, activeScenarioId: project.activeScenarioId };
+  }
+
   function parseBatchValue(spec, rawText) {
     const num = Number(rawText);
     if (!Number.isFinite(num)) return null;
@@ -276,8 +305,10 @@
 
   return Object.freeze({
     applyBatchParameter,
+    createBaselineScenario,
     defaultScenarioConfig,
     normalizeLtConvergeStep,
+    normalizeScenarioMetadata,
     parseBatchValue,
     sanitizeScenario
   });

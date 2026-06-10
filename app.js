@@ -1052,14 +1052,10 @@ function ensureMockHistoryProjectForCurrentAccount() {
 
   project.statuses["create-page"] = "completed";
 
-  const baselineScenario = {
-    id: makeId("scn"),
-    name: "基准场景",
-    isBaseline: true,
-    locked: false,
-    config: defaultScenarioConfig(project),
-    updatedAt: now.toISOString()
-  };
+  const baselineScenario = createBaselineScenario(project, {
+    currentYear: year,
+    nowIso: now.toISOString()
+  });
   project.scenarios.push(baselineScenario);
   project.activeScenarioId = baselineScenario.id;
 
@@ -1399,27 +1395,10 @@ function sanitizeProject(rawProject, index) {
   const rawScenarios = Array.isArray(rawProject.scenarios) ? rawProject.scenarios : [];
   project.scenarios = rawScenarios.map((scenario, i) => sanitizeScenario(project, scenario, i));
   if (!project.scenarios.length) {
-    project.scenarios = [{
-      id: makeId("scn"),
-      name: "基准场景",
-      isBaseline: true,
-      locked: false,
-      config: defaultScenarioConfig(project),
-      updatedAt: new Date().toISOString()
-    }];
+    project.scenarios = [createBaselineScenario(project)];
   }
-  const firstBaselineIndex = project.scenarios.findIndex((scenario) => scenario.isBaseline);
-  if (firstBaselineIndex < 0) {
-    project.scenarios[0].isBaseline = true;
-  } else {
-    project.scenarios = project.scenarios.map((scenario, idx) => ({
-      ...scenario,
-      isBaseline: idx === firstBaselineIndex
-    }));
-  }
-  project.activeScenarioId = project.scenarios.some((scenario) => scenario.id === rawProject.activeScenarioId)
-    ? rawProject.activeScenarioId
-    : project.scenarios[0].id;
+  project.activeScenarioId = rawProject.activeScenarioId;
+  scenarioModel.normalizeScenarioMetadata(project);
 
   project.resultsByScenario = isPlainObject(rawProject.resultsByScenario) ? rawProject.resultsByScenario : {};
 
@@ -1790,17 +1769,7 @@ function syncProjectProvinceDefaultsToBaseline(project, options = {}) {
 }
 
 function ensureScenarioMetadata(project) {
-  if (!project.scenarios?.length) return;
-  const baselineId = project.scenarios.find((scenario) => scenario.isBaseline)?.id || project.scenarios[0].id;
-  project.scenarios.forEach((scenario) => {
-    scenario.isBaseline = scenario.id === baselineId;
-    if (typeof scenario.locked !== "boolean") {
-      scenario.locked = false;
-    }
-  });
-  if (!project.scenarios.some((scenario) => scenario.id === project.activeScenarioId)) {
-    project.activeScenarioId = project.scenarios[0].id;
-  }
+  scenarioModel.normalizeScenarioMetadata(project);
 }
 
 function getBaselineScenario(project) {
@@ -3204,19 +3173,10 @@ function createEmptyWorkspaceProject() {
     activeScenarioId: null,
     resultsByScenario: {}
   };
-  const baselineScenario = {
-    id: makeId("scn"),
-    name: "基准场景",
-    isBaseline: true,
-    locked: false,
-    config: defaultScenarioConfig({
-      province: "",
-      siteType: "onshore",
-      startYear: Math.max(2026, now.getFullYear()),
-      forecastYears: 30
-    }),
-    updatedAt: now.toISOString()
-  };
+  const baselineScenario = createBaselineScenario(project, {
+    currentYear: now.getFullYear(),
+    nowIso: now.toISOString()
+  });
   project.scenarios.push(baselineScenario);
   project.activeScenarioId = baselineScenario.id;
   appState.projects.unshift(project);
@@ -3320,6 +3280,15 @@ function defaultScenarioConfig(project) {
   return scenarioModel.defaultScenarioConfig(project, {
     provinceDefaults: getProvinceDefaults(project?.province),
     currentYear: new Date().getFullYear()
+  });
+}
+
+function createBaselineScenario(project, options = {}) {
+  return scenarioModel.createBaselineScenario(project, {
+    provinceDefaults: getProvinceDefaults(project?.province),
+    currentYear: Number.isInteger(options.currentYear) ? options.currentYear : new Date().getFullYear(),
+    nowIso: options.nowIso || (() => new Date().toISOString()),
+    makeId
   });
 }
 
@@ -3573,14 +3542,9 @@ function createProjectFromForm(options = {}) {
   project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
   project.statuses["energy-page"] = project.statuses["create-page"] === "completed" ? "in_progress" : "not_started";
 
-  const baselineScenario = {
-    id: makeId("scn"),
-    name: "基准场景",
-    isBaseline: true,
-    locked: false,
-    config: defaultScenarioConfig(project),
-    updatedAt: new Date().toISOString()
-  };
+  const baselineScenario = createBaselineScenario(project, {
+    nowIso: project.createdAt
+  });
   project.scenarios.push(baselineScenario);
   project.activeScenarioId = baselineScenario.id;
 

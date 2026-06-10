@@ -3,8 +3,10 @@
 const assert = require("node:assert/strict");
 const {
   applyBatchParameter,
+  createBaselineScenario,
   defaultScenarioConfig,
   normalizeLtConvergeStep,
+  normalizeScenarioMetadata,
   parseBatchValue,
   sanitizeScenario
 } = require("../src/domain/scenario-model");
@@ -116,6 +118,39 @@ assert.equal(sanitized.config.carbonPrice, 0);
 assert.equal(sanitized.config.feeConfigMode, "manual");
 assert.deepEqual(Object.keys(sanitized.config.feeManualValuesByYear), ["2026", "2028"]);
 assert.equal(sanitized.config.storageArbitragePrice, 0);
+
+const baselineScenario = createBaselineScenario(offshoreStorageProject, {
+  provinceDefaults,
+  currentYear: 2026,
+  nowIso: "2026-06-10T00:00:00.000Z",
+  makeId: (prefix) => `${prefix}-base`
+});
+assert.equal(baselineScenario.id, "scn-base");
+assert.equal(baselineScenario.name, "基准场景");
+assert.equal(baselineScenario.isBaseline, true);
+assert.equal(baselineScenario.locked, false);
+assert.equal(baselineScenario.config.carbonEnabled, true);
+assert.equal(baselineScenario.updatedAt, "2026-06-10T00:00:00.000Z");
+
+const metadataProject = {
+  activeScenarioId: "missing",
+  scenarios: [
+    { id: "a", isBaseline: false },
+    { id: "b", isBaseline: true },
+    { id: "c", isBaseline: true, locked: true }
+  ]
+};
+const metadata = normalizeScenarioMetadata(metadataProject);
+assert.equal(metadata.baselineId, "b");
+assert.equal(metadata.activeScenarioId, "a");
+assert.deepEqual(
+  metadataProject.scenarios.map((scenario) => [scenario.id, scenario.isBaseline, scenario.locked]),
+  [
+    ["a", false, false],
+    ["b", true, false],
+    ["c", false, true]
+  ]
+);
 
 assert.equal(parseBatchValue({ type: "percent", min: 0, max: 100 }, "36"), 0.36);
 assert.equal(parseBatchValue({ type: "number", min: 0, max: 100 }, "120"), 100);
