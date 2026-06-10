@@ -35,8 +35,8 @@ function assertAppJsBudget() {
   }
 }
 
-function collectTopLevelFunctionSizes(relativePath) {
-  const lines = readText(relativePath).split(/\r?\n/);
+function collectTopLevelFunctionSizesFromText(sourceText) {
+  const lines = sourceText.split(/\r?\n/);
   const functions = [];
   const declarationPattern = /^function\s+([A-Za-z0-9_$]+)/;
 
@@ -76,6 +76,10 @@ function collectTopLevelFunctionSizes(relativePath) {
   });
 
   return functions;
+}
+
+function collectTopLevelFunctionSizes(relativePath) {
+  return collectTopLevelFunctionSizesFromText(readText(relativePath));
 }
 
 function assertAppJsFunctionBudget() {
@@ -192,4 +196,10 @@ function run() {
   }
 }
 
-run();
+if (require.main === module) {
+  run();
+}
+
+module.exports = {
+  collectTopLevelFunctionSizesFromText
+};
