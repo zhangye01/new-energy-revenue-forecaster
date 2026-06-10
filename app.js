@@ -3040,25 +3040,18 @@ function renderProjects() {
   const historyProjects = accountProjects.filter((project) => !isNewWorkspaceProject(project));
   refs.projectCountBadge.textContent = String(historyProjects.length);
   const buildProjectListItem = (project) => {
-    const activeRun = getActiveRun(project);
-    const scenario = getActiveScenario(project);
-    const statusMap = project.statuses || statusMapTemplate();
     const createReady = isProjectCreateCompleted(project);
-    const period = createReady ? getForecastPeriodDisplayRange(project) : "待创建";
-    const metaLine = createReady
-      ? `${getProvinceName(project.province)} / ${project.assetType === "wind" ? "风电" : "光伏"} / ${project.siteType === "offshore" ? "海上" : "陆上"} / ${getStorageConfigText(project)}`
-      : "基础信息待填写 / 风光类型待选 / 陆海类型待选";
-    const runtimeLine = createReady
-      ? `场景：${scenario?.name || "未配置"} | 电价版本：${activeRun?.algorithmVersion || "未生成"}`
-      : "场景：未配置 | 电价版本：未生成";
-    return {
-      id: project.id,
-      name: project.name,
-      period,
-      metaLine,
-      runtimeLine,
-      statuses: statusMap
-    };
+    return projectListView.buildProjectListItem(project, {
+      activeRun: getActiveRun(project),
+      scenario: getActiveScenario(project),
+      statuses: project.statuses || statusMapTemplate(),
+      createReady,
+      forecastPeriod: createReady ? getForecastPeriodDisplayRange(project) : "待创建",
+      provinceName: getProvinceName(project.province),
+      assetTypeText: project.assetType === "wind" ? "风电" : "光伏",
+      siteTypeText: project.siteType === "offshore" ? "海上" : "陆上",
+      storageText: getStorageConfigText(project)
+    });
   };
 
   refs.projectList.innerHTML = projectListView.buildProjectListHtml({

@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  buildProjectListItem,
   buildProjectCardHtml,
   buildProjectListHtml,
   bindProjectListActions
@@ -55,6 +56,34 @@ const project = {
     "energy-page": "stale"
   }
 };
+
+const projectListItem = buildProjectListItem({
+  id: "p1",
+  name: "基准项目"
+}, {
+  activeRun: { algorithmVersion: "run-v1" },
+  scenario: { name: "基准场景" },
+  statuses: { "create-page": "completed" },
+  createReady: true,
+  forecastPeriod: "2026-2050",
+  provinceName: "江苏",
+  assetTypeText: "风电",
+  siteTypeText: "海上",
+  storageText: "配储"
+});
+assert.deepEqual(projectListItem, {
+  id: "p1",
+  name: "基准项目",
+  period: "2026-2050",
+  metaLine: "江苏 / 风电 / 海上 / 配储",
+  runtimeLine: "场景：基准场景 | 电价版本：run-v1",
+  statuses: { "create-page": "completed" }
+});
+
+const draftListItem = buildProjectListItem({ id: "draft", name: "草稿" });
+assert.equal(draftListItem.period, "待创建");
+assert.equal(draftListItem.metaLine, "基础信息待填写 / 风光类型待选 / 陆海类型待选");
+assert.equal(draftListItem.runtimeLine, "场景：未配置 | 电价版本：未生成");
 
 const card = buildProjectCardHtml(project, {}, { workflowPages, pageTitles, statusText });
 assert.match(card, /江苏&lt;海上&gt;风电/);
