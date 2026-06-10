@@ -326,6 +326,24 @@
       || project.forecastYears !== input.forecastYears;
   }
 
+  function applyCreateProjectInput(project, input = {}) {
+    if (!isPlainObject(project)) return project;
+    project.name = input.name;
+    project.province = input.province;
+    project.assetType = input.assetType;
+    project.siteType = input.siteType;
+    project.hasStorage = input.hasStorage;
+    project.storagePowerMw = input.storagePowerMw;
+    project.storageDurationH = input.storageDurationH;
+    project.storageNote = input.storageNote;
+    project.capacityMw = input.capacityMw;
+    project.startYear = input.startYear;
+    project.forecastYears = input.forecastYears;
+    project.energyMode = normalizeEnergyMode(input.energyMode);
+    project.note = typeof input.note === "string" ? input.note : "";
+    return project;
+  }
+
   function sanitizeProjectBase(rawProject, index = 0, options = {}) {
     if (!isPlainObject(rawProject)) return null;
     const makeId = resolveMakeId(options);
@@ -411,6 +429,7 @@
     normalizeCreateProjectFormInput,
     validateCreateProjectFormInput,
     hasProjectBaseInputChanged,
+    applyCreateProjectInput,
     createProjectRecord,
     createMockHistoryProject,
     createEmptyWorkspaceProject,

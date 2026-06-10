@@ -7,6 +7,7 @@ const {
   normalizeCreateProjectFormInput,
   validateCreateProjectFormInput,
   hasProjectBaseInputChanged,
+  applyCreateProjectInput,
   createProjectRecord,
   createMockHistoryProject,
   createEmptyWorkspaceProject,
@@ -223,6 +224,40 @@ assert.equal(hasProjectBaseInputChanged({
   startYear: 2026,
   forecastYears: 30
 }), true);
+
+const projectForInputUpdate = createProjectRecord({ name: "旧项目", energyMode: "annual_hours" }, {
+  id: "proj-update",
+  nowIso: "2026-06-10T03:00:00.000Z"
+});
+applyCreateProjectInput(projectForInputUpdate, {
+  name: "更新项目",
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  hasStorage: true,
+  storagePowerMw: 64,
+  storageDurationH: 2,
+  storageNote: "两小时",
+  capacityMw: 320,
+  startYear: 2026,
+  forecastYears: 25,
+  energyMode: "province_typical_curve",
+  note: "已更新"
+});
+assert.equal(projectForInputUpdate.name, "更新项目");
+assert.equal(projectForInputUpdate.province, "jiangsu");
+assert.equal(projectForInputUpdate.hasStorage, true);
+assert.equal(projectForInputUpdate.storagePowerMw, 64);
+assert.equal(projectForInputUpdate.capacityMw, 320);
+assert.equal(projectForInputUpdate.forecastYears, 25);
+assert.equal(projectForInputUpdate.energyMode, "province_typical_curve");
+assert.equal(projectForInputUpdate.note, "已更新");
+applyCreateProjectInput(projectForInputUpdate, {
+  name: "坏模式回退",
+  energyMode: "bad"
+});
+assert.equal(projectForInputUpdate.energyMode, "annual_hours");
+assert.equal(projectForInputUpdate.note, "");
 
 const createdRecord = createProjectRecord(createInput, {
   id: "proj-created",

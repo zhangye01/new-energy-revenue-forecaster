@@ -3122,19 +3122,7 @@ function updateExistingProjectFromForm(project, input, targetPage) {
   const oldProvince = project.province;
   const baseChanged = projectModel.hasProjectBaseInputChanged(project, input);
 
-  project.name = input.name;
-  project.province = input.province;
-  project.assetType = input.assetType;
-  project.siteType = input.siteType;
-  project.hasStorage = input.hasStorage;
-  project.storagePowerMw = input.storagePowerMw;
-  project.storageDurationH = input.storageDurationH;
-  project.storageNote = input.storageNote;
-  project.capacityMw = input.capacityMw;
-  project.startYear = input.startYear;
-  project.forecastYears = input.forecastYears;
-  project.energyMode = input.energyMode;
-  project.note = input.note;
+  projectModel.applyCreateProjectInput(project, input);
   project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
   const provinceDefaultsAutoSynced = syncProjectProvinceDefaultsToBaseline(project, {
     force: shouldAutoSyncProvinceDefaults(project)
