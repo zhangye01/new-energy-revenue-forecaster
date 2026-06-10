@@ -423,62 +423,8 @@ function ensureProjectEnergyDataState(project) {
   return energyDataRules.ensureProjectEnergyDataState(project);
 }
 
-function hasStoredEnergyTypicalCurve(energyData) {
-  return energyDataRules.hasStoredEnergyTypicalCurve(energyData);
-}
-
 function ensureProjectEnergyDataDerivedState(project) {
-  const energyData = ensureProjectEnergyDataState(project);
-  if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears <= 0) {
-    return energyData;
-  }
-
-  const hasCurve = hasStoredEnergyTypicalCurve(energyData);
-  let needsRebuild = false;
-
-  for (let i = 0; i < project.forecastYears; i += 1) {
-    const year = project.startYear + i;
-    const annualHours = Number(energyData.annualInputByYear?.[year]);
-    const summary = energyData.annualSummary?.[year];
-    const hourlyValues = energyData.hourlyByYear?.[year];
-
-    if (!Number.isFinite(annualHours) || annualHours <= 0) {
-      if (summary?.status && summary.status !== "缺失") {
-        needsRebuild = true;
-        break;
-      }
-      continue;
-    }
-
-    if (!hasCurve) {
-      if (
-        summary?.status !== "待典型曲线"
-        || !Number.isFinite(Number(summary?.annualHours))
-        || Math.abs(Number(summary?.annualHours) - annualHours) > 1e-6
-      ) {
-        needsRebuild = true;
-        break;
-      }
-      continue;
-    }
-
-    if (
-      summary?.status !== "完整"
-      || !Array.isArray(hourlyValues)
-      || hourlyValues.length !== 8760
-      || !Number.isFinite(Number(summary?.annualHours))
-      || Math.abs(Number(summary?.annualHours) - annualHours) > 1e-6
-    ) {
-      needsRebuild = true;
-      break;
-    }
-  }
-
-  if (needsRebuild) {
-    rebuildProjectEnergyData(project);
-    return ensureProjectEnergyDataState(project);
-  }
-  return energyData;
+  return energyDataRules.ensureProjectEnergyDataDerivedState(project);
 }
 
 function getAnnualInputYearCount(project) {

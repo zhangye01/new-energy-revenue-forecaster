@@ -5,6 +5,7 @@ const {
   buildEnergyTemplateRows,
   detectEnergyModeByHeader,
   deriveEnergyModeFromInputs,
+  ensureProjectEnergyDataDerivedState,
   ensureProjectEnergyDataState,
   getEnergyModeMeta,
   hasEnergyTypicalCurve,
@@ -183,5 +184,41 @@ approx(
   "重建后逐小时电量合计守恒",
   1e-6
 );
+
+const derivedWithoutCurve = {
+  startYear: 2026,
+  forecastYears: 1,
+  capacityMw: 100,
+  energyData: {
+    mode: "annual_hours",
+    annualInputByYear: { 2026: 2400 },
+    annualSummary: {
+      2026: { annualHours: 2300, energyMwh: 230000, status: "完整" }
+    }
+  }
+};
+ensureProjectEnergyDataDerivedState(derivedWithoutCurve);
+assert.equal(derivedWithoutCurve.energyData.annualSummary[2026].status, "待典型曲线");
+assert.equal(derivedWithoutCurve.energyData.annualSummary[2026].annualHours, 2400);
+assert.deepEqual(derivedWithoutCurve.energyData.hourlyByYear, {});
+
+const derivedWithCurve = {
+  startYear: 2026,
+  forecastYears: 1,
+  capacityMw: 100,
+  energyData: {
+    mode: "typical_curve_8760",
+    annualInputByYear: { 2026: 8760 },
+    typicalCurveSource: "typical_curve_8760",
+    typicalCurveProfile: flatProfile,
+    annualSummary: {
+      2026: { annualHours: 8760, energyMwh: 876000, status: "待典型曲线" }
+    },
+    hourlyByYear: {}
+  }
+};
+ensureProjectEnergyDataDerivedState(derivedWithCurve);
+assert.equal(derivedWithCurve.energyData.annualSummary[2026].status, "完整");
+assert.equal(derivedWithCurve.energyData.hourlyByYear[2026].length, 8760);
 
 console.log("energy data tests passed");
