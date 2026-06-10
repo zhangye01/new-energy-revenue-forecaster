@@ -45,6 +45,7 @@ const projectModel = window.NE_PROJECT_MODEL;
 const energyDataRules = window.NE_ENERGY_DATA;
 const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
+const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
 const energyCharts = window.NE_ENERGY_CHARTS;
 const resultCharts = window.NE_RESULT_CHARTS;
@@ -54,7 +55,7 @@ const historyCharts = window.NE_HISTORY_CHARTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !energyWorkspace || !energyCharts || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -5535,167 +5536,30 @@ function toggleProvinceDefaultDetails(provinceKey) {
 function renderProvinceLibrary() {
   const project = getActiveProject();
   if (!refs.provinceParamBody || !refs.provinceApplyMessage) return;
-  if (!project) {
-    refs.provinceApplyMessage.textContent = "请选择项目后再一键带入省份默认参数。";
-    refs.provinceApplyMessage.style.borderColor = "#9ab7e5";
-    refs.provinceApplyMessage.style.background = "#eff5ff";
-    if (refs.provinceDefaultSelector) {
-      refs.provinceDefaultSelector.innerHTML = '<option value="">调用其他省份参数</option>';
-      refs.provinceDefaultSelector.value = "";
-      refs.provinceDefaultSelector.disabled = true;
-    }
-    refs.provinceParamBody.innerHTML = `
-      <div class="empty-box compact">当前项目尚未选择省份，保存基础信息后再查看默认参数。</div>
-    `;
-    return;
-  }
-  const currentProvinceKey = PROVINCE_KEY_SET.has(project?.province) ? project.province : "";
-  const currentProvinceName = getProvinceName(currentProvinceKey);
-  const currentRegionKey = getPolicyRegionKeyByProvince(currentProvinceKey);
-  const selectorContextKey = `${project.id || ""}:${currentProvinceKey || ""}`;
-  if (selectedProvinceDefaultContextKey !== selectorContextKey) {
-    selectedProvinceDefaultKey = currentProvinceKey;
-    selectedProvinceDefaultContextKey = selectorContextKey;
-  }
-  if (!PROVINCE_KEY_SET.has(selectedProvinceDefaultKey)) {
-    selectedProvinceDefaultKey = currentProvinceKey || PROVINCES[0]?.key || "";
-  }
-  const selectedProvince = PROVINCES.find((province) => province.key === selectedProvinceDefaultKey)
-    || PROVINCES.find((province) => province.key === currentProvinceKey)
-    || PROVINCES[0];
-  selectedProvinceDefaultKey = selectedProvince?.key || "";
+  const model = provinceDefaultsView.buildProvinceDefaultsViewModel({
+    project,
+    provinces: PROVINCES,
+    selectedProvinceDefaultKey,
+    selectedProvinceDefaultContextKey,
+    expandedKeys: Array.from(expandedProvinceDefaultKeys),
+    currentMessage: refs.provinceApplyMessage.textContent,
+    getProvinceDefaults,
+    getProvinceName,
+    getRegionKey: getPolicyRegionKeyByProvince
+  });
+  selectedProvinceDefaultKey = model.selectedKey;
+  selectedProvinceDefaultContextKey = model.contextKey;
   if (refs.provinceDefaultSelector) {
-    const sortedOptions = [...PROVINCES].sort((left, right) => {
-      if (left.key === currentProvinceKey) return -1;
-      if (right.key === currentProvinceKey) return 1;
-      const leftSameRegion = getPolicyRegionKeyByProvince(left.key) === currentRegionKey;
-      const rightSameRegion = getPolicyRegionKeyByProvince(right.key) === currentRegionKey;
-      if (leftSameRegion && !rightSameRegion) return -1;
-      if (!leftSameRegion && rightSameRegion) return 1;
-      return left.name.localeCompare(right.name, "zh-CN");
-    });
-    refs.provinceDefaultSelector.disabled = !sortedOptions.length;
-    refs.provinceDefaultSelector.innerHTML = sortedOptions.map((province) => {
-      const currentMark = province.key === currentProvinceKey ? "（当前项目）" : "";
-      return `<option value="${escapeHtml(province.key)}">调用其他省份参数：${escapeHtml(province.name)}${currentMark}</option>`;
-    }).join("");
-    refs.provinceDefaultSelector.value = selectedProvinceDefaultKey;
+    refs.provinceDefaultSelector.disabled = model.selector.disabled;
+    refs.provinceDefaultSelector.innerHTML = model.selector.html;
+    refs.provinceDefaultSelector.value = model.selector.value;
   }
-  if (
-    currentProvinceName
-    && (
-      !refs.provinceApplyMessage.textContent
-      || refs.provinceApplyMessage.textContent.includes("请选择一个省份")
-      || refs.provinceApplyMessage.textContent.includes("请选择项目后")
-      || refs.provinceApplyMessage.textContent.includes("当前项目已选省份")
-      || refs.provinceApplyMessage.textContent.includes("当前正在查看")
-    )
-  ) {
-    const selectedProvinceName = getProvinceName(selectedProvinceDefaultKey);
-    refs.provinceApplyMessage.textContent = selectedProvinceDefaultKey === currentProvinceKey
-      ? `当前项目已选省份：${currentProvinceName}。后续场景默认以该省口径为基础，可直接带入当前场景后再微调。`
-      : `当前正在查看：${selectedProvinceName}默认参数。可调用该省参数带入当前场景，项目省份仍为${currentProvinceName}。`;
-    refs.provinceApplyMessage.style.borderColor = "#9ab7e5";
-    refs.provinceApplyMessage.style.background = "#eff5ff";
+  if (model.message) {
+    refs.provinceApplyMessage.textContent = model.message.text;
+    refs.provinceApplyMessage.style.borderColor = model.message.borderColor;
+    refs.provinceApplyMessage.style.background = model.message.background;
   }
-  const provincesToRender = selectedProvince ? [selectedProvince] : [];
-  refs.provinceParamBody.innerHTML = provincesToRender.map((province) => {
-    const defaults = getProvinceDefaults(province.key);
-    const isCurrentProvince = province.key === currentProvinceKey;
-    const isExpanded = expandedProvinceDefaultKeys.has(province.key);
-    return `
-      <article class="province-default-item ${isCurrentProvince ? "province-row-current" : ""}">
-        <div class="province-default-summary">
-          <div class="province-default-main">
-            <div class="province-default-title-row">
-              <span class="province-default-title">${province.name}</span>
-              ${isCurrentProvince ? '<span class="project-province-badge">当前项目</span>' : ""}
-              ${!isCurrentProvince ? '<span class="project-province-badge province-source-badge">参数来源</span>' : ""}
-            </div>
-            <div class="province-default-summary-grid">
-              <div class="province-default-metric">
-                <span class="label">机制状态</span>
-                <span class="value">${defaults.mechanismEnabled ? "纳入" : "不纳入"}</span>
-              </div>
-              <div class="province-default-metric">
-                <span class="label">机制占比</span>
-                <span class="value">${asNum(defaults.mechanismRatio * 100, 1)}%</span>
-              </div>
-              <div class="province-default-metric">
-                <span class="label">机制电价</span>
-                <span class="value">${asNum(defaults.mechanismPrice, 1)} 元/MWh</span>
-              </div>
-            </div>
-          </div>
-          <div class="province-default-actions">
-            <button
-              type="button"
-              class="ghost-button province-default-toggle"
-              data-toggle-province-details="${province.key}"
-              aria-expanded="${isExpanded ? "true" : "false"}"
-            >
-              ${isExpanded ? "收起详情" : "展开详情"}
-            </button>
-            <button type="button" class="ghost-button" data-apply-province="${province.key}" ${project ? "" : "disabled"}>
-              带入当前场景
-            </button>
-          </div>
-        </div>
-        ${isExpanded ? `
-          <div class="province-default-details">
-            <div class="province-default-detail">
-              <span class="label">市场运营费</span>
-              <span class="value">${asNum(defaults.marketOpFee, 1)} 元/MWh</span>
-            </div>
-            <div class="province-default-detail">
-              <span class="label">并网考核费</span>
-              <span class="value">${asNum(defaults.gridAssessFee, 1)} 元/MWh</span>
-            </div>
-            <div class="province-default-detail">
-              <span class="label">辅助服务费</span>
-              <span class="value">${asNum(defaults.ancillaryFee, 1)} 元/MWh</span>
-            </div>
-            <div class="province-default-detail">
-              <span class="label">其他费用</span>
-              <span class="value">${asNum(defaults.otherFee, 1)} 元/MWh</span>
-            </div>
-            <div class="province-default-detail">
-              <span class="label">绿证</span>
-              <span class="value">${asNum(defaults.greenCertPrice, 1)} 元/MWh</span>
-            </div>
-            <div class="province-default-detail">
-              <span class="label">绿电溢价</span>
-              <span class="value">${asNum(defaults.greenPremiumPrice, 1)} 元/MWh</span>
-            </div>
-            ${project?.hasStorage ? `
-              <div class="province-default-detail">
-                <span class="label">现货价差套利</span>
-                <span class="value">${asNum(defaults.storageArbitragePrice, 1)} 元/MWh</span>
-              </div>
-              <div class="province-default-detail">
-                <span class="label">容量补偿收益</span>
-                <span class="value">${asNum(defaults.storageCapacityCompPrice, 1)} 元/MWh</span>
-              </div>
-              <div class="province-default-detail">
-                <span class="label">配储辅助服务收益</span>
-                <span class="value">${asNum(defaults.storageAncillaryRevenuePrice, 1)} 元/MWh</span>
-              </div>
-              <div class="province-default-detail">
-                <span class="label">其他配储收益</span>
-                <span class="value">${asNum(defaults.storageOtherRevenuePrice, 1)} 元/MWh</span>
-              </div>
-            ` : ""}
-          </div>
-        ` : ""}
-      </article>
-    `;
-  }).join("");
-
-  if (!refs.provinceParamBody.innerHTML) {
-    refs.provinceParamBody.innerHTML = `
-      <div class="empty-box compact">当前项目尚未选择省份，保存基础信息后再查看默认参数。</div>
-    `;
-  }
+  refs.provinceParamBody.innerHTML = model.bodyHtml;
 
   document.querySelectorAll("[data-toggle-province-details]").forEach((button) => {
     button.addEventListener("click", () => toggleProvinceDefaultDetails(button.dataset.toggleProvinceDetails));
