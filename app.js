@@ -54,10 +54,11 @@ const resultCharts = window.NE_RESULT_CHARTS;
 const scenarioCharts = window.NE_SCENARIO_CHARTS;
 const compareCharts = window.NE_COMPARE_CHARTS;
 const historyCharts = window.NE_HISTORY_CHARTS;
+const historyPage = window.NE_HISTORY_PAGE;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !historyPage || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -5353,33 +5354,22 @@ function renderHistoryPrices() {
   const tokens = historyThemeTokens();
   const lineColors = ["#2f78e8", "#6cb34f", "#ff8a1f", "#8b5cf6", "#0ea5a3"];
   const historyData = historyAnalysis.buildHistorySelectedAnalysis(selectedYears, { lineColors });
-  const {
-    allValues,
-    valueAvg,
-    p50,
-    p90,
-    negativeRatio,
-    typicalWorkday,
-    maxStdMonth,
-    maxStd,
-    exportRows
-  } = historyData;
-  const yearsRangeText = `${range.startDate}至${range.endDate}`;
   const provinceLabel = project.provinceLabel || getProvinceName(project.province) || "-";
   const assetLabel = getAssetTypeLabel(project.assetType);
   const siteLabel = getSiteTypeLabel(project.siteType);
-  const exportPrefix = [
-    sanitizeExportFilenamePart(provinceLabel),
-    "历史现货",
-    sanitizeExportFilenamePart(assetLabel),
-    sanitizeExportFilenamePart(siteLabel),
-    sanitizeExportFilenamePart(yearsRangeText)
-  ].join("-");
-  setHistoryExportPayload("monthTrend", `${exportPrefix}-月度均价趋势对比.csv`, exportRows.monthTrend);
-  setHistoryExportPayload("typicalDay", `${exportPrefix}-典型日电价曲线.csv`, exportRows.typicalDay);
-  setHistoryExportPayload("distribution", `${exportPrefix}-电价分布直方图.csv`, exportRows.distribution);
-  setHistoryExportPayload("heatmap", `${exportPrefix}-分时电价热力图.csv`, exportRows.heatmap);
-  setHistoryExportPayload("boxplot", `${exportPrefix}-月度电价箱线图.csv`, exportRows.boxplot);
+  const historyView = historyPage.buildHistoryReadyViewModel({
+    historyData,
+    range,
+    dataset,
+    project,
+    labels: { provinceLabel, assetLabel, siteLabel },
+    monthLabels: HISTORY_MONTH_LABELS,
+    quarterLabels: HISTORY_QUARTER_LABELS,
+    sanitizePart: sanitizeExportFilenamePart
+  });
+  historyView.exportPlan.forEach(([key, filename, rows]) => {
+    setHistoryExportPayload(key, filename, rows);
+  });
   syncHistoryExportButtons();
   const historyChartOptions = historyCharts.buildHistoryChartOptions(historyData, tokens);
   if (charts.monthTrend) charts.monthTrend.setOption(historyChartOptions.monthTrend, true);
@@ -5390,23 +5380,14 @@ function renderHistoryPrices() {
 
   queueHistoryChartsResize();
 
-  if (refs.historyKpiPoints) refs.historyKpiPoints.textContent = `${allValues.length.toLocaleString()} 点`;
-  if (refs.historyKpiAvg) refs.historyKpiAvg.textContent = `${valueAvg.toFixed(1)} 元/MWh`;
-  if (refs.historyKpiP50) refs.historyKpiP50.textContent = `${p50.toFixed(1)} 元/MWh`;
-  if (refs.historyKpiP90) refs.historyKpiP90.textContent = `${p90.toFixed(1)} 元/MWh`;
-  if (refs.historyKpiNegative) refs.historyKpiNegative.textContent = `${negativeRatio.toFixed(2)}%`;
-
-  const workdayMax = Math.max(...typicalWorkday.filter((value) => Number.isFinite(value)));
-  const workdayPeakIndex = typicalWorkday.findIndex((value) => value === workdayMax);
-  const peakTime = workdayPeakIndex >= 0 ? HISTORY_QUARTER_LABELS[workdayPeakIndex] : "--:--";
-  const sourceLabel = dataset.sourceType === "database"
-    ? `${provinceLabel}${dataset?.mock ? "省级现货模拟库" : "省级现货数据库"}`
-    : "历史现货数据库";
-  const storageLabel = project.hasStorage
-    ? `，已按配储(${project.storagePowerMw || 0}MW / ${project.storageDurationH || 0}h)对波动做平滑处理`
-    : "";
+  const kpis = historyView.kpis;
+  if (refs.historyKpiPoints) refs.historyKpiPoints.textContent = kpis.points;
+  if (refs.historyKpiAvg) refs.historyKpiAvg.textContent = kpis.avg;
+  if (refs.historyKpiP50) refs.historyKpiP50.textContent = kpis.p50;
+  if (refs.historyKpiP90) refs.historyKpiP90.textContent = kpis.p90;
+  if (refs.historyKpiNegative) refs.historyKpiNegative.textContent = kpis.negative;
   if (refs.historyInsightBox) {
-    refs.historyInsightBox.textContent = `数据源：${sourceLabel}。当前口径：${assetLabel} / ${siteLabel}${storageLabel}。日期区间：${yearsRangeText}（15分钟颗粒度）。工作日高价时段约在 ${peakTime}，波动最大月份为 ${HISTORY_MONTH_LABELS[maxStdMonth]}（标准差 ${maxStd.toFixed(1)} 元/MWh）。`;
+    refs.historyInsightBox.textContent = historyView.insightText;
     refs.historyInsightBox.style.borderColor = "#8fb48d";
     refs.historyInsightBox.style.background = "#f1fbf1";
   }
