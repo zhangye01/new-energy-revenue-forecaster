@@ -5408,71 +5408,17 @@ function setScenarioFormDisabled(disabled) {
 
 function renderScenarioManager() {
   const project = getActiveProject();
-  if (!project) {
-    refs.scenarioSelector.innerHTML = "";
-    refs.scenarioQuickName.value = "";
-    refs.scenarioQuickName.disabled = true;
-    refs.scenarioListBody.innerHTML = "";
-    refs.scenarioLockHint.textContent = "请先创建项目。";
-    refs.duplicateScenarioButton.disabled = true;
-    refs.renameScenarioButton.disabled = true;
-    refs.deleteScenarioButton.disabled = true;
-    refs.toggleBaselineLockButton.disabled = true;
-    refs.applyBatchButton.disabled = true;
-    return;
-  }
-  ensureScenarioMetadata(project);
-  const activeScenario = getActiveScenario(project);
-  const baselineScenario = getBaselineScenario(project);
-
-  refs.scenarioSelector.innerHTML = project.scenarios.map((scenario) => `
-    <option value="${scenario.id}">
-      ${scenario.name}${scenario.isBaseline ? "（基准）" : ""}${scenario.locked ? " [已锁定]" : ""}
-    </option>
-  `).join("");
-  refs.scenarioSelector.value = activeScenario?.id || "";
-  refs.scenarioQuickName.value = activeScenario?.name || "";
-  refs.scenarioQuickName.disabled = !activeScenario || activeScenario.locked;
-
-  refs.scenarioListBody.innerHTML = project.scenarios.map((scenario) => {
-    const valuePart = getEnvValueAllocation(project, scenario.config, project.startYear).unitValuePerMarketMwh;
-    const feeConfig = getFeeConfigForYear(project, scenario.config, project.startYear);
-    const storagePart = project.hasStorage
-      ? scenario.config.storageArbitragePrice
-        + scenario.config.storageCapacityCompPrice
-        + scenario.config.storageAncillaryRevenuePrice
-        + scenario.config.storageOtherRevenuePrice
-      : null;
-    const feePart = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
-    const marks = [
-      scenario.id === project.activeScenarioId ? "当前" : "",
-      scenario.isBaseline ? "基准" : "",
-      scenario.locked ? "已锁定" : ""
-    ].filter(Boolean).join(" / ");
-    return `
-      <tr>
-        <td>${escapeHtml(scenario.name)}</td>
-        <td>${marks || "-"}</td>
-        <td>${asPercent(scenario.config.mechanismRatio)}</td>
-        <td>${asNum(scenario.config.mechanismPrice, 1)}</td>
-        <td>${asNum(scenario.config.ltYear1Pnl, 1)}</td>
-        <td>${asNum(valuePart, 1)}</td>
-        <td>${storagePart === null ? "-" : asNum(storagePart, 1)}</td>
-        <td>${asNum(feePart, 1)}</td>
-        <td>${new Date(scenario.updatedAt).toLocaleString("zh-CN", { hour12: false })}</td>
-      </tr>
-    `;
-  }).join("");
-
-  refs.deleteScenarioButton.disabled = !activeScenario || activeScenario.isBaseline || activeScenario.locked || project.scenarios.length <= 1;
-  refs.duplicateScenarioButton.disabled = !activeScenario;
-  refs.renameScenarioButton.disabled = !activeScenario || activeScenario.locked;
-  refs.toggleBaselineLockButton.disabled = !baselineScenario;
-  refs.applyBatchButton.disabled = !project.scenarios.length;
-  refs.toggleBaselineLockButton.textContent = baselineScenario?.locked ? "解锁基准场景" : "锁定基准场景";
-  refs.scenarioLockHint.textContent = baselineScenario?.locked
-    ? "基准场景已锁定。切换到其他场景可继续编辑。"
-    : "基准场景未锁定。建议阶段性锁定用于对比。";
+  if (project) ensureScenarioMetadata(project);
+  scenarioForm.applyScenarioManagerView(refs, scenarioForm.buildScenarioManagerView({
+    project,
+    activeScenario: project ? getActiveScenario(project) : null,
+    baselineScenario: project ? getBaselineScenario(project) : null,
+    getEnvValueAllocation,
+    getFeeConfigForYear,
+    asPercent,
+    asNum,
+    formatDate: (value) => new Date(value).toLocaleString("zh-CN", { hour12: false })
+  }));
 }
 
 function renderScenarioPageSummary() {

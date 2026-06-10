@@ -3,6 +3,8 @@
 const assert = require("node:assert/strict");
 const scenarioConfig = require("../src/domain/scenario-config");
 const {
+  applyScenarioManagerView,
+  buildScenarioManagerView,
   buildScenarioSaveDraft,
   buildScenarioConfigFromForm,
   loadScenarioToForm
@@ -19,6 +21,15 @@ function makeFields(initial = {}) {
       if (!fields.has(selector)) fields.set(selector, { value: "" });
       return fields.get(selector);
     }
+  };
+}
+
+function makeNode() {
+  return {
+    disabled: false,
+    innerHTML: "old",
+    textContent: "old",
+    value: "old"
   };
 }
 
@@ -250,5 +261,86 @@ const invalidEnvDraft = buildScenarioSaveDraft({
 });
 assert.equal(invalidEnvDraft.ok, false);
 assert.match(invalidEnvDraft.message, /不能超过 100.0%/);
+
+const emptyManagerView = buildScenarioManagerView();
+assert.equal(emptyManagerView.lockHint, "请先创建项目。");
+assert.equal(emptyManagerView.quickNameDisabled, true);
+assert.equal(emptyManagerView.applyBatchDisabled, true);
+
+const managerProject = {
+  hasStorage: true,
+  startYear: 2026,
+  activeScenarioId: "base",
+  scenarios: [
+    {
+      id: "base",
+      name: "基准<场景>",
+      isBaseline: true,
+      locked: true,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      config: {
+        mechanismRatio: 0.36,
+        mechanismPrice: 365,
+        ltYear1Pnl: 8,
+        storageArbitragePrice: 1,
+        storageCapacityCompPrice: 2,
+        storageAncillaryRevenuePrice: 3,
+        storageOtherRevenuePrice: 4
+      }
+    },
+    {
+      id: "up",
+      name: "乐观场景",
+      isBaseline: false,
+      locked: false,
+      updatedAt: "2026-01-02T00:00:00.000Z",
+      config: {
+        mechanismRatio: 0.4,
+        mechanismPrice: 370,
+        ltYear1Pnl: 9,
+        storageArbitragePrice: 0,
+        storageCapacityCompPrice: 0,
+        storageAncillaryRevenuePrice: 0,
+        storageOtherRevenuePrice: 0
+      }
+    }
+  ]
+};
+const managerView = buildScenarioManagerView({
+  project: managerProject,
+  activeScenario: managerProject.scenarios[0],
+  baselineScenario: managerProject.scenarios[0],
+  getEnvValueAllocation: () => ({ unitValuePerMarketMwh: 12.8 }),
+  getFeeConfigForYear: () => ({ marketOpFee: 6, gridAssessFee: 7, ancillaryFee: 14, otherFee: 3 }),
+  asPercent: (value) => `${(value * 100).toFixed(1)}%`,
+  asNum: (value, digits) => Number(value).toFixed(digits),
+  formatDate: (value) => `date:${value}`
+});
+assert.match(managerView.selectorHtml, /基准&lt;场景&gt;（基准） \[已锁定\]/);
+assert.match(managerView.listHtml, /基准&lt;场景&gt;/);
+assert.match(managerView.listHtml, /当前 \/ 基准 \/ 已锁定/);
+assert.match(managerView.listHtml, /10.0/);
+assert.equal(managerView.deleteDisabled, true);
+assert.equal(managerView.renameDisabled, true);
+assert.equal(managerView.toggleBaselineText, "解锁基准场景");
+assert.match(managerView.lockHint, /基准场景已锁定/);
+
+const managerRefs = {
+  scenarioSelector: makeNode(),
+  scenarioQuickName: makeNode(),
+  scenarioListBody: makeNode(),
+  scenarioLockHint: makeNode(),
+  duplicateScenarioButton: makeNode(),
+  renameScenarioButton: makeNode(),
+  deleteScenarioButton: makeNode(),
+  toggleBaselineLockButton: makeNode(),
+  applyBatchButton: makeNode()
+};
+applyScenarioManagerView(managerRefs, managerView);
+assert.equal(managerRefs.scenarioSelector.value, "base");
+assert.equal(managerRefs.scenarioQuickName.value, "基准<场景>");
+assert.equal(managerRefs.scenarioQuickName.disabled, true);
+assert.equal(managerRefs.toggleBaselineLockButton.textContent, "解锁基准场景");
+assert.equal(managerRefs.applyBatchButton.disabled, false);
 
 console.log("scenario form tests passed");

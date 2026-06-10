@@ -44,6 +44,124 @@
     return { ok: false, message };
   }
 
+  function escapeHtml(text) {
+    return String(text ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll("\"", "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  function buildScenarioManagerView(input = {}) {
+    const {
+      project = null,
+      activeScenario = null,
+      baselineScenario = null,
+      getEnvValueAllocation = () => ({ unitValuePerMarketMwh: 0 }),
+      getFeeConfigForYear = () => ({
+        marketOpFee: 0,
+        gridAssessFee: 0,
+        ancillaryFee: 0,
+        otherFee: 0
+      }),
+      asPercent = (value) => String(value),
+      asNum = (value) => String(value),
+      formatDate = (value) => String(value || "")
+    } = input;
+
+    if (!project) {
+      return {
+        selectorHtml: "",
+        selectorValue: "",
+        quickName: "",
+        quickNameDisabled: true,
+        listHtml: "",
+        lockHint: "请先创建项目。",
+        duplicateDisabled: true,
+        renameDisabled: true,
+        deleteDisabled: true,
+        toggleBaselineDisabled: true,
+        applyBatchDisabled: true,
+        toggleBaselineText: ""
+      };
+    }
+
+    const scenarios = Array.isArray(project.scenarios) ? project.scenarios : [];
+    const selectorHtml = scenarios.map((scenario) => `
+    <option value="${escapeHtml(scenario.id)}">
+      ${escapeHtml(scenario.name)}${scenario.isBaseline ? "（基准）" : ""}${scenario.locked ? " [已锁定]" : ""}
+    </option>
+  `).join("");
+    const listHtml = scenarios.map((scenario) => {
+      const valuePart = getEnvValueAllocation(project, scenario.config, project.startYear).unitValuePerMarketMwh;
+      const feeConfig = getFeeConfigForYear(project, scenario.config, project.startYear);
+      const storagePart = project.hasStorage
+        ? scenario.config.storageArbitragePrice
+          + scenario.config.storageCapacityCompPrice
+          + scenario.config.storageAncillaryRevenuePrice
+          + scenario.config.storageOtherRevenuePrice
+        : null;
+      const feePart = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
+      const marks = [
+        scenario.id === project.activeScenarioId ? "当前" : "",
+        scenario.isBaseline ? "基准" : "",
+        scenario.locked ? "已锁定" : ""
+      ].filter(Boolean).join(" / ");
+      return `
+      <tr>
+        <td>${escapeHtml(scenario.name)}</td>
+        <td>${marks || "-"}</td>
+        <td>${asPercent(scenario.config.mechanismRatio)}</td>
+        <td>${asNum(scenario.config.mechanismPrice, 1)}</td>
+        <td>${asNum(scenario.config.ltYear1Pnl, 1)}</td>
+        <td>${asNum(valuePart, 1)}</td>
+        <td>${storagePart === null ? "-" : asNum(storagePart, 1)}</td>
+        <td>${asNum(feePart, 1)}</td>
+        <td>${formatDate(scenario.updatedAt)}</td>
+      </tr>
+    `;
+    }).join("");
+
+    return {
+      selectorHtml,
+      selectorValue: activeScenario?.id || "",
+      quickName: activeScenario?.name || "",
+      quickNameDisabled: !activeScenario || activeScenario.locked,
+      listHtml,
+      deleteDisabled: !activeScenario || activeScenario.isBaseline || activeScenario.locked || scenarios.length <= 1,
+      duplicateDisabled: !activeScenario,
+      renameDisabled: !activeScenario || activeScenario.locked,
+      toggleBaselineDisabled: !baselineScenario,
+      applyBatchDisabled: !scenarios.length,
+      toggleBaselineText: baselineScenario?.locked ? "解锁基准场景" : "锁定基准场景",
+      lockHint: baselineScenario?.locked
+        ? "基准场景已锁定。切换到其他场景可继续编辑。"
+        : "基准场景未锁定。建议阶段性锁定用于对比。"
+    };
+  }
+
+  function applyScenarioManagerView(refs = {}, view = {}) {
+    if (refs.scenarioSelector) {
+      refs.scenarioSelector.innerHTML = view.selectorHtml || "";
+      refs.scenarioSelector.value = view.selectorValue || "";
+    }
+    if (refs.scenarioQuickName) {
+      refs.scenarioQuickName.value = view.quickName || "";
+      refs.scenarioQuickName.disabled = Boolean(view.quickNameDisabled);
+    }
+    if (refs.scenarioListBody) refs.scenarioListBody.innerHTML = view.listHtml || "";
+    if (refs.scenarioLockHint) refs.scenarioLockHint.textContent = view.lockHint || "";
+    if (refs.duplicateScenarioButton) refs.duplicateScenarioButton.disabled = Boolean(view.duplicateDisabled);
+    if (refs.renameScenarioButton) refs.renameScenarioButton.disabled = Boolean(view.renameDisabled);
+    if (refs.deleteScenarioButton) refs.deleteScenarioButton.disabled = Boolean(view.deleteDisabled);
+    if (refs.toggleBaselineLockButton) {
+      refs.toggleBaselineLockButton.disabled = Boolean(view.toggleBaselineDisabled);
+      if (view.toggleBaselineText) refs.toggleBaselineLockButton.textContent = view.toggleBaselineText;
+    }
+    if (refs.applyBatchButton) refs.applyBatchButton.disabled = Boolean(view.applyBatchDisabled);
+  }
+
   function loadScenarioToForm(input = {}) {
     const {
       scenario,
@@ -236,6 +354,8 @@
   }
 
   return Object.freeze({
+    applyScenarioManagerView,
+    buildScenarioManagerView,
     buildScenarioSaveDraft,
     buildScenarioConfigFromForm,
     loadScenarioToForm
