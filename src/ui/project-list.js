@@ -132,6 +132,82 @@
     ].join("");
   }
 
+  function buildProjectListView(input = {}) {
+    const {
+      projects = [],
+      isNewWorkspaceProject = () => false,
+      buildProjectListItemView = (project) => project,
+      workflowPages = [],
+      pageTitles = {},
+      statusText = (state) => state
+    } = input;
+    const newWorkspaceProjects = projects.filter((project) => isNewWorkspaceProject(project));
+    const historyProjects = projects.filter((project) => !isNewWorkspaceProject(project));
+    return {
+      historyCount: historyProjects.length,
+      html: buildProjectListHtml({
+        newProjects: newWorkspaceProjects.map(buildProjectListItemView),
+        historyProjects: historyProjects.map(buildProjectListItemView),
+        workflowPages,
+        pageTitles,
+        statusText
+      })
+    };
+  }
+
+  function createProjectListActionHandlers(input = {}) {
+    const {
+      appState = {},
+      windowRef = null,
+      createEmptyWorkspaceProject = () => null,
+      setTopMeta = () => {},
+      renderAll = () => {},
+      setActivePage = () => {},
+      cloneData = (value) => value,
+      makeId = (prefix) => `${prefix}-${Date.now()}`,
+      resolveUniqueProjectName = (name) => name,
+      projectBelongsToCurrentAccount = () => true,
+      getProjectsForCurrentAccount = () => []
+    } = input;
+    return {
+      createProject: () => {
+        const created = createEmptyWorkspaceProject();
+        if (created) {
+          setTopMeta("新项目已生成，可进入项目继续配置。");
+          renderAll();
+        }
+      },
+      openProject: (projectId) => {
+        appState.activeProjectId = projectId;
+        setActivePage("create-page");
+      },
+      duplicateProject: (projectId) => {
+        const source = (appState.projects || []).find((item) => item.id === projectId);
+        if (!source || !projectBelongsToCurrentAccount(source)) return;
+        const clone = cloneData(source);
+        clone.id = makeId("proj");
+        clone.ownerAccount = String(appState.auth?.account || "").trim();
+        clone.name = resolveUniqueProjectName(`${source.name}-副本`);
+        clone.createdAt = new Date().toISOString();
+        appState.projects.unshift(clone);
+        renderAll();
+      },
+      deleteProject: (targetId) => {
+        const target = (appState.projects || []).find((item) => item.id === targetId);
+        if (!target || !projectBelongsToCurrentAccount(target)) return;
+        const confirmed = windowRef && typeof windowRef.confirm === "function"
+          ? windowRef.confirm(`确定删除项目“${target.name}”吗？删除后不可恢复。`)
+          : true;
+        if (!confirmed) return;
+        appState.projects = appState.projects.filter((item) => item.id !== targetId);
+        if (appState.activeProjectId === targetId) {
+          appState.activeProjectId = getProjectsForCurrentAccount()[0]?.id || null;
+        }
+        renderAll();
+      }
+    };
+  }
+
   function bindProjectListActions(input = {}) {
     const {
       root = null,
@@ -157,6 +233,8 @@
     buildProjectListItem,
     buildProjectCardHtml,
     buildProjectListHtml,
+    buildProjectListView,
+    createProjectListActionHandlers,
     bindProjectListActions
   });
 });

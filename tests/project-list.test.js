@@ -5,6 +5,8 @@ const {
   buildProjectListItem,
   buildProjectCardHtml,
   buildProjectListHtml,
+  buildProjectListView,
+  createProjectListActionHandlers,
   bindProjectListActions
 } = require("../src/ui/project-list");
 
@@ -114,6 +116,28 @@ assert.match(populatedList, /历史项目工作区/);
 assert.equal((populatedList.match(/复制项目/g) || []).length, 1);
 assert.equal((populatedList.match(/进入项目/g) || []).length, 2);
 
+const listView = buildProjectListView({
+  projects: [
+    { id: "new", name: "新建", workspaceBucket: "new" },
+    { id: "history", name: "历史", workspaceBucket: "history" }
+  ],
+  isNewWorkspaceProject: (item) => item.workspaceBucket === "new",
+  buildProjectListItemView: (item) => ({
+    id: item.id,
+    name: item.name,
+    period: "2026-2050",
+    metaLine: "江苏 / 风电 / 海上 / 配储",
+    runtimeLine: "场景：基准 | 电价版本：v1",
+    statuses: {}
+  }),
+  workflowPages,
+  pageTitles,
+  statusText
+});
+assert.equal(listView.historyCount, 1);
+assert.match(listView.html, /新建项目工作区/);
+assert.match(listView.html, /历史项目工作区/);
+
 const createButton = new FakeButton();
 const openButton = new FakeButton({ openProject: "p1" });
 const duplicateButton = new FakeButton({ duplicateProject: "p2" });
@@ -138,5 +162,43 @@ openButton.click();
 duplicateButton.click();
 deleteButton.click();
 assert.deepEqual(actionCalls, ["create", "open:p1", "duplicate:p2", "delete:p3"]);
+
+const handlerCalls = [];
+const handlerState = {
+  auth: { account: "acct" },
+  activeProjectId: "p1",
+  projects: [
+    { id: "p1", name: "项目一" },
+    { id: "p2", name: "项目二" }
+  ]
+};
+const handlers = createProjectListActionHandlers({
+  appState: handlerState,
+  windowRef: { confirm: () => true },
+  createEmptyWorkspaceProject: () => ({ id: "new" }),
+  setTopMeta: (message) => handlerCalls.push(`top:${message}`),
+  renderAll: () => handlerCalls.push("render"),
+  setActivePage: (pageId) => handlerCalls.push(`page:${pageId}`),
+  cloneData: (value) => ({ ...value }),
+  makeId: () => "proj-copy",
+  resolveUniqueProjectName: (name) => `${name}-2`,
+  projectBelongsToCurrentAccount: (project) => project.id !== "blocked",
+  getProjectsForCurrentAccount: () => handlerState.projects
+});
+handlers.createProject();
+handlers.openProject("p2");
+handlers.duplicateProject("p2");
+assert.equal(handlerState.projects[0].id, "proj-copy");
+assert.equal(handlerState.projects[0].ownerAccount, "acct");
+assert.equal(handlerState.projects[0].name, "项目二-副本-2");
+handlers.deleteProject("p1");
+assert.equal(handlerState.projects.some((item) => item.id === "p1"), false);
+assert.deepEqual(handlerCalls, [
+  "top:新项目已生成，可进入项目继续配置。",
+  "render",
+  "page:create-page",
+  "render",
+  "render"
+]);
 
 console.log("project list tests passed");

@@ -2975,71 +2975,45 @@ function renderHome() {
 
 function renderProjects() {
   const accountProjects = getProjectsForCurrentAccount();
-  const newWorkspaceProjects = accountProjects.filter((project) => isNewWorkspaceProject(project));
-  const historyProjects = accountProjects.filter((project) => !isNewWorkspaceProject(project));
-  refs.projectCountBadge.textContent = String(historyProjects.length);
-  const buildProjectListItem = (project) => {
-    const createReady = isProjectCreateCompleted(project);
-    return projectListView.buildProjectListItem(project, {
-      activeRun: getActiveRun(project),
-      scenario: getActiveScenario(project),
-      statuses: project.statuses || statusMapTemplate(),
-      createReady,
-      forecastPeriod: createReady ? getForecastPeriodDisplayRange(project) : "待创建",
-      provinceName: getProvinceName(project.province),
-      assetTypeText: project.assetType === "wind" ? "风电" : "光伏",
-      siteTypeText: project.siteType === "offshore" ? "海上" : "陆上",
-      storageText: getStorageConfigText(project)
-    });
-  };
-
-  refs.projectList.innerHTML = projectListView.buildProjectListHtml({
-    newProjects: newWorkspaceProjects.map(buildProjectListItem),
-    historyProjects: historyProjects.map(buildProjectListItem),
+  const view = projectListView.buildProjectListView({
+    projects: accountProjects,
+    isNewWorkspaceProject,
+    buildProjectListItemView: (project) => {
+      const createReady = isProjectCreateCompleted(project);
+      return projectListView.buildProjectListItem(project, {
+        activeRun: getActiveRun(project),
+        scenario: getActiveScenario(project),
+        statuses: project.statuses || statusMapTemplate(),
+        createReady,
+        forecastPeriod: createReady ? getForecastPeriodDisplayRange(project) : "待创建",
+        provinceName: getProvinceName(project.province),
+        assetTypeText: project.assetType === "wind" ? "风电" : "光伏",
+        siteTypeText: project.siteType === "offshore" ? "海上" : "陆上",
+        storageText: getStorageConfigText(project)
+      });
+    },
     workflowPages: WORKFLOW_PAGES,
     pageTitles: PAGE_TITLES,
     statusText
   });
+  refs.projectCountBadge.textContent = String(view.historyCount);
+  refs.projectList.innerHTML = view.html;
 
   projectListView.bindProjectListActions({
     root: refs.projectList,
-    handlers: {
-      createProject: () => {
-        const created = createEmptyWorkspaceProject();
-        if (created) {
-          setTopMeta("新项目已生成，可进入项目继续配置。");
-          renderAll();
-        }
-      },
-      openProject: (projectId) => {
-        appState.activeProjectId = projectId;
-        setActivePage("create-page");
-      },
-      duplicateProject: (projectId) => {
-        const source = appState.projects.find((item) => item.id === projectId);
-        if (!source || !projectBelongsToCurrentAccount(source)) return;
-        const clone = cloneData(source);
-        clone.id = makeId("proj");
-        clone.ownerAccount = String(appState.auth.account || "").trim();
-        clone.name = resolveUniqueProjectName(`${source.name}-副本`);
-        clone.createdAt = new Date().toISOString();
-        appState.projects.unshift(clone);
-        renderAll();
-      },
-      deleteProject: (targetId) => {
-        const target = appState.projects.find((item) => item.id === targetId);
-        if (!target || !projectBelongsToCurrentAccount(target)) return;
-        const confirmed = typeof window === "undefined"
-          ? true
-          : window.confirm(`确定删除项目“${target.name}”吗？删除后不可恢复。`);
-        if (!confirmed) return;
-        appState.projects = appState.projects.filter((item) => item.id !== targetId);
-        if (appState.activeProjectId === targetId) {
-          appState.activeProjectId = getProjectsForCurrentAccount()[0]?.id || null;
-        }
-        renderAll();
-      }
-    }
+    handlers: projectListView.createProjectListActionHandlers({
+      appState,
+      windowRef: typeof window !== "undefined" ? window : null,
+      createEmptyWorkspaceProject,
+      setTopMeta,
+      renderAll,
+      setActivePage,
+      cloneData,
+      makeId,
+      resolveUniqueProjectName,
+      projectBelongsToCurrentAccount,
+      getProjectsForCurrentAccount
+    })
   });
 }
 
