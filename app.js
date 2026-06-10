@@ -48,6 +48,7 @@ const exportBuilders = window.NE_EXPORT_BUILDERS;
 const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
 const energyCharts = window.NE_ENERGY_CHARTS;
+const projectListView = window.NE_PROJECT_LIST_VIEW;
 const resultPage = window.NE_RESULT_PAGE;
 const resultCharts = window.NE_RESULT_CHARTS;
 const scenarioCharts = window.NE_SCENARIO_CHARTS;
@@ -56,7 +57,7 @@ const historyCharts = window.NE_HISTORY_CHARTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !resultPage || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !compareCharts || !historyCharts || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -3100,22 +3101,10 @@ function renderProjects() {
   const newWorkspaceProjects = accountProjects.filter((project) => isNewWorkspaceProject(project));
   const historyProjects = accountProjects.filter((project) => !isNewWorkspaceProject(project));
   refs.projectCountBadge.textContent = String(historyProjects.length);
-
-  const buildStepStatusHtml = (statusMap) => WORKFLOW_PAGES.map((pageId) => {
-    const state = statusMap[pageId] || "not_started";
-    return `<span class="project-step-chip ${state}">${PAGE_TITLES[pageId]}：${statusText(state)}</span>`;
-  }).join("");
-
-  const buildProjectCardHtml = (project, options = {}) => {
-    const {
-      showDuplicate = true,
-      showDelete = true,
-      useNewStyle = false
-    } = options;
+  const buildProjectListItem = (project) => {
     const activeRun = getActiveRun(project);
     const scenario = getActiveScenario(project);
     const statusMap = project.statuses || statusMapTemplate();
-    const completedCount = WORKFLOW_PAGES.filter((pageId) => statusMap[pageId] === "completed").length;
     const createReady = isProjectCreateCompleted(project);
     const period = createReady ? getForecastPeriodDisplayRange(project) : "待创建";
     const metaLine = createReady
@@ -3124,61 +3113,23 @@ function renderProjects() {
     const runtimeLine = createReady
       ? `场景：${scenario?.name || "未配置"} | 电价版本：${activeRun?.algorithmVersion || "未生成"}`
       : "场景：未配置 | 电价版本：未生成";
-    const duplicateButton = showDuplicate
-      ? `<button class="ghost-button" data-duplicate-project="${project.id}">复制项目</button>`
-      : "";
-    const deleteButton = showDelete
-      ? `<button class="ghost-button danger-ghost" data-delete-project="${project.id}">删除项目</button>`
-      : "";
-    return `
-      <article class="project-item${useNewStyle ? " project-item-new" : ""}">
-        <div class="head">
-          <strong>${escapeHtml(project.name)}</strong>
-          <span class="hint">${period}</span>
-        </div>
-        <div class="meta">${metaLine}</div>
-        <div class="meta">${runtimeLine}</div>
-        <div class="project-progress">
-          <div class="project-progress-head">流程进度：${completedCount}/${WORKFLOW_PAGES.length} 已完成</div>
-          <div class="project-step-grid">${buildStepStatusHtml(statusMap)}</div>
-        </div>
-        <div class="project-actions">
-          <button class="ghost-button" data-open-project="${project.id}">进入项目</button>
-          ${duplicateButton}
-          ${deleteButton}
-        </div>
-      </article>
-    `;
+    return {
+      id: project.id,
+      name: project.name,
+      period,
+      metaLine,
+      runtimeLine,
+      statuses: statusMap
+    };
   };
 
-  const newWorkspaceHtml = newWorkspaceProjects.length
-    ? newWorkspaceProjects.map((project) => buildProjectCardHtml(project, {
-      showDuplicate: false,
-      showDelete: true
-    })).join("")
-    : `<div class="project-empty">当前暂无待建项目，请点击“新建项目”。</div>`;
-
-  const historyHtml = historyProjects.length
-    ? historyProjects.map((project) => buildProjectCardHtml(project, { showDuplicate: true, showDelete: true })).join("")
-    : `<div class="project-empty">当前账号暂无历史项目。</div>`;
-
-  refs.projectList.innerHTML = `
-    <section class="project-workspace">
-      <div class="project-workspace-head">
-        <h4 class="project-workspace-title">新建项目工作区</h4>
-        <button class="ghost-button" type="button" data-create-new-project>新建项目</button>
-      </div>
-      <div class="project-list">
-        ${newWorkspaceHtml}
-      </div>
-    </section>
-    <section class="project-workspace">
-      <div class="project-workspace-head">
-        <h4 class="project-workspace-title">历史项目工作区</h4>
-      </div>
-      <div class="project-list">${historyHtml}</div>
-    </section>
-  `;
+  refs.projectList.innerHTML = projectListView.buildProjectListHtml({
+    newProjects: newWorkspaceProjects.map(buildProjectListItem),
+    historyProjects: historyProjects.map(buildProjectListItem),
+    workflowPages: WORKFLOW_PAGES,
+    pageTitles: PAGE_TITLES,
+    statusText
+  });
 
   document.querySelectorAll("[data-create-new-project]").forEach((button) => {
     button.addEventListener("click", () => {
