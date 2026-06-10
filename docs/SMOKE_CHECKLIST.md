@@ -6,7 +6,7 @@
 
 1. 启动本地服务：`python3 -m http.server 8000`
 2. 浏览器打开：`http://127.0.0.1:8000/index.html`
-3. `npm run check:smoke` 已覆盖核心页面、关键 DOM 节点和启动脚本顺序，但不能替代下面的真实浏览器流程检查。
+3. `npm run check:smoke` 已覆盖核心页面、关键 DOM 节点和启动脚本顺序，`npm run check:serve` 已覆盖本地 HTTP 静态资源访问，但不能替代下面的真实浏览器流程检查。
 
 ## 1. 首页与登录
 

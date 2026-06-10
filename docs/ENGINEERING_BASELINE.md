@@ -17,6 +17,7 @@
 | 检查脚本 | 语法检查和测试必须自动发现文件，不允许在 `package.json` 手写长串 |
 | 静态完整性 | `index.html` 引用的本地脚本、样式、图片和 CSS 资源必须存在，DOM id 不允许重复 |
 | 页面骨架 | 核心页面、关键 DOM 节点和脚本顺序必须通过 smoke 契约检查 |
+| 静态服务 | `index.html` 和本地资源必须能通过临时 HTTP 静态服务访问 |
 | CI 入口 | `.github/workflows/` 保持一个检查 workflow，避免重复跑同一套门禁 |
 | 业务公式 | 公式变更必须同步业务交接包、模型说明和自动测试 |
 | 页面流程 | 流程变更必须同步烟测清单 |
@@ -59,7 +60,8 @@ npm run check
 3. 架构守护检查：`scripts/architecture-check.js` 检查分层、脚本顺序、`app.js` 行数和函数规模、`styles.css` 行数。
 4. 静态页面完整性检查：`scripts/static-check.js` 检查 `index.html` / `styles.css` 的本地资源引用、重复 id 和标题结构。
 5. 页面 smoke 契约检查：`scripts/smoke-check.js` 检查核心页面、关键 DOM 节点和启动脚本顺序。
-6. 发布仓库卫生检查：`scripts/release-check.js` 检查被 Git 追踪的本地缓存、个人绝对路径和高置信度密钥格式。
+6. 静态服务 smoke 检查：`scripts/serve-smoke.js` 启动临时 HTTP 服务，检查 `index.html` 和本地资源能被正常访问。
+7. 发布仓库卫生检查：`scripts/release-check.js` 检查被 Git 追踪的本地缓存、个人绝对路径和高置信度密钥格式。
 
 如果改动涉及页面交互，还需要按 [最小回归检查清单](./SMOKE_CHECKLIST.md) 做人工烟测或浏览器烟测。
 
@@ -80,5 +82,5 @@ npm run check
 1. 拆 `scenario-page` / 全口径收入配置页控制逻辑。
 2. 拆事件绑定，把页面事件按模块组织。
 3. 继续迁出 `app.js` 中的图表 option 和报表展示数据。
-4. 把静态 smoke 契约继续扩展为真实浏览器关键路径 smoke。
+4. 把静态服务 smoke 继续扩展为真实浏览器关键路径 smoke。
 5. 当模块数量继续增长时，再评估 Vite/TypeScript，不提前引入复杂构建。

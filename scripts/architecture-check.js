@@ -195,6 +195,18 @@ function assertSmokeCheckIsRequired() {
   }
 }
 
+function assertServeSmokeCheckIsRequired() {
+  const packageJson = JSON.parse(readText("package.json"));
+  const serveScript = packageJson.scripts?.["check:serve"] || "";
+  const checkScript = packageJson.scripts?.check || "";
+  if (serveScript !== "node scripts/serve-smoke.js") {
+    fail("npm run check:serve must use scripts/serve-smoke.js");
+  }
+  if (!checkScript.includes("npm run check:serve")) {
+    fail("npm run check must include npm run check:serve");
+  }
+}
+
 function assertBrowserModulesAreLoaded() {
   const html = readText("index.html");
   const modules = [
@@ -229,6 +241,7 @@ function run() {
   assertStaticCheckIsRequired();
   assertReleaseCheckIsRequired();
   assertSmokeCheckIsRequired();
+  assertServeSmokeCheckIsRequired();
   assertBrowserModulesAreLoaded();
   assertSingleWorkflow();
   if (!process.exitCode) {
