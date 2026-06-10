@@ -52,6 +52,7 @@
 | `scenario-charts.js` | 全口径收入配置页参数可视化三张 ECharts 图的 option 和主题 token 构造 |
 | `scenario-form.js` | 全口径收入配置页表单读写和场景配置构造 |
 | `compare-charts.js` | 多方案对比和敏感性分析图表 option、对比页主题 token 构造 |
+| `compare-page.js` | 多方案对比页变量列表、方案焦点列表和对比表格 HTML 构造 |
 | `history-page.js` | 历史电价展示页导出计划、KPI 和洞察文案构造 |
 | `history-charts.js` | 历史电价展示五张 ECharts 图的 option 和主题 token 构造 |
 | `shell-events.js` | 全局壳层、弹窗、导航和窗口级事件绑定 |

@@ -54,13 +54,14 @@ const resultCharts = window.NE_RESULT_CHARTS;
 const scenarioCharts = window.NE_SCENARIO_CHARTS;
 const scenarioForm = window.NE_SCENARIO_FORM;
 const compareCharts = window.NE_COMPARE_CHARTS;
+const comparePage = window.NE_COMPARE_PAGE;
 const historyCharts = window.NE_HISTORY_CHARTS;
 const historyPage = window.NE_HISTORY_PAGE;
 const shellEvents = window.NE_SHELL_EVENTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !scenarioForm || !compareCharts || !historyCharts || !historyPage || !shellEvents || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !csvUtils || !exportBuilders || !provinceDefaultsView || !energyWorkspace || !energyCharts || !projectListView || !resultPage || !resultCharts || !scenarioCharts || !scenarioForm || !compareCharts || !comparePage || !historyCharts || !historyPage || !shellEvents || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -5093,47 +5094,12 @@ function renderSensitivityTornadoChart(factors, baselineRevenueWan) {
 function renderSensitivityFactorList(allFactors, enabledFactors) {
   if (!refs.compareSensitivityFactorList) return;
   const tokens = compareThemeTokens();
-  const enabledSet = new Set(enabledFactors.map((factor) => factor.key));
-  const enabledRankMap = new Map(enabledFactors.map((factor, index) => [factor.key, index + 1]));
-  const optionHtml = allFactors.map((factor) => {
-    const checked = enabledSet.has(factor.key);
-    return `
-      <label class="compare-variable-option ${checked ? "" : "muted"}">
-        <input type="checkbox" data-sensitivity-variable="${escapeHtml(factor.key)}" ${checked ? "checked" : ""}>
-        <span>
-          <strong>${escapeHtml(factor.name)}</strong>
-          <small>${escapeHtml(factor.note)}</small>
-        </span>
-      </label>
-    `;
-  }).join("");
-
-  const drillHtml = enabledFactors.map((factor) => {
-    const index = enabledRankMap.get(factor.key) || 0;
-    const isActive = factor.key === activeSensitivityFactorKey;
-    const color = tokens.palette[factor.colorIndex % tokens.palette.length] || tokens.primary;
-    return `
-      <button class="compare-factor-button ${isActive ? "active" : ""}" type="button" data-sensitivity-factor="${escapeHtml(factor.key)}">
-        <span class="compare-factor-rank" style="--factor-color:${color}">${index + 1}</span>
-        <span class="compare-factor-main">
-          <strong>${escapeHtml(factor.name)}</strong>
-          <small>${escapeHtml(factor.note)}</small>
-        </span>
-        <span class="compare-factor-value">${asNum(factor.sensitivity, 1)} 万元</span>
-      </button>
-    `;
-  }).join("");
-
-  refs.compareSensitivityFactorList.innerHTML = `
-    <div class="compare-variable-grid">${optionHtml}</div>
-    <div class="compare-factor-subhead">
-      <strong>响应曲线变量</strong>
-      <span>点击下方变量切换右侧曲线</span>
-    </div>
-    <div class="compare-factor-drill-list">
-      ${drillHtml || `<div class="hint">请至少启用一个变量。</div>`}
-    </div>
-  `;
+  refs.compareSensitivityFactorList.innerHTML = comparePage.buildSensitivityFactorListHtml({
+    allFactors,
+    enabledFactors,
+    activeFactorKey: activeSensitivityFactorKey,
+    tokens
+  });
   if (refs.compareSensitivityVariableSummary) {
     refs.compareSensitivityVariableSummary.textContent = `已启用 ${enabledFactors.length}/${allFactors.length} 项，排序按敏感度自动更新`;
   }
@@ -5195,21 +5161,12 @@ function renderScenarioRankingChart(available, baseline) {
 
 function renderScenarioFocusList(available, baseline) {
   if (!refs.compareScenarioFocusList) return;
-  refs.compareScenarioFocusList.innerHTML = available.map((item, index) => {
-    const firstRow = item.result.annualRows.find((row) => row.energyMwh > 0) || item.result.annualRows[0];
-    const deltaWan = baseline ? (item.result.totalFullRevenue - baseline.result.totalFullRevenue) / 10000 : 0;
-    const isActive = item.scenario.id === activeCompareScenarioId;
-    return `
-      <button class="compare-factor-button ${isActive ? "active" : ""}" type="button" data-compare-focus-scenario="${escapeHtml(item.scenario.id)}">
-        <span class="compare-factor-rank">${item.scenario.isBaseline ? "基" : index + 1}</span>
-        <span class="compare-factor-main">
-          <strong>${escapeHtml(item.scenario.name)}</strong>
-          <small>首年 ${asCompactMoney(firstRow?.fullRevenue || 0)} / 均价 ${asNum(item.result.avgFullRevenuePrice, 2)} 元/MWh</small>
-        </span>
-        <span class="compare-factor-value">${deltaWan >= 0 ? "+" : ""}${asNum(deltaWan, 1)} 万元</span>
-      </button>
-    `;
-  }).join("");
+  refs.compareScenarioFocusList.innerHTML = comparePage.buildScenarioFocusListHtml({
+    available,
+    baseline,
+    activeScenarioId: activeCompareScenarioId,
+    asCompactMoney
+  });
 }
 
 function renderScenarioBridgeChart(focusItem, baseline) {
@@ -6610,25 +6567,14 @@ function renderCompare() {
   renderCompareTrendChart(available);
   renderScenarioFocusList(available, baseline);
   renderScenarioBridgeChart(focusScenario, baseline);
-  if (refs.compareBody) refs.compareBody.innerHTML = available.map((item) => {
-    const deltaRevenue = item.result.totalFullRevenue - baseline.result.totalFullRevenue;
-    const topDriver = compareAnalysis.detectTopDriver(item.result);
-    const firstRow = item.result.annualRows.find((row) => row.energyMwh > 0) || item.result.annualRows[0];
-    const scenarioLabel = item.scenario.isBaseline
-      ? `${escapeHtml(item.scenario.name)} <span class="table-tag">基准</span>`
-      : escapeHtml(item.scenario.name);
-    return `
-      <tr>
-        <td>${scenarioLabel}</td>
-        <td>${asCompactMoney(firstRow.fullRevenue)}</td>
-        <td>${asCompactMoney(item.result.totalFullRevenue)}</td>
-        <td>${asNum(item.result.avgFullRevenuePrice, 2)}</td>
-        <td>${asNum(firstRow.capturePrice, 2)} 元/MWh</td>
-        <td>${deltaRevenue >= 0 ? "+" : ""}${asCompactMoney(deltaRevenue)}</td>
-        <td>${topDriver}</td>
-      </tr>
-    `;
-  }).join("");
+  if (refs.compareBody) {
+    refs.compareBody.innerHTML = comparePage.buildCompareTableRowsHtml({
+      available,
+      baseline,
+      detectTopDriver: compareAnalysis.detectTopDriver,
+      asCompactMoney
+    });
+  }
   queueCompareChartsResize();
 }
 
