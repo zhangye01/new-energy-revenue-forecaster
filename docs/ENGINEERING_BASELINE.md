@@ -10,7 +10,7 @@
 | --- | --- |
 | 自动检查 | `npm run check` 必须通过 |
 | CI | GitHub Actions 必须运行 `npm run check` |
-| 主控文件规模 | `app.js` 不允许超过 6350 行 |
+| 主控文件规模 | `app.js` 不允许超过 6300 行 |
 | 主控函数规模 | `app.js` 单个顶层函数不允许超过 120 行 |
 | 新模块测试 | `src/domain/*.js` 和 `src/ui/*.js` 新增模块必须有对应 `tests/*.test.js` |
 | 检查脚本 | 语法检查和测试必须自动发现文件，不允许在 `package.json` 手写长串 |
