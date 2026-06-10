@@ -4,8 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const APP_JS_MAX_LINES = 7000;
-const APP_JS_MAX_FUNCTION_LINES = 180;
+const APP_JS_MAX_LINES = 6500;
+const APP_JS_MAX_FUNCTION_LINES = 120;
 
 function readText(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), "utf8");
