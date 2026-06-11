@@ -96,6 +96,66 @@
     return hasStoredEnergyTypicalCurve(energyData);
   }
 
+  function getCompleteEnergyYears(project) {
+    if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears)) return [];
+    const energyData = ensureProjectEnergyDataDerivedState(project);
+    const years = [];
+    for (let i = 0; i < project.forecastYears; i += 1) {
+      const year = project.startYear + i;
+      if (
+        energyData?.annualSummary?.[year]?.status === "完整"
+        && Array.isArray(energyData?.hourlyByYear?.[year])
+        && energyData.hourlyByYear[year].length === 8760
+      ) {
+        years.push(year);
+      }
+    }
+    return years;
+  }
+
+  function getAnnualInputYearCount(project) {
+    const energyData = ensureProjectEnergyDataDerivedState(project);
+    const rangeYears = Number.isInteger(project?.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
+    if (!rangeYears) return 0;
+    let count = 0;
+    for (let i = 0; i < project.forecastYears; i += 1) {
+      const year = project.startYear + i;
+      const annual = Number(energyData.annualInputByYear?.[year]);
+      if (Number.isFinite(annual) && annual > 0) count += 1;
+    }
+    return count;
+  }
+
+  function getContiguousAnnualInputPeriod(annualInputByYear) {
+    if (!isPlainObject(annualInputByYear)) return null;
+    const years = Object.keys(annualInputByYear)
+      .map((year) => Number(year))
+      .filter((year) => Number.isInteger(year))
+      .sort((a, b) => a - b);
+    if (!years.length) return null;
+    for (let index = 1; index < years.length; index += 1) {
+      if (years[index] !== years[index - 1] + 1) return null;
+    }
+    return {
+      startYear: years[0],
+      endYear: years[years.length - 1],
+      count: years.length
+    };
+  }
+
+  function parseYearRangeFromLabel(label) {
+    const match = String(label || "").match(/(?:^|[^0-9])(\d{4})-(\d{4})(?:[^0-9]|$)/);
+    if (!match) return null;
+    const startYear = Number(match[1]);
+    const endYear = Number(match[2]);
+    if (!Number.isInteger(startYear) || !Number.isInteger(endYear) || endYear < startYear) return null;
+    return {
+      startYear,
+      endYear,
+      count: endYear - startYear + 1
+    };
+  }
+
   function deriveEnergyModeFromInputs(energyData) {
     if (energyData.typicalCurveSource === "province_typical_curve" && hasNonEmptyObject(energyData.annualInputByYear)) {
       return "province_typical_curve";
@@ -399,6 +459,10 @@
     ensureProjectEnergyDataDerivedState,
     hasStoredEnergyTypicalCurve,
     hasEnergyTypicalCurve,
+    getCompleteEnergyYears,
+    getAnnualInputYearCount,
+    getContiguousAnnualInputPeriod,
+    parseYearRangeFromLabel,
     deriveEnergyModeFromInputs,
     rebuildProjectEnergyData,
     detectEnergyModeByHeader,

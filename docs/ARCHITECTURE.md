@@ -24,7 +24,7 @@
 | `csv-utils.js` | CSV 解析、表头标准化、导出字段转义、文件名清洗 |
 | `export-builders.js` | CSV 导出文件名、年度结果和小时明细导出行构造 |
 | `energy-profiles.js` | 年总小时拆分、典型曲线归一化、逐年电量扩展 |
-| `energy-data.js` | 电量导入模板校验、模式识别、电量状态重建 |
+| `energy-data.js` | 电量导入模板校验、模式识别、电量状态重建、完整年份和逐年输入辅助判断 |
 | `energy-import-flow.js` | 结算电量导入后的状态更新、提示文案和下游置脏流程 |
 | `app-utils.js` | 页面主控共用的格式化、转义、日期裁剪、对象判断和基础工具函数 |
 | `price-forecast.js` | 三模型模拟现货电价、预测质量校核 |
@@ -38,6 +38,7 @@
 | `scenario-model.js` | 场景默认值、复制、重命名、基准锁定规则 |
 | `project-settings.js` | 项目默认设置、配置清洗 |
 | `project-model.js` | 项目创建、项目清洗、基础字段默认值 |
+| `project-display.js` | 项目省份、风光类型、陆海类型、周期和导出时间等展示辅助 |
 | `app-storage.js` | 业务快照的 localStorage / IndexedDB 读写、最新快照选择 |
 
 ## 3. `src/ui/` 模块责任
@@ -60,6 +61,7 @@
 | `history-page.js` | 历史电价展示页导出计划、KPI 和洞察文案构造 |
 | `history-renderer.js` | 历史电价展示页渲染控制、空态处理、图表和状态回写 |
 | `history-charts.js` | 历史电价展示五张 ECharts 图的 option 和主题 token 构造 |
+| `theme-controller.js` | 主题偏好读取、切换、DOM data-theme 和设置页文案同步 |
 | `shell-events.js` | 全局壳层、弹窗、导航和窗口级事件绑定 |
 
 ## 4. 主要数据流

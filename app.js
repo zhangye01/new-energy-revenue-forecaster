@@ -43,6 +43,7 @@ const scenarioConfig = window.NE_SCENARIO_CONFIG;
 const scenarioModel = window.NE_SCENARIO_MODEL;
 const projectSettings = window.NE_PROJECT_SETTINGS;
 const projectModel = window.NE_PROJECT_MODEL;
+const projectDisplay = window.NE_PROJECT_DISPLAY;
 const energyDataRules = window.NE_ENERGY_DATA;
 const energyImportFlow = window.NE_ENERGY_IMPORT_FLOW;
 const csvUtils = window.NE_CSV_UTILS;
@@ -64,11 +65,12 @@ const comparePage = window.NE_COMPARE_PAGE;
 const historyCharts = window.NE_HISTORY_CHARTS;
 const historyPage = window.NE_HISTORY_PAGE;
 const historyRenderer = window.NE_HISTORY_RENDERER;
+const themeController = window.NE_THEME_CONTROLLER;
 const shellEvents = window.NE_SHELL_EVENTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !shellEvents || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -84,6 +86,24 @@ const {
   isPlainObject,
   hasNonEmptyObject
 } = appUtils;
+const { normalizeTheme } = themeController;
+const {
+  getProvinceName,
+  getAssetTypeLabel,
+  getSiteTypeLabel,
+  describeProvinceTypicalCurve,
+  formatExportStatusTime,
+  getForecastPeriodDisplayRange
+} = projectDisplay.createProjectDisplayHelpers({ provinces: PROVINCES });
+const createEmptyEnergyDataState = projectModel.createEmptyEnergyDataState;
+const normalizeTypicalCurveProfile = energyProfiles.normalizeTypicalCurveProfile;
+const ensureProjectEnergyDataState = energyDataRules.ensureProjectEnergyDataState;
+const ensureProjectEnergyDataDerivedState = energyDataRules.ensureProjectEnergyDataDerivedState;
+const hasEnergyTypicalCurve = energyDataRules.hasEnergyTypicalCurve;
+const getCompleteEnergyYears = energyDataRules.getCompleteEnergyYears;
+const getAnnualInputYearCount = energyDataRules.getAnnualInputYearCount;
+const getContiguousAnnualInputPeriod = energyDataRules.getContiguousAnnualInputPeriod;
+const parseYearRangeFromLabel = energyDataRules.parseYearRangeFromLabel;
 
 const APP_DATA_STORAGE_KEY = "ne_app_data_v1";
 const APP_DATA_VERSION = 1;
@@ -354,122 +374,6 @@ const OVERVIEW_POLICY_DETAILS = [
 ];
 const OVERVIEW_IMAGE_FALLBACK = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#10243b"/><stop offset="100%" stop-color="#1f4f7d"/></linearGradient></defs><rect width="1600" height="900" fill="url(#g)"/><circle cx="1300" cy="180" r="120" fill="#f9c55d" opacity=".85"/><path d="M0 760 L420 620 L740 690 L1080 610 L1600 760 L1600 900 L0 900Z" fill="#1a3f63" opacity=".72"/><path d="M220 760 L300 420 L380 760 M255 580 L345 580 M760 760 L840 360 L920 760 M795 540 L885 540 M1180 760 L1240 470 L1300 760 M1210 620 L1270 620" stroke="#f2e3c0" stroke-width="12" stroke-linecap="round" fill="none"/><text x="80" y="150" fill="#ffffff" font-family="Arial,sans-serif" font-size="68" font-weight="700">NEW ENERGY</text></svg>')}`;
 
-function getProvinceName(key) {
-  return PROVINCES.find((item) => item.key === key)?.name || key;
-}
-
-function getAssetTypeLabel(key) {
-  if (key === "wind") return "风电";
-  if (key === "photovoltaic") return "光伏";
-  return "待选";
-}
-
-function getSiteTypeLabel(key) {
-  if (key === "offshore") return "海上";
-  if (key === "onshore") return "陆上";
-  return "待选";
-}
-
-function describeProvinceTypicalCurve(project) {
-  return `${getProvinceName(project?.province)} / ${getAssetTypeLabel(project?.assetType)} / ${getSiteTypeLabel(project?.siteType)}`;
-}
-
-function formatExportStatusTime(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).replace(/\//g, "-");
-}
-
-function getCompleteEnergyYears(project) {
-  if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears)) return [];
-  const energyData = ensureProjectEnergyDataDerivedState(project);
-  const years = [];
-  for (let i = 0; i < project.forecastYears; i += 1) {
-    const year = project.startYear + i;
-    if (
-      energyData?.annualSummary?.[year]?.status === "完整"
-      && Array.isArray(energyData?.hourlyByYear?.[year])
-      && energyData.hourlyByYear[year].length === 8760
-    ) {
-      years.push(year);
-    }
-  }
-  return years;
-}
-
-function getForecastPeriodDisplayRange(project) {
-  if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears < 1) {
-    return "-";
-  }
-  return `${project.startYear}-${project.startYear + project.forecastYears - 1}`;
-}
-
-function createEmptyEnergyDataState(mode = "annual_hours") {
-  return projectModel.createEmptyEnergyDataState(mode);
-}
-
-function normalizeTypicalCurveProfile(values) {
-  return energyProfiles.normalizeTypicalCurveProfile(values);
-}
-
-function ensureProjectEnergyDataState(project) {
-  return energyDataRules.ensureProjectEnergyDataState(project);
-}
-
-function ensureProjectEnergyDataDerivedState(project) {
-  return energyDataRules.ensureProjectEnergyDataDerivedState(project);
-}
-
-function getAnnualInputYearCount(project) {
-  const energyData = ensureProjectEnergyDataDerivedState(project);
-  const rangeYears = Number.isInteger(project?.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
-  if (!rangeYears) return 0;
-  let count = 0;
-  for (let i = 0; i < project.forecastYears; i += 1) {
-    const year = project.startYear + i;
-    const annual = Number(energyData.annualInputByYear?.[year]);
-    if (Number.isFinite(annual) && annual > 0) count += 1;
-  }
-  return count;
-}
-
-function getContiguousAnnualInputPeriod(annualInputByYear) {
-  if (!isPlainObject(annualInputByYear)) return null;
-  const years = Object.keys(annualInputByYear)
-    .map((year) => Number(year))
-    .filter((year) => Number.isInteger(year))
-    .sort((a, b) => a - b);
-  if (!years.length) return null;
-  for (let index = 1; index < years.length; index += 1) {
-    if (years[index] !== years[index - 1] + 1) return null;
-  }
-  return {
-    startYear: years[0],
-    endYear: years[years.length - 1],
-    count: years.length
-  };
-}
-
-function parseYearRangeFromLabel(label) {
-  const match = String(label || "").match(/(?:^|[^0-9])(\d{4})-(\d{4})(?:[^0-9]|$)/);
-  if (!match) return null;
-  const startYear = Number(match[1]);
-  const endYear = Number(match[2]);
-  if (!Number.isInteger(startYear) || !Number.isInteger(endYear) || endYear < startYear) return null;
-  return {
-    startYear,
-    endYear,
-    count: endYear - startYear + 1
-  };
-}
-
 function alignDefaultForecastYearsToAnnualTemplate(project, annualInputByYear, sourceLabel = "") {
   if (!project || project.forecastYears !== 30) return false;
   const annualPeriod = getContiguousAnnualInputPeriod(annualInputByYear);
@@ -495,10 +399,6 @@ function alignDefaultForecastYearsToStoredAnnualInput(project) {
   project.forecastYears = annualPeriod.count;
   project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
   return true;
-}
-
-function hasEnergyTypicalCurve(project) {
-  return energyDataRules.hasEnergyTypicalCurve(project);
 }
 
 function buildEnergyMonthHourlyShareCurves(hourlyValues) {
@@ -544,28 +444,6 @@ function getEnergyCurvePreviewProfile(project) {
 function getPolicyRegionKeyByProvince(provinceKey) {
   if (!provinceKey) return null;
   return POLICY_CARDS.find((card) => card.provinceKey === provinceKey)?.regionKey || null;
-}
-
-function normalizeTheme(theme) {
-  return THEME_SEQUENCE.includes(theme) ? theme : "light";
-}
-
-function getNextTheme(theme) {
-  const current = normalizeTheme(theme);
-  const index = THEME_SEQUENCE.indexOf(current);
-  return THEME_SEQUENCE[(index + 1) % THEME_SEQUENCE.length];
-}
-
-function applyTheme(theme) {
-  const targetTheme = normalizeTheme(theme);
-  appState.theme = targetTheme;
-  document.body.setAttribute("data-theme", targetTheme);
-  if (refs.themeToggleButton) {
-    refs.themeToggleButton.textContent = `切换${THEME_LABELS[getNextTheme(targetTheme)]}`;
-  }
-  if (refs.themeCurrentLabel) {
-    refs.themeCurrentLabel.textContent = `当前：${THEME_LABELS[targetTheme]}`;
-  }
 }
 
 function normalizeOverviewIndex(index, total) {
@@ -1150,17 +1028,26 @@ async function handleChangePassword(event) {
   setAccountManageMessage("密码修改成功。", "success");
 }
 
-function initTheme() {
-  const saved = appStorage.readRawFromStorage(getBrowserStorage("localStorage"), "ne_ui_theme", {
+function getThemeControllerInput() {
+  return {
+    appState,
+    refs,
+    documentRef: typeof document !== "undefined" ? document : null,
+    storageApi: appStorage,
+    storageArea: getBrowserStorage("localStorage"),
+    themeSequence: THEME_SEQUENCE,
+    themeLabels: THEME_LABELS,
     onError: (error) => console.warn("读取主题偏好失败。", error)
-  });
-  applyTheme(normalizeTheme(saved));
+  };
+}
+
+function initTheme() {
+  themeController.initTheme(getThemeControllerInput());
 }
 
 function toggleTheme() {
-  const next = getNextTheme(appState.theme);
-  applyTheme(next);
-  appStorage.writeRawToStorage(getBrowserStorage("localStorage"), "ne_ui_theme", next, {
+  themeController.toggleTheme({
+    ...getThemeControllerInput(),
     onError: (error) => console.warn("写入主题偏好失败。", error)
   });
 }

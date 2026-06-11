@@ -7,8 +7,12 @@ const {
   deriveEnergyModeFromInputs,
   ensureProjectEnergyDataDerivedState,
   ensureProjectEnergyDataState,
+  getAnnualInputYearCount,
+  getCompleteEnergyYears,
+  getContiguousAnnualInputPeriod,
   getEnergyModeMeta,
   hasEnergyTypicalCurve,
+  parseYearRangeFromLabel,
   rebuildProjectEnergyData,
   validateAndBuildEnergyData
 } = require("../src/domain/energy-data");
@@ -220,5 +224,19 @@ const derivedWithCurve = {
 ensureProjectEnergyDataDerivedState(derivedWithCurve);
 assert.equal(derivedWithCurve.energyData.annualSummary[2026].status, "完整");
 assert.equal(derivedWithCurve.energyData.hourlyByYear[2026].length, 8760);
+assert.deepEqual(getCompleteEnergyYears(derivedWithCurve), [2026]);
+assert.equal(getAnnualInputYearCount(derivedWithCurve), 1);
+assert.deepEqual(getContiguousAnnualInputPeriod({ 2026: 1000, 2027: 1100 }), {
+  startYear: 2026,
+  endYear: 2027,
+  count: 2
+});
+assert.equal(getContiguousAnnualInputPeriod({ 2026: 1000, 2028: 1100 }), null);
+assert.deepEqual(parseYearRangeFromLabel("模板 2026-2028"), {
+  startYear: 2026,
+  endYear: 2028,
+  count: 3
+});
+assert.equal(parseYearRangeFromLabel("模板 2028-2026"), null);
 
 console.log("energy data tests passed");
