@@ -7,7 +7,7 @@
 | 层级 | 文件/目录 | 责任 |
 | --- | --- | --- |
 | 页面结构 | `index.html` | 静态 DOM、页面容器、脚本加载顺序、登录兜底脚本 |
-| 页面样式 | `styles/theme.css`、`styles/base.css`、`styles/components/*.css`、`styles/pages/*.css`、`styles.css` | 主题令牌、基础布局、公共组件、页面样式、临时兼容兜底 |
+| 页面样式 | `styles/theme.css`、`styles/base.css`、`styles/components/*.css`、`styles/pages/*.css`、`styles/responsive.css`、`styles.css` | 主题令牌、基础布局、公共组件、页面样式、响应式兜底、最终兜底 |
 | 运行时引用 | `runtime.js` | DOM 引用集中表、共享 `appState` |
 | 基础配置 | `config.js`、`map-data.js` | 页面标题、流程规则、省份默认参数、地图数据 |
 | 页面主控 | `app.js` | 导航、表单、图表渲染、状态持久化、导入导出、业务模块调度 |
@@ -108,15 +108,9 @@ src/storage/app-storage.js
 
 ### P1：整理样式边界
 
-当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/components/data-display.css` 放置面板辅助、指标卡和表格样式，`styles/components/forms.css` 放置表单字段与表单栅格样式，`styles/components/buttons.css` 放置按钮变体与行内操作样式，`styles/pages/home.css` 放置首页政策轮播、标杆地图和政策卡片样式，`styles/pages/projects.css` 放置项目列表页样式，`styles/pages/help.css` 放置帮助文档页样式，`styles/pages/energy.css` 放置结算电量配置页样式，`styles/pages/scenario.css` 放置全口径收入配置页样式，`styles/pages/results.css` 放置基准结果总览与打印报告样式，`styles/pages/compare.css` 放置多方案对比页样式，`styles/pages/history.css` 放置历史电价页样式，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 后续建议继续拆为：
+当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/components/data-display.css` 放置面板辅助、指标卡和表格样式，`styles/components/forms.css` 放置表单字段与表单栅格样式，`styles/components/buttons.css` 放置按钮变体与行内操作样式，`styles/components/workflow.css` 放置跨流程跳转条样式，`styles/components/auth.css` 放置登录与账号设置辅助样式，`styles/pages/home.css` 放置首页政策轮播、标杆地图和政策卡片样式，`styles/pages/projects.css` 放置项目列表页样式，`styles/pages/create.css` 放置创建项目页样式，`styles/pages/help.css` 放置帮助文档页样式，`styles/pages/energy.css` 放置结算电量配置页样式，`styles/pages/scenario.css` 放置全口径收入配置页样式，`styles/pages/results.css` 放置基准结果总览与打印报告样式，`styles/pages/compare.css` 放置多方案对比页样式，`styles/pages/history.css` 放置历史电价页样式，`styles/responsive.css` 放置跨页面响应式兜底，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 只保留最终覆盖入口，不应继续承载业务样式。
 
-```text
-styles/pages/create.css
-styles/components/auth.css
-styles/responsive.css
-```
-
-在没有构建工具前，可以继续用多个 `<link rel="stylesheet">` 按顺序加载；新增主题令牌必须进入 `styles/theme.css`，新增壳层基础样式必须进入 `styles/base.css`，新增通用组件样式必须进入 `styles/components/`，新增页面样式必须进入 `styles/pages/`。
+在没有构建工具前，可以继续用多个 `<link rel="stylesheet">` 按顺序加载；新增主题令牌必须进入 `styles/theme.css`，新增壳层基础样式必须进入 `styles/base.css`，新增通用组件样式必须进入 `styles/components/`，新增页面样式必须进入 `styles/pages/`，新增跨页面移动端兜底必须进入 `styles/responsive.css`。
 
 ### P2：评估构建工具
 

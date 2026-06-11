@@ -1,0 +1,30 @@
+/* CSS governance: shared workflow transition rows between major process pages. Load after buttons.css and before auth.css. */
+
+.create-next-step-bar,
+.energy-next-step-row,
+.history-next-step-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 0;
+  border-top: 1px dashed var(--line-strong);
+  min-width: 0;
+}
+
+.create-next-step-bar .hint,
+.energy-next-step-row .hint,
+.history-next-step-row .hint {
+  margin: 0;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.energy-next-step-row,
+.history-next-step-row {
+  width: 100%;
+  min-width: 0;
+  row-gap: 10px;
+}

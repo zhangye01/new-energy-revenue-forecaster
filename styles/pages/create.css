@@ -1,0 +1,48 @@
+/* CSS governance: create-project workspace styles. Load after projects.css and before help.css. */
+
+.create-workspace-panel {
+  gap: 12px;
+  align-content: start;
+  scroll-margin-top: var(--topbar-safe-offset);
+}
+
+.create-workspace-panel[hidden] {
+  display: none !important;
+}
+
+.workspace-step-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line-strong);
+}
+
+.workspace-step-chip {
+  min-width: 48px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid #a9c2df;
+  background: #edf4fd;
+  color: #355377;
+  font-weight: 700;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-step-meta {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace-step-meta h3 {
+  font-size: 1rem;
+}
+
+.workspace-step-meta p {
+  color: var(--muted);
+  font-size: 0.82rem;
+}

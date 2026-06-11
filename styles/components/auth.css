@@ -1,0 +1,63 @@
+/* CSS governance: authentication modal and account setting helpers. Load after workflow.css and before page CSS. */
+
+.login-modal {
+  position: fixed;
+  inset: 0;
+  background: var(--modal-scrim);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 60;
+}
+
+.login-modal[hidden] {
+  display: none !important;
+}
+
+.login-panel {
+  width: min(96vw, 430px);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  box-shadow: 0 16px 40px var(--elevated-shadow);
+}
+
+.login-panel h3 {
+  color: var(--ink);
+  font-size: 1.04rem;
+  line-height: 1.2;
+}
+
+.login-form {
+  display: grid;
+  gap: 10px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.setting-badge {
+  min-height: 26px;
+  border: 1px solid #8ebf8c;
+  border-radius: 6px;
+  background: #f1fbf1;
+  color: #247046;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+body[data-theme="dark"] .setting-badge {
+  border-color: #4f8b6f;
+  background: #1f3c31;
+  color: #9ed9ba;
+}

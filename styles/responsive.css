@@ -1,0 +1,227 @@
+/* CSS governance: cross-page responsive overrides. Load after page CSS and before styles.css. */
+
+@media (max-width: 1220px) {
+  .layout {
+    grid-template-columns: 246px minmax(0, 1fr);
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scenario-page-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scenario-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .history-grid-bottom {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .history-kpi-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 940px) {
+  :root {
+    --topbar-safe-offset: 120px;
+    --toast-left: 14px;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+  }
+
+  .sidebar-footer {
+    margin-top: 8px;
+  }
+
+  .main-area {
+    padding: 0;
+    height: auto;
+    overflow: visible;
+  }
+
+  .topbar {
+    padding: 6px 12px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .page {
+    padding: 10px;
+  }
+
+  .topbar-pathline {
+    width: 100%;
+  }
+
+  .page-help-card {
+    left: 0;
+    right: auto;
+    width: min(420px, calc(100vw - 34px));
+  }
+
+  .topbar-right {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .account-module {
+    margin-left: 0;
+  }
+
+  .account-dropdown {
+    right: auto;
+    left: 0;
+  }
+
+  .setting-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .grid-2,
+  .form-grid,
+  .compare-chart-grid,
+  .compare-drill-grid,
+  .compare-variable-grid,
+  .compare-factor-drill-list,
+  .scenario-page-summary,
+  .scenario-form-grid,
+  .scenario-trade-manual-actions,
+  .scenario-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scenario-form-grid.scenario-trade-grid,
+  .scenario-form-grid.scenario-env-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scenario-trade-field-wide,
+  .scenario-trade-field-third,
+  .scenario-env-field-half,
+  .scenario-env-field-third {
+    grid-column: auto;
+  }
+
+  .history-head-controls {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .history-date-popover {
+    left: 0;
+    right: auto;
+    min-width: min(360px, calc(100vw - 48px));
+    grid-template-columns: 1fr;
+  }
+
+  .history-source-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .history-range-list {
+    grid-template-columns: 1fr;
+  }
+
+  .create-next-step-bar,
+  .energy-next-step-row,
+  .history-next-step-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .scenario-workspace-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .scenario-workspace-tools {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .province-default-selector {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .scenario-batch-grid,
+  .scenario-visual-chart-grid,
+  .compare-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .province-default-summary {
+    flex-direction: column;
+  }
+
+  .province-default-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .province-default-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .province-default-details {
+    grid-template-columns: 1fr;
+  }
+
+  .history-grid-top,
+  .history-grid-bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .history-chart,
+  .history-grid-top .history-chart {
+    min-height: 220px;
+    height: 220px;
+  }
+
+  .compare-chart,
+  .compare-trend-chart {
+    min-height: 240px;
+    height: 240px;
+  }
+
+  .compare-tabbar {
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+
+  .compare-tab {
+    min-width: 168px;
+    padding: 10px 12px 12px;
+    white-space: nowrap;
+  }
+
+  .compare-tab-title {
+    font-size: 0.96rem;
+  }
+
+  .compare-tab-note {
+    font-size: 0.74rem;
+  }
+
+  .history-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
