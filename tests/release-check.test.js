@@ -9,6 +9,10 @@ const {
 } = require("../scripts/release-check");
 
 assert.equal(isForbiddenTrackedFile(".env.local"), true);
+assert.equal(isForbiddenTrackedFile(".codex/session.json"), true);
+assert.equal(isForbiddenTrackedFile(".agents/state.json"), true);
+assert.equal(isForbiddenTrackedFile("coverage/lcov.info"), true);
+assert.equal(isForbiddenTrackedFile("playwright-report/index.html"), true);
 assert.equal(isForbiddenTrackedFile("ui-demos/demo.html"), true);
 assert.equal(isForbiddenTrackedFile("src/domain/revenue-rules.js"), false);
 

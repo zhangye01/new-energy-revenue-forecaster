@@ -9,11 +9,17 @@ const FAILURES = [];
 const REQUIRED_GITIGNORE_ENTRIES = [
   ".DS_Store",
   ".Rhistory",
+  ".env",
+  ".env.*",
   ".playwright-cli/",
+  ".codex/",
+  ".agents/",
   "ui-demos/",
   "node_modules/",
   "dist/",
   "build/",
+  "coverage/",
+  "playwright-report/",
   "*.log"
 ];
 const FORBIDDEN_TRACKED_PATTERNS = [
@@ -27,6 +33,8 @@ const FORBIDDEN_TRACKED_PATTERNS = [
   /^node_modules\//,
   /^dist\//,
   /^build\//,
+  /^coverage\//,
+  /^playwright-report\//,
   /^tmp\//,
   /^temp\//,
   /\.log$/i

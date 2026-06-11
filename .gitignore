@@ -1,6 +1,10 @@
 .DS_Store
 .Rhistory
+.env
+.env.*
 .playwright-cli/
+.codex/
+.agents/
 ui-demos/
 
 # Local editor and OS files
@@ -13,6 +17,8 @@ ui-demos/
 node_modules/
 dist/
 build/
+coverage/
+playwright-report/
 
 # Logs and temporary files
 *.log
