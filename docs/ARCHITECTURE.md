@@ -46,6 +46,7 @@
 | 模块 | 责任 |
 | --- | --- |
 | `project-list.js` | 我的项目列表、工作区和项目卡片 HTML 构造 |
+| `file-import-utils.js` | 浏览器侧 CSV/TXT/Excel 文件读取与 Excel 转 CSV 适配 |
 | `policy-panel.js` | 首页地区政策筛选 view model 和政策卡片 HTML 构造 |
 | `province-defaults.js` | 省份默认参数展示 view model、选择器排序、消息文案和参数卡片 HTML 构造 |
 | `energy-workspace.js` | 结算电量配置页工作台 view model、创建项目表单读写/清空、状态文案、按钮禁用和模板状态计算 |

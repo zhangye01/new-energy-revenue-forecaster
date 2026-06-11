@@ -48,6 +48,7 @@ const energyDataRules = window.NE_ENERGY_DATA;
 const energyImportFlow = window.NE_ENERGY_IMPORT_FLOW;
 const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
+const fileImportUtils = window.NE_FILE_IMPORT_UTILS;
 const policyPanel = window.NE_POLICY_PANEL;
 const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
@@ -74,7 +75,7 @@ const appEventBindings = window.NE_APP_EVENT_BINDINGS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -3127,35 +3128,8 @@ function parseCsvRows(text) {
   return csvUtils.parseCsvRows(text);
 }
 
-function readTextFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("文件读取失败"));
-    reader.readAsText(file, "utf-8");
-  });
-}
-
 async function readSpreadsheetToCsv(file) {
-  const filename = file.name.toLowerCase();
-  if (filename.endsWith(".csv") || filename.endsWith(".txt")) {
-    const text = await readTextFile(file);
-    return { text, source: "text" };
-  }
-  if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
-    if (typeof window === "undefined" || typeof window.XLSX === "undefined") {
-      throw new Error("当前环境未加载XLSX解析器。请检查网络后重试，或先导出CSV。");
-    }
-    const workbook = window.XLSX.read(await file.arrayBuffer(), { type: "array" });
-    const firstSheetName = workbook.SheetNames?.[0];
-    if (!firstSheetName) {
-      throw new Error("Excel文件不包含可读取工作表。");
-    }
-    const worksheet = workbook.Sheets[firstSheetName];
-    const csv = window.XLSX.utils.sheet_to_csv(worksheet, { FS: ",", RS: "\n", blankrows: false });
-    return { text: csv, source: `excel:${firstSheetName}` };
-  }
-  throw new Error("当前仅支持CSV/TXT/XLSX/XLS文件。");
+  return fileImportUtils.readSpreadsheetToCsv(file, { xlsx: window.XLSX });
 }
 
 function monthSerial(ym) {
