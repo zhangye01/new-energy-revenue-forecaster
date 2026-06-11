@@ -68,10 +68,11 @@ const historyPage = window.NE_HISTORY_PAGE;
 const historyRenderer = window.NE_HISTORY_RENDERER;
 const themeController = window.NE_THEME_CONTROLLER;
 const shellEvents = window.NE_SHELL_EVENTS;
+const appEventBindings = window.NE_APP_EVENT_BINDINGS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -5555,209 +5556,145 @@ function bindBenchmarkRangeDrag() {
   });
 }
 
-function bindShellEvents() {
-  shellEvents.bindAppShellEvents({
+function createEventBindingModules() {
+  return {
+    shellEvents,
+    historyPage,
+    comparePage,
+    energyWorkspace,
+    scenarioForm,
+    resultPage
+  };
+}
+
+function createEventBindingChartRefs() {
+  return {
+    energyAnnual: {
+      get: () => energyAnnualChart,
+      set: (chart) => {
+        energyAnnualChart = chart;
+      }
+    },
+    energyCurve: {
+      get: () => energyCurveChart,
+      set: (chart) => {
+        energyCurveChart = chart;
+      }
+    },
+    benchmarkMap: {
+      get: () => benchmarkMapChart,
+      set: (chart) => {
+        benchmarkMapChart = chart;
+      }
+    }
+  };
+}
+
+function createEventBindingStateAccessors() {
+  return {
+    compareSensitivitySettings,
+    getActiveSensitivityFactorKey: () => activeSensitivityFactorKey,
+    setActiveSensitivityFactorKey: (key) => {
+      activeSensitivityFactorKey = key;
+    },
+    setActiveCompareScenarioId: (scenarioId) => {
+      activeCompareScenarioId = scenarioId;
+    },
+    setSelectedProvinceDefaultKey: (provinceKey) => {
+      selectedProvinceDefaultKey = provinceKey;
+    }
+  };
+}
+
+function createEventBindingActions() {
+  return {
+    toggleTheme,
+    renderBenchmarkMap,
+    schedulePersistAppData,
+    adjustBenchmarkMapZoom,
+    resetBenchmarkMapZoom,
+    bindBenchmarkRangeDrag,
+    togglePageHelp,
+    goToOverviewSlide,
+    openOverviewPolicyDetail,
+    openLoginModal,
+    toggleSidebarGroup,
+    toggleAccountDropdown,
+    setHistoryDatePanelOpen,
+    handleAccountManage,
+    handleAccountPassword,
+    handleLogout,
+    handleChangePassword,
+    closeLoginModal,
+    handleLoginSubmit,
+    closeOverviewPolicyDetail,
+    closeAccountDropdown,
+    closePageHelp,
+    stopOverviewAutoplay,
+    disposeHistoryCharts,
+    disposeCompareCharts,
+    disposeResultCharts,
+    persistAppDataNow,
+    normalizeUserFacingError,
+    setTopMeta,
+    sanitizeHistoryAnalysis,
+    renderPolicyPanel,
+    renderHistoryPrices,
+    exportHistoryChartData,
+    setActivePage,
+    setResultReportView,
+    queueResultChartsResize,
+    sanitizeCompareView,
+    sanitizeCompareSensitivitySettings,
+    renderCompareWorkspaceState,
+    renderCompare,
+    queueCompareChartsResize,
+    getActiveProject,
+    isProjectCreateCompleted,
+    hasEnergyHistoryEntryReadiness,
+    sanitizeEnergyStep2Choice,
+    createProjectFromForm,
+    syncCreateStorageFieldsUi,
+    setCreateSaveMessage,
+    setEnergyImportMessage,
+    exportEnergyTemplate,
+    importEnergyFromFile,
+    applyProvinceTypicalCurve,
+    renderEnergyStep2ChoiceState,
+    generateForecastRun,
+    saveScenarioFromForm,
+    switchActiveScenario,
+    renameActiveScenario,
+    duplicateActiveScenario,
+    deleteActiveScenario,
+    toggleBaselineLock,
+    applyBatchParameter,
+    syncScenarioFieldLocks,
+    exportManualScenarioTemplate,
+    importManualScenarioTemplate,
+    renderProvinceLibrary,
+    updateMarketTradeEnergyDisplay,
+    updateEnvValueSpaceDisplay,
+    runCalculation,
+    exportAnnualCsv,
+    exportHourlyCsv,
+    printScenarioReport
+  };
+}
+
+function bindEvents() {
+  appEventBindings.bindAppEvents({
     refs,
     documentRef: typeof document !== "undefined" ? document : null,
     windowRef: typeof window !== "undefined" ? window : null,
     appState,
     benchmarkMapZoomStep: BENCHMARK_MAP_ZOOM_STEP,
     scenarioVisualCharts,
-    chartRefs: {
-      energyAnnual: {
-        get: () => energyAnnualChart,
-        set: (chart) => {
-          energyAnnualChart = chart;
-        }
-      },
-      energyCurve: {
-        get: () => energyCurveChart,
-        set: (chart) => {
-          energyCurveChart = chart;
-        }
-      },
-      benchmarkMap: {
-        get: () => benchmarkMapChart,
-        set: (chart) => {
-          benchmarkMapChart = chart;
-        }
-      }
-    },
-    actions: {
-      toggleTheme,
-      renderBenchmarkMap,
-      schedulePersistAppData,
-      adjustBenchmarkMapZoom,
-      resetBenchmarkZoom: resetBenchmarkMapZoom,
-      bindBenchmarkRangeDrag,
-      togglePageHelp,
-      goToOverviewSlide,
-      openOverviewPolicyDetail,
-      openLoginModal,
-      toggleSidebarGroup,
-      toggleAccountDropdown,
-      setHistoryDatePanelOpen,
-      handleAccountManage,
-      handleAccountPassword,
-      handleLogout,
-      handleChangePassword,
-      closeLoginModal,
-      handleLoginSubmit,
-      closeOverviewPolicyDetail,
-      closeAccountDropdown,
-      closePageHelp,
-      stopOverviewAutoplay,
-      disposeHistoryCharts,
-      disposeCompareCharts,
-      disposeResultCharts,
-      persistAppDataNow,
-      normalizeUserFacingError,
-      setTopMeta
-    }
+    modules: createEventBindingModules(),
+    chartRefs: createEventBindingChartRefs(),
+    state: createEventBindingStateAccessors(),
+    actions: createEventBindingActions()
   });
-}
-
-function bindPolicyHistoryEvents() {
-  historyPage.bindPolicyHistoryEvents({
-    refs,
-    handlers: historyPage.createPolicyHistoryEventHandlers({
-      getPolicyFilters: () => appState.policyFilters,
-      setPolicyFilters: (policyFilters) => {
-        appState.policyFilters = policyFilters;
-      },
-      getHistoryAnalysis: () => appState.historyAnalysis,
-      setHistoryAnalysis: (historyAnalysisState) => {
-        appState.historyAnalysis = historyAnalysisState;
-      },
-      sanitizeHistoryAnalysis,
-      renderPolicyPanel,
-      renderHistoryPrices,
-      schedulePersistAppData,
-      exportHistoryChart: exportHistoryChartData
-    })
-  });
-}
-
-function bindCompareEvents() {
-  comparePage.bindCompareEvents({
-    refs,
-    handlers: comparePage.createCompareEventHandlers({
-      refs,
-      sensitivitySettings: compareSensitivitySettings,
-      getCompareView: () => appState.compareView,
-      setCompareView: (nextView) => {
-        appState.compareView = nextView;
-      },
-      sanitizeCompareView,
-      getActiveSensitivityFactorKey: () => activeSensitivityFactorKey,
-      setActiveSensitivityFactorKey: (key) => {
-        activeSensitivityFactorKey = key;
-      },
-      setActiveCompareScenarioId: (scenarioId) => {
-        activeCompareScenarioId = scenarioId;
-      },
-      sanitizeCompareSensitivitySettings,
-      renderCompareWorkspaceState,
-      renderCompare,
-      queueCompareChartsResize,
-      schedulePersistAppData
-    })
-  });
-}
-
-function bindCreateEnergyEvents() {
-  energyWorkspace.bindCreateEnergyEvents({
-    refs,
-    handlers: energyWorkspace.createEnergyWorkspaceEventHandlers({
-      getActiveProject,
-      isProjectReady: isProjectCreateCompleted,
-      hasHistoryReadiness: hasEnergyHistoryEntryReadiness,
-      getEnergyStep2Choice: () => appState.energyStep2Choice,
-      setEnergyStep2Choice: (nextChoice) => {
-        appState.energyStep2Choice = nextChoice;
-      },
-      sanitizeEnergyStep2Choice,
-      createProjectFromForm,
-      syncCreateStorageFields: syncCreateStorageFieldsUi,
-      setTopMeta,
-      setCreateSaveMessage,
-      setEnergyImportMessage,
-      setActivePage,
-      exportEnergyTemplate,
-      importEnergyFromFile,
-      applyProvinceTypicalCurve,
-      renderEnergyStep2ChoiceState,
-      schedulePersistAppData
-    })
-  });
-}
-
-function bindForecastScenarioEvents() {
-  scenarioForm.bindForecastScenarioEvents({
-    refs,
-    handlers: {
-      generateForecastRun,
-      saveScenarioFromForm,
-      switchActiveScenario,
-      renameActiveScenario,
-      duplicateActiveScenario,
-      deleteActiveScenario,
-      toggleBaselineLock,
-      applyBatchParameter,
-      syncScenarioFieldLocks,
-      exportManualScenarioTemplate,
-      importManualScenarioTemplate,
-      changeProvinceDefault: (provinceKey) => {
-        selectedProvinceDefaultKey = provinceKey;
-        if (refs.provinceApplyMessage) {
-          refs.provinceApplyMessage.textContent = "";
-        }
-        renderProvinceLibrary();
-      }
-    }
-  });
-}
-
-function bindScenarioDerivedFieldEvents() {
-  scenarioForm.bindScenarioDerivedFieldEvents({
-    querySelector: (selector) => document.querySelector(selector),
-    handlers: {
-      syncScenarioFieldLocks,
-      updateMarketTradeEnergyDisplay,
-      updateEnvValueSpaceDisplay
-    }
-  });
-}
-
-function bindResultActionEvents() {
-  resultPage.bindResultActionEvents({
-    refs,
-    handlers: {
-      runCalculation,
-      exportAnnualCsv,
-      exportHourlyCsv,
-      printScenarioReport
-    }
-  });
-}
-
-function bindEvents() {
-  bindShellEvents();
-  bindPolicyHistoryEvents();
-  shellEvents.bindAppNavigationEvents({
-    refs,
-    documentRef: typeof document !== "undefined" ? document : null,
-    actions: {
-      setActivePage,
-      setResultReportView,
-      queueResultChartsResize
-    }
-  });
-  bindCompareEvents();
-  bindCreateEnergyEvents();
-  bindForecastScenarioEvents();
-  bindScenarioDerivedFieldEvents();
-  bindResultActionEvents();
 }
 
 async function init() {

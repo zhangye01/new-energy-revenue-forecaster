@@ -64,6 +64,7 @@
 | `history-charts.js` | 历史电价展示五张 ECharts 图的 option 和主题 token 构造 |
 | `theme-controller.js` | 主题偏好读取、切换、DOM data-theme 和设置页文案同步 |
 | `shell-events.js` | 全局壳层、弹窗、导航和窗口级事件绑定 |
+| `app-event-bindings.js` | 应用级事件绑定编排，把页面主控回调接入壳层、历史、对比、电量、场景和结果页事件模块 |
 
 ## 4. 主要数据流
 
