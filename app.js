@@ -53,6 +53,7 @@ const policyPanel = window.NE_POLICY_PANEL;
 const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
 const createProjectFlow = window.NE_CREATE_PROJECT_FLOW;
+const energyTemplateFlow = window.NE_ENERGY_TEMPLATE_FLOW;
 const manualScenarioFlow = window.NE_MANUAL_SCENARIO_FLOW;
 const chartLifecycle = window.NE_CHART_LIFECYCLE;
 const energyCharts = window.NE_ENERGY_CHARTS;
@@ -75,7 +76,7 @@ const appEventBindings = window.NE_APP_EVENT_BINDINGS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -3132,6 +3133,35 @@ async function readSpreadsheetToCsv(file) {
   return fileImportUtils.readSpreadsheetToCsv(file, { xlsx: window.XLSX });
 }
 
+function energyTemplateFlowContext() {
+  return {
+    project: getActiveProject(),
+    appState,
+    services: {
+      normalizeEnergyMode: projectModel.normalizeEnergyMode,
+      buildEnergyTemplateRows: energyDataRules.buildEnergyTemplateRows,
+      buildEnergyTemplateFilename,
+      ensureProjectEnergyTemplateExports,
+      ensureProjectEnergyDataState,
+      getEnergyModeMeta,
+      isProjectCreateCompleted,
+      generateHourlyHoursFromAnnual,
+      getAnnualInputYearCount,
+      getProvinceTypicalCurveRecord,
+      rebuildProjectEnergyData,
+      countCompleteEnergyYears,
+      markDownstreamStale
+    },
+    actions: {
+      setEnergyImportMessage,
+      downloadCsv,
+      readSpreadsheetToCsv,
+      importEnergyDataFromText,
+      renderAll
+    }
+  };
+}
+
 function monthSerial(ym) {
   return revenueRules.monthSerial(ym);
 }
@@ -3251,124 +3281,29 @@ function importEnergyDataFromText(mode, csvText, sourceLabel = "") {
 }
 
 function exportEnergyTemplate(mode = "hourly_8760") {
-  const project = getActiveProject();
-  if (!project) {
-    setEnergyImportMessage("请先创建或进入项目，再导出模板。", "error");
-    return;
-  }
-  if (!isProjectCreateCompleted(project)) {
-    setEnergyImportMessage("请先完成步骤1基础信息保存，再导出模板。", "warn");
-    return;
-  }
-  const normalizedMode = projectModel.normalizeEnergyMode(mode);
-  const rows = energyDataRules.buildEnergyTemplateRows(project, normalizedMode);
-
-  downloadCsv(buildEnergyTemplateFilename(project, normalizedMode), rows);
-  const exports = ensureProjectEnergyTemplateExports(project);
-  exports[normalizedMode] = new Date().toISOString();
-  setEnergyImportMessage(
-    `模板已导出（${getEnergyModeMeta(normalizedMode).label}）：${getEnergyModeMeta(normalizedMode).header}（${project.startYear}-${project.startYear + project.forecastYears - 1}）`,
-    "success"
-  );
+  return energyTemplateFlow.exportEnergyTemplate({
+    ...energyTemplateFlowContext(),
+    mode
+  });
 }
 
 async function importEnergyFromFile(mode, inputElement) {
-  const file = inputElement?.files?.[0];
-  if (!file) {
-    setEnergyImportMessage("请先选择CSV或Excel文件。", "error");
-    return false;
-  }
-
-  try {
-    const output = await readSpreadsheetToCsv(file);
-    const text = output.text.trim();
-    if (!text) {
-      setEnergyImportMessage("文件内容为空，请检查模板后重试。", "error");
-      return false;
-    }
-    const sourceLabel = output.source.startsWith("excel:") ? output.source.slice(6) : file.name;
-    const imported = importEnergyDataFromText(mode, text.trim(), sourceLabel);
-    if (imported && inputElement) {
-      inputElement.value = "";
-    }
-    return imported;
-  } catch (error) {
-    setEnergyImportMessage(error?.message || "文件读取失败，请检查格式后重试。", "error");
-    return false;
-  }
+  return energyTemplateFlow.importEnergyFromFile({
+    ...energyTemplateFlowContext(),
+    mode,
+    inputElement
+  });
 }
 
 function downloadEnergySampleFile(mode = "annual_hours") {
-  const project = getActiveProject();
-  if (!project) return;
-  const normalizedMode = projectModel.normalizeEnergyMode(mode);
-  const rows = [];
-  if (normalizedMode === "annual_hours") {
-    rows.push(["year", "annual_hours_h"]);
-    for (let i = 0; i < project.forecastYears; i += 1) {
-      const year = project.startYear + i;
-      const annual = (project.assetType === "wind" ? 2400 : 1300) * Math.pow(0.997, i);
-      rows.push([year, annual.toFixed(2)]);
-    }
-    downloadCsv(buildEnergyTemplateFilename(project, "annual_hours").replace(".csv", "-示例.csv"), rows);
-    return;
-  }
-  if (normalizedMode === "typical_curve_8760") {
-    rows.push(["hour_index", "equivalent_hours_h"]);
-    const values = generateHourlyHoursFromAnnual(project.assetType === "wind" ? 2400 : 1300, project.assetType, project.startYear);
-    for (let hour = 1; hour <= 8760; hour += 1) {
-      rows.push([hour, values[hour - 1].toFixed(6)]);
-    }
-    downloadCsv(buildEnergyTemplateFilename(project, "typical_curve_8760").replace(".csv", "-示例.csv"), rows);
-    return;
-  }
-  const year = project.startYear;
-  rows.push(["year", "hour_index", "equivalent_hours_h"]);
-  const values = generateHourlyHoursFromAnnual(project.assetType === "wind" ? 2400 : 1300, project.assetType, year);
-  for (let hour = 1; hour <= 8760; hour += 1) {
-    rows.push([year, hour, values[hour - 1].toFixed(6)]);
-  }
-  downloadCsv(buildEnergyTemplateFilename(project, "hourly_8760").replace(".csv", "-示例.csv"), rows);
+  return energyTemplateFlow.downloadEnergySampleFile({
+    ...energyTemplateFlowContext(),
+    mode
+  });
 }
 
 function applyProvinceTypicalCurve() {
-  const project = getActiveProject();
-  if (!project) {
-    setEnergyImportMessage("请先进入项目。", "error");
-    return;
-  }
-  if (!isProjectCreateCompleted(project)) {
-    setEnergyImportMessage("请先完成步骤1基础信息保存，再调用所选省份典型曲线。", "warn");
-    return;
-  }
-  const annualCount = getAnnualInputYearCount(project);
-  if (annualCount !== project.forecastYears) {
-    setEnergyImportMessage(`请先完成逐年总量模板导入。当前仅录入 ${annualCount}/${project.forecastYears} 年。`, "warn");
-    return;
-  }
-  const energyData = ensureProjectEnergyDataState(project);
-  const curveRecord = getProvinceTypicalCurveRecord(project);
-  if (!curveRecord?.profile?.length) {
-    setEnergyImportMessage("当前项目未匹配到可调用的省份典型曲线，请检查省份、风/光类型和陆/海类型。", "error");
-    return;
-  }
-  energyData.typicalCurveProfile = curveRecord.profile;
-  energyData.typicalCurveSource = "province_typical_curve";
-  appState.energyStep2Choice = "province";
-  rebuildProjectEnergyData(project);
-  const exports = ensureProjectEnergyTemplateExports(project);
-  exports.province_typical_curve = new Date().toISOString();
-  const completeYears = countCompleteEnergyYears(project);
-  project.statuses["energy-page"] = completeYears === project.forecastYears ? "completed" : "in_progress";
-  if (isProjectCreateCompleted(project) && project.statuses["history-page"] === "not_started") {
-    project.statuses["history-page"] = "in_progress";
-  }
-  markDownstreamStale(project, "energy-page");
-  setEnergyImportMessage(
-    `已调用 ${curveRecord.sourceLabel}，已生成 ${completeYears}/${project.forecastYears} 年上网电量。`,
-    completeYears === project.forecastYears ? "success" : "warn"
-  );
-  renderAll();
+  return energyTemplateFlow.applyProvinceTypicalCurve(energyTemplateFlowContext());
 }
 
 function defaultAnnualEquivalentHours(project, offset = 0) {

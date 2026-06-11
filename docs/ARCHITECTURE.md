@@ -51,6 +51,7 @@
 | `province-defaults.js` | 省份默认参数展示 view model、选择器排序、消息文案和参数卡片 HTML 构造 |
 | `energy-workspace.js` | 结算电量配置页工作台 view model、创建项目表单读写/清空、状态文案、按钮禁用和模板状态计算 |
 | `create-project-flow.js` | 创建项目表单保存流程编排，处理新建/更新项目分支和页面跳转副作用 |
+| `energy-template-flow.js` | 结算电量模板导出、文件导入、示例模板和省份典型曲线调用流程 |
 | `chart-lifecycle.js` | ECharts 实例存活判断、批量 resize、窗口 resize 绑定和双帧延迟刷新 |
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
 | `result-page.js` | 基准结果总览报告文案、指标卡、假设说明和明细表 HTML 构造 |
