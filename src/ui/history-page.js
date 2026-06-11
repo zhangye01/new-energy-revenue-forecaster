@@ -58,6 +58,46 @@
     });
   }
 
+  function createPolicyHistoryEventHandlers(input = {}) {
+    const {
+      getPolicyFilters = () => ({}),
+      setPolicyFilters = () => {},
+      getHistoryAnalysis = () => ({}),
+      setHistoryAnalysis = () => {},
+      sanitizeHistoryAnalysis = (value) => value,
+      renderPolicyPanel = () => {},
+      renderHistoryPrices = () => {},
+      schedulePersistAppData = () => {},
+      exportHistoryChart = () => {}
+    } = input;
+
+    const updatePolicyFilters = (patch) => {
+      setPolicyFilters({
+        ...getPolicyFilters(),
+        ...patch
+      });
+      renderPolicyPanel();
+      schedulePersistAppData();
+    };
+
+    const updateHistoryAnalysis = (patch) => {
+      setHistoryAnalysis(sanitizeHistoryAnalysis({
+        ...getHistoryAnalysis(),
+        ...patch
+      }));
+      renderHistoryPrices();
+      schedulePersistAppData();
+    };
+
+    return {
+      changePolicyProvince: (provinceKey) => updatePolicyFilters({ provinceKey }),
+      changePolicyRegion: (regionKey) => updatePolicyFilters({ regionKey }),
+      changeHistoryStartDate: (startDate) => updateHistoryAnalysis({ startDate }),
+      changeHistoryEndDate: (endDate) => updateHistoryAnalysis({ endDate }),
+      exportHistoryChart
+    };
+  }
+
   function buildHistoryExportPlan(input = {}) {
     const {
       provinceLabel = "-",
@@ -160,6 +200,7 @@
     buildHistoryExportPlan,
     buildHistoryInsightText,
     buildHistoryKpis,
-    buildHistoryReadyViewModel
+    buildHistoryReadyViewModel,
+    createPolicyHistoryEventHandlers
   });
 });

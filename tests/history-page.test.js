@@ -6,7 +6,8 @@ const {
   buildHistoryExportPlan,
   buildHistoryInsightText,
   buildHistoryKpis,
-  buildHistoryReadyViewModel
+  buildHistoryReadyViewModel,
+  createPolicyHistoryEventHandlers
 } = require("../src/ui/history-page");
 
 class FakeTarget {
@@ -65,6 +66,50 @@ assert.deepEqual(historyEventCalls, [
   "export:distribution",
   "export:heatmap",
   "export:boxplot"
+]);
+
+const historyHandlerCalls = [];
+let policyFilters = { provinceKey: "jiangsu", regionKey: "east" };
+let historyAnalysisState = { startDate: "2026-01-01", endDate: "2026-12-31" };
+const historyHandlers = createPolicyHistoryEventHandlers({
+  getPolicyFilters: () => policyFilters,
+  setPolicyFilters: (nextFilters) => {
+    policyFilters = nextFilters;
+  },
+  getHistoryAnalysis: () => historyAnalysisState,
+  setHistoryAnalysis: (nextState) => {
+    historyAnalysisState = nextState;
+  },
+  sanitizeHistoryAnalysis: (state) => ({
+    ...state,
+    sanitized: true
+  }),
+  renderPolicyPanel: () => historyHandlerCalls.push("render-policy"),
+  renderHistoryPrices: () => historyHandlerCalls.push("render-history"),
+  schedulePersistAppData: () => historyHandlerCalls.push("persist"),
+  exportHistoryChart: (type) => historyHandlerCalls.push(`export:${type}`)
+});
+historyHandlers.changePolicyProvince("zhejiang");
+historyHandlers.changePolicyRegion("south");
+historyHandlers.changeHistoryStartDate("2027-01-01");
+historyHandlers.changeHistoryEndDate("2027-12-31");
+historyHandlers.exportHistoryChart("monthTrend");
+assert.deepEqual(policyFilters, { provinceKey: "zhejiang", regionKey: "south" });
+assert.deepEqual(historyAnalysisState, {
+  startDate: "2027-01-01",
+  endDate: "2027-12-31",
+  sanitized: true
+});
+assert.deepEqual(historyHandlerCalls, [
+  "render-policy",
+  "persist",
+  "render-policy",
+  "persist",
+  "render-history",
+  "persist",
+  "render-history",
+  "persist",
+  "export:monthTrend"
 ]);
 
 const exportPlan = buildHistoryExportPlan({

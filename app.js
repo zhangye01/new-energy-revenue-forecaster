@@ -5670,35 +5670,21 @@ function bindShellEvents() {
 function bindPolicyHistoryEvents() {
   historyPageView.bindPolicyHistoryEvents({
     refs,
-    handlers: {
-      changePolicyProvince: (provinceKey) => {
-        appState.policyFilters.provinceKey = provinceKey;
-        renderPolicyPanel();
-        schedulePersistAppData();
+    handlers: historyPageView.createPolicyHistoryEventHandlers({
+      getPolicyFilters: () => appState.policyFilters,
+      setPolicyFilters: (policyFilters) => {
+        appState.policyFilters = policyFilters;
       },
-      changePolicyRegion: (regionKey) => {
-        appState.policyFilters.regionKey = regionKey;
-        renderPolicyPanel();
-        schedulePersistAppData();
+      getHistoryAnalysis: () => appState.historyAnalysis,
+      setHistoryAnalysis: (historyAnalysisState) => {
+        appState.historyAnalysis = historyAnalysisState;
       },
-      changeHistoryStartDate: (startDate) => {
-        appState.historyAnalysis = sanitizeHistoryAnalysis({
-          ...appState.historyAnalysis,
-          startDate
-        });
-        renderHistoryPrices();
-        schedulePersistAppData();
-      },
-      changeHistoryEndDate: (endDate) => {
-        appState.historyAnalysis = sanitizeHistoryAnalysis({
-          ...appState.historyAnalysis,
-          endDate
-        });
-        renderHistoryPrices();
-        schedulePersistAppData();
-      },
+      sanitizeHistoryAnalysis,
+      renderPolicyPanel,
+      renderHistoryPrices,
+      schedulePersistAppData,
       exportHistoryChart: exportHistoryChartData
-    }
+    })
   });
 }
 
