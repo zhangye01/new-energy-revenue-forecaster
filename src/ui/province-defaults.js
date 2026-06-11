@@ -230,7 +230,26 @@
     };
   }
 
+  function bindProvinceDefaultActions(input = {}) {
+    const {
+      root = null,
+      handlers = {}
+    } = input;
+    if (!root || typeof root.querySelectorAll !== "function") return;
+    root.querySelectorAll("[data-toggle-province-details]").forEach((button) => {
+      button.addEventListener("click", () => {
+        handlers.toggleProvinceDefaultDetails?.(button.dataset.toggleProvinceDetails);
+      });
+    });
+    root.querySelectorAll("[data-apply-province]").forEach((button) => {
+      button.addEventListener("click", () => {
+        handlers.applyProvinceDefaultsToProject?.(button.dataset.applyProvince);
+      });
+    });
+  }
+
   return Object.freeze({
+    bindProvinceDefaultActions,
     buildProvinceDefaultsViewModel,
     shouldRefreshProvinceDefaultMessage
   });

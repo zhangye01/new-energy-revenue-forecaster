@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  bindProvinceDefaultActions,
   buildProvinceDefaultsViewModel,
   shouldRefreshProvinceDefaultMessage
 } = require("../src/ui/province-defaults");
@@ -67,6 +68,43 @@ function getProvinceName(key) {
 function getRegionKey(key) {
   return key === "guangdong" ? "south" : "east";
 }
+
+class FakeButton {
+  constructor(dataset = {}) {
+    this.dataset = dataset;
+    this.handlers = {};
+  }
+
+  addEventListener(name, handler) {
+    this.handlers[name] = handler;
+  }
+
+  dispatch(name) {
+    this.handlers[name]?.({ target: this });
+  }
+}
+
+const actionCalls = [];
+const toggleButton = new FakeButton({ toggleProvinceDetails: "jiangsu" });
+const applyButton = new FakeButton({ applyProvince: "shanghai" });
+bindProvinceDefaultActions({
+  root: {
+    querySelectorAll: (selector) => {
+      if (selector === "[data-toggle-province-details]") return [toggleButton];
+      if (selector === "[data-apply-province]") return [applyButton];
+      return [];
+    }
+  },
+  handlers: {
+    toggleProvinceDefaultDetails: (provinceKey) => actionCalls.push(`toggle:${provinceKey}`),
+    applyProvinceDefaultsToProject: (provinceKey) => actionCalls.push(`apply:${provinceKey}`)
+  }
+});
+toggleButton.dispatch("click");
+applyButton.dispatch("click");
+assert.deepEqual(actionCalls, ["toggle:jiangsu", "apply:shanghai"]);
+
+assert.doesNotThrow(() => bindProvinceDefaultActions());
 
 assert.equal(shouldRefreshProvinceDefaultMessage("已带入江苏默认参数"), false);
 assert.equal(shouldRefreshProvinceDefaultMessage("当前项目已选省份：江苏。"), true);

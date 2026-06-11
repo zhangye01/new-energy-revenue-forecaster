@@ -4515,11 +4515,9 @@ function renderProvinceLibrary() {
   }
   refs.provinceParamBody.innerHTML = model.bodyHtml;
 
-  document.querySelectorAll("[data-toggle-province-details]").forEach((button) => {
-    button.addEventListener("click", () => toggleProvinceDefaultDetails(button.dataset.toggleProvinceDetails));
-  });
-  document.querySelectorAll("[data-apply-province]").forEach((button) => {
-    button.addEventListener("click", () => applyProvinceDefaultsToProject(button.dataset.applyProvince));
+  provinceDefaultsView.bindProvinceDefaultActions({
+    root: document,
+    handlers: { toggleProvinceDefaultDetails, applyProvinceDefaultsToProject }
   });
 }
 
