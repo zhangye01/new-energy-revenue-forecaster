@@ -5732,38 +5732,27 @@ function bindCompareEvents() {
 function bindCreateEnergyEvents() {
   energyWorkspaceView.bindCreateEnergyEvents({
     refs,
-    handlers: {
-      submitCreateProject: () => createProjectFromForm({ targetPage: "create-page" }),
+    handlers: energyWorkspaceView.createEnergyWorkspaceEventHandlers({
+      getActiveProject,
+      isProjectReady: isProjectCreateCompleted,
+      hasHistoryReadiness: hasEnergyHistoryEntryReadiness,
+      getEnergyStep2Choice: () => appState.energyStep2Choice,
+      setEnergyStep2Choice: (nextChoice) => {
+        appState.energyStep2Choice = nextChoice;
+      },
+      sanitizeEnergyStep2Choice,
+      createProjectFromForm,
       syncCreateStorageFields: syncCreateStorageFieldsUi,
-      enterEnergyPage: () => {
-        const project = getActiveProject();
-        if (!project || !isProjectCreateCompleted(project)) {
-          setTopMeta("请先完成并保存项目基础信息。");
-          setCreateSaveMessage("请先保存基础信息，再进入结算电量配置。", "warn");
-          return;
-        }
-        setActivePage("energy-page");
-      },
-      enterHistoryPage: () => {
-        const project = getActiveProject();
-        const ready = project && hasEnergyHistoryEntryReadiness(project);
-        if (!ready) {
-          setEnergyImportMessage("请先完成全部预测年份的结算电量配置，再进入历史电价分析。", "warn");
-          return;
-        }
-        setActivePage("history-page");
-      },
+      setTopMeta,
+      setCreateSaveMessage,
+      setEnergyImportMessage,
+      setActivePage,
       exportEnergyTemplate,
       importEnergyFromFile,
       applyProvinceTypicalCurve,
-      changeEnergyStep2Choice: (rawChoice) => {
-        const nextChoice = sanitizeEnergyStep2Choice(rawChoice);
-        if (appState.energyStep2Choice === nextChoice) return;
-        appState.energyStep2Choice = nextChoice;
-        renderEnergyStep2ChoiceState();
-        schedulePersistAppData();
-      }
-    }
+      renderEnergyStep2ChoiceState,
+      schedulePersistAppData
+    })
   });
 }
 

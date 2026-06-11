@@ -12,6 +12,7 @@ const {
   buildEnergySummaryNote,
   buildEnergyWorkspaceViewModel,
   collectCompleteAnnualEnergyRows,
+  createEnergyWorkspaceEventHandlers,
   readCreateProjectFormRawInput,
   resolveModeLabel,
   shouldRefreshEnergyMessage
@@ -111,6 +112,59 @@ assert.deepEqual(energyEventCalls, [
   "apply-province",
   "choice:typical",
   "choice:province"
+]);
+
+const energyHandlerCalls = [];
+let activeEnergyProject = null;
+let energyStep2Choice = "typical";
+const workspaceHandlers = createEnergyWorkspaceEventHandlers({
+  getActiveProject: () => activeEnergyProject,
+  isProjectReady: (project) => project?.ready,
+  hasHistoryReadiness: (project) => project?.historyReady,
+  getEnergyStep2Choice: () => energyStep2Choice,
+  setEnergyStep2Choice: (choice) => {
+    energyStep2Choice = choice;
+  },
+  sanitizeEnergyStep2Choice: (choice) => (choice === "province" ? "province" : "typical"),
+  createProjectFromForm: (payload) => energyHandlerCalls.push(`submit:${payload.targetPage}`),
+  syncCreateStorageFields: () => energyHandlerCalls.push("sync"),
+  setTopMeta: (message) => energyHandlerCalls.push(`top:${message}`),
+  setCreateSaveMessage: (message, tone) => energyHandlerCalls.push(`create-message:${tone}:${message}`),
+  setEnergyImportMessage: (message, tone) => energyHandlerCalls.push(`energy-message:${tone}:${message}`),
+  setActivePage: (page) => energyHandlerCalls.push(`page:${page}`),
+  exportEnergyTemplate: (mode) => energyHandlerCalls.push(`export:${mode}`),
+  importEnergyFromFile: (mode, input) => energyHandlerCalls.push(`import:${mode}:${input}`),
+  applyProvinceTypicalCurve: () => energyHandlerCalls.push("apply-province"),
+  renderEnergyStep2ChoiceState: () => energyHandlerCalls.push("render-step2"),
+  schedulePersistAppData: () => energyHandlerCalls.push("persist")
+});
+workspaceHandlers.submitCreateProject();
+workspaceHandlers.syncCreateStorageFields();
+workspaceHandlers.enterEnergyPage();
+activeEnergyProject = { ready: true, historyReady: false };
+workspaceHandlers.enterEnergyPage();
+workspaceHandlers.enterHistoryPage();
+activeEnergyProject = { ready: true, historyReady: true };
+workspaceHandlers.enterHistoryPage();
+workspaceHandlers.exportEnergyTemplate("annual_hours");
+workspaceHandlers.importEnergyFromFile("annual_hours", "file-input");
+workspaceHandlers.applyProvinceTypicalCurve();
+workspaceHandlers.changeEnergyStep2Choice("typical");
+workspaceHandlers.changeEnergyStep2Choice("province");
+assert.equal(energyStep2Choice, "province");
+assert.deepEqual(energyHandlerCalls, [
+  "submit:create-page",
+  "sync",
+  "top:请先完成并保存项目基础信息。",
+  "create-message:warn:请先保存基础信息，再进入结算电量配置。",
+  "page:energy-page",
+  "energy-message:warn:请先完成全部预测年份的结算电量配置，再进入历史电价分析。",
+  "page:history-page",
+  "export:annual_hours",
+  "import:annual_hours:file-input",
+  "apply-province",
+  "render-step2",
+  "persist"
 ]);
 
 const createProjectFormValues = buildCreateProjectFormValues({
