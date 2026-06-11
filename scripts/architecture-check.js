@@ -297,6 +297,18 @@ function assertSmokeCheckIsRequired() {
   }
 }
 
+function assertModuleLoadSmokeCheckIsRequired() {
+  const packageJson = JSON.parse(readText("package.json"));
+  const moduleScript = packageJson.scripts?.["check:modules"] || "";
+  const checkScript = packageJson.scripts?.check || "";
+  if (moduleScript !== "node scripts/module-load-smoke.js") {
+    fail("npm run check:modules must use scripts/module-load-smoke.js");
+  }
+  if (!checkScript.includes("npm run check:modules")) {
+    fail("npm run check must include npm run check:modules");
+  }
+}
+
 function assertServeSmokeCheckIsRequired() {
   const packageJson = JSON.parse(readText("package.json"));
   const serveScript = packageJson.scripts?.["check:serve"] || "";
@@ -356,6 +368,7 @@ function run() {
   assertStaticCheckIsRequired();
   assertReleaseCheckIsRequired();
   assertSmokeCheckIsRequired();
+  assertModuleLoadSmokeCheckIsRequired();
   assertServeSmokeCheckIsRequired();
   assertBrowserModulesAreLoaded();
   assertAppWindowGlobalsAreExported();
