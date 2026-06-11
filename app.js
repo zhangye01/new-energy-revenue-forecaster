@@ -51,6 +51,7 @@ const exportBuilders = window.NE_EXPORT_BUILDERS;
 const policyPanel = window.NE_POLICY_PANEL;
 const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
+const createProjectFlow = window.NE_CREATE_PROJECT_FLOW;
 const chartLifecycle = window.NE_CHART_LIFECYCLE;
 const energyCharts = window.NE_ENERGY_CHARTS;
 const forecastPage = window.NE_FORECAST_PAGE;
@@ -72,7 +73,7 @@ const appEventBindings = window.NE_APP_EVENT_BINDINGS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -2984,137 +2985,55 @@ function getStorageConfigText(project) {
   return "配储";
 }
 
-function updateExistingProjectFromForm(project, input, targetPage) {
-  const oldProvince = project.province;
-  const baseChanged = projectModel.hasProjectBaseInputChanged(project, input);
-
-  projectModel.applyCreateProjectInput(project, input);
-  project.statuses["create-page"] = isProjectCreateCompleted(project) ? "completed" : "in_progress";
-  const provinceDefaultsAutoSynced = syncProjectProvinceDefaultsToBaseline(project, {
-    force: shouldAutoSyncProvinceDefaults(project)
-  });
-  syncProjectProvinceScopedState(project, { force: true });
-
-  if (baseChanged) {
-    project.energyData = createEmptyEnergyDataState(input.energyMode);
-    project.historySpotImport = createEmptyHistorySpotImport();
-    clearHistoryAnalysisCacheForProject(project.id);
-    const exports = ensureProjectEnergyTemplateExports(project);
-    exports.hourly_8760 = "";
-    exports.annual_hours = "";
-    exports.typical_curve_8760 = "";
-    exports.province_typical_curve = "";
-    project.statuses["energy-page"] = "in_progress";
-    project.statuses["history-page"] = "not_started";
-    markDownstreamStale(project, "energy-page");
-    setTopMeta("当前项目已更新，请在步骤2重新导入电量。");
-    if (provinceDefaultsAutoSynced) {
-      setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量；${getProvinceName(project.province)}默认参数已同步到基准场景。`, "warn");
-    } else if (oldProvince !== input.province) {
-      setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量，并在全口径收入配置页复核${getProvinceName(project.province)}默认参数。`, "warn");
-    } else {
-      setCreateSaveMessage(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量。`, "warn");
+function createProjectFormFlowContext() {
+  return {
+    refs,
+    documentRef: document,
+    appState,
+    modules: {
+      projectModel,
+      energyWorkspace
+    },
+    sets: {
+      provinceKeys: PROVINCE_KEY_SET,
+      assetTypes: ASSET_TYPE_SET,
+      siteTypes: SITE_TYPE_SET
+    },
+    actions: {
+      getActiveProject,
+      setTopMeta,
+      setCreateSaveMessage,
+      resolveUniqueProjectName,
+      makeId,
+      statusMapTemplate,
+      createEmptyHistorySpotImport,
+      createDefaultSpotMarketConfig,
+      isProjectCreateCompleted,
+      createBaselineScenario,
+      syncProjectProvinceDefaultsToBaseline,
+      shouldAutoSyncProvinceDefaults,
+      syncProjectProvinceScopedState,
+      createEmptyEnergyDataState,
+      clearHistoryAnalysisCacheForProject,
+      ensureProjectEnergyTemplateExports,
+      markDownstreamStale,
+      getProvinceName,
+      ensureProjectEnergyDataState,
+      moveProjectToHistoryWorkspaceIfReady,
+      setCreateFormSyncedProjectId: (projectId) => {
+        createFormSyncedProjectId = projectId;
+      },
+      setActivePage,
+      scrollCreateWorkspaceToBottom
     }
-  } else {
-    if (!project.energyData || typeof project.energyData !== "object") {
-      project.energyData = createEmptyEnergyDataState(input.energyMode);
-    } else {
-      ensureProjectEnergyDataState(project).mode = input.energyMode;
-    }
-    if (project.statuses["energy-page"] === "not_started") {
-      project.statuses["energy-page"] = "in_progress";
-    }
-    setTopMeta("当前项目已保存。");
-    if (provinceDefaultsAutoSynced) {
-      setCreateSaveMessage(`已更新当前项目：${project.name}。${getProvinceName(project.province)}默认参数已同步到基准场景。`, "success");
-    } else {
-      setCreateSaveMessage(`已更新当前项目：${project.name}。`, "success");
-    }
-  }
-
-  ensureProjectEnergyTemplateExports(project);
-  const movedToHistory = moveProjectToHistoryWorkspaceIfReady(project);
-  createFormSyncedProjectId = project.id;
-  appState.activeProjectId = project.id;
-  if (movedToHistory) {
-    setTopMeta("当前项目已完成基础信息校准，已转入历史项目工作区。");
-    setCreateSaveMessage(`已更新当前项目：${project.name}。已转入历史项目工作区。`, "success");
-  }
-  setActivePage(targetPage);
-  if (targetPage === "create-page") {
-    scrollCreateWorkspaceToBottom();
-  }
-  return project;
+  };
 }
 
 function createProjectFromForm(options = {}) {
-  const {
-    targetPage = "create-page",
-    appendToBottom = false,
-    autoUniqueName = false,
-    workspaceBucket = "history",
-    forceCreate = false
-  } = options;
-  const existingProject = forceCreate ? null : getActiveProject();
-  const formState = projectModel.buildCreateProjectFormInput(energyWorkspace.readCreateProjectFormRawInput({
-    refs,
-    documentRef: document,
-    existingProject
-  }), {
-    autoUniqueName,
-    forceCreate,
-    currentYear: new Date().getFullYear(),
-    provinceKeys: PROVINCE_KEY_SET,
-    assetTypes: ASSET_TYPE_SET,
-    siteTypes: SITE_TYPE_SET
+  return createProjectFlow.saveCreateProjectFromForm({
+    ...createProjectFormFlowContext(),
+    options
   });
-  if (formState.error) {
-    setTopMeta(formState.error.topMeta);
-    setCreateSaveMessage(formState.error.message, "warn");
-    return null;
-  }
-  let { name } = formState.input;
-  if (!existingProject && autoUniqueName) {
-    name = resolveUniqueProjectName(name);
-  }
-
-  if (existingProject) {
-    return updateExistingProjectFromForm(existingProject, {
-      ...formState.input,
-      name
-    }, targetPage);
-  }
-
-  const project = projectModel.createProjectRecordWithBaseline({
-    ...formState.input,
-    name
-  }, {
-    id: makeId("proj"),
-    ownerAccount: String(appState.auth.account || "").trim(),
-    workspaceBucket,
-    nowIso: new Date().toISOString(),
-    statuses: statusMapTemplate(),
-    historySpotImport: createEmptyHistorySpotImport(),
-    spotMarketConfig: createDefaultSpotMarketConfig(),
-    isProjectCreateCompleted,
-    createBaselineScenario: (targetProject) => createBaselineScenario(targetProject, { nowIso: targetProject.createdAt })
-  });
-
-  if (appendToBottom) {
-    appState.projects.push(project);
-  } else {
-    appState.projects.unshift(project);
-  }
-  createFormSyncedProjectId = project.id;
-  appState.activeProjectId = project.id;
-  syncProjectProvinceScopedState(project, { force: true });
-  moveProjectToHistoryWorkspaceIfReady(project);
-  setCreateSaveMessage(`已创建新项目：${project.name}。`, "success");
-  setActivePage(targetPage);
-  if (targetPage === "create-page") {
-    scrollCreateWorkspaceToBottom();
-  }
-  return project;
 }
 
 function normalizeCsvHeaderToken(value) {
