@@ -152,6 +152,48 @@ function collectStylesheetHrefsFromHtml(html) {
   return links;
 }
 
+function collectScriptSourcesFromHtml(html) {
+  const scripts = [];
+  const scriptPattern = /<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
+  for (const match of html.matchAll(scriptPattern)) {
+    scripts.push(match[1].split("?")[0].replace(/^\.\//, ""));
+  }
+  return scripts;
+}
+
+function collectAppWindowGlobalsFromText(sourceText) {
+  const globals = new Set();
+  const globalPattern = /\bwindow\.(NE_[A-Z0-9_]+)/g;
+  for (const match of sourceText.matchAll(globalPattern)) {
+    globals.add(match[1]);
+  }
+  return Array.from(globals).sort();
+}
+
+function collectWindowGlobalExportsFromText(sourceText) {
+  const globals = new Set();
+  const exportPattern = /\b(?:window|root|root\.window)\.(NE_[A-Z0-9_]+)\s*=/g;
+  for (const match of sourceText.matchAll(exportPattern)) {
+    globals.add(match[1]);
+  }
+  return Array.from(globals).sort();
+}
+
+function collectLoadedWindowGlobalExports(scriptPaths) {
+  const exportsByGlobal = new Map();
+  scriptPaths.forEach((scriptPath) => {
+    const fullPath = path.join(ROOT, scriptPath);
+    if (!fs.existsSync(fullPath)) return;
+    collectWindowGlobalExportsFromText(readText(scriptPath)).forEach((globalName) => {
+      if (!exportsByGlobal.has(globalName)) {
+        exportsByGlobal.set(globalName, []);
+      }
+      exportsByGlobal.get(globalName).push(scriptPath);
+    });
+  });
+  return exportsByGlobal;
+}
+
 function assertCssLoadOrder() {
   const stylesheets = collectStylesheetHrefsFromHtml(readText("index.html"));
   REQUIRED_CSS_ORDER.forEach((requiredPath) => {
@@ -280,6 +322,17 @@ function assertBrowserModulesAreLoaded() {
   });
 }
 
+function assertAppWindowGlobalsAreExported() {
+  const html = readText("index.html");
+  const scripts = collectScriptSourcesFromHtml(html).filter((scriptPath) => scriptPath !== "app.js");
+  const loadedExports = collectLoadedWindowGlobalExports(scripts);
+  const missing = collectAppWindowGlobalsFromText(readText("app.js"))
+    .filter((globalName) => !loadedExports.has(globalName));
+  if (missing.length) {
+    fail(`app.js depends on window globals that are not exported by loaded scripts: ${missing.join(", ")}`);
+  }
+}
+
 function assertSingleWorkflow() {
   const workflowDir = path.join(ROOT, ".github", "workflows");
   if (!fs.existsSync(workflowDir)) return;
@@ -305,6 +358,7 @@ function run() {
   assertSmokeCheckIsRequired();
   assertServeSmokeCheckIsRequired();
   assertBrowserModulesAreLoaded();
+  assertAppWindowGlobalsAreExported();
   assertSingleWorkflow();
   if (!process.exitCode) {
     console.log("architecture checks passed");
@@ -316,8 +370,12 @@ if (require.main === module) {
 }
 
 module.exports = {
+  collectAppWindowGlobalsFromText,
+  collectLoadedWindowGlobalExports,
+  collectScriptSourcesFromHtml,
   collectTopLevelFunctionSizesFromText,
   collectStylesheetHrefsFromHtml,
   collectUnloadedCssFiles,
+  collectWindowGlobalExportsFromText,
   findForbiddenAppPatternsFromText
 };

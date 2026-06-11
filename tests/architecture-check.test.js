@@ -2,9 +2,13 @@
 
 const assert = require("node:assert/strict");
 const {
+  collectAppWindowGlobalsFromText,
+  collectLoadedWindowGlobalExports,
+  collectScriptSourcesFromHtml,
   collectTopLevelFunctionSizesFromText,
   collectStylesheetHrefsFromHtml,
   collectUnloadedCssFiles,
+  collectWindowGlobalExportsFromText,
   findForbiddenAppPatternsFromText
 } = require("../scripts/architecture-check");
 
@@ -81,5 +85,33 @@ assert.deepEqual(collectUnloadedCssFiles([
   "styles/theme.css",
   "styles/components/forms.css"
 ]), ["styles/pages/new-page.css"]);
+
+assert.deepEqual(collectScriptSourcesFromHtml([
+  "<script src=\"./config.js?v=1\" defer></script>",
+  "<script src=\"src/domain/app-utils.js?v=2\" defer></script>"
+].join("\n")), ["config.js", "src/domain/app-utils.js"]);
+
+assert.deepEqual(collectAppWindowGlobalsFromText([
+  "const appUtils = window.NE_APP_UTILS;",
+  "const optionalMap = window.NE_MAP_GEO;",
+  "const appUtilsAgain = window.NE_APP_UTILS;"
+].join("\n")), ["NE_APP_UTILS", "NE_MAP_GEO"]);
+
+assert.deepEqual(collectWindowGlobalExportsFromText([
+  "window.NE_CONFIG = {};",
+  "root.NE_APP_UTILS = api;",
+  "root.window.NE_APP_UTILS = api;"
+].join("\n")), ["NE_APP_UTILS", "NE_CONFIG"]);
+
+const loadedWindowExports = collectLoadedWindowGlobalExports([
+  "config.js",
+  "runtime.js",
+  "map-data.js",
+  "src/domain/app-utils.js"
+]);
+assert.deepEqual(loadedWindowExports.get("NE_CONFIG"), ["config.js"]);
+assert.deepEqual(loadedWindowExports.get("NE_RUNTIME"), ["runtime.js"]);
+assert.deepEqual(loadedWindowExports.get("NE_MAP_GEO"), ["map-data.js"]);
+assert.deepEqual(loadedWindowExports.get("NE_APP_UTILS"), ["src/domain/app-utils.js"]);
 
 console.log("architecture check tests passed");
