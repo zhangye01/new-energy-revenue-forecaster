@@ -51,6 +51,7 @@ const exportBuilders = window.NE_EXPORT_BUILDERS;
 const policyPanel = window.NE_POLICY_PANEL;
 const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
+const chartLifecycle = window.NE_CHART_LIFECYCLE;
 const energyCharts = window.NE_ENERGY_CHARTS;
 const forecastPage = window.NE_FORECAST_PAGE;
 const projectListView = window.NE_PROJECT_LIST_VIEW;
@@ -70,7 +71,7 @@ const shellEvents = window.NE_SHELL_EVENTS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -2126,14 +2127,11 @@ function ensureBenchmarkChart() {
     return benchmarkMapChart;
   }
   benchmarkMapChart = window.echarts.init(refs.benchmarkMapCanvas, null, { renderer: "canvas" });
-  if (!benchmarkMapResizeBound && typeof window !== "undefined") {
-    window.addEventListener("resize", () => {
-      if (benchmarkMapChart && !benchmarkMapChart.isDisposed()) {
-        benchmarkMapChart.resize();
-      }
-    });
-    benchmarkMapResizeBound = true;
-  }
+  benchmarkMapResizeBound = chartLifecycle.bindWindowResizeOnce({
+    windowRef: window,
+    isBound: benchmarkMapResizeBound,
+    resize: () => chartLifecycle.resizeChart(benchmarkMapChart)
+  });
   return benchmarkMapChart;
 }
 
@@ -3936,17 +3934,11 @@ function ensureEnergyCurveChart() {
     return energyCurveChart;
   }
   energyCurveChart = window.echarts.init(refs.energyCurveChart, null, { renderer: "canvas" });
-  if (!energyCurveResizeBound) {
-    window.addEventListener("resize", () => {
-      if (energyAnnualChart && !energyAnnualChart.isDisposed()) {
-        energyAnnualChart.resize();
-      }
-      if (energyCurveChart && !energyCurveChart.isDisposed()) {
-        energyCurveChart.resize();
-      }
-    });
-    energyCurveResizeBound = true;
-  }
+  energyCurveResizeBound = chartLifecycle.bindWindowResizeOnce({
+    windowRef: window,
+    isBound: energyCurveResizeBound,
+    resize: () => chartLifecycle.resizeCharts([energyAnnualChart, energyCurveChart])
+  });
   return energyCurveChart;
 }
 
@@ -3956,17 +3948,11 @@ function ensureEnergyAnnualChart() {
     return energyAnnualChart;
   }
   energyAnnualChart = window.echarts.init(refs.energyAnnualChart, null, { renderer: "canvas" });
-  if (!energyCurveResizeBound) {
-    window.addEventListener("resize", () => {
-      if (energyAnnualChart && !energyAnnualChart.isDisposed()) {
-        energyAnnualChart.resize();
-      }
-      if (energyCurveChart && !energyCurveChart.isDisposed()) {
-        energyCurveChart.resize();
-      }
-    });
-    energyCurveResizeBound = true;
-  }
+  energyCurveResizeBound = chartLifecycle.bindWindowResizeOnce({
+    windowRef: window,
+    isBound: energyCurveResizeBound,
+    resize: () => chartLifecycle.resizeCharts([energyAnnualChart, energyCurveChart])
+  });
   return energyAnnualChart;
 }
 
@@ -4056,27 +4042,19 @@ function ensureHistoryCharts() {
     heatmap: ensureHistoryChart("heatmap", refs.historyHeatmapChart),
     boxplot: ensureHistoryChart("boxplot", refs.historyBoxplotChart)
   };
-  if (!historyChartsResizeBound && typeof window !== "undefined") {
-    window.addEventListener("resize", () => {
-      Object.values(historyChartInstances).forEach((chart) => {
-        if (chart && !chart.isDisposed()) chart.resize();
-      });
-    });
-    historyChartsResizeBound = true;
-  }
+  historyChartsResizeBound = chartLifecycle.bindWindowResizeOnce({
+    windowRef: window,
+    isBound: historyChartsResizeBound,
+    resize: () => chartLifecycle.resizeCharts(historyChartInstances)
+  });
   return charts;
 }
 
 function queueHistoryChartsResize() {
   if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      Object.values(historyChartInstances).forEach((chart) => {
-        if (chart && !chart.isDisposed()) {
-          chart.resize();
-        }
-      });
-    });
+  chartLifecycle.queueDoubleFrame({
+    windowRef: window,
+    callback: () => chartLifecycle.resizeCharts(historyChartInstances)
   });
 }
 
@@ -4109,16 +4087,11 @@ function ensureScenarioVisualChart(key) {
     return existing;
   }
   scenarioVisualCharts[key] = window.echarts.init(node, null, { renderer: "canvas" });
-  if (!scenarioVisualResizeBound && typeof window !== "undefined") {
-    window.addEventListener("resize", () => {
-      Object.values(scenarioVisualCharts).forEach((chart) => {
-        if (chart && !chart.isDisposed()) {
-          chart.resize();
-        }
-      });
-    });
-    scenarioVisualResizeBound = true;
-  }
+  scenarioVisualResizeBound = chartLifecycle.bindWindowResizeOnce({
+    windowRef: window,
+    isBound: scenarioVisualResizeBound,
+    resize: () => chartLifecycle.resizeCharts(scenarioVisualCharts)
+  });
   return scenarioVisualCharts[key];
 }
 
@@ -4130,14 +4103,9 @@ function getScenarioVisualCharts() {
 
 function queueScenarioVisualResize() {
   if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      Object.values(scenarioVisualCharts).forEach((chart) => {
-        if (chart && !chart.isDisposed()) {
-          chart.resize();
-        }
-      });
-    });
+  chartLifecycle.queueDoubleFrame({
+    windowRef: window,
+    callback: () => chartLifecycle.resizeCharts(scenarioVisualCharts)
   });
 }
 
@@ -4205,29 +4173,19 @@ function ensureCompareChart(chartKey, node) {
   }
   const chart = window.echarts.init(node, null, { renderer: "canvas" });
   compareChartInstances[chartKey] = chart;
-  if (!compareChartsResizeBound && typeof window !== "undefined") {
-    window.addEventListener("resize", () => {
-      Object.values(compareChartInstances).forEach((instance) => {
-        if (instance && !instance.isDisposed()) {
-          instance.resize();
-        }
-      });
-    });
-    compareChartsResizeBound = true;
-  }
+  compareChartsResizeBound = chartLifecycle.bindWindowResizeOnce({
+    windowRef: window,
+    isBound: compareChartsResizeBound,
+    resize: () => chartLifecycle.resizeCharts(compareChartInstances)
+  });
   return chart;
 }
 
 function queueCompareChartsResize() {
   if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      Object.values(compareChartInstances).forEach((instance) => {
-        if (instance && !instance.isDisposed()) {
-          instance.resize();
-        }
-      });
-    });
+  chartLifecycle.queueDoubleFrame({
+    windowRef: window,
+    callback: () => chartLifecycle.resizeCharts(compareChartInstances)
   });
 }
 
@@ -5171,25 +5129,19 @@ function ensureResultChart(key) {
   if (existing && !existing.isDisposed()) return existing;
   const chart = window.echarts.init(node, null, { renderer: "canvas" });
   resultChartInstances[key] = chart;
-  if (!resultChartsResizeBound && typeof window !== "undefined") {
-    window.addEventListener("resize", () => {
-      Object.values(resultChartInstances).forEach((instance) => {
-        if (instance && !instance.isDisposed()) instance.resize();
-      });
-    });
-    resultChartsResizeBound = true;
-  }
+  resultChartsResizeBound = chartLifecycle.bindWindowResizeOnce({
+    windowRef: window,
+    isBound: resultChartsResizeBound,
+    resize: () => chartLifecycle.resizeCharts(resultChartInstances)
+  });
   return chart;
 }
 
 function queueResultChartsResize() {
   if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      Object.values(resultChartInstances).forEach((instance) => {
-        if (instance && !instance.isDisposed()) instance.resize();
-      });
-    });
+  chartLifecycle.queueDoubleFrame({
+    windowRef: window,
+    callback: () => chartLifecycle.resizeCharts(resultChartInstances)
   });
 }
 
