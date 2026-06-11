@@ -1,0 +1,137 @@
+/* CSS governance: shared form fields and form layout primitives. Load after data-display.css and before page CSS. */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-section-header {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 3px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line-strong);
+}
+
+.form-section-header strong {
+  color: var(--ink);
+  font-size: 0.94rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.form-section-header span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+label,
+.block-label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+  min-height: 38px;
+  padding: 7px 9px;
+  color: var(--ink);
+  background: var(--field-bg);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--field-bg-disabled);
+  color: var(--field-placeholder);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--field-placeholder);
+}
+
+select option,
+select optgroup {
+  color: var(--ink);
+  background: var(--panel);
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--field-icon-color) 50%),
+    linear-gradient(135deg, var(--field-icon-color) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 1px),
+    calc(100% - 12px) calc(50% - 1px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+input[type="date"],
+input[type="month"] {
+  padding-right: 38px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.82;
+  filter: var(--field-icon-filter);
+}
+
+input[type="file"] {
+  padding: 5px 8px;
+  line-height: 1.3;
+}
+
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
+  min-height: 28px;
+  margin-right: 10px;
+  border: 1px solid var(--field-file-button-border);
+  border-radius: 6px;
+  background: var(--field-file-button-bg);
+  color: var(--field-file-button-ink);
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+input[type="file"]:disabled::file-selector-button,
+input[type="file"]:disabled::-webkit-file-upload-button {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+textarea {
+  min-height: 200px;
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--field-focus-border);
+  box-shadow: 0 0 0 2px var(--field-focus-ring);
+}
+
+.actions-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

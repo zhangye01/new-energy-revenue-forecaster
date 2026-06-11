@@ -1,0 +1,129 @@
+/* CSS governance: shared panel helpers, metadata, metrics, and tables. Load after base.css and before page CSS. */
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-head h3 {
+  font-size: 1rem;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.card-list {
+  display: grid;
+  gap: 8px;
+}
+
+.meta-item {
+  display: grid;
+  gap: 2px;
+}
+
+.meta-item.full {
+  grid-column: 1 / -1;
+}
+
+.meta-key {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.meta-value {
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.info-box {
+  min-height: 40px;
+  border: 1px dashed var(--info-border);
+  border-radius: 6px;
+  padding: 9px 10px;
+  color: var(--info-ink);
+  background: var(--info-bg);
+  font-size: 0.86rem;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.metric-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.metric-card .label {
+  color: var(--muted);
+  font-size: 0.79rem;
+  min-height: 30px;
+}
+
+.metric-card .value {
+  margin-top: 6px;
+  font-weight: 900;
+  font-size: 1.12rem;
+}
+
+.metric-card small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 7px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+
+th {
+  color: var(--table-head-ink);
+  font-size: 0.8rem;
+  background: var(--table-head-bg);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+td {
+  font-size: 0.84rem;
+}

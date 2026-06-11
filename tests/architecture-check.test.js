@@ -54,6 +54,9 @@ assert.deepEqual(collectStylesheetHrefsFromHtml([
   "<link rel=\"icon\" href=\"data:,\">",
   "<link rel=\"stylesheet\" href=\"./styles/theme.css?v=1\">",
   "<link rel=\"stylesheet\" href=\"./styles/base.css?v=1\">",
+  "<link rel=\"stylesheet\" href=\"./styles/components/data-display.css?v=1\">",
+  "<link rel=\"stylesheet\" href=\"./styles/components/forms.css?v=1\">",
+  "<link rel=\"stylesheet\" href=\"./styles/components/buttons.css?v=1\">",
   "<link rel=\"stylesheet\" href=\"./styles/pages/home.css?v=1\">",
   "<link rel=\"stylesheet\" href=\"./styles/pages/projects.css?v=1\">",
   "<link rel=\"stylesheet\" href=\"./styles/pages/help.css?v=1\">",
@@ -63,6 +66,6 @@ assert.deepEqual(collectStylesheetHrefsFromHtml([
   "<link rel=\"stylesheet\" href=\"./styles/pages/compare.css?v=1\">",
   "<link rel=\"stylesheet\" href=\"./styles/pages/history.css?v=1\">",
   "<link href=\"./styles.css?v=1\" rel=\"stylesheet\">"
-].join("\n")), ["styles/theme.css", "styles/base.css", "styles/pages/home.css", "styles/pages/projects.css", "styles/pages/help.css", "styles/pages/energy.css", "styles/pages/scenario.css", "styles/pages/results.css", "styles/pages/compare.css", "styles/pages/history.css", "styles.css"]);
+].join("\n")), ["styles/theme.css", "styles/base.css", "styles/components/data-display.css", "styles/components/forms.css", "styles/components/buttons.css", "styles/pages/home.css", "styles/pages/projects.css", "styles/pages/help.css", "styles/pages/energy.css", "styles/pages/scenario.css", "styles/pages/results.css", "styles/pages/compare.css", "styles/pages/history.css", "styles.css"]);
 
 console.log("architecture check tests passed");
