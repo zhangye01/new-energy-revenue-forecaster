@@ -52,6 +52,7 @@ const policyPanel = window.NE_POLICY_PANEL;
 const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
 const createProjectFlow = window.NE_CREATE_PROJECT_FLOW;
+const manualScenarioFlow = window.NE_MANUAL_SCENARIO_FLOW;
 const chartLifecycle = window.NE_CHART_LIFECYCLE;
 const energyCharts = window.NE_ENERGY_CHARTS;
 const forecastPage = window.NE_FORECAST_PAGE;
@@ -73,7 +74,7 @@ const appEventBindings = window.NE_APP_EVENT_BINDINGS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -5212,109 +5213,40 @@ function sanitizeExportFilenamePart(value) {
 }
 
 const MANUAL_SCENARIO_IMPORTS = Object.freeze({
-  lt: {
-    fileInputRef: "ltManualFileInput",
-    statusRef: "ltManualStatus",
-    modeKey: "ltPricingMode",
-    valuesKey: "ltManualPricesByYear",
-    parsedKey: "prices",
-    filename: exportBuilders.buildLtManualTemplateFilename,
-    rows: scenarioConfig.buildLtManualTemplateRows,
-    parse: scenarioConfig.parseLtManualPricesCsv,
-    exportedMessage: "已导出空白逐年损益模板，可填写后重新导入。",
-    lockedMessage: "当前场景已锁定，不能导入逐年损益。",
-    successMessage: (scenario) => `已导入“${scenario.name}”的逐年交易策略损益值，请确认后保存当前配置。`
-  },
-  env: {
-    fileInputRef: "envManualFileInput",
-    statusRef: "envManualStatus",
-    modeKey: "envValueMode",
-    valuesKey: "envManualValuesByYear",
-    parsedKey: "values",
-    filename: exportBuilders.buildEnvManualTemplateFilename,
-    rows: scenarioConfig.buildEnvManualTemplateRows,
-    parse: scenarioConfig.parseEnvManualValuesCsv,
-    exportedMessage: "已导出空白逐年环境价值兑现模板，可填写后重新导入。",
-    lockedMessage: "当前场景已锁定，不能导入逐年环境价值兑现配置。",
-    successMessage: (scenario) => `已导入“${scenario.name}”的逐年环境价值兑现配置，请确认后保存当前配置。`
-  },
-  fee: {
-    fileInputRef: "feeManualFileInput",
-    statusRef: "feeManualStatus",
-    modeKey: "feeConfigMode",
-    valuesKey: "feeManualValuesByYear",
-    parsedKey: "values",
-    filename: exportBuilders.buildFeeManualTemplateFilename,
-    rows: scenarioConfig.buildFeeManualTemplateRows,
-    parse: scenarioConfig.parseFeeManualValuesCsv,
-    exportedMessage: "已导出空白逐年扣费收益模板，可填写后重新导入。",
-    lockedMessage: "当前场景已锁定，不能导入逐年扣费收益配置。",
-    successMessage: (scenario) => `已导入“${scenario.name}”的逐年扣费收益配置，请确认后保存当前配置。`
-  }
+  ...manualScenarioFlow.createManualScenarioImportConfigs({ exportBuilders, scenarioConfig })
 });
 
-function setManualScenarioStatus(config, text) {
-  const node = refs[config.statusRef];
-  if (node) node.textContent = text;
-}
-
-function setScenarioImportMessage(text, tone) {
-  refs.scenarioMessage.textContent = text;
-  refs.scenarioMessage.style.borderColor = tone === "success" ? "#8fb48d" : "#d39191";
-  refs.scenarioMessage.style.background = tone === "success" ? "#f1fbf1" : "#fff2f2";
+function manualScenarioFlowContext() {
+  const project = getActiveProject();
+  return {
+    refs,
+    configs: MANUAL_SCENARIO_IMPORTS,
+    project,
+    scenario: project ? getActiveScenario(project) : null,
+    actions: {
+      setTopMeta,
+      downloadCsv,
+      readSpreadsheetToCsv,
+      markDownstreamStale,
+      renderAll,
+      schedulePersistAppData,
+      normalizeUserFacingError
+    }
+  };
 }
 
 function exportManualScenarioTemplate(kind) {
-  const config = MANUAL_SCENARIO_IMPORTS[kind];
-  const project = getActiveProject();
-  if (!project) {
-    setTopMeta("请先创建或选择项目。", "warn");
-    return;
-  }
-  const scenario = getActiveScenario(project);
-  if (!scenario) return;
-  downloadCsv(config.filename(project, scenario), config.rows(project));
-  setManualScenarioStatus(config, config.exportedMessage);
+  return manualScenarioFlow.exportManualScenarioTemplate({
+    ...manualScenarioFlowContext(),
+    kind
+  });
 }
 
 async function importManualScenarioTemplate(kind) {
-  const config = MANUAL_SCENARIO_IMPORTS[kind];
-  const project = getActiveProject();
-  const scenario = project ? getActiveScenario(project) : null;
-  if (!project || !scenario) {
-    setTopMeta("请先创建或选择项目。", "warn");
-    return;
-  }
-  if (scenario.locked) {
-    setScenarioImportMessage(config.lockedMessage, "error");
-    return;
-  }
-  const file = refs[config.fileInputRef]?.files?.[0];
-  if (!file) {
-    setManualScenarioStatus(config, "请先选择CSV或Excel文件。");
-    return;
-  }
-  try {
-    const { text } = await readSpreadsheetToCsv(file);
-    const parsed = config.parse(text, project);
-    if (!parsed.ok) {
-      setManualScenarioStatus(config, parsed.message);
-      setScenarioImportMessage(parsed.message, "error");
-      return;
-    }
-    scenario.config[config.modeKey] = "manual";
-    scenario.config[config.valuesKey] = parsed[config.parsedKey];
-    scenario.updatedAt = new Date().toISOString();
-    project.statuses["scenario-page"] = "in_progress";
-    markDownstreamStale(project, "scenario-page");
-    setScenarioImportMessage(config.successMessage(scenario), "success");
-    renderAll();
-    schedulePersistAppData();
-  } catch (error) {
-    const message = normalizeUserFacingError(error);
-    setManualScenarioStatus(config, message);
-    setScenarioImportMessage(message, "error");
-  }
+  return manualScenarioFlow.importManualScenarioTemplate({
+    ...manualScenarioFlowContext(),
+    kind
+  });
 }
 
 function syncHistoryExportButtons() {

@@ -58,6 +58,7 @@
 | `scenario-charts.js` | 全口径收入配置页参数可视化三张 ECharts 图的 option 和主题 token 构造 |
 | `scenario-form.js` | 全口径收入配置页表单读写和场景配置构造 |
 | `scenario-visual-data.js` | 全口径收入配置页参数可视化年度行数据构造 |
+| `manual-scenario-flow.js` | 交易策略、环境价值、综合费用三类逐年手工模板的导出、导入和状态回写流程 |
 | `compare-charts.js` | 多方案对比和敏感性分析图表 option、对比页主题 token 构造 |
 | `compare-page.js` | 多方案对比页变量列表、方案焦点列表和对比表格 HTML 构造 |
 | `history-page.js` | 历史电价展示页导出计划、KPI 和洞察文案构造 |
