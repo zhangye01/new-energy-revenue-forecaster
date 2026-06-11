@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   collectTopLevelFunctionSizesFromText,
   collectStylesheetHrefsFromHtml,
+  collectUnloadedCssFiles,
   findForbiddenAppPatternsFromText
 } = require("../scripts/architecture-check");
 
@@ -71,5 +72,14 @@ assert.deepEqual(collectStylesheetHrefsFromHtml([
   "<link rel=\"stylesheet\" href=\"./styles/responsive.css?v=1\">",
   "<link href=\"./styles.css?v=1\" rel=\"stylesheet\">"
 ].join("\n")), ["styles/theme.css", "styles/base.css", "styles/components/data-display.css", "styles/components/forms.css", "styles/components/buttons.css", "styles/components/workflow.css", "styles/components/auth.css", "styles/pages/home.css", "styles/pages/projects.css", "styles/pages/create.css", "styles/pages/help.css", "styles/pages/energy.css", "styles/pages/scenario.css", "styles/pages/results.css", "styles/pages/compare.css", "styles/pages/history.css", "styles/responsive.css", "styles.css"]);
+
+assert.deepEqual(collectUnloadedCssFiles([
+  "styles/theme.css",
+  "styles/components/forms.css",
+  "styles/pages/new-page.css"
+], [
+  "styles/theme.css",
+  "styles/components/forms.css"
+]), ["styles/pages/new-page.css"]);
 
 console.log("architecture check tests passed");

@@ -28,6 +28,15 @@ function listJsFiles(relativeDir) {
     .sort();
 }
 
+function listCssFiles(relativeDir) {
+  const dir = path.join(ROOT, relativeDir);
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir)
+    .filter((file) => file.endsWith(".css"))
+    .map((file) => `${relativeDir}/${file}`)
+    .sort();
+}
+
 function lineCount(relativePath) {
   return readText(relativePath).split(/\r?\n/).length;
 }
@@ -159,6 +168,27 @@ function assertCssLoadOrder() {
   }
 }
 
+function collectUnloadedCssFiles(cssFiles, loadedStylesheets) {
+  const loadedSet = new Set(loadedStylesheets);
+  return cssFiles.filter((cssFile) => !loadedSet.has(cssFile));
+}
+
+function assertAllGovernedCssFilesLoaded() {
+  const stylesheets = collectStylesheetHrefsFromHtml(readText("index.html"));
+  const governedCssFiles = [
+    "styles/theme.css",
+    "styles/base.css",
+    ...listCssFiles("styles/components"),
+    ...listCssFiles("styles/pages"),
+    "styles/responsive.css",
+    "styles.css"
+  ];
+  const unloaded = collectUnloadedCssFiles(governedCssFiles, stylesheets);
+  if (unloaded.length) {
+    fail(`CSS files are not loaded by index.html: ${unloaded.join(", ")}`);
+  }
+}
+
 function assertModulesHaveTests() {
   const modules = [
     ...listJsFiles("src/domain"),
@@ -266,6 +296,7 @@ function run() {
   assertNoForbiddenAppPatterns();
   assertStylesCssBudget();
   assertCssLoadOrder();
+  assertAllGovernedCssFilesLoaded();
   assertModulesHaveTests();
   assertModulesAreInSyntaxCheck();
   assertTestsUseDiscovery();
@@ -287,5 +318,6 @@ if (require.main === module) {
 module.exports = {
   collectTopLevelFunctionSizesFromText,
   collectStylesheetHrefsFromHtml,
+  collectUnloadedCssFiles,
   findForbiddenAppPatternsFromText
 };
