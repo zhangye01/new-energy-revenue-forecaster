@@ -22,6 +22,26 @@
     });
   }
 
+  function bindNavigationEvents(input = {}) {
+    const {
+      refs = {},
+      documentRef = null,
+      handlers = {}
+    } = input;
+    (refs.navItems || []).forEach((item) => {
+      on(item, "click", () => handlers.setActivePage?.(item.dataset.page));
+    });
+    documentRef?.querySelectorAll?.("[data-jump]").forEach((button) => {
+      on(button, "click", () => handlers.setActivePage?.(button.dataset.jump));
+    });
+    (refs.resultReportTabs || []).forEach((button) => {
+      on(button, "click", () => handlers.setResultReportView?.(button.dataset.resultView));
+    });
+    documentRef?.querySelectorAll?.(".result-disclosure").forEach((node) => {
+      on(node, "toggle", handlers.queueResultChartsResize);
+    });
+  }
+
   function bindShellEvents(input = {}) {
     const {
       refs = {},
@@ -198,9 +218,23 @@
     });
   }
 
+  function bindAppNavigationEvents(input = {}) {
+    bindNavigationEvents({
+      refs: input.refs,
+      documentRef: input.documentRef,
+      handlers: {
+        setActivePage: input.actions?.setActivePage,
+        setResultReportView: input.actions?.setResultReportView,
+        queueResultChartsResize: input.actions?.queueResultChartsResize
+      }
+    });
+  }
+
   return Object.freeze({
     bindShellEvents,
+    bindNavigationEvents,
     createAppShellHandlers,
-    bindAppShellEvents
+    bindAppShellEvents,
+    bindAppNavigationEvents
   });
 });

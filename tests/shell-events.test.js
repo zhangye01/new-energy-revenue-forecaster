@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  bindNavigationEvents,
   bindShellEvents,
   createAppShellHandlers
 } = require("../src/ui/shell-events");
@@ -100,6 +101,40 @@ assert.deepEqual(calls, [
   "keydown",
   "error",
   "rejection"
+]);
+
+const navCalls = [];
+const jumpButton = new FakeTarget({ jump: "results-page" });
+const disclosure = new FakeTarget();
+const navigationDocument = {
+  querySelectorAll(selector) {
+    if (selector === "[data-jump]") return [jumpButton];
+    if (selector === ".result-disclosure") return [disclosure];
+    return [];
+  }
+};
+const navigationRefs = {
+  navItems: [new FakeTarget({ page: "energy-page" })],
+  resultReportTabs: [new FakeTarget({ resultView: "detail" })]
+};
+bindNavigationEvents({
+  refs: navigationRefs,
+  documentRef: navigationDocument,
+  handlers: {
+    setActivePage: (pageId) => navCalls.push(`page:${pageId}`),
+    setResultReportView: (view) => navCalls.push(`result:${view}`),
+    queueResultChartsResize: () => navCalls.push("resize-result")
+  }
+});
+navigationRefs.navItems[0].dispatch("click");
+jumpButton.dispatch("click");
+navigationRefs.resultReportTabs[0].dispatch("click");
+disclosure.dispatch("toggle");
+assert.deepEqual(navCalls, [
+  "page:energy-page",
+  "page:results-page",
+  "result:detail",
+  "resize-result"
 ]);
 
 const hiddenTarget = new FakeTarget();

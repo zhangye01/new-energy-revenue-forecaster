@@ -5702,22 +5702,6 @@ function bindPolicyHistoryEvents() {
   });
 }
 
-function bindNavigationEvents() {
-  refs.navItems.forEach((item) => {
-    item.addEventListener("click", () => setActivePage(item.dataset.page));
-  });
-
-  document.querySelectorAll("[data-jump]").forEach((button) => {
-    button.addEventListener("click", () => setActivePage(button.dataset.jump));
-  });
-  refs.resultReportTabs?.forEach((button) => {
-    button.addEventListener("click", () => setResultReportView(button.dataset.resultView));
-  });
-  document.querySelectorAll(".result-disclosure").forEach((node) => {
-    node.addEventListener("toggle", queueResultChartsResize);
-  });
-}
-
 function bindCompareEvents() {
   comparePage.bindCompareEvents({
     refs,
@@ -5853,7 +5837,15 @@ function bindResultActionEvents() {
 function bindEvents() {
   bindShellEvents();
   bindPolicyHistoryEvents();
-  bindNavigationEvents();
+  shellEvents.bindAppNavigationEvents({
+    refs,
+    documentRef: typeof document !== "undefined" ? document : null,
+    actions: {
+      setActivePage,
+      setResultReportView,
+      queueResultChartsResize
+    }
+  });
   bindCompareEvents();
   bindCreateEnergyEvents();
   bindForecastScenarioEvents();
