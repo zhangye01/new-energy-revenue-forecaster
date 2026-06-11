@@ -9,6 +9,7 @@ const {
   buildCompareTableRowsHtml,
   buildScenarioFocusListHtml,
   buildSensitivityFactorListHtml,
+  createCompareEventHandlers,
   renderCompareReadyState,
   resetComparePageState,
   renderCompareNoProjectState,
@@ -75,6 +76,72 @@ assert.deepEqual(compareEventCalls, [
   "variable:price:true",
   "controls",
   "scenario:up"
+]);
+
+const handlerCalls = [];
+const sensitivitySettings = {
+  selectedKeys: ["hours"],
+  rangePercent: 20,
+  stepPercent: 5,
+  responseScalePercent: 100,
+  topN: 5
+};
+let compareView = "scenario";
+let activeFactor = "hours";
+let activeScenario = "";
+const compareHandlers = createCompareEventHandlers({
+  refs: {
+    compareSensitivityRange: { value: "30" },
+    compareSensitivityStep: { value: "10" },
+    compareSensitivityScale: { value: "80" },
+    compareSensitivityTopn: { value: "all" }
+  },
+  sensitivitySettings,
+  getCompareView: () => compareView,
+  setCompareView: (value) => {
+    compareView = value;
+  },
+  sanitizeCompareView: (value) => (value === "sensitivity" ? "sensitivity" : "scenario"),
+  getActiveSensitivityFactorKey: () => activeFactor,
+  setActiveSensitivityFactorKey: (value) => {
+    activeFactor = value;
+  },
+  setActiveCompareScenarioId: (value) => {
+    activeScenario = value;
+  },
+  sanitizeCompareSensitivitySettings: () => {
+    handlerCalls.push("sanitize");
+  },
+  renderCompareWorkspaceState: () => handlerCalls.push("workspace"),
+  renderCompare: () => handlerCalls.push("render"),
+  queueCompareChartsResize: () => handlerCalls.push("resize"),
+  schedulePersistAppData: () => handlerCalls.push("persist")
+});
+compareHandlers.changeCompareView("sensitivity");
+compareHandlers.changeCompareView("sensitivity");
+compareHandlers.selectSensitivityFactor("price");
+compareHandlers.toggleSensitivityVariable("hours", false);
+compareHandlers.toggleSensitivityVariable("price", true);
+compareHandlers.changeSensitivityControls();
+compareHandlers.selectScenarioFocus("up");
+assert.equal(compareView, "sensitivity");
+assert.equal(activeFactor, "price");
+assert.equal(activeScenario, "up");
+assert.deepEqual(sensitivitySettings.selectedKeys, ["price"]);
+assert.equal(sensitivitySettings.rangePercent, 30);
+assert.equal(sensitivitySettings.stepPercent, 10);
+assert.equal(sensitivitySettings.responseScalePercent, 80);
+assert.equal(sensitivitySettings.topN, "all");
+assert.deepEqual(handlerCalls, [
+  "workspace",
+  "resize",
+  "persist",
+  "render",
+  "render",
+  "render",
+  "sanitize",
+  "render",
+  "render"
 ]);
 
 const availabilityView = buildCompareAvailabilityView({

@@ -171,6 +171,64 @@
     }
   }
 
+  function createCompareEventHandlers(input = {}) {
+    const {
+      refs = {},
+      sensitivitySettings = {},
+      getCompareView = () => "",
+      setCompareView = () => {},
+      sanitizeCompareView = (value) => value,
+      getActiveSensitivityFactorKey = () => "",
+      setActiveSensitivityFactorKey = () => {},
+      setActiveCompareScenarioId = () => {},
+      sanitizeCompareSensitivitySettings = () => sensitivitySettings,
+      renderCompareWorkspaceState = () => {},
+      renderCompare = () => {},
+      queueCompareChartsResize = () => {},
+      schedulePersistAppData = () => {}
+    } = input;
+
+    return {
+      changeCompareView: (rawView) => {
+        const nextView = sanitizeCompareView(rawView);
+        if (getCompareView() === nextView) return;
+        setCompareView(nextView);
+        renderCompareWorkspaceState();
+        queueCompareChartsResize();
+        schedulePersistAppData();
+      },
+      selectSensitivityFactor: (key) => {
+        setActiveSensitivityFactorKey(key);
+        renderCompare();
+      },
+      toggleSensitivityVariable: (key, checked) => {
+        const current = new Set(sensitivitySettings.selectedKeys);
+        if (checked) {
+          current.add(key);
+        } else {
+          current.delete(key);
+        }
+        sensitivitySettings.selectedKeys = Array.from(current);
+        if (!sensitivitySettings.selectedKeys.includes(getActiveSensitivityFactorKey())) {
+          setActiveSensitivityFactorKey(sensitivitySettings.selectedKeys[0] || "");
+        }
+        renderCompare();
+      },
+      changeSensitivityControls: () => {
+        sensitivitySettings.rangePercent = Number(refs.compareSensitivityRange?.value) || sensitivitySettings.rangePercent;
+        sensitivitySettings.stepPercent = Number(refs.compareSensitivityStep?.value) || sensitivitySettings.stepPercent;
+        sensitivitySettings.responseScalePercent = Number(refs.compareSensitivityScale?.value) || sensitivitySettings.responseScalePercent;
+        sensitivitySettings.topN = refs.compareSensitivityTopn?.value === "all" ? "all" : Number(refs.compareSensitivityTopn?.value);
+        sanitizeCompareSensitivitySettings();
+        renderCompare();
+      },
+      selectScenarioFocus: (scenarioId) => {
+        setActiveCompareScenarioId(scenarioId);
+        renderCompare();
+      }
+    };
+  }
+
   function resetComparePageState(input = {}) {
     const {
       refs = {},
@@ -389,6 +447,7 @@
     buildCompareTableRowsHtml,
     buildScenarioFocusListHtml,
     buildSensitivityFactorListHtml,
+    createCompareEventHandlers,
     renderCompareReadyState,
     resetComparePageState,
     renderCompareNoProjectState,

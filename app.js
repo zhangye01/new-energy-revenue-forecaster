@@ -5705,45 +5705,27 @@ function bindPolicyHistoryEvents() {
 function bindCompareEvents() {
   comparePage.bindCompareEvents({
     refs,
-    handlers: {
-      changeCompareView: (rawView) => {
-        const nextView = sanitizeCompareView(rawView);
-        if (appState.compareView === nextView) return;
+    handlers: comparePage.createCompareEventHandlers({
+      refs,
+      sensitivitySettings: compareSensitivitySettings,
+      getCompareView: () => appState.compareView,
+      setCompareView: (nextView) => {
         appState.compareView = nextView;
-        renderCompareWorkspaceState();
-        queueCompareChartsResize();
-        schedulePersistAppData();
       },
-      selectSensitivityFactor: (key) => {
+      sanitizeCompareView,
+      getActiveSensitivityFactorKey: () => activeSensitivityFactorKey,
+      setActiveSensitivityFactorKey: (key) => {
         activeSensitivityFactorKey = key;
-        renderCompare();
       },
-      toggleSensitivityVariable: (key, checked) => {
-        const current = new Set(compareSensitivitySettings.selectedKeys);
-        if (checked) {
-          current.add(key);
-        } else {
-          current.delete(key);
-        }
-        compareSensitivitySettings.selectedKeys = Array.from(current);
-        if (!compareSensitivitySettings.selectedKeys.includes(activeSensitivityFactorKey)) {
-          activeSensitivityFactorKey = compareSensitivitySettings.selectedKeys[0] || "";
-        }
-        renderCompare();
-      },
-      changeSensitivityControls: () => {
-        compareSensitivitySettings.rangePercent = Number(refs.compareSensitivityRange?.value) || compareSensitivitySettings.rangePercent;
-        compareSensitivitySettings.stepPercent = Number(refs.compareSensitivityStep?.value) || compareSensitivitySettings.stepPercent;
-        compareSensitivitySettings.responseScalePercent = Number(refs.compareSensitivityScale?.value) || compareSensitivitySettings.responseScalePercent;
-        compareSensitivitySettings.topN = refs.compareSensitivityTopn?.value === "all" ? "all" : Number(refs.compareSensitivityTopn?.value);
-        sanitizeCompareSensitivitySettings();
-        renderCompare();
-      },
-      selectScenarioFocus: (scenarioId) => {
+      setActiveCompareScenarioId: (scenarioId) => {
         activeCompareScenarioId = scenarioId;
-        renderCompare();
-      }
-    }
+      },
+      sanitizeCompareSensitivitySettings,
+      renderCompareWorkspaceState,
+      renderCompare,
+      queueCompareChartsResize,
+      schedulePersistAppData
+    })
   });
 }
 
