@@ -39,6 +39,13 @@ assert.equal(storage.getItem("theme"), null);
 const documentRef = createFakeDocument();
 assert.equal(documentRef.querySelector("#app").selector, "#app");
 assert.deepEqual(Array.from(documentRef.querySelectorAll(".item")), []);
+const fakeElement = documentRef.createElement("div");
+fakeElement.style.setProperty("--offset", "1px");
+fakeElement.style.removeProperty("--offset");
+fakeElement.setAttribute("aria-hidden", "true");
+assert.equal(fakeElement.getAttribute("aria-hidden"), "true");
+fakeElement.removeAttribute("aria-hidden");
+assert.equal(fakeElement.getAttribute("aria-hidden"), null);
 
 const scriptSources = [
   {

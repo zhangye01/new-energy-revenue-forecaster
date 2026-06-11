@@ -5618,9 +5618,9 @@ function bindShellEvents() {
 }
 
 function bindPolicyHistoryEvents() {
-  historyPageView.bindPolicyHistoryEvents({
+  historyPage.bindPolicyHistoryEvents({
     refs,
-    handlers: historyPageView.createPolicyHistoryEventHandlers({
+    handlers: historyPage.createPolicyHistoryEventHandlers({
       getPolicyFilters: () => appState.policyFilters,
       setPolicyFilters: (policyFilters) => {
         appState.policyFilters = policyFilters;
@@ -5666,9 +5666,9 @@ function bindCompareEvents() {
 }
 
 function bindCreateEnergyEvents() {
-  energyWorkspaceView.bindCreateEnergyEvents({
+  energyWorkspace.bindCreateEnergyEvents({
     refs,
-    handlers: energyWorkspaceView.createEnergyWorkspaceEventHandlers({
+    handlers: energyWorkspace.createEnergyWorkspaceEventHandlers({
       getActiveProject,
       isProjectReady: isProjectCreateCompleted,
       hasHistoryReadiness: hasEnergyHistoryEntryReadiness,
@@ -5693,7 +5693,7 @@ function bindCreateEnergyEvents() {
 }
 
 function bindForecastScenarioEvents() {
-  scenarioFormView.bindForecastScenarioEvents({
+  scenarioForm.bindForecastScenarioEvents({
     refs,
     handlers: {
       generateForecastRun,
@@ -5719,7 +5719,7 @@ function bindForecastScenarioEvents() {
 }
 
 function bindScenarioDerivedFieldEvents() {
-  scenarioFormView.bindScenarioDerivedFieldEvents({
+  scenarioForm.bindScenarioDerivedFieldEvents({
     querySelector: (selector) => document.querySelector(selector),
     handlers: {
       syncScenarioFieldLocks,
@@ -5730,7 +5730,7 @@ function bindScenarioDerivedFieldEvents() {
 }
 
 function bindResultActionEvents() {
-  resultPageView.bindResultActionEvents({
+  resultPage.bindResultActionEvents({
     refs,
     handlers: {
       runCalculation,

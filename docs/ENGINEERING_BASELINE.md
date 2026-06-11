@@ -18,6 +18,7 @@
 | 静态完整性 | `index.html` 引用的本地脚本、样式、图片和 CSS 资源必须存在，DOM id 不允许重复 |
 | 脚本契约 | `app.js` 使用的 `window.NE_*` 全局依赖必须由已加载脚本导出 |
 | 模块加载 | `index.html` 中非 vendor、非 `app.js` 的浏览器脚本必须能按页面顺序执行并发布 `window.NE_*` |
+| 应用启动 | `index.html` 中的业务脚本和 `app.js` 必须能在浏览器沙箱中完成初始化，不允许同步或异步启动异常 |
 | 页面骨架 | 核心页面、关键 DOM 节点和脚本顺序必须通过 smoke 契约检查 |
 | 静态服务 | `index.html` 和本地资源必须能通过临时 HTTP 静态服务访问 |
 | CI 入口 | `.github/workflows/` 保持一个检查 workflow，避免重复跑同一套门禁 |
@@ -62,9 +63,10 @@ npm run check
 3. 架构守护检查：`scripts/architecture-check.js` 检查分层、脚本顺序、`window.NE_*` 全局依赖导出契约、`app.js` 行数和函数规模、`styles.css` 行数、CSS 加载顺序。
 4. 静态页面完整性检查：`scripts/static-check.js` 检查 `index.html` / 所有 CSS 入口的本地资源引用、重复 id 和标题结构。
 5. 浏览器模块加载 smoke：`scripts/module-load-smoke.js` 在轻量浏览器沙箱中按 `index.html` 顺序执行配置、运行时、领域和 UI 模块。
-6. 页面 smoke 契约检查：`scripts/smoke-check.js` 检查核心页面、关键 DOM 节点和启动脚本顺序。
-7. 静态服务 smoke 检查：`scripts/serve-smoke.js` 启动临时 HTTP 服务，检查 `index.html` 和本地资源能被正常访问。
-8. 发布仓库卫生检查：`scripts/release-check.js` 检查被 Git 追踪的本地缓存、个人绝对路径和高置信度密钥格式。
+6. 应用启动 smoke：`scripts/app-bootstrap-smoke.js` 加载业务脚本和 `app.js`，验证初始化阶段没有同步或异步异常。
+7. 页面 smoke 契约检查：`scripts/smoke-check.js` 检查核心页面、关键 DOM 节点和启动脚本顺序。
+8. 静态服务 smoke 检查：`scripts/serve-smoke.js` 启动临时 HTTP 服务，检查 `index.html` 和本地资源能被正常访问。
+9. 发布仓库卫生检查：`scripts/release-check.js` 检查被 Git 追踪的本地缓存、个人绝对路径和高置信度密钥格式。
 
 如果改动涉及页面交互，还需要按 [最小回归检查清单](./SMOKE_CHECKLIST.md) 做人工烟测或浏览器烟测。
 
@@ -85,5 +87,5 @@ npm run check
 1. 拆 `scenario-page` / 全口径收入配置页控制逻辑。
 2. 拆事件绑定，把页面事件按模块组织。
 3. 继续迁出 `app.js` 中的图表 option 和报表展示数据。
-4. 把模块加载 smoke 和静态服务 smoke 继续扩展为真实浏览器关键路径 smoke。
+4. 把模块加载 smoke、应用启动 smoke 和静态服务 smoke 继续扩展为真实浏览器关键路径 smoke。
 5. 当模块数量继续增长时，再评估 Vite/TypeScript，不提前引入复杂构建。

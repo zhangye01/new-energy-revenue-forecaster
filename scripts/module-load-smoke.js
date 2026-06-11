@@ -36,6 +36,18 @@ function createMemoryStorage() {
   };
 }
 
+function createFakeStyleDeclaration() {
+  const values = {};
+  return {
+    setProperty(name, value) {
+      values[name] = String(value);
+    },
+    removeProperty(name) {
+      delete values[name];
+    }
+  };
+}
+
 function createFakeElement(selector = "") {
   const attributes = {};
   const element = {
@@ -53,7 +65,7 @@ function createFakeElement(selector = "") {
       }
     },
     dataset: {},
-    style: {},
+    style: createFakeStyleDeclaration(),
     value: "",
     checked: false,
     disabled: false,
@@ -68,8 +80,12 @@ function createFakeElement(selector = "") {
     },
     remove() {},
     focus() {},
+    reset() {},
     setAttribute(name, value) {
       attributes[name] = String(value);
+    },
+    removeAttribute(name) {
+      delete attributes[name];
     },
     getAttribute(name) {
       return Object.prototype.hasOwnProperty.call(attributes, name) ? attributes[name] : null;
@@ -79,6 +95,9 @@ function createFakeElement(selector = "") {
     },
     querySelectorAll() {
       return [];
+    },
+    closest() {
+      return null;
     }
   };
   return element;
@@ -220,6 +239,7 @@ module.exports = {
   createFakeDocument,
   createFakeElement,
   createMemoryStorage,
+  createFakeStyleDeclaration,
   executeBrowserModuleScripts,
   executeBrowserModuleSources,
   isBrowserModuleScript

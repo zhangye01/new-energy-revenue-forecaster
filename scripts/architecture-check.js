@@ -309,6 +309,18 @@ function assertModuleLoadSmokeCheckIsRequired() {
   }
 }
 
+function assertAppBootstrapSmokeCheckIsRequired() {
+  const packageJson = JSON.parse(readText("package.json"));
+  const bootstrapScript = packageJson.scripts?.["check:bootstrap"] || "";
+  const checkScript = packageJson.scripts?.check || "";
+  if (bootstrapScript !== "node scripts/app-bootstrap-smoke.js") {
+    fail("npm run check:bootstrap must use scripts/app-bootstrap-smoke.js");
+  }
+  if (!checkScript.includes("npm run check:bootstrap")) {
+    fail("npm run check must include npm run check:bootstrap");
+  }
+}
+
 function assertServeSmokeCheckIsRequired() {
   const packageJson = JSON.parse(readText("package.json"));
   const serveScript = packageJson.scripts?.["check:serve"] || "";
@@ -369,6 +381,7 @@ function run() {
   assertReleaseCheckIsRequired();
   assertSmokeCheckIsRequired();
   assertModuleLoadSmokeCheckIsRequired();
+  assertAppBootstrapSmokeCheckIsRequired();
   assertServeSmokeCheckIsRequired();
   assertBrowserModulesAreLoaded();
   assertAppWindowGlobalsAreExported();
