@@ -2868,32 +2868,12 @@ function syncCreateStorageFieldsUi() {
 function resetCreateProjectFormForNew() {
   if (!refs.createProjectForm) return;
   createFormSyncedProjectId = null;
-  refs.createProjectForm.reset();
-  const projectName = document.querySelector("#create-project-name");
-  const assetType = document.querySelector("#create-asset-type");
-  const siteType = document.querySelector("#create-site-type");
-  const hasStorage = document.querySelector("#create-has-storage");
-  const storagePower = refs.createStoragePowerMw;
-  const storageDuration = refs.createStorageDurationH;
-  const storageNote = refs.createStorageNote;
-  const capacity = document.querySelector("#create-capacity-mw");
-  const startYear = document.querySelector("#create-start-year");
-  const forecastYears = document.querySelector("#create-forecast-years");
-  const note = document.querySelector("#create-note");
-  if (projectName) projectName.value = "";
-  if (refs.createProvince) refs.createProvince.value = "";
-  if (assetType) assetType.value = "";
-  if (siteType) siteType.value = "";
-  if (hasStorage) hasStorage.value = "";
-  if (storagePower) storagePower.value = "";
-  if (storageDuration) storageDuration.value = "";
-  if (storageNote) storageNote.value = "";
-  if (capacity) capacity.value = "";
-  if (startYear) startYear.value = "";
-  if (forecastYears) forecastYears.value = "";
-  syncCreateStorageFieldsUi();
-  if (note) note.value = "";
-  setCreateSaveMessage("当前为新建模板，填写后点击保存。", "info");
+  energyWorkspace.resetCreateProjectFormForNew({
+    refs,
+    documentRef: document,
+    syncCreateStorageFields: syncCreateStorageFieldsUi,
+    setCreateSaveMessage
+  });
 }
 
 function createEmptyWorkspaceProject() {

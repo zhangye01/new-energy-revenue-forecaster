@@ -249,6 +249,38 @@
     return true;
   }
 
+  function resetCreateProjectFormForNew(input = {}) {
+    const {
+      refs = {},
+      documentRef = null,
+      syncCreateStorageFields = () => {},
+      setCreateSaveMessage = () => {}
+    } = input;
+    if (!refs.createProjectForm) return false;
+    refs.createProjectForm.reset?.();
+    applyCreateProjectFormValues({
+      refs,
+      documentRef,
+      values: {
+        projectName: "",
+        province: "",
+        assetType: "",
+        siteType: "",
+        hasStorage: "",
+        storagePower: "",
+        storageDuration: "",
+        storageNote: "",
+        capacity: "",
+        startYear: "",
+        forecastYears: "",
+        note: ""
+      }
+    });
+    syncCreateStorageFields();
+    setCreateSaveMessage("当前为新建模板，填写后点击保存。", "info");
+    return true;
+  }
+
   function applyCreateStorageFieldsState(input = {}) {
     const { refs = {} } = input;
     const storageEnabled = refs.createHasStorage?.value === "yes";
@@ -588,6 +620,7 @@
     collectCompleteAnnualEnergyRows,
     createEnergyWorkspaceEventHandlers,
     readCreateProjectFormRawInput,
+    resetCreateProjectFormForNew,
     shouldRefreshEnergyMessage,
     resolveModeLabel
   });

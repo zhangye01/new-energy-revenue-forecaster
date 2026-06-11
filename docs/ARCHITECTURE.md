@@ -48,7 +48,7 @@
 | `project-list.js` | 我的项目列表、工作区和项目卡片 HTML 构造 |
 | `policy-panel.js` | 首页地区政策筛选 view model 和政策卡片 HTML 构造 |
 | `province-defaults.js` | 省份默认参数展示 view model、选择器排序、消息文案和参数卡片 HTML 构造 |
-| `energy-workspace.js` | 结算电量配置页工作台 view model、状态文案、按钮禁用和模板状态计算 |
+| `energy-workspace.js` | 结算电量配置页工作台 view model、创建项目表单读写/清空、状态文案、按钮禁用和模板状态计算 |
 | `chart-lifecycle.js` | ECharts 实例存活判断、批量 resize、窗口 resize 绑定和双帧延迟刷新 |
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
 | `result-page.js` | 基准结果总览报告文案、指标卡、假设说明和明细表 HTML 构造 |

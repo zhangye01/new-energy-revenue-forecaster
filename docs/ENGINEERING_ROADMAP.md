@@ -7,7 +7,7 @@
 | 项 | 当前状态 |
 | --- | --- |
 | 发布形态 | GitHub Pages 静态部署，无构建工具 |
-| 主控文件 | `app.js` 低于 5725 行门槛，主控继续收敛为启动与调度层 |
+| 主控文件 | `app.js` 低于 5710 行门槛，主控继续收敛为启动与调度层 |
 | 样式文件 | 主题令牌已拆入 `styles/theme.css`，壳层基础样式已拆入 `styles/base.css`，表单、按钮、流程条、登录设置、指标卡、表格等公共组件已拆入 `styles/components/`，首页、项目列表页、创建项目页、帮助页、结算电量配置页、全口径收入配置页、基准结果总览、多方案对比页和历史电价页样式已拆入 `styles/pages/`，跨页面移动端兜底已拆入 `styles/responsive.css`；`styles.css` 低于 20 行门槛，后续新增样式需优先复用或分区 |
 | 自动检查 | `npm run check` 覆盖语法、测试、架构、脚本全局依赖契约、静态页面、浏览器模块加载、应用启动 smoke、smoke 契约、静态服务访问和发布卫生 |
 | 业务测试 | 核心计算、导入导出、图表 option、页面 view model 已有 Node 测试 |
@@ -19,7 +19,7 @@
 
 | 批次 | 目标 | 交付物 | 验收 |
 | --- | --- | --- | --- |
-| S1 | 给 `app.js` 留出维护缓冲 | 已迁出项目 seed builder、创建项目表单同步、创建项目表单校验、项目记录工厂、项目展示辅助、主题控制、电量状态辅助、场景管理、对比页、预测版本列表、测算前置校验、结算电量展示、电量派生状态、多组事件绑定、图表生命周期辅助和应用事件绑定编排 | `app.js` 已降到 5725 行以内，单函数低于 75 行 |
+| S1 | 给 `app.js` 留出维护缓冲 | 已迁出项目 seed builder、创建项目表单同步、创建项目表单校验、创建项目表单清空、项目记录工厂、项目展示辅助、主题控制、电量状态辅助、场景管理、对比页、预测版本列表、测算前置校验、结算电量展示、电量派生状态、多组事件绑定、图表生命周期辅助和应用事件绑定编排 | `app.js` 已降到 5710 行以内，单函数低于 75 行 |
 | S2 | 提高页面回归可靠性 | 已补浏览器模块加载 smoke、应用启动 smoke 和静态服务访问 smoke，后续扩展为关键流程浏览器 smoke 方案 | 页面静态资源可通过 HTTP 服务访问；非 vendor、非 `app.js` 的浏览器模块可按 `index.html` 顺序执行；`app.js` 初始化不允许同步或异步异常；登录、项目、导入、预测、测算主链路后续可重复验证 |
 | S3 | 固化业务变更入口 | 为全口径收入、结果总览、多方案对比补充更多黄金样例 | 业务口径变化时测试先失败，避免只靠人工看页面 |
 | S4 | 控制样式增长 | 已拆出 `styles/theme.css`、`styles/base.css`、`styles/components/data-display.css`、`styles/components/forms.css`、`styles/components/buttons.css`、`styles/components/workflow.css`、`styles/components/auth.css`、`styles/pages/home.css`、`styles/pages/projects.css`、`styles/pages/create.css`、`styles/pages/help.css`、`styles/pages/energy.css`、`styles/pages/scenario.css`、`styles/pages/results.css`、`styles/pages/compare.css`、`styles/pages/history.css` 与 `styles/responsive.css`，并给 `styles.css` 增加 20 行架构门禁和 CSS 加载顺序门禁 | 新页面和公共组件样式有明确归属，减少选择器互相污染 |

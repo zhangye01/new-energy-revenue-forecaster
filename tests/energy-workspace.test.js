@@ -14,6 +14,7 @@ const {
   collectCompleteAnnualEnergyRows,
   createEnergyWorkspaceEventHandlers,
   readCreateProjectFormRawInput,
+  resetCreateProjectFormForNew,
   resolveModeLabel,
   shouldRefreshEnergyMessage
 } = require("../src/ui/energy-workspace");
@@ -44,6 +45,10 @@ class FakeTarget {
 
   removeAttribute(name) {
     delete this[name];
+  }
+
+  reset() {
+    this.resetCalled = true;
   }
 }
 
@@ -307,6 +312,27 @@ assert.equal(createFormRefs.createStoragePowerMw.value, "64");
 assert.equal(createFormTargets["#create-forecast-years"].value, "25");
 assert.equal(createFormTargets["#create-note"].value, "示例项目");
 assert.equal(applyCreateProjectFormValues(), false);
+
+const resetCalls = [];
+assert.equal(resetCreateProjectFormForNew({
+  refs: {
+    ...createFormRefs,
+    createProjectForm: new FakeTarget()
+  },
+  documentRef: new FakeDocument(createFormTargets),
+  syncCreateStorageFields: () => resetCalls.push("sync-storage"),
+  setCreateSaveMessage: (text, tone) => resetCalls.push(`${tone}:${text}`)
+}), true);
+assert.equal(createFormTargets["#create-project-name"].value, "");
+assert.equal(createFormRefs.createProvince.value, "");
+assert.equal(createFormTargets["#create-has-storage"].value, "");
+assert.equal(createFormRefs.createStoragePowerMw.value, "");
+assert.equal(createFormTargets["#create-note"].value, "");
+assert.deepEqual(resetCalls, [
+  "sync-storage",
+  "info:当前为新建模板，填写后点击保存。"
+]);
+assert.equal(resetCreateProjectFormForNew(), false);
 
 const storageRefs = {
   createHasStorage: new FakeTarget(),
