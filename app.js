@@ -1905,33 +1905,33 @@ function syncCreateWorkspaceStepVisibility(pageId) {
   refs.createStepEnergy.hidden = false;
 }
 
-function setActivePage(pageId) {
-  if (pageId === "province-page" || pageId === "spot-page") {
-    pageId = "scenario-page";
-  }
-  if (REQUIRES_LOGIN.has(pageId) && !appState.auth.loggedIn) {
-    pageId = "home-page";
-  }
-  if (REQUIRES_PROJECT.has(pageId) && !getActiveProject()) {
-    setTopMeta("请先创建项目或在“我的项目”里选择一个项目");
-    pageId = "projects-page";
-  }
-  closeOverviewPolicyDetail();
+function resolveActivePageRequest(pageId) {
+  const request = shellEvents.resolveActivePageRequest({
+    pageId,
+    aliases: { "province-page": "scenario-page", "spot-page": "scenario-page" },
+    requiresLogin: REQUIRES_LOGIN,
+    requiresProject: REQUIRES_PROJECT,
+    loggedIn: appState.auth.loggedIn,
+    hasProject: Boolean(getActiveProject()),
+    projectRequiredMessage: "请先创建项目或在“我的项目”里选择一个项目"
+  });
+  if (request.topMetaMessage) setTopMeta(request.topMetaMessage);
+  return request.pageId;
+}
 
-  appState.activePage = pageId;
+function syncActivePageDom(pageId) {
   const visiblePageId = resolveVisiblePageId(pageId);
   refs.topTitle.textContent = PAGE_TITLES[pageId] || "新能源平台";
-
   refs.navItems.forEach((item) => {
     item.classList.toggle("active", item.dataset.page === pageId);
   });
-
   refs.pages.forEach((page) => {
     page.classList.toggle("active", page.id === visiblePageId);
   });
-
   syncCreateWorkspaceStepVisibility(pageId);
+}
 
+function runActivePageEntryEffects(pageId) {
   if (pageId === "home-page") {
     renderOverviewCarousel();
     startOverviewAutoplay();
@@ -1939,22 +1939,28 @@ function setActivePage(pageId) {
   } else {
     stopOverviewAutoplay();
   }
-
   if (pageId === "create-page" || pageId === "energy-page") {
     scrollCreateWorkspaceToStep(pageId);
   }
+}
 
-  renderAll();
-  if (pageId === "scenario-page") {
-    queueScenarioVisualResize();
-  }
+function queueActivePageCharts(pageId) {
+  if (pageId === "scenario-page") queueScenarioVisualResize();
   if (pageId === "history-page") {
     queueHistoryChartsResize();
     queueHistoryChartsRefresh();
   }
-  if (pageId === "compare-page") {
-    queueCompareChartsResize();
-  }
+  if (pageId === "compare-page") queueCompareChartsResize();
+}
+
+function setActivePage(pageId) {
+  pageId = resolveActivePageRequest(pageId);
+  closeOverviewPolicyDetail();
+  appState.activePage = pageId;
+  syncActivePageDom(pageId);
+  runActivePageEntryEffects(pageId);
+  renderAll();
+  queueActivePageCharts(pageId);
 }
 
 function refreshNavigationAvailability() {

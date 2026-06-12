@@ -42,6 +42,27 @@
     });
   }
 
+  function hasPageRequirement(requiredPages, pageId) {
+    if (!pageId) return false;
+    if (requiredPages && typeof requiredPages.has === "function") return requiredPages.has(pageId);
+    return Array.isArray(requiredPages) && requiredPages.includes(pageId);
+  }
+
+  function resolveActivePageRequest(input = {}) {
+    const aliases = input.aliases || {};
+    let pageId = aliases[input.pageId] || input.pageId;
+    if (hasPageRequirement(input.requiresLogin, pageId) && !input.loggedIn) {
+      pageId = input.loginFallbackPage || "home-page";
+    }
+    if (hasPageRequirement(input.requiresProject, pageId) && !input.hasProject) {
+      return {
+        pageId: input.projectFallbackPage || "projects-page",
+        topMetaMessage: input.projectRequiredMessage || ""
+      };
+    }
+    return { pageId, topMetaMessage: "" };
+  }
+
   function bindShellEvents(input = {}) {
     const {
       refs = {},
@@ -233,6 +254,7 @@
   return Object.freeze({
     bindShellEvents,
     bindNavigationEvents,
+    resolveActivePageRequest,
     createAppShellHandlers,
     bindAppShellEvents,
     bindAppNavigationEvents

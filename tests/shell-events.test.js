@@ -4,7 +4,8 @@ const assert = require("node:assert/strict");
 const {
   bindNavigationEvents,
   bindShellEvents,
-  createAppShellHandlers
+  createAppShellHandlers,
+  resolveActivePageRequest
 } = require("../src/ui/shell-events");
 
 class FakeTarget {
@@ -136,6 +137,30 @@ assert.deepEqual(navCalls, [
   "result:detail",
   "resize-result"
 ]);
+
+assert.deepEqual(resolveActivePageRequest({
+  pageId: "spot-page",
+  aliases: { "spot-page": "scenario-page" },
+  requiresLogin: new Set(["scenario-page"]),
+  requiresProject: new Set(["scenario-page"]),
+  loggedIn: true,
+  hasProject: true
+}), { pageId: "scenario-page", topMetaMessage: "" });
+assert.deepEqual(resolveActivePageRequest({
+  pageId: "results-page",
+  requiresLogin: ["results-page"],
+  requiresProject: ["results-page"],
+  loggedIn: false,
+  hasProject: true
+}), { pageId: "home-page", topMetaMessage: "" });
+assert.deepEqual(resolveActivePageRequest({
+  pageId: "results-page",
+  requiresLogin: new Set(["results-page"]),
+  requiresProject: new Set(["results-page"]),
+  loggedIn: true,
+  hasProject: false,
+  projectRequiredMessage: "请选择项目"
+}), { pageId: "projects-page", topMetaMessage: "请选择项目" });
 
 const hiddenTarget = new FakeTarget();
 hiddenTarget.hidden = true;
