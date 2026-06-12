@@ -1,7 +1,24 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { bindAppEvents } = require("../src/ui/app-event-bindings");
+const { bindAppEvents, createActionRegistry } = require("../src/ui/app-event-bindings");
+
+const groupedActions = createActionRegistry({
+  shell: {
+    open: () => "open"
+  },
+  history: {
+    render: () => "render"
+  },
+  empty: null
+});
+assert.equal(groupedActions.open(), "open");
+assert.equal(groupedActions.render(), "render");
+assert.deepEqual(Object.keys(groupedActions), ["open", "render"]);
+assert.throws(() => createActionRegistry({
+  first: { save: () => "a" },
+  second: { save: () => "b" }
+}), /事件动作重复注册：second\.save/);
 
 const calls = [];
 const refs = {

@@ -10,6 +10,20 @@
     root.window.NE_APP_EVENT_BINDINGS = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
+  function createActionRegistry(groups = {}) {
+    const registry = {};
+    Object.entries(groups).forEach(([groupName, group]) => {
+      if (!group || typeof group !== "object") return;
+      Object.entries(group).forEach(([name, handler]) => {
+        if (Object.prototype.hasOwnProperty.call(registry, name)) {
+          throw new Error(`事件动作重复注册：${groupName}.${name}`);
+        }
+        registry[name] = handler;
+      });
+    });
+    return registry;
+  }
+
   function bindAppEvents(input = {}) {
     const {
       refs = {},
@@ -163,6 +177,7 @@
   }
 
   return Object.freeze({
-    bindAppEvents
+    bindAppEvents,
+    createActionRegistry
   });
 });
