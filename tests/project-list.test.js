@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const {
   buildProjectListItem,
+  createProjectListItemViewBuilder,
   buildProjectCardHtml,
   buildProjectListHtml,
   buildProjectListView,
@@ -86,6 +87,39 @@ const draftListItem = buildProjectListItem({ id: "draft", name: "草稿" });
 assert.equal(draftListItem.period, "待创建");
 assert.equal(draftListItem.metaLine, "基础信息待填写 / 风光类型待选 / 陆海类型待选");
 assert.equal(draftListItem.runtimeLine, "场景：未配置 | 电价版本：未生成");
+
+const listItemBuilder = createProjectListItemViewBuilder({
+  isProjectCreateCompleted: (item) => item.ready,
+  getActiveRun: () => ({ algorithmVersion: "v2" }),
+  getActiveScenario: () => ({ name: "测算场景" }),
+  statusMapTemplate: () => ({ "create-page": "not_started" }),
+  getForecastPeriodDisplayRange: () => "2026-2056",
+  getProvinceName: () => "江苏",
+  getStorageConfigText: () => "配储"
+});
+assert.deepEqual(listItemBuilder({
+  id: "ready",
+  name: "已建项目",
+  ready: true,
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore",
+  statuses: { "create-page": "completed" }
+}), {
+  id: "ready",
+  name: "已建项目",
+  period: "2026-2056",
+  metaLine: "江苏 / 风电 / 海上 / 配储",
+  runtimeLine: "场景：测算场景 | 电价版本：v2",
+  statuses: { "create-page": "completed" }
+});
+assert.equal(listItemBuilder({
+  id: "draft",
+  name: "草稿项目",
+  ready: false,
+  assetType: "photovoltaic",
+  siteType: "onshore"
+}).metaLine, "基础信息待填写 / 风光类型待选 / 陆海类型待选");
 
 const card = buildProjectCardHtml(project, {}, { workflowPages, pageTitles, statusText });
 assert.match(card, /江苏&lt;海上&gt;风电/);

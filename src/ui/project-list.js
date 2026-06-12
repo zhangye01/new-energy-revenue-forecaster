@@ -51,6 +51,32 @@
     };
   }
 
+  function createProjectListItemViewBuilder(input = {}) {
+    const {
+      isProjectCreateCompleted = () => false,
+      getActiveRun = () => null,
+      getActiveScenario = () => null,
+      statusMapTemplate = () => ({}),
+      getForecastPeriodDisplayRange = () => "待创建",
+      getProvinceName = () => "",
+      getStorageConfigText = () => ""
+    } = input;
+    return (project) => {
+      const createReady = isProjectCreateCompleted(project);
+      return buildProjectListItem(project, {
+        activeRun: getActiveRun(project),
+        scenario: getActiveScenario(project),
+        statuses: project.statuses || statusMapTemplate(),
+        createReady,
+        forecastPeriod: createReady ? getForecastPeriodDisplayRange(project) : "待创建",
+        provinceName: getProvinceName(project.province),
+        assetTypeText: project.assetType === "wind" ? "风电" : "光伏",
+        siteTypeText: project.siteType === "offshore" ? "海上" : "陆上",
+        storageText: getStorageConfigText(project)
+      });
+    };
+  }
+
   function buildProjectCardHtml(project, options = {}, workflow = {}) {
     const {
       showDuplicate = true,
@@ -231,6 +257,7 @@
 
   return Object.freeze({
     buildProjectListItem,
+    createProjectListItemViewBuilder,
     buildProjectCardHtml,
     buildProjectListHtml,
     buildProjectListView,

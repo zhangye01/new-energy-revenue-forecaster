@@ -2823,20 +2823,15 @@ function renderProjects() {
   const view = projectListView.buildProjectListView({
     projects: accountProjects,
     isNewWorkspaceProject,
-    buildProjectListItemView: (project) => {
-      const createReady = isProjectCreateCompleted(project);
-      return projectListView.buildProjectListItem(project, {
-        activeRun: getActiveRun(project),
-        scenario: getActiveScenario(project),
-        statuses: project.statuses || statusMapTemplate(),
-        createReady,
-        forecastPeriod: createReady ? getForecastPeriodDisplayRange(project) : "待创建",
-        provinceName: getProvinceName(project.province),
-        assetTypeText: project.assetType === "wind" ? "风电" : "光伏",
-        siteTypeText: project.siteType === "offshore" ? "海上" : "陆上",
-        storageText: getStorageConfigText(project)
-      });
-    },
+    buildProjectListItemView: projectListView.createProjectListItemViewBuilder({
+      isProjectCreateCompleted,
+      getActiveRun,
+      getActiveScenario,
+      statusMapTemplate,
+      getForecastPeriodDisplayRange,
+      getProvinceName,
+      getStorageConfigText
+    }),
     workflowPages: WORKFLOW_PAGES,
     pageTitles: PAGE_TITLES,
     statusText
