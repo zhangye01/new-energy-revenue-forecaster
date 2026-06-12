@@ -58,6 +58,7 @@ const manualScenarioFlow = window.NE_MANUAL_SCENARIO_FLOW;
 const chartLifecycle = window.NE_CHART_LIFECYCLE;
 const energyCharts = window.NE_ENERGY_CHARTS;
 const forecastPage = window.NE_FORECAST_PAGE;
+const forecastRunFlow = window.NE_FORECAST_RUN_FLOW;
 const projectListView = window.NE_PROJECT_LIST_VIEW;
 const resultPage = window.NE_RESULT_PAGE;
 const resultPrint = window.NE_RESULT_PRINT;
@@ -76,7 +77,7 @@ const appEventBindings = window.NE_APP_EVENT_BINDINGS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -263,7 +264,6 @@ const compareChartInstances = {
   scenarioBridge: null,
   scenarioTrend: null
 };
-const FORECAST_MODEL_DEFINITIONS = priceForecast.FORECAST_MODEL_DEFINITIONS;
 const resultChartInstances = {
   annualStack: null,
   pricePath: null,
@@ -1688,8 +1688,7 @@ function getEnergyCompletionState(project) {
 }
 
 function hasActiveActivatableRun(project) {
-  const run = getActiveRun(project);
-  return Boolean(run && canActivateRun(run));
+  return forecastRunFlow.hasActiveActivatableRun(project);
 }
 
 
@@ -3451,10 +3450,7 @@ function createForecastRunForModel(project, model, options) {
 }
 
 function formatForecastGranularity(run) {
-  if (run?.granularityMinutes === 15) {
-    return `15分钟 / ${run.pointsPerYear || 35040}点/年`;
-  }
-  return "小时 / 8760点/年";
+  return forecastRunFlow.formatForecastGranularity(run);
 }
 
 function countForecastPriceMissing(project, run) {
@@ -3466,116 +3462,52 @@ function evaluateRunQuality(project, run) {
 }
 
 function canActivateRun(run) {
-  return ["publishable", "publishable_warn", "publishable_forced"].includes(run.status);
+  return forecastRunFlow.canActivateRun(run);
 }
 
 function statusLabel(run) {
-  const labels = {
-    validated: "未过硬门槛",
-    publishable: "可发布",
-    publishable_warn: "可发布(软门槛预警)",
-    publishable_forced: "强制发布"
-  };
-  return labels[run.status] || run.status;
+  return forecastRunFlow.statusLabel(run);
 }
 
-function addActivationLog(project, fromRunId, toRunId, reason) {
-  project.activationLogs.unshift({
-    id: makeId("act"),
-    fromRunId: fromRunId || "-",
-    toRunId,
-    reason: reason || "手动切换",
-    changedAt: new Date().toISOString()
-  });
+function forecastRunFlowContext() {
+  return {
+    project: getActiveProject(),
+    documentRef: typeof document !== "undefined" ? document : null,
+    modelDefinitions: priceForecast.FORECAST_MODEL_DEFINITIONS,
+    services: {
+      createForecastRunForModel,
+      markDownstreamStale
+    },
+    actions: {
+      makeId,
+      nowIso: () => new Date().toISOString(),
+      setTopMeta,
+      renderAll,
+      promptForceReason: () => (
+        typeof window !== "undefined" && typeof window.prompt === "function"
+          ? window.prompt("请输入强制发布原因：", "初版阶段人工放行")
+          : "初版阶段人工放行"
+      )
+    }
+  };
 }
 
 function generateForecastRun() {
-  const project = getActiveProject();
-  if (!project) return;
-
-  if (!Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears < 1) {
-    setTopMeta("请先保存项目测算起始年份和测算周期，再生成电价预测。");
-    return;
-  }
-
-  const algorithmVersion = document.querySelector("#algo-version").value.trim() || "1.0.0";
-  const featureVersion = document.querySelector("#feature-version").value.trim() || "1.0.0";
-  const dataSnapshotId = document.querySelector("#data-snapshot-id").value.trim() || `snapshot-${new Date().toISOString().slice(0, 10)}`;
-  const trainStartInput = Number(document.querySelector("#train-start").value);
-  const trainEndInput = Number(document.querySelector("#train-end").value);
-  const trainStart = Number.isFinite(trainStartInput) ? trainStartInput : Math.max(2010, project.startYear - 8);
-  const trainEnd = Number.isFinite(trainEndInput) ? trainEndInput : Math.max(trainStart, project.startYear - 1);
-  const seed = Number(document.querySelector("#algo-seed").value) || 2027;
-  const growthInput = Number(document.querySelector("#algo-growth").value);
-  const growth = Number.isFinite(growthInput) ? growthInput / 100 : 0;
-
-  const generatedRuns = FORECAST_MODEL_DEFINITIONS.map((model) => createForecastRunForModel(project, model, {
-    algorithmVersion,
-    featureVersion,
-    dataSnapshotId,
-    trainStart,
-    trainEnd,
-    seed,
-    growth
-  }));
-  project.priceRuns.unshift(...generatedRuns.slice().reverse());
-
-  const preferredRun = generatedRuns.find((run) => run.algorithmFamily === "ensemble" && canActivateRun(run))
-    || generatedRuns.find((run) => canActivateRun(run));
-  if (preferredRun) {
-    const old = project.activeRunId;
-    project.activeRunId = preferredRun.id;
-    addActivationLog(project, old, preferredRun.id, "三模型15分钟模拟完成，融合模型自动生效");
-  }
-  project.statuses["forecast-page"] = hasActiveActivatableRun(project) ? "completed" : "in_progress";
-  if (project.statuses["scenario-page"] === "not_started") {
-    project.statuses["scenario-page"] = "in_progress";
-  }
-  setTopMeta(`已生成 LSTM、XGBoost、Ensemble 三套 ${project.startYear}-${project.startYear + project.forecastYears - 1} 年15分钟现货电价模拟曲线。`);
-  markDownstreamStale(project, "forecast-page");
-  renderAll();
+  return forecastRunFlow.generateForecastRun(forecastRunFlowContext());
 }
 
 function setActiveRun(runId) {
-  const project = getActiveProject();
-  if (!project) return;
-  const target = project.priceRuns.find((run) => run.id === runId);
-  if (!target) return;
-  if (!canActivateRun(target)) {
-    setTopMeta("该版本未通过硬门槛，不能直接生效。");
-    return;
-  }
-  if (project.activeRunId === target.id) return;
-  const old = project.activeRunId;
-  project.activeRunId = target.id;
-  addActivationLog(project, old, target.id, "设置为生效版本");
-  project.statuses["forecast-page"] = "completed";
-  if (project.statuses["scenario-page"] === "not_started") {
-    project.statuses["scenario-page"] = "in_progress";
-  }
-  markDownstreamStale(project, "forecast-page");
-  renderAll();
+  return forecastRunFlow.setActiveRun({
+    ...forecastRunFlowContext(),
+    runId
+  });
 }
 
 function forceActivateRun(runId) {
-  const project = getActiveProject();
-  if (!project) return;
-  const target = project.priceRuns.find((run) => run.id === runId);
-  if (!target) return;
-  const reason = typeof window !== "undefined" && typeof window.prompt === "function"
-    ? window.prompt("请输入强制发布原因：", "初版阶段人工放行")
-    : "初版阶段人工放行";
-  if (reason === null) return;
-  target.status = "publishable_forced";
-  const old = project.activeRunId;
-  project.activeRunId = target.id;
-  addActivationLog(project, old, target.id, reason || "初版阶段人工放行");
-  project.statuses["forecast-page"] = "completed";
-  if (project.statuses["scenario-page"] === "not_started") {
-    project.statuses["scenario-page"] = "in_progress";
-  }
-  markDownstreamStale(project, "forecast-page");
-  renderAll();
+  return forecastRunFlow.forceActivateRun({
+    ...forecastRunFlowContext(),
+    runId
+  });
 }
 
 

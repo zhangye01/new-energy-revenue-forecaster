@@ -54,6 +54,8 @@
 | `energy-template-flow.js` | 结算电量模板导出、文件导入、示例模板和省份典型曲线调用流程 |
 | `chart-lifecycle.js` | ECharts 实例存活判断、批量 resize、窗口 resize 绑定和双帧延迟刷新 |
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
+| `forecast-page.js` | 电价预测版本列表、质量门槛和激活日志 HTML 构造 |
+| `forecast-run-flow.js` | 电价预测运行生成、自动激活、手动切换和强制发布流程 |
 | `result-page.js` | 基准结果总览报告文案、指标卡、假设说明和明细表 HTML 构造 |
 | `result-print.js` | 基准结果总览打印前展开、图表刷新和打印后恢复控制 |
 | `result-charts.js` | 基准结果总览四张 ECharts 图的 option 构造和图表 token 扩展 |
