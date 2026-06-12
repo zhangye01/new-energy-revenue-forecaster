@@ -10,6 +10,7 @@ const {
   buildScenarioFocusListHtml,
   buildSensitivityFactorListHtml,
   createCompareEventHandlers,
+  renderCompareFrame,
   renderCompareReadyState,
   resetComparePageState,
   renderCompareNoProjectState,
@@ -361,5 +362,116 @@ assert.deepEqual(readyRenderCalls, [
 assert.equal(readyMetricCalls.length, 5);
 assert.match(refs.compareBody.innerHTML, /现货收入/);
 assert.equal(refs.compareBaselineLabel.textContent, "基准：基准<场景>");
+
+function makeFrameRefs() {
+  return {
+    compareBody: makeNode(),
+    compareSensitivityBody: makeNode(),
+    compareSensitivityFactorList: makeNode(),
+    compareScenarioFocusList: makeNode(),
+    compareMetricBaselineScenario: makeNode(),
+    compareMetricBaselineRevenue: makeNode(),
+    compareMetricSensitiveFactors: makeNode(),
+    compareMetricCompareCount: makeNode(),
+    compareMetricScenarioCount: makeNode(),
+    compareMetricBestScenario: makeNode(),
+    compareMetricMaxGap: makeNode(),
+    compareMetricPeriod: makeNode(),
+    compareSensitivityResponseLabel: makeNode(),
+    compareScenarioBridgeLabel: makeNode(),
+    compareSensitivityVariableSummary: makeNode(),
+    compareBaselineLabel: makeNode(),
+    compareScenarioLabel: makeNode(),
+    compareSensitivityMessage: makeNode(),
+    compareScenarioMessage: makeNode(),
+    compareSensitivityTornadoChart: makeNode(),
+    compareSensitivityResponseChart: makeNode(),
+    compareRankingChart: makeNode(),
+    compareTrendChart: makeNode(),
+    compareBridgeChart: makeNode()
+  };
+}
+
+const framePlaceholders = [];
+let frameSyncCount = 0;
+const noProjectStatus = renderCompareFrame({
+  refs: makeFrameRefs(),
+  setCompareMetric: () => {},
+  syncCompareSensitivityControls: () => {
+    frameSyncCount += 1;
+  },
+  project: null,
+  renderPlaceholder: (key, node, message) => framePlaceholders.push({ key, node, message })
+});
+assert.equal(noProjectStatus, "no-project");
+assert.equal(frameSyncCount, 1);
+assert.equal(framePlaceholders.length, 5);
+assert.match(framePlaceholders[0].message, /请选择项目/);
+
+framePlaceholders.length = 0;
+const noResultsRefs = makeFrameRefs();
+const noResultsStatus = renderCompareFrame({
+  refs: noResultsRefs,
+  setCompareMetric: () => {},
+  syncCompareSensitivityControls: () => {
+    frameSyncCount += 1;
+  },
+  project: { id: "project-1" },
+  available: [],
+  comparePeriod: "2026-2056",
+  renderPlaceholder: (key, node, message) => framePlaceholders.push({ key, node, message })
+});
+assert.equal(noResultsStatus, "no-results");
+assert.match(noResultsRefs.compareBody.innerHTML, /暂无可对比结果/);
+assert.equal(framePlaceholders.length, 5);
+
+const frameReadyCalls = [];
+const readyFrameStatus = renderCompareFrame({
+  refs: makeFrameRefs(),
+  setCompareMetric: () => {},
+  syncCompareSensitivityControls: () => {
+    frameSyncCount += 1;
+  },
+  project: { id: "project-1" },
+  available,
+  compareState: {
+    baseline: available[0],
+    baselineFirst: available[0].result.annualRows[0],
+    baselineRevenueWan: 40,
+    allSensitivityFactors: [{ key: "hours", name: "利用小时", note: "上网电量变化", sensitivity: 20 }],
+    sensitivityFactors: [{ key: "hours", name: "利用小时", note: "上网电量变化", sensitivity: 20 }],
+    bestScenario: available[1],
+    maxGapWan: 20,
+    focusScenario: available[1]
+  },
+  comparePeriod: "2026-2056",
+  sensitivitySettings: { rangePercent: 20, stepPercent: 5 },
+  asCompactMoney: (value) => `${Math.round(value / 10000)}万元`,
+  asNum: (value, digits = 1) => Number(value).toFixed(digits),
+  detectTopDriver: () => "现货收入",
+  renderers: {
+    renderSensitivityTornadoChart: () => frameReadyCalls.push("tornado"),
+    renderSensitivityFactorList: () => frameReadyCalls.push("factor-list"),
+    renderSensitivityResponseChart: () => frameReadyCalls.push("response"),
+    renderSensitivityTable: () => frameReadyCalls.push("table"),
+    renderScenarioRankingChart: () => frameReadyCalls.push("ranking"),
+    renderCompareTrendChart: () => frameReadyCalls.push("trend"),
+    renderScenarioFocusList: () => frameReadyCalls.push("focus"),
+    renderScenarioBridgeChart: () => frameReadyCalls.push("bridge"),
+    queueCompareChartsResize: () => frameReadyCalls.push("resize")
+  }
+});
+assert.equal(readyFrameStatus, "ready");
+assert.deepEqual(frameReadyCalls, [
+  "tornado",
+  "factor-list",
+  "response",
+  "table",
+  "ranking",
+  "trend",
+  "focus",
+  "bridge",
+  "resize"
+]);
 
 console.log("compare page tests passed");

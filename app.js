@@ -4969,68 +4969,57 @@ function renderResults() {
   renderResultCharts(project, scenario, result);
 }
 
+function createCompareRenderers() {
+  return {
+    renderSensitivityTornadoChart,
+    renderSensitivityFactorList,
+    renderSensitivityResponseChart,
+    renderSensitivityTable,
+    renderScenarioRankingChart,
+    renderCompareTrendChart,
+    renderScenarioFocusList,
+    renderScenarioBridgeChart,
+    queueCompareChartsResize
+  };
+}
+
 function renderCompare() {
   renderCompareWorkspaceState();
   const project = getActiveProject();
-  comparePage.resetComparePageState({
-    refs,
-    setCompareMetric,
-    syncCompareSensitivityControls
-  });
-  if (!project) {
-    comparePage.renderCompareNoProjectState({
-      refs,
-      renderPlaceholder: renderCompareChartPlaceholder
-    });
-    return;
+  let available = [];
+  let comparePeriod = "-";
+  let compareState = {};
+  if (project) {
+    ensureScenarioMetadata(project);
+    available = compareAnalysis.buildAvailableScenarioResults(project);
+    comparePeriod = getForecastPeriodDisplayRange(project);
   }
-  ensureScenarioMetadata(project);
-  const available = compareAnalysis.buildAvailableScenarioResults(project);
-  const comparePeriod = getForecastPeriodDisplayRange(project);
-  comparePage.applyCompareView({
-    refs,
-    setCompareMetric,
-    view: comparePage.buildCompareAvailabilityView({ available, comparePeriod })
-  });
-  if (!available.length) {
-    comparePage.renderCompareNoResultsState({
-      refs,
-      renderPlaceholder: renderCompareChartPlaceholder
+  if (available.length) {
+    syncCompareSensitivityControls();
+    compareState = compareAnalysis.buildCompareRenderState({
+      available,
+      activeCompareScenarioId,
+      activeSensitivityFactorKey,
+      sensitivitySettings: compareSensitivitySettings
     });
-    return;
+    compareSensitivitySettings.selectedKeys = compareState.sensitivitySelection.selectedKeys;
+    activeSensitivityFactorKey = compareState.sensitivitySelection.activeFactorKey;
+    activeCompareScenarioId = compareState.activeCompareScenarioId;
   }
-
-  syncCompareSensitivityControls();
-  const compareState = compareAnalysis.buildCompareRenderState({
-    available,
-    activeCompareScenarioId,
-    activeSensitivityFactorKey,
-    sensitivitySettings: compareSensitivitySettings
-  });
-  compareSensitivitySettings.selectedKeys = compareState.sensitivitySelection.selectedKeys;
-  activeSensitivityFactorKey = compareState.sensitivitySelection.activeFactorKey;
-  activeCompareScenarioId = compareState.activeCompareScenarioId;
-  comparePage.renderCompareReadyState({
+  comparePage.renderCompareFrame({
     refs,
     setCompareMetric,
+    syncCompareSensitivityControls,
+    project,
     available,
     compareState,
     comparePeriod,
     sensitivitySettings: compareSensitivitySettings,
+    renderPlaceholder: renderCompareChartPlaceholder,
     detectTopDriver: compareAnalysis.detectTopDriver,
     asCompactMoney,
     asNum,
-    renderers: {
-      renderSensitivityTornadoChart,
-      renderSensitivityFactorList,
-      renderSensitivityResponseChart,
-      renderSensitivityTable,
-      renderScenarioRankingChart,
-      renderCompareTrendChart,
-      renderScenarioFocusList,
-      renderScenarioBridgeChart,
-      queueCompareChartsResize
-    }
+    renderers: createCompareRenderers()
   });
 }
 

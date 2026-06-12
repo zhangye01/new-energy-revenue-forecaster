@@ -439,6 +439,57 @@
     renderers.queueCompareChartsResize?.();
   }
 
+  function renderCompareFrame(input = {}) {
+    const {
+      refs = {},
+      setCompareMetric = () => {},
+      syncCompareSensitivityControls = () => {},
+      project = null,
+      available = [],
+      comparePeriod = "-",
+      compareState = {},
+      renderPlaceholder = () => {},
+      sensitivitySettings = {},
+      detectTopDriver = () => "-",
+      asCompactMoney = (value) => String(value),
+      asNum = (value, digits = 1) => {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric.toFixed(digits) : "-";
+      },
+      renderers = {}
+    } = input;
+
+    resetComparePageState({ refs, setCompareMetric, syncCompareSensitivityControls });
+    if (!project) {
+      renderCompareNoProjectState({ refs, renderPlaceholder });
+      return "no-project";
+    }
+
+    applyCompareView({
+      refs,
+      setCompareMetric,
+      view: buildCompareAvailabilityView({ available, comparePeriod })
+    });
+    if (!available.length) {
+      renderCompareNoResultsState({ refs, renderPlaceholder });
+      return "no-results";
+    }
+
+    renderCompareReadyState({
+      refs,
+      setCompareMetric,
+      available,
+      compareState,
+      comparePeriod,
+      sensitivitySettings,
+      detectTopDriver,
+      asCompactMoney,
+      asNum,
+      renderers
+    });
+    return "ready";
+  }
+
   return Object.freeze({
     applyCompareView,
     bindCompareEvents,
@@ -448,6 +499,7 @@
     buildScenarioFocusListHtml,
     buildSensitivityFactorListHtml,
     createCompareEventHandlers,
+    renderCompareFrame,
     renderCompareReadyState,
     resetComparePageState,
     renderCompareNoProjectState,
