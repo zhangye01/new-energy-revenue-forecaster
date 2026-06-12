@@ -1161,6 +1161,40 @@ function sanitizeScenario(project, rawScenario, index) {
   });
 }
 
+function sanitizeProjectEnergyState(project, rawProject) {
+  project.energyData = isPlainObject(rawProject.energyData)
+    ? { ...createEmptyEnergyDataState(project.energyMode), ...rawProject.energyData }
+    : createEmptyEnergyDataState(project.energyMode);
+  ensureProjectEnergyDataState(project);
+  alignDefaultForecastYearsToStoredAnnualInput(project);
+  ensureProjectEnergyTemplateExports(project);
+}
+
+function sanitizeProjectForecastState(project, rawProject) {
+  project.historySpotImport = sanitizeHistorySpotImport(rawProject.historySpotImport);
+  project.priceRuns = projectModel.sanitizePriceRuns(rawProject.priceRuns, {
+    makeId,
+    nowIso: () => new Date().toISOString()
+  });
+  project.activeRunId = projectModel.resolveActiveRunId(project.priceRuns, rawProject.activeRunId);
+  project.spotMarketConfig = sanitizeSpotMarketConfig(project, rawProject.spotMarketConfig);
+  project.activationLogs = projectModel.sanitizeActivationLogs(rawProject.activationLogs, {
+    makeId,
+    nowIso: () => new Date().toISOString()
+  });
+}
+
+function sanitizeProjectScenarioState(project, rawProject) {
+  const rawScenarios = Array.isArray(rawProject.scenarios) ? rawProject.scenarios : [];
+  project.scenarios = rawScenarios.map((scenario, i) => sanitizeScenario(project, scenario, i));
+  if (!project.scenarios.length) {
+    project.scenarios = [createBaselineScenario(project)];
+  }
+  project.activeScenarioId = rawProject.activeScenarioId;
+  scenarioModel.normalizeScenarioMetadata(project);
+  project.resultsByScenario = isPlainObject(rawProject.resultsByScenario) ? rawProject.resultsByScenario : {};
+}
+
 function sanitizeProject(rawProject, index) {
   if (!isPlainObject(rawProject)) return null;
   const project = {
@@ -1184,36 +1218,9 @@ function sanitizeProject(rawProject, index) {
     resultsByScenario: {}
   };
 
-  project.energyData = isPlainObject(rawProject.energyData)
-    ? { ...createEmptyEnergyDataState(project.energyMode), ...rawProject.energyData }
-    : createEmptyEnergyDataState(project.energyMode);
-  ensureProjectEnergyDataState(project);
-  alignDefaultForecastYearsToStoredAnnualInput(project);
-  ensureProjectEnergyTemplateExports(project);
-  project.historySpotImport = sanitizeHistorySpotImport(rawProject.historySpotImport);
-
-  project.priceRuns = projectModel.sanitizePriceRuns(rawProject.priceRuns, {
-    makeId,
-    nowIso: () => new Date().toISOString()
-  });
-  project.activeRunId = projectModel.resolveActiveRunId(project.priceRuns, rawProject.activeRunId);
-  project.spotMarketConfig = sanitizeSpotMarketConfig(project, rawProject.spotMarketConfig);
-
-  project.activationLogs = projectModel.sanitizeActivationLogs(rawProject.activationLogs, {
-    makeId,
-    nowIso: () => new Date().toISOString()
-  });
-
-  const rawScenarios = Array.isArray(rawProject.scenarios) ? rawProject.scenarios : [];
-  project.scenarios = rawScenarios.map((scenario, i) => sanitizeScenario(project, scenario, i));
-  if (!project.scenarios.length) {
-    project.scenarios = [createBaselineScenario(project)];
-  }
-  project.activeScenarioId = rawProject.activeScenarioId;
-  scenarioModel.normalizeScenarioMetadata(project);
-
-  project.resultsByScenario = isPlainObject(rawProject.resultsByScenario) ? rawProject.resultsByScenario : {};
-
+  sanitizeProjectEnergyState(project, rawProject);
+  sanitizeProjectForecastState(project, rawProject);
+  sanitizeProjectScenarioState(project, rawProject);
   return project;
 }
 

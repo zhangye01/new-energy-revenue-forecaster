@@ -19,7 +19,7 @@
 
 | 批次 | 目标 | 交付物 | 验收 |
 | --- | --- | --- | --- |
-| S1 | 给 `app.js` 留出维护缓冲 | 已迁出项目 seed builder、创建项目表单同步、创建项目表单校验、创建项目表单清空、创建项目表单保存流程、逐年手工模板导入导出流程、文件读取适配、结算电量模板流程、电价预测运行流程、项目记录工厂、项目展示辅助、主题控制、电量状态辅助、场景管理、对比页、预测版本列表、测算前置校验、结算电量展示、电量派生状态、多组事件绑定、图表生命周期辅助、应用事件绑定编排、应用级事件动作分组注册和对比页渲染 frame 编排 | `app.js` 已降到 5360 行以内，单函数低于 55 行 |
+| S1 | 给 `app.js` 留出维护缓冲 | 已迁出项目 seed builder、创建项目表单同步、创建项目表单校验、创建项目表单清空、创建项目表单保存流程、逐年手工模板导入导出流程、文件读取适配、结算电量模板流程、电价预测运行流程、项目记录工厂、项目展示辅助、主题控制、电量状态辅助、项目清洗后处理分段、场景管理、对比页、预测版本列表、测算前置校验、结算电量展示、电量派生状态、多组事件绑定、图表生命周期辅助、应用事件绑定编排、应用级事件动作分组注册和对比页渲染 frame 编排 | `app.js` 已降到 5360 行以内，单函数低于 51 行 |
 | S2 | 提高页面回归可靠性 | 已补浏览器模块加载 smoke、应用启动 smoke 和静态服务访问 smoke，后续扩展为关键流程浏览器 smoke 方案 | 页面静态资源可通过 HTTP 服务访问；非 vendor、非 `app.js` 的浏览器模块可按 `index.html` 顺序执行；`app.js` 初始化不允许同步或异步异常；登录、项目、导入、预测、测算主链路后续可重复验证 |
 | S3 | 固化业务变更入口 | 为全口径收入、结果总览、多方案对比补充更多黄金样例 | 业务口径变化时测试先失败，避免只靠人工看页面 |
 | S4 | 控制样式增长 | 已拆出 `styles/theme.css`、`styles/base.css`、`styles/components/data-display.css`、`styles/components/forms.css`、`styles/components/buttons.css`、`styles/components/workflow.css`、`styles/components/auth.css`、`styles/pages/home.css`、`styles/pages/projects.css`、`styles/pages/create.css`、`styles/pages/help.css`、`styles/pages/energy.css`、`styles/pages/scenario.css`、`styles/pages/results.css`、`styles/pages/compare.css`、`styles/pages/history.css` 与 `styles/responsive.css`，并给 `styles.css` 增加 20 行架构门禁和 CSS 加载顺序门禁 | 新页面和公共组件样式有明确归属，减少选择器互相污染 |
