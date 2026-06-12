@@ -208,6 +208,44 @@
     };
   }
 
+  function writeLocalSnapshotIfDue(input = {}) {
+    const {
+      store,
+      snapshot,
+      hasLocalStorage = false,
+      storageMode = "",
+      forceLocal = false,
+      nowMs = Date.now(),
+      lastLocalWriteAt = 0,
+      intervalMs = 0,
+      onLocalWriteError
+    } = input;
+    const shouldAttempt = Boolean(hasLocalStorage)
+      && storageMode !== "idb_only"
+      && (forceLocal || nowMs - lastLocalWriteAt >= intervalMs);
+    if (!shouldAttempt) {
+      return {
+        attempted: false,
+        succeeded: false,
+        storageMode,
+        lastLocalWriteAt
+      };
+    }
+    let nextStorageMode = storageMode;
+    const succeeded = Boolean(store?.writeLocalSnapshot?.(snapshot, {
+      onLocalWriteError: (error) => {
+        nextStorageMode = "idb_only";
+        if (typeof onLocalWriteError === "function") onLocalWriteError(error);
+      }
+    }));
+    return {
+      attempted: true,
+      succeeded,
+      storageMode: nextStorageMode,
+      lastLocalWriteAt: succeeded ? nowMs : lastLocalWriteAt
+    };
+  }
+
   return {
     resolveBrowserStorage: resolveGlobalValue,
     readRawFromStorage,
@@ -219,6 +257,7 @@
     snapshotTime,
     selectLatestSnapshot,
     createIndexedDbSnapshotStore,
-    createAppDataSnapshotStore
+    createAppDataSnapshotStore,
+    writeLocalSnapshotIfDue
   };
 });

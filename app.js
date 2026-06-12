@@ -1406,26 +1406,21 @@ function setEnergyPaneCurrentState(pane, statusElement, message = "") {
 
 function persistAppDataNow(options = {}) {
   const snapshot = buildAppDataSnapshot();
-  const forceLocal = Boolean(options.forceLocal);
-  let localSucceeded = false;
-  let localAttempted = false;
-
-  const shouldTryLocal = Boolean(getBrowserStorage("localStorage"))
-    && appDataStorageMode !== "idb_only"
-    && (forceLocal || Date.now() - lastLocalStoragePersistAt >= LOCAL_STORAGE_PERSIST_INTERVAL_MS);
-
-  if (shouldTryLocal) {
-    localAttempted = true;
-    localSucceeded = appDataSnapshotStore.writeLocalSnapshot(snapshot, {
-      onLocalWriteError: (error) => {
-        appDataStorageMode = "idb_only";
-        console.warn("localStorage容量不足，已切换IndexedDB持久化。", error);
-      }
-    });
-    if (localSucceeded) {
-      lastLocalStoragePersistAt = Date.now();
+  const localWrite = appStorage.writeLocalSnapshotIfDue({
+    store: appDataSnapshotStore,
+    snapshot,
+    hasLocalStorage: Boolean(getBrowserStorage("localStorage")),
+    storageMode: appDataStorageMode,
+    forceLocal: Boolean(options.forceLocal),
+    nowMs: Date.now(),
+    lastLocalWriteAt: lastLocalStoragePersistAt,
+    intervalMs: LOCAL_STORAGE_PERSIST_INTERVAL_MS,
+    onLocalWriteError: (error) => {
+      console.warn("localStorage容量不足，已切换IndexedDB持久化。", error);
     }
-  }
+  });
+  appDataStorageMode = localWrite.storageMode;
+  lastLocalStoragePersistAt = localWrite.lastLocalWriteAt;
 
   const currentSeq = ++persistSequence;
   void appDataSnapshotStore.writeDbSnapshot(snapshot)
@@ -1436,13 +1431,13 @@ function persistAppDataNow(options = {}) {
     .catch((error) => {
       if (currentSeq !== persistSequence) return;
       console.warn("写入IndexedDB业务快照失败。", error);
-      if (!localSucceeded && !storageWarningShown) {
+      if (!localWrite.succeeded && !storageWarningShown) {
         storageWarningShown = true;
         setTopMeta("本地存储不可用，当前改动可能在刷新后丢失。");
       }
     });
 
-  if (localSucceeded || !localAttempted) {
+  if (localWrite.succeeded || !localWrite.attempted) {
     storageWarningShown = false;
   } else if (!appDataSnapshotStore.supportsIndexedDb() && !storageWarningShown) {
     storageWarningShown = true;

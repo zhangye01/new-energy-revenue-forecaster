@@ -66,6 +66,80 @@ function createMemoryStorage(options = {}) {
   assert.equal(appStorage.selectLatestSnapshot(null, oldSnapshot), oldSnapshot);
 }
 
+{
+  let writeCount = 0;
+  const store = {
+    writeLocalSnapshot() {
+      writeCount += 1;
+      return true;
+    }
+  };
+  const skipped = appStorage.writeLocalSnapshotIfDue({
+    store,
+    snapshot: { payload: {} },
+    hasLocalStorage: true,
+    storageMode: "",
+    forceLocal: false,
+    nowMs: 5000,
+    lastLocalWriteAt: 4000,
+    intervalMs: 4000
+  });
+  assert.deepEqual(skipped, {
+    attempted: false,
+    succeeded: false,
+    storageMode: "",
+    lastLocalWriteAt: 4000
+  });
+  assert.equal(writeCount, 0);
+
+  const written = appStorage.writeLocalSnapshotIfDue({
+    store,
+    snapshot: { payload: {} },
+    hasLocalStorage: true,
+    storageMode: "",
+    forceLocal: true,
+    nowMs: 6000,
+    lastLocalWriteAt: 4000,
+    intervalMs: 4000
+  });
+  assert.deepEqual(written, {
+    attempted: true,
+    succeeded: true,
+    storageMode: "",
+    lastLocalWriteAt: 6000
+  });
+  assert.equal(writeCount, 1);
+}
+
+{
+  let capturedError = "";
+  const store = {
+    writeLocalSnapshot(snapshot, callbacks = {}) {
+      callbacks.onLocalWriteError?.(new Error("quota"));
+      return false;
+    }
+  };
+  const result = appStorage.writeLocalSnapshotIfDue({
+    store,
+    snapshot: { payload: {} },
+    hasLocalStorage: true,
+    storageMode: "",
+    nowMs: 9000,
+    lastLocalWriteAt: 8000,
+    intervalMs: 500,
+    onLocalWriteError: (error) => {
+      capturedError = error.message;
+    }
+  });
+  assert.deepEqual(result, {
+    attempted: true,
+    succeeded: false,
+    storageMode: "idb_only",
+    lastLocalWriteAt: 8000
+  });
+  assert.equal(capturedError, "quota");
+}
+
 (async () => {
   const storage = createMemoryStorage();
   const store = appStorage.createAppDataSnapshotStore({
