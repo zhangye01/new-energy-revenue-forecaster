@@ -2,6 +2,8 @@
 
 const assert = require("node:assert/strict");
 const {
+  buildMissingCurveMessage,
+  formatYearListCompact,
   validateCalculationReadiness,
   validateManualCompleteness
 } = require("../src/domain/result-calculation");
@@ -81,5 +83,20 @@ assert.deepEqual(
   }),
   { ok: true, message: "" }
 );
+
+assert.equal(formatYearListCompact([2026, 2027, 2029, 2031, 2032]), "2026-2027、2029、2031-2032");
+assert.equal(
+  buildMissingCurveMessage({
+    missingYears: [2026, 2027, 2028],
+    missingEnergyYears: [2026, 2027],
+    missingPriceYears: [2028]
+  }),
+  "测算失败：缺失上网电量曲线：2026-2027；缺失生效电价曲线：2028"
+);
+assert.equal(
+  buildMissingCurveMessage({ missingYears: [2030, 2031], missingEnergyYears: [], missingPriceYears: [] }),
+  "测算失败：缺失年份：2030-2031"
+);
+assert.equal(buildMissingCurveMessage({ missingYears: [] }), "");
 
 console.log("result calculation tests passed");

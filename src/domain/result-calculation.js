@@ -73,7 +73,48 @@
     });
   }
 
+  function formatYearListCompact(years) {
+    const sorted = Array.from(new Set((years || []).map((year) => Number(year)).filter(Number.isInteger))).sort((a, b) => a - b);
+    const ranges = [];
+    let start = null;
+    let prev = null;
+    sorted.forEach((year) => {
+      if (start === null) {
+        start = year;
+        prev = year;
+        return;
+      }
+      if (year === prev + 1) {
+        prev = year;
+        return;
+      }
+      ranges.push(start === prev ? String(start) : `${start}-${prev}`);
+      start = year;
+      prev = year;
+    });
+    if (start !== null) {
+      ranges.push(start === prev ? String(start) : `${start}-${prev}`);
+    }
+    return ranges.join("、");
+  }
+
+  function buildMissingCurveMessage(result = {}) {
+    const pieces = [];
+    if (result.missingEnergyYears?.length) {
+      pieces.push(`缺失上网电量曲线：${formatYearListCompact(result.missingEnergyYears)}`);
+    }
+    if (result.missingPriceYears?.length) {
+      pieces.push(`缺失生效电价曲线：${formatYearListCompact(result.missingPriceYears)}`);
+    }
+    if (!pieces.length && result.missingYears?.length) {
+      pieces.push(`缺失年份：${formatYearListCompact(result.missingYears)}`);
+    }
+    return pieces.length ? `测算失败：${pieces.join("；")}` : "";
+  }
+
   return Object.freeze({
+    buildMissingCurveMessage,
+    formatYearListCompact,
     validateCalculationReadiness,
     validateManualCompleteness
   });

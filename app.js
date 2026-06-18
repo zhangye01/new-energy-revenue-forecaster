@@ -4726,31 +4726,6 @@ function tradeStrategyPnlPriceForYear(config, yearIndex, year) {
   return revenueRules.tradeStrategyPnlPriceForYear(config, yearIndex, year);
 }
 
-function formatYearListCompact(years) {
-  const sorted = Array.from(new Set((years || []).map((year) => Number(year)).filter(Number.isInteger))).sort((a, b) => a - b);
-  const ranges = [];
-  let start = null;
-  let prev = null;
-  sorted.forEach((year) => {
-    if (start === null) {
-      start = year;
-      prev = year;
-      return;
-    }
-    if (year === prev + 1) {
-      prev = year;
-      return;
-    }
-    ranges.push(start === prev ? String(start) : `${start}-${prev}`);
-    start = year;
-    prev = year;
-  });
-  if (start !== null) {
-    ranges.push(start === prev ? String(start) : `${start}-${prev}`);
-  }
-  return ranges.join("、");
-}
-
 function calculateScenarioResult(project, scenario, run) {
   return revenueCalculator.calculateScenarioResult(project, scenario, run, {
     getHourlyEnergyForCalculation,
@@ -4777,14 +4752,7 @@ function runCalculation() {
   const energyPrepared = ensureHourlyEnergyForCalculation(project);
   const result = calculateScenarioResult(project, scenario, run);
   if (result.missingYears.length) {
-    const pieces = [];
-    if (result.missingEnergyYears.length) {
-      pieces.push(`缺失上网电量曲线：${formatYearListCompact(result.missingEnergyYears)}`);
-    }
-    if (result.missingPriceYears.length) {
-      pieces.push(`缺失生效电价曲线：${formatYearListCompact(result.missingPriceYears)}`);
-    }
-    setTopMeta(`测算失败：${pieces.join("；")}`);
+    setTopMeta(resultCalculation.buildMissingCurveMessage(result));
     if (energyPrepared.changed) {
       renderAll();
     }
