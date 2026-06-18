@@ -217,6 +217,29 @@
     return { baselineId, activeScenarioId: project.activeScenarioId };
   }
 
+  function renameScenario(project = {}, scenario = {}, input = {}) {
+    if (scenario.locked) {
+      return { ok: false, changed: false, tone: "error", message: "当前场景已锁定，不能重命名。" };
+    }
+    const name = typeof input.name === "string" ? input.name.trim() : "";
+    if (!name) {
+      return { ok: false, changed: false, tone: "error", message: "场景名称不能为空。" };
+    }
+    if (name === scenario.name) {
+      return { ok: true, changed: false, tone: "success", message: "场景名称未变化。" };
+    }
+    const duplicatedName = (project.scenarios || []).some((item) => (
+      item.id !== scenario.id && item.name === name
+    ));
+    if (duplicatedName) {
+      return { ok: false, changed: false, tone: "error", message: "场景名称重复，请换一个名称。" };
+    }
+    const oldName = scenario.name;
+    scenario.name = name;
+    scenario.updatedAt = resolveNowIso(input);
+    return { ok: true, changed: true, tone: "success", message: `场景“${oldName}”已重命名为“${scenario.name}”。` };
+  }
+
   function applyProvinceDefaultsToScenario(project = {}, scenario = {}, input = {}) {
     const defaults = resolveProvinceDefaults({ provinceDefaults: input.provinceDefaults });
     const nowIso = input.nowIso;
@@ -341,6 +364,7 @@
     normalizeLtConvergeStep,
     normalizeScenarioMetadata,
     parseBatchValue,
+    renameScenario,
     sanitizeScenario
   });
 });

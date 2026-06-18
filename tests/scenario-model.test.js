@@ -9,6 +9,7 @@ const {
   normalizeLtConvergeStep,
   normalizeScenarioMetadata,
   parseBatchValue,
+  renameScenario,
   sanitizeScenario
 } = require("../src/domain/scenario-model");
 
@@ -196,6 +197,38 @@ assert.deepEqual(
 assert.equal(parseBatchValue({ type: "percent", min: 0, max: 100 }, "36"), 0.36);
 assert.equal(parseBatchValue({ type: "number", min: 0, max: 100 }, "120"), 100);
 assert.equal(parseBatchValue({ type: "number", min: 0, max: 100 }, "bad"), null);
+
+const renameProject = {
+  scenarios: [
+    { id: "base", name: "基准场景", locked: false, updatedAt: "" },
+    { id: "target", name: "原方案", locked: false, updatedAt: "" },
+    { id: "locked", name: "锁定方案", locked: true, updatedAt: "" }
+  ]
+};
+assert.equal(
+  renameScenario(renameProject, renameProject.scenarios[2], { name: "新名称" }).message,
+  "当前场景已锁定，不能重命名。"
+);
+assert.equal(
+  renameScenario(renameProject, renameProject.scenarios[1], { name: " " }).message,
+  "场景名称不能为空。"
+);
+assert.equal(
+  renameScenario(renameProject, renameProject.scenarios[1], { name: "基准场景" }).message,
+  "场景名称重复，请换一个名称。"
+);
+const unchangedRename = renameScenario(renameProject, renameProject.scenarios[1], { name: "原方案" });
+assert.equal(unchangedRename.ok, true);
+assert.equal(unchangedRename.changed, false);
+const changedRename = renameScenario(renameProject, renameProject.scenarios[1], {
+  name: " 新方案 ",
+  nowIso: "2026-06-11T00:00:00.000Z"
+});
+assert.equal(changedRename.ok, true);
+assert.equal(changedRename.changed, true);
+assert.equal(renameProject.scenarios[1].name, "新方案");
+assert.equal(renameProject.scenarios[1].updatedAt, "2026-06-11T00:00:00.000Z");
+assert.equal(changedRename.message, "场景“原方案”已重命名为“新方案”。");
 
 const batchProject = {
   siteType: "offshore",

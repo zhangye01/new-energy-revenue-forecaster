@@ -4570,46 +4570,22 @@ function duplicateActiveScenario() {
   renderAll();
 }
 
+function setScenarioImportMessage(text, tone = "error") {
+  manualScenarioFlow.setScenarioImportMessage({ refs, text, tone });
+}
+
 function renameActiveScenario() {
   const project = getActiveProject();
   if (!project) return;
   ensureScenarioMetadata(project);
   const target = getActiveScenario(project);
   if (!target) return;
-  if (target.locked) {
-    refs.scenarioMessage.textContent = "当前场景已锁定，不能重命名。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-    return;
-  }
-  const trimmedName = refs.scenarioQuickName.value.trim();
-  if (!trimmedName) {
-    refs.scenarioMessage.textContent = "场景名称不能为空。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-    return;
-  }
-  if (trimmedName === target.name) {
-    refs.scenarioMessage.textContent = "场景名称未变化。";
-    refs.scenarioMessage.style.borderColor = "#8fb48d";
-    refs.scenarioMessage.style.background = "#f1fbf1";
-    return;
-  }
-  const duplicatedName = project.scenarios.some((scenario) => (
-    scenario.id !== target.id && scenario.name === trimmedName
-  ));
-  if (duplicatedName) {
-    refs.scenarioMessage.textContent = "场景名称重复，请换一个名称。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
-    return;
-  }
-  const oldName = target.name;
-  target.name = trimmedName;
-  target.updatedAt = new Date().toISOString();
-  refs.scenarioMessage.textContent = `场景“${oldName}”已重命名为“${target.name}”。`;
-  refs.scenarioMessage.style.borderColor = "#8fb48d";
-  refs.scenarioMessage.style.background = "#f1fbf1";
+  const result = scenarioModel.renameScenario(project, target, {
+    name: refs.scenarioQuickName.value,
+    nowIso: () => new Date().toISOString()
+  });
+  setScenarioImportMessage(result.message, result.tone);
+  if (!result.changed) return;
   renderAll();
 }
 
