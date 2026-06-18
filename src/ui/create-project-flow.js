@@ -18,6 +18,28 @@
     return exports;
   }
 
+  function createCreateProjectFormFlowContext(input = {}) {
+    const {
+      refs = {},
+      documentRef = null,
+      appState = {},
+      projectModel = null,
+      energyWorkspace = null,
+      provinceKeys,
+      assetTypes,
+      siteTypes,
+      actions = {}
+    } = input;
+    return {
+      refs,
+      documentRef,
+      appState,
+      modules: { projectModel, energyWorkspace },
+      sets: { provinceKeys, assetTypes, siteTypes },
+      actions
+    };
+  }
+
   function updateExistingProjectFromForm(input = {}) {
     const {
       project = null,
@@ -193,6 +215,7 @@
   }
 
   return Object.freeze({
+    createCreateProjectFormFlowContext,
     createProjectFromValidatedInput,
     resetEnergyTemplateExports,
     saveCreateProjectFromForm,

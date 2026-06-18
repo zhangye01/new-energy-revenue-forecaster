@@ -2991,47 +2991,28 @@ function getStorageConfigText(project) {
 }
 
 function createProjectFormFlowContext() {
-  return {
+  return createProjectFlow.createCreateProjectFormFlowContext({
     refs,
     documentRef: document,
     appState,
-    modules: {
-      projectModel,
-      energyWorkspace
-    },
-    sets: {
-      provinceKeys: PROVINCE_KEY_SET,
-      assetTypes: ASSET_TYPE_SET,
-      siteTypes: SITE_TYPE_SET
-    },
+    projectModel,
+    energyWorkspace,
+    provinceKeys: PROVINCE_KEY_SET,
+    assetTypes: ASSET_TYPE_SET,
+    siteTypes: SITE_TYPE_SET,
     actions: {
-      getActiveProject,
-      setTopMeta,
-      setCreateSaveMessage,
-      resolveUniqueProjectName,
-      makeId,
-      statusMapTemplate,
-      createEmptyHistorySpotImport,
-      createDefaultSpotMarketConfig,
-      isProjectCreateCompleted,
-      createBaselineScenario,
-      syncProjectProvinceDefaultsToBaseline,
-      shouldAutoSyncProvinceDefaults,
-      syncProjectProvinceScopedState,
-      createEmptyEnergyDataState,
-      clearHistoryAnalysisCacheForProject,
-      ensureProjectEnergyTemplateExports,
-      markDownstreamStale,
-      getProvinceName,
-      ensureProjectEnergyDataState,
-      moveProjectToHistoryWorkspaceIfReady,
+      getActiveProject, setTopMeta, setCreateSaveMessage, resolveUniqueProjectName, makeId,
+      statusMapTemplate, createEmptyHistorySpotImport, createDefaultSpotMarketConfig,
+      isProjectCreateCompleted, createBaselineScenario, syncProjectProvinceDefaultsToBaseline,
+      shouldAutoSyncProvinceDefaults, syncProjectProvinceScopedState, createEmptyEnergyDataState,
+      clearHistoryAnalysisCacheForProject, ensureProjectEnergyTemplateExports, markDownstreamStale,
+      getProvinceName, ensureProjectEnergyDataState, moveProjectToHistoryWorkspaceIfReady,
       setCreateFormSyncedProjectId: (projectId) => {
         createFormSyncedProjectId = projectId;
       },
-      setActivePage,
-      scrollCreateWorkspaceToBottom
+      setActivePage, scrollCreateWorkspaceToBottom
     }
-  };
+  });
 }
 
 function createProjectFromForm(options = {}) {

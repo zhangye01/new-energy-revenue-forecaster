@@ -2,10 +2,28 @@
 
 const assert = require("node:assert/strict");
 const {
+  createCreateProjectFormFlowContext,
   resetEnergyTemplateExports,
   saveCreateProjectFromForm,
   updateExistingProjectFromForm
 } = require("../src/ui/create-project-flow");
+
+const context = createCreateProjectFormFlowContext({
+  refs: { name: "refs" },
+  documentRef: { nodeType: 9 },
+  appState: { projects: [] },
+  projectModel: { name: "projectModel" },
+  energyWorkspace: { name: "energyWorkspace" },
+  provinceKeys: new Set(["jiangsu"]),
+  assetTypes: new Set(["wind"]),
+  siteTypes: new Set(["offshore"]),
+  actions: { setActivePage: () => {} }
+});
+assert.equal(context.refs.name, "refs");
+assert.equal(context.modules.projectModel.name, "projectModel");
+assert.equal(context.modules.energyWorkspace.name, "energyWorkspace");
+assert.equal(context.sets.provinceKeys.has("jiangsu"), true);
+assert.equal(typeof context.actions.setActivePage, "function");
 
 assert.deepEqual(resetEnergyTemplateExports({
   hourly_8760: "a",
