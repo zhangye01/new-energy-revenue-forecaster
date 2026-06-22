@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const {
   buildAvailableScenarioResults,
+  buildCompareFrameState,
   buildCompareRenderState,
   buildCompareSensitivityFactors,
   buildSensitivitySeries,
@@ -190,5 +191,61 @@ assert.deepEqual(
     focusScenario: null
   }
 );
+
+assert.deepEqual(
+  buildCompareFrameState({
+    project: null,
+    comparePeriod: "2026-2056",
+    activeCompareScenarioId: "up",
+    activeSensitivityFactorKey: "fee",
+    sensitivitySettings: { selectedKeys: ["fee"] }
+  }),
+  {
+    available: [],
+    comparePeriod: "-",
+    compareState: {},
+    hasResults: false,
+    activeCompareScenarioId: "up",
+    sensitivitySelection: {
+      selectedKeys: ["fee"],
+      activeFactorKey: "fee",
+      factors: []
+    }
+  }
+);
+
+const emptyFrameState = buildCompareFrameState({
+  project: { scenarios: compareProject.scenarios, resultsByScenario: {} },
+  comparePeriod: "2026-2056",
+  activeCompareScenarioId: "up",
+  activeSensitivityFactorKey: "fee",
+  sensitivitySettings: { selectedKeys: ["fee"] }
+});
+assert.equal(emptyFrameState.comparePeriod, "2026-2056");
+assert.equal(emptyFrameState.hasResults, false);
+assert.deepEqual(emptyFrameState.available, []);
+assert.deepEqual(emptyFrameState.compareState, {});
+assert.equal(emptyFrameState.activeCompareScenarioId, "up");
+assert.deepEqual(emptyFrameState.sensitivitySelection.selectedKeys, ["fee"]);
+
+const frameState = buildCompareFrameState({
+  project: compareProject,
+  comparePeriod: "2026-2056",
+  activeCompareScenarioId: "missing",
+  activeSensitivityFactorKey: "missing",
+  sensitivitySettings: {
+    rangePercent: 20,
+    stepPercent: 10,
+    responseScalePercent: 100,
+    selectedKeys: ["fee"]
+  }
+});
+assert.equal(frameState.comparePeriod, "2026-2056");
+assert.equal(frameState.hasResults, true);
+assert.equal(frameState.available.length, 2);
+assert.equal(frameState.compareState.baseline.scenario.id, "base");
+assert.equal(frameState.activeCompareScenarioId, "up");
+assert.equal(frameState.sensitivitySelection.activeFactorKey, "fee");
+assert.deepEqual(frameState.sensitivitySelection.selectedKeys, ["fee"]);
 
 console.log("compare analysis tests passed");

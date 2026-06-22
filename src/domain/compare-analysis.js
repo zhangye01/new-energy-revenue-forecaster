@@ -283,11 +283,43 @@
     };
   }
 
+  function buildCompareFrameState(input = {}) {
+    const {
+      project = null,
+      comparePeriod = "-",
+      activeCompareScenarioId = "",
+      activeSensitivityFactorKey = "",
+      sensitivitySettings = {}
+    } = input;
+    const available = project ? buildAvailableScenarioResults(project) : [];
+    const compareState = available.length
+      ? buildCompareRenderState({
+        available,
+        activeCompareScenarioId,
+        activeSensitivityFactorKey,
+        sensitivitySettings
+      })
+      : {};
+    return {
+      available,
+      comparePeriod: project ? comparePeriod : "-",
+      compareState,
+      hasResults: available.length > 0,
+      activeCompareScenarioId: compareState.activeCompareScenarioId || activeCompareScenarioId,
+      sensitivitySelection: compareState.sensitivitySelection || {
+        selectedKeys: sensitivitySettings.selectedKeys || [],
+        activeFactorKey: activeSensitivityFactorKey,
+        factors: []
+      }
+    };
+  }
+
   return Object.freeze({
     sanitizeCompareSensitivitySettings,
     sensitivityAxisLabels,
     buildSensitivitySeries,
     buildCompareSensitivityFactors,
+    buildCompareFrameState,
     buildCompareRenderState,
     buildAvailableScenarioResults,
     resultComponentTotals,

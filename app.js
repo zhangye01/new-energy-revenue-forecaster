@@ -4867,34 +4867,27 @@ function createCompareRenderers() {
 function renderCompare() {
   renderCompareWorkspaceState();
   const project = getActiveProject();
-  let available = [];
-  let comparePeriod = "-";
-  let compareState = {};
-  if (project) {
-    ensureScenarioMetadata(project);
-    available = compareAnalysis.buildAvailableScenarioResults(project);
-    comparePeriod = getForecastPeriodDisplayRange(project);
-  }
-  if (available.length) {
-    syncCompareSensitivityControls();
-    compareState = compareAnalysis.buildCompareRenderState({
-      available,
-      activeCompareScenarioId,
-      activeSensitivityFactorKey,
-      sensitivitySettings: compareSensitivitySettings
-    });
-    compareSensitivitySettings.selectedKeys = compareState.sensitivitySelection.selectedKeys;
-    activeSensitivityFactorKey = compareState.sensitivitySelection.activeFactorKey;
-    activeCompareScenarioId = compareState.activeCompareScenarioId;
+  if (project) ensureScenarioMetadata(project);
+  const frameState = compareAnalysis.buildCompareFrameState({
+    project,
+    comparePeriod: project ? getForecastPeriodDisplayRange(project) : "-",
+    activeCompareScenarioId,
+    activeSensitivityFactorKey,
+    sensitivitySettings: compareSensitivitySettings
+  });
+  if (frameState.hasResults) {
+    compareSensitivitySettings.selectedKeys = frameState.sensitivitySelection.selectedKeys;
+    activeSensitivityFactorKey = frameState.sensitivitySelection.activeFactorKey;
+    activeCompareScenarioId = frameState.activeCompareScenarioId;
   }
   comparePage.renderCompareFrame({
     refs,
     setCompareMetric,
     syncCompareSensitivityControls,
     project,
-    available,
-    compareState,
-    comparePeriod,
+    available: frameState.available,
+    compareState: frameState.compareState,
+    comparePeriod: frameState.comparePeriod,
     sensitivitySettings: compareSensitivitySettings,
     renderPlaceholder: renderCompareChartPlaceholder,
     detectTopDriver: compareAnalysis.detectTopDriver,
