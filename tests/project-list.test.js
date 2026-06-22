@@ -8,7 +8,8 @@ const {
   buildProjectListHtml,
   buildProjectListView,
   createProjectListActionHandlers,
-  bindProjectListActions
+  bindProjectListActions,
+  renderProjectListFrame
 } = require("../src/ui/project-list");
 
 class FakeButton {
@@ -29,11 +30,19 @@ class FakeButton {
 class FakeRoot {
   constructor(map) {
     this.map = map;
+    this.innerHTML = "";
   }
 
   querySelectorAll(selector) {
     return this.map[selector] || [];
   }
+}
+
+function makeNode() {
+  return {
+    textContent: "",
+    innerHTML: ""
+  };
 }
 
 const workflowPages = ["create-page", "energy-page", "result-page"];
@@ -171,6 +180,62 @@ const listView = buildProjectListView({
 assert.equal(listView.historyCount, 1);
 assert.match(listView.html, /新建项目工作区/);
 assert.match(listView.html, /历史项目工作区/);
+
+const frameCreateButton = new FakeButton();
+const frameOpenButton = new FakeButton({ openProject: "frame-history" });
+const frameRoot = new FakeRoot({
+  "[data-create-new-project]": [frameCreateButton],
+  "[data-open-project]": [frameOpenButton]
+});
+const frameState = {
+  activeProjectId: "",
+  projects: [
+    { id: "frame-new", name: "新建项目", workspaceBucket: "new", ready: false },
+    { id: "frame-history", name: "历史项目", workspaceBucket: "history", ready: true }
+  ]
+};
+const frameCalls = [];
+const frameCountBadge = makeNode();
+const frameView = renderProjectListFrame({
+  refs: {
+    projectCountBadge: frameCountBadge,
+    projectList: frameRoot
+  },
+  projects: frameState.projects,
+  isNewWorkspaceProject: (item) => item.workspaceBucket === "new",
+  itemViewBuilderInput: {
+    isProjectCreateCompleted: (item) => item.ready,
+    getActiveRun: () => null,
+    getActiveScenario: () => ({ name: "基准场景" }),
+    statusMapTemplate: () => ({}),
+    getForecastPeriodDisplayRange: () => "2026-2050",
+    getProvinceName: () => "江苏",
+    getStorageConfigText: () => "无配储"
+  },
+  workflowPages,
+  pageTitles,
+  statusText,
+  actionHandlersInput: {
+    appState: frameState,
+    windowRef: { confirm: () => true },
+    createEmptyWorkspaceProject: () => ({ id: "created" }),
+    setTopMeta: (message) => frameCalls.push(`top:${message}`),
+    renderAll: () => frameCalls.push("render"),
+    setActivePage: (pageId) => frameCalls.push(`page:${pageId}`)
+  }
+});
+assert.equal(frameView.historyCount, 1);
+assert.equal(frameCountBadge.textContent, "1");
+assert.match(frameRoot.innerHTML, /新建项目工作区/);
+assert.match(frameRoot.innerHTML, /历史项目/);
+frameCreateButton.click();
+frameOpenButton.click();
+assert.equal(frameState.activeProjectId, "frame-history");
+assert.deepEqual(frameCalls, [
+  "top:新项目已生成，可进入项目继续配置。",
+  "render",
+  "page:create-page"
+]);
 
 const createButton = new FakeButton();
 const openButton = new FakeButton({ openProject: "p1" });

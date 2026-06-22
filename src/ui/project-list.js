@@ -255,6 +255,36 @@
     });
   }
 
+  function renderProjectListFrame(input = {}) {
+    const {
+      refs = {},
+      projects = [],
+      isNewWorkspaceProject = () => false,
+      itemViewBuilderInput = {},
+      workflowPages = [],
+      pageTitles = {},
+      statusText = (state) => state,
+      actionHandlersInput = {}
+    } = input;
+    const view = buildProjectListView({
+      projects,
+      isNewWorkspaceProject,
+      buildProjectListItemView: createProjectListItemViewBuilder(itemViewBuilderInput),
+      workflowPages,
+      pageTitles,
+      statusText
+    });
+    if (refs.projectCountBadge) refs.projectCountBadge.textContent = String(view.historyCount);
+    if (refs.projectList) {
+      refs.projectList.innerHTML = view.html;
+      bindProjectListActions({
+        root: refs.projectList,
+        handlers: createProjectListActionHandlers(actionHandlersInput)
+      });
+    }
+    return view;
+  }
+
   return Object.freeze({
     buildProjectListItem,
     createProjectListItemViewBuilder,
@@ -262,6 +292,7 @@
     buildProjectListHtml,
     buildProjectListView,
     createProjectListActionHandlers,
-    bindProjectListActions
+    bindProjectListActions,
+    renderProjectListFrame
   });
 });

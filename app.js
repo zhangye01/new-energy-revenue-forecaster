@@ -2784,11 +2784,11 @@ function renderHome() {
 }
 
 function renderProjects() {
-  const accountProjects = getProjectsForCurrentAccount();
-  const view = projectListView.buildProjectListView({
-    projects: accountProjects,
+  projectListView.renderProjectListFrame({
+    refs,
+    projects: getProjectsForCurrentAccount(),
     isNewWorkspaceProject,
-    buildProjectListItemView: projectListView.createProjectListItemViewBuilder({
+    itemViewBuilderInput: {
       isProjectCreateCompleted,
       getActiveRun,
       getActiveScenario,
@@ -2796,17 +2796,11 @@ function renderProjects() {
       getForecastPeriodDisplayRange,
       getProvinceName,
       getStorageConfigText
-    }),
+    },
     workflowPages: WORKFLOW_PAGES,
     pageTitles: PAGE_TITLES,
-    statusText
-  });
-  refs.projectCountBadge.textContent = String(view.historyCount);
-  refs.projectList.innerHTML = view.html;
-
-  projectListView.bindProjectListActions({
-    root: refs.projectList,
-    handlers: projectListView.createProjectListActionHandlers({
+    statusText,
+    actionHandlersInput: {
       appState,
       windowRef: typeof window !== "undefined" ? window : null,
       createEmptyWorkspaceProject,
@@ -2818,7 +2812,7 @@ function renderProjects() {
       resolveUniqueProjectName,
       projectBelongsToCurrentAccount,
       getProjectsForCurrentAccount
-    })
+    }
   });
 }
 
