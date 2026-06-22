@@ -9,6 +9,7 @@ const {
   applyCreateWorkspaceEntryState,
   bindCreateEnergyEvents,
   buildCreateProjectFormValues,
+  buildEnergyStep2ChoiceSummary,
   buildEnergySummaryNote,
   buildEnergyWorkspaceViewModel,
   collectCompleteAnnualEnergyRows,
@@ -376,6 +377,49 @@ assert.equal(resolveModeLabel(0, ""), "待配置");
 assert.equal(resolveModeLabel(2, ""), "仅逐年总量");
 assert.equal(resolveModeLabel(2, "typical_curve_8760"), "逐年总量 + 典型年8760小时模板");
 assert.equal(resolveModeLabel(2, "province_typical_curve"), "逐年总量 + 省份典型曲线");
+
+assert.deepEqual(buildEnergyStep2ChoiceSummary(), {
+  summary: "当前选择：待进入项目",
+  detail: "请先进入项目并完成基础信息保存，再从两种典型年曲线来源中二选一。"
+});
+assert.equal(
+  buildEnergyStep2ChoiceSummary({ project: { forecastYears: 3 }, createReady: false }).summary,
+  "当前选择：待基础信息保存"
+);
+assert.equal(
+  buildEnergyStep2ChoiceSummary({ project: { forecastYears: 3 }, createReady: true, annualInputYears: 0 }).summary,
+  "当前选择：待完成第一步"
+);
+assert.equal(
+  buildEnergyStep2ChoiceSummary({ project: { forecastYears: 3 }, createReady: true, annualInputYears: 2 }).summary,
+  "当前选择：待补齐逐年总量（2/3）"
+);
+assert.equal(
+  buildEnergyStep2ChoiceSummary({
+    project: { forecastYears: 3, energyData: { typicalCurveSource: "province_typical_curve" } },
+    createReady: true,
+    annualInputYears: 3,
+    provinceCurveText: "江苏海上风电"
+  }).detail,
+  "当前生效来源为 江苏海上风电 典型曲线；如切换为模板导入，将以新来源覆盖当前典型年曲线。"
+);
+assert.equal(
+  buildEnergyStep2ChoiceSummary({
+    project: { forecastYears: 3, energyData: { typicalCurveSource: "typical_curve_8760" } },
+    createReady: true,
+    annualInputYears: 3
+  }).summary,
+  "当前选择：上传典型年8760小时模板"
+);
+assert.equal(
+  buildEnergyStep2ChoiceSummary({
+    project: { forecastYears: 3, energyData: {} },
+    activeChoice: "province",
+    createReady: true,
+    annualInputYears: 3
+  }).summary,
+  "当前选择：准备调用所选省份典型曲线"
+);
 
 assert.equal(shouldRefreshEnergyMessage("", BLOCKED_MESSAGE, false), true);
 assert.equal(shouldRefreshEnergyMessage("用户刚手动上传了文件", BLOCKED_MESSAGE, false), false);

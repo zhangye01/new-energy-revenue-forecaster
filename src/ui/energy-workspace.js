@@ -545,6 +545,60 @@
     };
   }
 
+  function buildEnergyStep2ChoiceSummary(input = {}) {
+    const {
+      project = null,
+      activeChoice = "typical",
+      createReady = false,
+      annualInputYears = 0,
+      provinceCurveText = ""
+    } = input;
+    if (!project) {
+      return {
+        summary: "当前选择：待进入项目",
+        detail: "请先进入项目并完成基础信息保存，再从两种典型年曲线来源中二选一。"
+      };
+    }
+    if (!createReady) {
+      return {
+        summary: "当前选择：待基础信息保存",
+        detail: "基础信息保存完成后，才能上传典型年8760小时模板或调用所选省份典型曲线。"
+      };
+    }
+    const totalYears = Number.isInteger(project.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
+    const annualReady = totalYears > 0 && annualInputYears === totalYears;
+    if (!annualInputYears) {
+      return {
+        summary: "当前选择：待完成第一步",
+        detail: "请先导入逐年总量模板，录入测算周期内各年度总小时数，再开始第二步二选一。"
+      };
+    }
+    if (!annualReady) {
+      return {
+        summary: `当前选择：待补齐逐年总量（${annualInputYears}/${totalYears}）`,
+        detail: "第二步必须在逐年总量覆盖全部测算年度后再进行。"
+      };
+    }
+    if (project.energyData?.typicalCurveSource === "province_typical_curve") {
+      return {
+        summary: "当前选择：调用所选省份典型曲线",
+        detail: `当前生效来源为 ${provinceCurveText} 典型曲线；如切换为模板导入，将以新来源覆盖当前典型年曲线。`
+      };
+    }
+    if (project.energyData?.typicalCurveSource === "typical_curve_8760") {
+      return {
+        summary: "当前选择：上传典型年8760小时模板",
+        detail: "当前生效来源为典型年8760小时模板；如切换为省份典型曲线，将以新来源覆盖当前典型年曲线。"
+      };
+    }
+    return {
+      summary: activeChoice === "province"
+        ? "当前选择：准备调用所选省份典型曲线"
+        : "当前选择：准备上传典型年8760小时模板",
+      detail: "第二步二选一：确认任一来源完成后，系统将据此生成测算周期内各年上网电量。"
+    };
+  }
+
   function collectCompleteAnnualEnergyRows(project = {}, energyData = {}) {
     const forecastYears = Number.isInteger(project.forecastYears) && project.forecastYears > 0
       ? project.forecastYears
@@ -615,6 +669,7 @@
     applyCreateWorkspaceEntryState,
     bindCreateEnergyEvents,
     buildCreateProjectFormValues,
+    buildEnergyStep2ChoiceSummary,
     buildEnergySummaryNote,
     buildEnergyWorkspaceViewModel,
     collectCompleteAnnualEnergyRows,

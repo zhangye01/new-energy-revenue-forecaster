@@ -4,8 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
-const APP_JS_MAX_LINES = 5280;
-const APP_JS_MAX_FUNCTION_LINES = 41;
+const APP_JS_MAX_LINES = 5250;
+const APP_JS_MAX_FUNCTION_LINES = 40;
 const STYLES_CSS_MAX_LINES = 20;
 const REQUIRED_CSS_ORDER = ["styles/theme.css", "styles/base.css", "styles/components/data-display.css", "styles/components/forms.css", "styles/components/buttons.css", "styles/components/workflow.css", "styles/components/auth.css", "styles/pages/home.css", "styles/pages/projects.css", "styles/pages/create.css", "styles/pages/help.css", "styles/pages/energy.css", "styles/pages/scenario.css", "styles/pages/results.css", "styles/pages/compare.css", "styles/pages/history.css", "styles/responsive.css", "styles.css"];
 const FORBIDDEN_APP_JS_PATTERNS = [

@@ -1344,44 +1344,15 @@ function renderEnergyStep2ChoiceState() {
 
 function renderEnergyStep2ChoiceSummary(project) {
   if (!refs.energyStep2ChoiceSummary || !refs.energyStep2ChoiceDetail) return;
-  const activeChoice = sanitizeEnergyStep2Choice(appState.energyStep2Choice);
-  if (!project) {
-    refs.energyStep2ChoiceSummary.textContent = "当前选择：待进入项目";
-    refs.energyStep2ChoiceDetail.textContent = "请先进入项目并完成基础信息保存，再从两种典型年曲线来源中二选一。";
-    return;
-  }
-  if (!isProjectCreateCompleted(project)) {
-    refs.energyStep2ChoiceSummary.textContent = "当前选择：待基础信息保存";
-    refs.energyStep2ChoiceDetail.textContent = "基础信息保存完成后，才能上传典型年8760小时模板或调用所选省份典型曲线。";
-    return;
-  }
-  const totalYears = Number.isInteger(project.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
-  const annualInputYears = getAnnualInputYearCount(project);
-  const annualReady = totalYears > 0 && annualInputYears === totalYears;
-  if (!annualInputYears) {
-    refs.energyStep2ChoiceSummary.textContent = "当前选择：待完成第一步";
-    refs.energyStep2ChoiceDetail.textContent = "请先导入逐年总量模板，录入测算周期内各年度总小时数，再开始第二步二选一。";
-    return;
-  }
-  if (!annualReady) {
-    refs.energyStep2ChoiceSummary.textContent = `当前选择：待补齐逐年总量（${annualInputYears}/${totalYears}）`;
-    refs.energyStep2ChoiceDetail.textContent = "第二步必须在逐年总量覆盖全部测算年度后再进行。";
-    return;
-  }
-  if (project.energyData?.typicalCurveSource === "province_typical_curve") {
-    refs.energyStep2ChoiceSummary.textContent = "当前选择：调用所选省份典型曲线";
-    refs.energyStep2ChoiceDetail.textContent = `当前生效来源为 ${describeProvinceTypicalCurve(project)} 典型曲线；如切换为模板导入，将以新来源覆盖当前典型年曲线。`;
-    return;
-  }
-  if (project.energyData?.typicalCurveSource === "typical_curve_8760") {
-    refs.energyStep2ChoiceSummary.textContent = "当前选择：上传典型年8760小时模板";
-    refs.energyStep2ChoiceDetail.textContent = "当前生效来源为典型年8760小时模板；如切换为省份典型曲线，将以新来源覆盖当前典型年曲线。";
-    return;
-  }
-  refs.energyStep2ChoiceSummary.textContent = activeChoice === "province"
-    ? "当前选择：准备调用所选省份典型曲线"
-    : "当前选择：准备上传典型年8760小时模板";
-  refs.energyStep2ChoiceDetail.textContent = "第二步二选一：确认任一来源完成后，系统将据此生成测算周期内各年上网电量。";
+  const content = energyWorkspace.buildEnergyStep2ChoiceSummary({
+    project,
+    activeChoice: sanitizeEnergyStep2Choice(appState.energyStep2Choice),
+    createReady: project ? isProjectCreateCompleted(project) : false,
+    annualInputYears: project ? getAnnualInputYearCount(project) : 0,
+    provinceCurveText: project ? describeProvinceTypicalCurve(project) : ""
+  });
+  refs.energyStep2ChoiceSummary.textContent = content.summary;
+  refs.energyStep2ChoiceDetail.textContent = content.detail;
 }
 
 function setEnergyButtonVariant(button, variant = "ghost") {
