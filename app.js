@@ -3116,64 +3116,20 @@ function pseudoNoise(index, seed) {
   return energyProfiles.pseudoNoise(index, seed);
 }
 
-function generationWeight(assetType, hourIndex, seed) {
-  return energyProfiles.generationWeight(assetType, hourIndex, seed);
-}
-
 function generateHourlyHoursFromAnnual(annualHours, assetType, seed) {
   return energyProfiles.generateHourlyHoursFromAnnual(annualHours, assetType, seed);
 }
 
-function getProvinceTypicalCurveRecordKey(project) {
-  if (!project?.province || !project?.assetType) return "";
-  const siteType = SITE_TYPE_SET.has(project.siteType) ? project.siteType : "onshore";
-  return `${project.province}:${project.assetType}:${siteType}`;
-}
-
-function createProvinceTypicalCurveMockRecord(project) {
-  const benchmark = PROVINCE_BENCHMARKS?.[project?.province] || {};
-  const provinceSeed = Number(benchmark.historyPrice || 360);
-  const siteType = SITE_TYPE_SET.has(project?.siteType) ? project.siteType : "onshore";
-  const assetType = project?.assetType;
-  const coastalSet = new Set(["liaoning", "tianjin", "shanghai", "jiangsu", "zhejiang", "fujian", "shandong", "guangdong", "guangxi", "hainan"]);
-  const northernSet = new Set(["heilongjiang", "jilin", "liaoning", "inner_mongolia", "gansu", "ningxia", "xinjiang", "qinghai"]);
-  const raw = [];
-
-  for (let hourIndex = 0; hourIndex < 8760; hourIndex += 1) {
-    const dayOfYear = Math.floor(hourIndex / 24) + 1;
-    const hour = hourIndex % 24;
-    const { month } = dayOfYearToMonthDay(dayOfYear);
-    let value = generationWeight(assetType, hourIndex, provinceSeed + 17);
-
-    if (assetType === "wind") {
-      const winterBoost = (month === 12 || month <= 2) ? (northernSet.has(project?.province) ? 1.18 : 1.06) : 1;
-      const nightBoost = hour <= 6 || hour >= 19 ? (siteType === "offshore" ? 1.14 : 1.08) : 0.97;
-      const coastalBoost = siteType === "offshore" || coastalSet.has(project?.province) ? 1.05 : 0.99;
-      value *= winterBoost * nightBoost * coastalBoost;
-    } else if (assetType === "photovoltaic") {
-      const summerBoost = month >= 4 && month <= 9 ? 1.12 : 0.88;
-      const noonBoost = hour >= 10 && hour <= 15 ? 1.14 : (hour >= 7 && hour <= 17 ? 0.98 : 1);
-      const cloudFactor = coastalSet.has(project?.province) ? 0.97 : 1.02;
-      const offshoreBoost = siteType === "offshore" ? 1.03 : 1;
-      value *= summerBoost * noonBoost * cloudFactor * offshoreBoost;
-    }
-
-    value *= 0.94 + (provinceSeed % 23) / 100;
-    raw.push(value);
-  }
-
-  return {
-    key: getProvinceTypicalCurveRecordKey(project),
-    profile: normalizeTypicalCurveProfile(raw),
-    sourceLabel: `模拟库：${describeProvinceTypicalCurve(project)} 典型8760曲线`
-  };
-}
-
 function getProvinceTypicalCurveRecord(project) {
-  const cacheKey = getProvinceTypicalCurveRecordKey(project);
+  const curveOptions = {
+    provinceBenchmarks: PROVINCE_BENCHMARKS,
+    siteTypeSet: SITE_TYPE_SET,
+    describeProvinceTypicalCurve
+  };
+  const cacheKey = energyDataRules.getProvinceTypicalCurveRecordKey(project, curveOptions);
   if (!cacheKey) return null;
   if (!provinceTypicalCurveDbCache.has(cacheKey)) {
-    provinceTypicalCurveDbCache.set(cacheKey, createProvinceTypicalCurveMockRecord(project));
+    provinceTypicalCurveDbCache.set(cacheKey, energyDataRules.createProvinceTypicalCurveMockRecord(project, curveOptions));
   }
   return provinceTypicalCurveDbCache.get(cacheKey) || null;
 }

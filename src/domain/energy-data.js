@@ -40,6 +40,8 @@
     })
   });
   const ENERGY_MODE_SET = Object.freeze(Object.keys(ENERGY_MODE_META));
+  const COASTAL_PROVINCE_KEYS = Object.freeze(["liaoning", "tianjin", "shanghai", "jiangsu", "zhejiang", "fujian", "shandong", "guangdong", "guangxi", "hainan"]);
+  const NORTHERN_PROVINCE_KEYS = Object.freeze(["heilongjiang", "jilin", "liaoning", "inner_mongolia", "gansu", "ningxia", "xinjiang", "qinghai"]);
 
   function isPlainObject(value) {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -94,6 +96,57 @@
   function hasEnergyTypicalCurve(project) {
     const energyData = ensureProjectEnergyDataState(project);
     return hasStoredEnergyTypicalCurve(energyData);
+  }
+
+  function normalizeSiteType(siteType, validSiteTypes) {
+    return validSiteTypes?.has?.(siteType) ? siteType : "onshore";
+  }
+
+  function getProvinceTypicalCurveRecordKey(project, options = {}) {
+    if (!project?.province || !project?.assetType) return "";
+    const siteType = normalizeSiteType(project.siteType, options.siteTypeSet);
+    return `${project.province}:${project.assetType}:${siteType}`;
+  }
+
+  function createProvinceTypicalCurveMockRecord(project, options = {}) {
+    const provinceBenchmarks = options.provinceBenchmarks || {};
+    const benchmark = provinceBenchmarks?.[project?.province] || {};
+    const provinceSeed = Number(benchmark.historyPrice || 360);
+    const siteType = normalizeSiteType(project?.siteType, options.siteTypeSet);
+    const assetType = project?.assetType;
+    const coastalSet = new Set(options.coastalProvinceKeys || COASTAL_PROVINCE_KEYS);
+    const northernSet = new Set(options.northernProvinceKeys || NORTHERN_PROVINCE_KEYS);
+    const describeProvinceTypicalCurve = options.describeProvinceTypicalCurve || (() => "所选省份");
+    const raw = [];
+
+    for (let hourIndex = 0; hourIndex < 8760; hourIndex += 1) {
+      const dayOfYear = Math.floor(hourIndex / 24) + 1;
+      const hour = hourIndex % 24;
+      const { month } = energyProfiles.dayOfYearToMonthDay(dayOfYear);
+      let value = energyProfiles.generationWeight(assetType, hourIndex, provinceSeed + 17);
+
+      if (assetType === "wind") {
+        const winterBoost = (month === 12 || month <= 2) ? (northernSet.has(project?.province) ? 1.18 : 1.06) : 1;
+        const nightBoost = hour <= 6 || hour >= 19 ? (siteType === "offshore" ? 1.14 : 1.08) : 0.97;
+        const coastalBoost = siteType === "offshore" || coastalSet.has(project?.province) ? 1.05 : 0.99;
+        value *= winterBoost * nightBoost * coastalBoost;
+      } else if (assetType === "photovoltaic") {
+        const summerBoost = month >= 4 && month <= 9 ? 1.12 : 0.88;
+        const noonBoost = hour >= 10 && hour <= 15 ? 1.14 : (hour >= 7 && hour <= 17 ? 0.98 : 1);
+        const cloudFactor = coastalSet.has(project?.province) ? 0.97 : 1.02;
+        const offshoreBoost = siteType === "offshore" ? 1.03 : 1;
+        value *= summerBoost * noonBoost * cloudFactor * offshoreBoost;
+      }
+
+      value *= 0.94 + (provinceSeed % 23) / 100;
+      raw.push(value);
+    }
+
+    return {
+      key: getProvinceTypicalCurveRecordKey(project, options),
+      profile: energyProfiles.normalizeTypicalCurveProfile(raw),
+      sourceLabel: `模拟库：${describeProvinceTypicalCurve(project)} 典型8760曲线`
+    };
   }
 
   function getCompleteEnergyYears(project) {
@@ -457,8 +510,10 @@
     getEnergyModeMeta,
     ensureProjectEnergyDataState,
     ensureProjectEnergyDataDerivedState,
+    createProvinceTypicalCurveMockRecord,
     hasStoredEnergyTypicalCurve,
     hasEnergyTypicalCurve,
+    getProvinceTypicalCurveRecordKey,
     getCompleteEnergyYears,
     getAnnualInputYearCount,
     getContiguousAnnualInputPeriod,

@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const {
   buildEnergyTemplateRows,
+  createProvinceTypicalCurveMockRecord,
   detectEnergyModeByHeader,
   deriveEnergyModeFromInputs,
   ensureProjectEnergyDataDerivedState,
@@ -11,6 +12,7 @@ const {
   getCompleteEnergyYears,
   getContiguousAnnualInputPeriod,
   getEnergyModeMeta,
+  getProvinceTypicalCurveRecordKey,
   hasEnergyTypicalCurve,
   parseYearRangeFromLabel,
   rebuildProjectEnergyData,
@@ -238,5 +240,36 @@ assert.deepEqual(parseYearRangeFromLabel("模板 2026-2028"), {
   count: 3
 });
 assert.equal(parseYearRangeFromLabel("模板 2028-2026"), null);
+
+const provinceCurveProject = {
+  province: "jiangsu",
+  assetType: "wind",
+  siteType: "offshore"
+};
+assert.equal(
+  getProvinceTypicalCurveRecordKey(provinceCurveProject, { siteTypeSet: new Set(["onshore", "offshore"]) }),
+  "jiangsu:wind:offshore"
+);
+assert.equal(
+  getProvinceTypicalCurveRecordKey({ ...provinceCurveProject, siteType: "bad" }, { siteTypeSet: new Set(["onshore", "offshore"]) }),
+  "jiangsu:wind:onshore"
+);
+assert.equal(getProvinceTypicalCurveRecordKey({ province: "jiangsu" }), "");
+
+const provinceCurveRecord = createProvinceTypicalCurveMockRecord(provinceCurveProject, {
+  provinceBenchmarks: { jiangsu: { historyPrice: 365 } },
+  siteTypeSet: new Set(["onshore", "offshore"]),
+  describeProvinceTypicalCurve: () => "江苏海上风电"
+});
+assert.equal(provinceCurveRecord.key, "jiangsu:wind:offshore");
+assert.equal(provinceCurveRecord.profile.length, 8760);
+approx(
+  provinceCurveRecord.profile.reduce((sum, value) => sum + value, 0),
+  1,
+  "省份典型曲线归一化",
+  1e-6
+);
+assert.ok(provinceCurveRecord.profile.every((value) => Number.isFinite(value) && value >= 0));
+assert.equal(provinceCurveRecord.sourceLabel, "模拟库：江苏海上风电 典型8760曲线");
 
 console.log("energy data tests passed");
