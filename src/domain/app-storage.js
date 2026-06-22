@@ -246,6 +246,58 @@
     };
   }
 
+  function persistSnapshotWithFallback(input = {}) {
+    const {
+      store,
+      snapshot,
+      hasLocalStorage = false,
+      storageMode = "",
+      forceLocal = false,
+      nowMs = Date.now(),
+      lastLocalWriteAt = 0,
+      intervalMs = 0,
+      sequence = 0,
+      isLatestSequence = () => true,
+      onLocalWriteError,
+      onDbWriteError,
+      onStorageAvailable,
+      onStorageRisk
+    } = input;
+    const localWrite = writeLocalSnapshotIfDue({
+      store,
+      snapshot,
+      hasLocalStorage,
+      storageMode,
+      forceLocal,
+      nowMs,
+      lastLocalWriteAt,
+      intervalMs,
+      onLocalWriteError
+    });
+
+    void Promise.resolve(store?.writeDbSnapshot?.(snapshot) || false)
+      .then(() => {
+        if (isLatestSequence(sequence)) onStorageAvailable?.();
+      })
+      .catch((error) => {
+        if (!isLatestSequence(sequence)) return;
+        onDbWriteError?.(error);
+        if (!localWrite.succeeded) onStorageRisk?.("db_write_failed");
+      });
+
+    if (localWrite.succeeded || !localWrite.attempted) {
+      onStorageAvailable?.();
+    } else if (!store?.supportsIndexedDb?.()) {
+      onStorageRisk?.("indexeddb_unsupported");
+    }
+
+    return {
+      localWrite,
+      storageMode: localWrite.storageMode,
+      lastLocalWriteAt: localWrite.lastLocalWriteAt
+    };
+  }
+
   return {
     resolveBrowserStorage: resolveGlobalValue,
     readRawFromStorage,
@@ -258,6 +310,7 @@
     selectLatestSnapshot,
     createIndexedDbSnapshotStore,
     createAppDataSnapshotStore,
+    persistSnapshotWithFallback,
     writeLocalSnapshotIfDue
   };
 });

@@ -22,6 +22,12 @@ function createMemoryStorage(options = {}) {
   };
 }
 
+function flushAsyncStorageCallbacks() {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 {
   const storage = createMemoryStorage();
   const ok = appStorage.writeJsonToStorage(storage, "demo", { a: 1 });
@@ -139,6 +145,92 @@ function createMemoryStorage(options = {}) {
   });
   assert.equal(capturedError, "quota");
 }
+
+(async () => {
+  const calls = [];
+  let localWrites = 0;
+  const store = {
+    supportsIndexedDb: () => true,
+    writeLocalSnapshot() {
+      localWrites += 1;
+      return true;
+    },
+    writeDbSnapshot: () => Promise.resolve(true)
+  };
+  const result = appStorage.persistSnapshotWithFallback({
+    store,
+    snapshot: { payload: { id: "ok" } },
+    hasLocalStorage: true,
+    forceLocal: true,
+    nowMs: 12000,
+    lastLocalWriteAt: 10000,
+    intervalMs: 4000,
+    sequence: 2,
+    isLatestSequence: (seq) => seq === 2,
+    onStorageAvailable: () => calls.push("available")
+  });
+  assert.equal(localWrites, 1);
+  assert.equal(result.storageMode, "");
+  assert.equal(result.lastLocalWriteAt, 12000);
+  assert.equal(calls.length, 1);
+  await flushAsyncStorageCallbacks();
+  assert.deepEqual(calls, ["available", "available"]);
+})();
+
+(async () => {
+  const calls = [];
+  const store = {
+    supportsIndexedDb: () => true,
+    writeLocalSnapshot(_snapshot, callbacks = {}) {
+      callbacks.onLocalWriteError?.(new Error("quota"));
+      return false;
+    },
+    writeDbSnapshot: () => Promise.reject(new Error("idb failed"))
+  };
+  const result = appStorage.persistSnapshotWithFallback({
+    store,
+    snapshot: { payload: { id: "risk" } },
+    hasLocalStorage: true,
+    nowMs: 13000,
+    lastLocalWriteAt: 10000,
+    intervalMs: 100,
+    sequence: 3,
+    isLatestSequence: (seq) => seq === 3,
+    onLocalWriteError: (error) => calls.push(`local:${error.message}`),
+    onDbWriteError: (error) => calls.push(`db:${error.message}`),
+    onStorageRisk: (reason) => calls.push(`risk:${reason}`)
+  });
+  assert.equal(result.storageMode, "idb_only");
+  assert.equal(result.lastLocalWriteAt, 10000);
+  await flushAsyncStorageCallbacks();
+  assert.deepEqual(calls, ["local:quota", "db:idb failed", "risk:db_write_failed"]);
+})();
+
+(async () => {
+  const calls = [];
+  const store = {
+    supportsIndexedDb: () => false,
+    writeLocalSnapshot() {
+      return false;
+    },
+    writeDbSnapshot: () => Promise.resolve(false)
+  };
+  appStorage.persistSnapshotWithFallback({
+    store,
+    snapshot: { payload: { id: "unsupported" } },
+    hasLocalStorage: true,
+    nowMs: 14000,
+    lastLocalWriteAt: 10000,
+    intervalMs: 100,
+    sequence: 4,
+    isLatestSequence: (seq) => seq === 4,
+    onStorageAvailable: () => calls.push("available"),
+    onStorageRisk: (reason) => calls.push(`risk:${reason}`)
+  });
+  assert.deepEqual(calls, ["risk:indexeddb_unsupported"]);
+  await flushAsyncStorageCallbacks();
+  assert.deepEqual(calls, ["risk:indexeddb_unsupported", "available"]);
+})();
 
 (async () => {
   const storage = createMemoryStorage();

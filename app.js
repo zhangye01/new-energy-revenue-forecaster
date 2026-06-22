@@ -1377,7 +1377,8 @@ function setEnergyPaneCurrentState(pane, statusElement, message = "") {
 
 function persistAppDataNow(options = {}) {
   const snapshot = buildAppDataSnapshot();
-  const localWrite = appStorage.writeLocalSnapshotIfDue({
+  const currentSeq = ++persistSequence;
+  const result = appStorage.persistSnapshotWithFallback({
     store: appDataSnapshotStore,
     snapshot,
     hasLocalStorage: Boolean(getBrowserStorage("localStorage")),
@@ -1386,34 +1387,27 @@ function persistAppDataNow(options = {}) {
     nowMs: Date.now(),
     lastLocalWriteAt: lastLocalStoragePersistAt,
     intervalMs: LOCAL_STORAGE_PERSIST_INTERVAL_MS,
+    sequence: currentSeq,
+    isLatestSequence: (seq) => seq === persistSequence,
     onLocalWriteError: (error) => {
       console.warn("localStorage容量不足，已切换IndexedDB持久化。", error);
+    },
+    onDbWriteError: (error) => {
+      console.warn("写入IndexedDB业务快照失败。", error);
+    },
+    onStorageAvailable: () => {
+      storageWarningShown = false;
+    },
+    onStorageRisk: (reason) => {
+      if (storageWarningShown) return;
+      storageWarningShown = true;
+      setTopMeta(reason === "indexeddb_unsupported"
+        ? "浏览器不支持大容量本地存储，当前改动可能在刷新后丢失。"
+        : "本地存储不可用，当前改动可能在刷新后丢失。");
     }
   });
-  appDataStorageMode = localWrite.storageMode;
-  lastLocalStoragePersistAt = localWrite.lastLocalWriteAt;
-
-  const currentSeq = ++persistSequence;
-  void appDataSnapshotStore.writeDbSnapshot(snapshot)
-    .then(() => {
-      if (currentSeq !== persistSequence) return;
-      storageWarningShown = false;
-    })
-    .catch((error) => {
-      if (currentSeq !== persistSequence) return;
-      console.warn("写入IndexedDB业务快照失败。", error);
-      if (!localWrite.succeeded && !storageWarningShown) {
-        storageWarningShown = true;
-        setTopMeta("本地存储不可用，当前改动可能在刷新后丢失。");
-      }
-    });
-
-  if (localWrite.succeeded || !localWrite.attempted) {
-    storageWarningShown = false;
-  } else if (!appDataSnapshotStore.supportsIndexedDb() && !storageWarningShown) {
-    storageWarningShown = true;
-    setTopMeta("浏览器不支持大容量本地存储，当前改动可能在刷新后丢失。");
-  }
+  appDataStorageMode = result.storageMode;
+  lastLocalStoragePersistAt = result.lastLocalWriteAt;
 }
 
 function schedulePersistAppData() {
