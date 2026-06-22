@@ -2,11 +2,13 @@
 
 const assert = require("node:assert/strict");
 const {
+  applyResultPageViewModel,
   applyResultReportView,
   bindResultActionEvents,
   buildEmptyMetricCards,
   buildResultMetaHtml,
-  buildResultPageViewModel
+  buildResultPageViewModel,
+  resetResultDom
 } = require("../src/ui/result-page");
 
 class FakeTarget {
@@ -109,6 +111,48 @@ const noProject = buildResultPageViewModel();
 assert.equal(noProject.state, "no_project");
 assert.equal(noProject.chartPlaceholder, "请选择项目后发起测算");
 assert.match(noProject.metaHtml, /项目：-/);
+
+const resultDomRefs = {
+  resultReportMeta: { innerHTML: "old" },
+  resultExecutiveSummary: { textContent: "old" },
+  resultMetricGrid: { innerHTML: "old" },
+  resultInsightList: { innerHTML: "old" },
+  resultAssumptionList: { innerHTML: "old" },
+  annualResultBody: { innerHTML: "old" },
+  hourlyResultBody: { innerHTML: "old" },
+  hourlyPreviewHint: { textContent: "old" }
+};
+resetResultDom(resultDomRefs);
+assert.equal(resultDomRefs.resultMetricGrid.innerHTML, "");
+assert.equal(resultDomRefs.resultInsightList.innerHTML, "");
+assert.equal(resultDomRefs.annualResultBody.innerHTML, "");
+assert.equal(resultDomRefs.hourlyPreviewHint.textContent, "等待测算");
+applyResultPageViewModel({
+  refs: resultDomRefs,
+  view: {
+    metaHtml: "<span>项目：测试</span>",
+    executiveSummary: "摘要",
+    metricHtml: "<article>指标</article>",
+    insightHtml: "<article>洞察</article>",
+    assumptionHtml: "<article>假设</article>",
+    annualRowsHtml: "<tr><td>2026</td></tr>",
+    hourlyRowsHtml: "<tr><td>小时</td></tr>",
+    hourlyPreviewHint: "预览"
+  }
+});
+assert.equal(resultDomRefs.resultReportMeta.innerHTML, "<span>项目：测试</span>");
+assert.equal(resultDomRefs.resultExecutiveSummary.textContent, "摘要");
+assert.equal(resultDomRefs.resultMetricGrid.innerHTML, "<article>指标</article>");
+assert.equal(resultDomRefs.hourlyPreviewHint.textContent, "预览");
+applyResultPageViewModel({
+  refs: resultDomRefs,
+  view: {
+    metricHtml: "",
+    hourlyPreviewHint: ""
+  }
+});
+assert.equal(resultDomRefs.resultMetricGrid.innerHTML, "");
+assert.equal(resultDomRefs.hourlyPreviewHint.textContent, "");
 
 const project = { name: "江苏海上风电示例项目" };
 const scenario = {

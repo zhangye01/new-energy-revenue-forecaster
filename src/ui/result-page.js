@@ -97,6 +97,43 @@
     return nextView;
   }
 
+  function hasViewValue(value) {
+    return value !== undefined && value !== null;
+  }
+
+  function setHtml(target, value) {
+    if (target && hasViewValue(value)) target.innerHTML = value;
+  }
+
+  function setText(target, value) {
+    if (target && hasViewValue(value)) target.textContent = value;
+  }
+
+  function resetResultDom(refs = {}) {
+    if (refs.resultMetricGrid) refs.resultMetricGrid.innerHTML = "";
+    if (refs.resultInsightList) refs.resultInsightList.innerHTML = "";
+    if (refs.resultAssumptionList) refs.resultAssumptionList.innerHTML = "";
+    if (refs.annualResultBody) refs.annualResultBody.innerHTML = "";
+    if (refs.hourlyResultBody) refs.hourlyResultBody.innerHTML = "";
+    if (refs.hourlyPreviewHint) refs.hourlyPreviewHint.textContent = "等待测算";
+  }
+
+  function applyResultPageViewModel(input = {}) {
+    const {
+      refs = {},
+      view = {}
+    } = input;
+    setHtml(refs.resultReportMeta, view.metaHtml);
+    setText(refs.resultExecutiveSummary, view.executiveSummary);
+    setHtml(refs.resultMetricGrid, view.metricHtml);
+    setHtml(refs.resultInsightList, view.insightHtml);
+    setHtml(refs.resultAssumptionList, view.assumptionHtml);
+    setHtml(refs.annualResultBody, view.annualRowsHtml);
+    setHtml(refs.hourlyResultBody, view.hourlyRowsHtml);
+    setText(refs.hourlyPreviewHint, view.hourlyPreviewHint);
+    return view;
+  }
+
   function buildResultMetaHtml(labels = {}) {
     return `
       <span>项目：${escapeHtml(labels.projectName || "-")}</span>
@@ -290,10 +327,12 @@
   }
 
   return Object.freeze({
+    applyResultPageViewModel,
     applyResultReportView,
     bindResultActionEvents,
     buildEmptyMetricCards,
     buildResultMetaHtml,
-    buildResultPageViewModel
+    buildResultPageViewModel,
+    resetResultDom
   });
 });

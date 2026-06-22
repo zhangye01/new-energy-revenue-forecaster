@@ -4814,12 +4814,7 @@ function renderResultCharts(project, scenario, result) {
 }
 
 function resetResultDom() {
-  if (refs.resultMetricGrid) refs.resultMetricGrid.innerHTML = "";
-  if (refs.resultInsightList) refs.resultInsightList.innerHTML = "";
-  if (refs.resultAssumptionList) refs.resultAssumptionList.innerHTML = "";
-  if (refs.annualResultBody) refs.annualResultBody.innerHTML = "";
-  if (refs.hourlyResultBody) refs.hourlyResultBody.innerHTML = "";
-  if (refs.hourlyPreviewHint) refs.hourlyPreviewHint.textContent = "等待测算";
+  resultPage.resetResultDom(refs);
 }
 
 function renderResults() {
@@ -4847,14 +4842,7 @@ function renderResults() {
     feeConfigMode: getFeeConfigMode(cfg)
   });
 
-  if (refs.resultReportMeta && view.metaHtml) refs.resultReportMeta.innerHTML = view.metaHtml;
-  if (refs.resultExecutiveSummary && view.executiveSummary) refs.resultExecutiveSummary.textContent = view.executiveSummary;
-  if (refs.resultMetricGrid && view.metricHtml) refs.resultMetricGrid.innerHTML = view.metricHtml;
-  if (refs.resultInsightList && view.insightHtml) refs.resultInsightList.innerHTML = view.insightHtml;
-  if (refs.resultAssumptionList && view.assumptionHtml) refs.resultAssumptionList.innerHTML = view.assumptionHtml;
-  if (refs.annualResultBody && view.annualRowsHtml) refs.annualResultBody.innerHTML = view.annualRowsHtml;
-  if (refs.hourlyResultBody && view.hourlyRowsHtml) refs.hourlyResultBody.innerHTML = view.hourlyRowsHtml;
-  if (refs.hourlyPreviewHint && view.hourlyPreviewHint) refs.hourlyPreviewHint.textContent = view.hourlyPreviewHint;
+  resultPage.applyResultPageViewModel({ refs, view });
   if (view.chartPlaceholder) {
     renderResultChartsPlaceholder(view.chartPlaceholder);
     return;
