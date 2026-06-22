@@ -10,6 +10,44 @@
     root.window.NE_APP_EVENT_BINDINGS = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
+  const APP_ACTION_GROUPS = Object.freeze({
+    shell: [
+      "toggleTheme", "renderBenchmarkMap", "schedulePersistAppData",
+      "adjustBenchmarkMapZoom", "resetBenchmarkMapZoom", "bindBenchmarkRangeDrag",
+      "togglePageHelp", "goToOverviewSlide", "openOverviewPolicyDetail",
+      "openLoginModal", "toggleSidebarGroup", "toggleAccountDropdown", "setHistoryDatePanelOpen"
+    ],
+    account: [
+      "handleAccountManage", "handleAccountPassword", "handleLogout", "handleChangePassword",
+      "closeLoginModal", "handleLoginSubmit", "closeOverviewPolicyDetail",
+      "closeAccountDropdown", "closePageHelp", "stopOverviewAutoplay"
+    ],
+    lifecycle: [
+      "disposeHistoryCharts", "disposeCompareCharts", "disposeResultCharts",
+      "persistAppDataNow", "normalizeUserFacingError", "setTopMeta"
+    ],
+    history: ["sanitizeHistoryAnalysis", "renderPolicyPanel", "renderHistoryPrices", "exportHistoryChartData"],
+    navigation: ["setActivePage", "setResultReportView", "queueResultChartsResize"],
+    compare: [
+      "sanitizeCompareView", "sanitizeCompareSensitivitySettings",
+      "renderCompareWorkspaceState", "renderCompare", "queueCompareChartsResize"
+    ],
+    energy: [
+      "getActiveProject", "isProjectCreateCompleted", "hasEnergyHistoryEntryReadiness",
+      "sanitizeEnergyStep2Choice", "createProjectFromForm", "syncCreateStorageFieldsUi",
+      "setCreateSaveMessage", "setEnergyImportMessage", "exportEnergyTemplate",
+      "importEnergyFromFile", "applyProvinceTypicalCurve", "renderEnergyStep2ChoiceState"
+    ],
+    scenario: [
+      "generateForecastRun", "saveScenarioFromForm", "switchActiveScenario",
+      "renameActiveScenario", "duplicateActiveScenario", "deleteActiveScenario",
+      "toggleBaselineLock", "applyBatchParameter", "syncScenarioFieldLocks",
+      "exportManualScenarioTemplate", "importManualScenarioTemplate", "renderProvinceLibrary",
+      "updateMarketTradeEnergyDisplay", "updateEnvValueSpaceDisplay"
+    ],
+    result: ["runCalculation", "exportAnnualCsv", "exportHourlyCsv", "printScenarioReport"]
+  });
+
   function createActionRegistry(groups = {}) {
     const registry = {};
     Object.entries(groups).forEach(([groupName, group]) => {
@@ -22,6 +60,21 @@
       });
     });
     return registry;
+  }
+
+  function createGroupedActionMap(source = {}, groups = APP_ACTION_GROUPS) {
+    const grouped = {};
+    Object.entries(groups).forEach(([groupName, names]) => {
+      grouped[groupName] = {};
+      names.forEach((name) => {
+        grouped[groupName][name] = source[name];
+      });
+    });
+    return grouped;
+  }
+
+  function createAppActionRegistry(source = {}) {
+    return createActionRegistry(createGroupedActionMap(source));
   }
 
   function bindAppEvents(input = {}) {
@@ -177,6 +230,7 @@
   }
 
   return Object.freeze({
+    createAppActionRegistry,
     bindAppEvents,
     createActionRegistry
   });

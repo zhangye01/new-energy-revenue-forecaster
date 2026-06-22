@@ -5161,42 +5161,27 @@ function createEventBindingStateAccessors() {
 }
 
 function createEventBindingActions() {
-  return appEventBindings.createActionRegistry({
-    shell: {
-      toggleTheme, renderBenchmarkMap, schedulePersistAppData,
-      adjustBenchmarkMapZoom, resetBenchmarkMapZoom, bindBenchmarkRangeDrag,
-      togglePageHelp, goToOverviewSlide, openOverviewPolicyDetail,
-      openLoginModal, toggleSidebarGroup, toggleAccountDropdown, setHistoryDatePanelOpen
-    },
-    account: {
-      handleAccountManage, handleAccountPassword, handleLogout, handleChangePassword,
-      closeLoginModal, handleLoginSubmit, closeOverviewPolicyDetail,
-      closeAccountDropdown, closePageHelp, stopOverviewAutoplay
-    },
-    lifecycle: {
-      disposeHistoryCharts, disposeCompareCharts, disposeResultCharts,
-      persistAppDataNow, normalizeUserFacingError, setTopMeta
-    },
-    history: { sanitizeHistoryAnalysis, renderPolicyPanel, renderHistoryPrices, exportHistoryChartData },
-    navigation: { setActivePage, setResultReportView, queueResultChartsResize },
-    compare: {
-      sanitizeCompareView, sanitizeCompareSensitivitySettings,
-      renderCompareWorkspaceState, renderCompare, queueCompareChartsResize
-    },
-    energy: {
-      getActiveProject, isProjectCreateCompleted, hasEnergyHistoryEntryReadiness,
-      sanitizeEnergyStep2Choice, createProjectFromForm, syncCreateStorageFieldsUi,
-      setCreateSaveMessage, setEnergyImportMessage, exportEnergyTemplate,
-      importEnergyFromFile, applyProvinceTypicalCurve, renderEnergyStep2ChoiceState
-    },
-    scenario: {
-      generateForecastRun, saveScenarioFromForm, switchActiveScenario,
-      renameActiveScenario, duplicateActiveScenario, deleteActiveScenario,
-      toggleBaselineLock, applyBatchParameter, syncScenarioFieldLocks,
-      exportManualScenarioTemplate, importManualScenarioTemplate, renderProvinceLibrary,
-      updateMarketTradeEnergyDisplay, updateEnvValueSpaceDisplay
-    },
-    result: { runCalculation, exportAnnualCsv, exportHourlyCsv, printScenarioReport }
+  return appEventBindings.createAppActionRegistry({
+    toggleTheme, renderBenchmarkMap, schedulePersistAppData, adjustBenchmarkMapZoom,
+    resetBenchmarkMapZoom, bindBenchmarkRangeDrag, togglePageHelp, goToOverviewSlide,
+    openOverviewPolicyDetail, openLoginModal, toggleSidebarGroup, toggleAccountDropdown,
+    setHistoryDatePanelOpen, handleAccountManage, handleAccountPassword, handleLogout,
+    handleChangePassword, closeLoginModal, handleLoginSubmit, closeOverviewPolicyDetail,
+    closeAccountDropdown, closePageHelp, stopOverviewAutoplay, disposeHistoryCharts,
+    disposeCompareCharts, disposeResultCharts, persistAppDataNow, normalizeUserFacingError,
+    setTopMeta, sanitizeHistoryAnalysis, renderPolicyPanel, renderHistoryPrices,
+    exportHistoryChartData, setActivePage, setResultReportView, queueResultChartsResize,
+    sanitizeCompareView, sanitizeCompareSensitivitySettings, renderCompareWorkspaceState,
+    renderCompare, queueCompareChartsResize, getActiveProject, isProjectCreateCompleted,
+    hasEnergyHistoryEntryReadiness, sanitizeEnergyStep2Choice, createProjectFromForm,
+    syncCreateStorageFieldsUi, setCreateSaveMessage, setEnergyImportMessage,
+    exportEnergyTemplate, importEnergyFromFile, applyProvinceTypicalCurve,
+    renderEnergyStep2ChoiceState, generateForecastRun, saveScenarioFromForm,
+    switchActiveScenario, renameActiveScenario, duplicateActiveScenario, deleteActiveScenario,
+    toggleBaselineLock, applyBatchParameter, syncScenarioFieldLocks, exportManualScenarioTemplate,
+    importManualScenarioTemplate, renderProvinceLibrary, updateMarketTradeEnergyDisplay,
+    updateEnvValueSpaceDisplay, runCalculation, exportAnnualCsv, exportHourlyCsv,
+    printScenarioReport
   });
 }
 

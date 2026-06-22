@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { bindAppEvents, createActionRegistry } = require("../src/ui/app-event-bindings");
+const { bindAppEvents, createActionRegistry, createAppActionRegistry } = require("../src/ui/app-event-bindings");
 
 const groupedActions = createActionRegistry({
   shell: {
@@ -19,6 +19,21 @@ assert.throws(() => createActionRegistry({
   first: { save: () => "a" },
   second: { save: () => "b" }
 }), /事件动作重复注册：second\.save/);
+
+const appActionCalls = [];
+const appActions = createAppActionRegistry({
+  toggleTheme: () => appActionCalls.push("theme"),
+  handleLoginSubmit: () => appActionCalls.push("login"),
+  renderCompare: () => appActionCalls.push("compare"),
+  runCalculation: () => appActionCalls.push("run")
+});
+appActions.toggleTheme();
+appActions.handleLoginSubmit();
+appActions.renderCompare();
+appActions.runCalculation();
+assert.deepEqual(appActionCalls, ["theme", "login", "compare", "run"]);
+assert.equal(Object.prototype.hasOwnProperty.call(appActions, "setTopMeta"), true);
+assert.equal(Object.prototype.hasOwnProperty.call(appActions, "printScenarioReport"), true);
 
 const calls = [];
 const refs = {
