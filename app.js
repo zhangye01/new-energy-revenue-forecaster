@@ -4253,39 +4253,14 @@ function updateEnvManualStatus(project = getActiveProject(), scenario = null) {
 
 function syncEnvValueControls(project = getActiveProject(), scenario = null, locked = false) {
   const activeScenario = scenario || (project ? getActiveScenario(project) : null);
-  const mode = refs.envValueMode?.value || getEnvValueMode(activeScenario?.config);
-  const isManual = mode === "manual";
-  const canUseCarbon = project?.siteType === "offshore";
-  const carbonEnabled = document.querySelector("#carbon-enabled")?.value === "yes";
-  if (refs.envManualPanel) refs.envManualPanel.hidden = !isManual;
-  if (refs.envValueMode) refs.envValueMode.disabled = locked;
-  [
-    "#green-cert-price",
-    "#green-cert-realize-ratio",
-    "#green-premium-price",
-    "#green-premium-realize-ratio"
-  ].forEach((selector) => {
-    const field = document.querySelector(selector);
-    if (field) field.disabled = locked || isManual;
+  scenarioForm.applyEnvValueControlState({
+    refs,
+    querySelector: (selector) => document.querySelector(selector),
+    project,
+    scenario: activeScenario,
+    locked,
+    envValueMode: getEnvValueMode(activeScenario?.config)
   });
-  const carbonEnabledField = document.querySelector("#carbon-enabled");
-  const carbonPriceField = document.querySelector("#carbon-price");
-  const carbonRatioField = document.querySelector("#carbon-realize-ratio");
-  if (carbonEnabledField) carbonEnabledField.disabled = locked || isManual || !canUseCarbon;
-  if (carbonPriceField) carbonPriceField.disabled = locked || isManual || !(canUseCarbon && carbonEnabled);
-  if (carbonRatioField) carbonRatioField.disabled = locked || isManual || !(canUseCarbon && carbonEnabled);
-  if (!canUseCarbon) {
-    if (carbonEnabledField) carbonEnabledField.value = "no";
-    if (carbonPriceField) carbonPriceField.value = "0";
-    if (carbonRatioField) carbonRatioField.value = "0";
-  } else if (!carbonEnabled && !isManual && carbonRatioField) {
-    carbonRatioField.value = "0";
-  }
-  if (refs.envValueSpaceRatio) refs.envValueSpaceRatio.disabled = true;
-  if (refs.envValueUsedRatio) refs.envValueUsedRatio.disabled = true;
-  if (refs.exportEnvTemplateButton) refs.exportEnvTemplateButton.disabled = locked || !project;
-  if (refs.envManualFileInput) refs.envManualFileInput.disabled = locked || !project || !isManual;
-  if (refs.importEnvTemplateButton) refs.importEnvTemplateButton.disabled = locked || !project || !isManual;
   updateEnvManualStatus(project, activeScenario);
   updateEnvValueSpaceDisplay(project, activeScenario);
 }

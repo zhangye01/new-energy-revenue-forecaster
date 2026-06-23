@@ -328,6 +328,59 @@
     }
   }
 
+  function applyEnvValueControlState(input = {}) {
+    const {
+      refs = {},
+      querySelector = () => null,
+      project = null,
+      scenario = null,
+      locked = false,
+      envValueMode = "global"
+    } = input;
+    const mode = refs.envValueMode?.value || envValueMode || "global";
+    const isManual = mode === "manual";
+    const canUseCarbon = project?.siteType === "offshore";
+    const carbonEnabledField = getField(querySelector, "#carbon-enabled");
+    const carbonPriceField = getField(querySelector, "#carbon-price");
+    const carbonRatioField = getField(querySelector, "#carbon-realize-ratio");
+    const carbonEnabled = carbonEnabledField?.value === "yes";
+
+    if (refs.envManualPanel) refs.envManualPanel.hidden = !isManual;
+    if (refs.envValueMode) refs.envValueMode.disabled = locked;
+    [
+      "#green-cert-price",
+      "#green-cert-realize-ratio",
+      "#green-premium-price",
+      "#green-premium-realize-ratio"
+    ].forEach((selector) => {
+      const field = getField(querySelector, selector);
+      if (field) field.disabled = locked || isManual;
+    });
+    if (carbonEnabledField) carbonEnabledField.disabled = locked || isManual || !canUseCarbon;
+    if (carbonPriceField) carbonPriceField.disabled = locked || isManual || !(canUseCarbon && carbonEnabled);
+    if (carbonRatioField) carbonRatioField.disabled = locked || isManual || !(canUseCarbon && carbonEnabled);
+    if (!canUseCarbon) {
+      if (carbonEnabledField) carbonEnabledField.value = "no";
+      if (carbonPriceField) carbonPriceField.value = "0";
+      if (carbonRatioField) carbonRatioField.value = "0";
+    } else if (!carbonEnabled && !isManual && carbonRatioField) {
+      carbonRatioField.value = "0";
+    }
+    if (refs.envValueSpaceRatio) refs.envValueSpaceRatio.disabled = true;
+    if (refs.envValueUsedRatio) refs.envValueUsedRatio.disabled = true;
+    if (refs.exportEnvTemplateButton) refs.exportEnvTemplateButton.disabled = locked || !project;
+    if (refs.envManualFileInput) refs.envManualFileInput.disabled = locked || !project || !isManual;
+    if (refs.importEnvTemplateButton) refs.importEnvTemplateButton.disabled = locked || !project || !isManual;
+
+    return {
+      mode,
+      isManual,
+      canUseCarbon,
+      carbonEnabled,
+      hasScenario: Boolean(project && scenario)
+    };
+  }
+
   function buildScenarioConfigFromForm(input = {}) {
     const {
       project = {},
@@ -480,6 +533,7 @@
   }
 
   return Object.freeze({
+    applyEnvValueControlState,
     applyScenarioManagerView,
     applyScenarioFieldLocks,
     bindForecastScenarioEvents,

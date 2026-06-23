@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const scenarioConfig = require("../src/domain/scenario-config");
 const {
+  applyEnvValueControlState,
   applyScenarioManagerView,
   applyScenarioFieldLocks,
   bindForecastScenarioEvents,
@@ -278,6 +279,80 @@ assert.equal(lockHarness.fields.get("#mechanism-price").disabled, true);
 assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, false);
 assert.equal(lockRefs.storageCapacityCompPrice.disabled, true);
 assert.equal(lockRefs.scenarioLockHint.textContent, "当前为锁定场景，已禁止编辑。可切换场景或解锁基准场景。");
+
+const envHarness = makeFields({
+  "#green-cert-price": "22",
+  "#green-cert-realize-ratio": "40",
+  "#green-premium-price": "12",
+  "#green-premium-realize-ratio": "20",
+  "#carbon-enabled": "yes",
+  "#carbon-price": "4",
+  "#carbon-realize-ratio": "40"
+});
+const envRefs = {
+  envManualPanel: new FakeTarget(),
+  envValueMode: new FakeTarget("global"),
+  envValueSpaceRatio: new FakeTarget(),
+  envValueUsedRatio: new FakeTarget(),
+  exportEnvTemplateButton: new FakeTarget(),
+  envManualFileInput: new FakeTarget(),
+  importEnvTemplateButton: new FakeTarget()
+};
+const envState = applyEnvValueControlState({
+  refs: envRefs,
+  querySelector: envHarness.querySelector,
+  project: { siteType: "offshore" },
+  scenario: { id: "base" },
+  locked: false,
+  envValueMode: "global"
+});
+assert.deepEqual(envState, {
+  mode: "global",
+  isManual: false,
+  canUseCarbon: true,
+  carbonEnabled: true,
+  hasScenario: true
+});
+assert.equal(envRefs.envManualPanel.hidden, true);
+assert.equal(envHarness.fields.get("#green-cert-price").disabled, false);
+assert.equal(envHarness.fields.get("#carbon-price").disabled, false);
+assert.equal(envRefs.envValueSpaceRatio.disabled, true);
+assert.equal(envRefs.exportEnvTemplateButton.disabled, false);
+assert.equal(envRefs.envManualFileInput.disabled, true);
+assert.equal(envRefs.importEnvTemplateButton.disabled, true);
+
+envRefs.envValueMode.value = "manual";
+const envManualState = applyEnvValueControlState({
+  refs: envRefs,
+  querySelector: envHarness.querySelector,
+  project: { siteType: "offshore" },
+  scenario: { id: "base" },
+  locked: false,
+  envValueMode: "global"
+});
+assert.equal(envManualState.isManual, true);
+assert.equal(envRefs.envManualPanel.hidden, false);
+assert.equal(envHarness.fields.get("#green-cert-price").disabled, true);
+assert.equal(envHarness.fields.get("#carbon-enabled").disabled, true);
+assert.equal(envRefs.envManualFileInput.disabled, false);
+assert.equal(envRefs.importEnvTemplateButton.disabled, false);
+
+envRefs.envValueMode.value = "global";
+envHarness.fields.get("#carbon-enabled").value = "yes";
+const inlandEnvState = applyEnvValueControlState({
+  refs: envRefs,
+  querySelector: envHarness.querySelector,
+  project: { siteType: "onshore" },
+  scenario: { id: "base" },
+  locked: true,
+  envValueMode: "global"
+});
+assert.equal(inlandEnvState.canUseCarbon, false);
+assert.equal(envRefs.envValueMode.disabled, true);
+assert.equal(envHarness.fields.get("#carbon-enabled").value, "no");
+assert.equal(envHarness.fields.get("#carbon-price").value, "0");
+assert.equal(envHarness.fields.get("#carbon-realize-ratio").value, "0");
+assert.equal(envRefs.exportEnvTemplateButton.disabled, true);
 
 const saveHarness = makeFields({
   "#mechanism-enabled": "yes",
