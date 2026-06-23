@@ -13,6 +13,21 @@
   const MAP_LEVEL_SET = new Set(["nation", "province"]);
   const BENCHMARK_MAP_ZOOM_MIN = 0.8;
   const BENCHMARK_MAP_ZOOM_MAX = 4;
+  const FALLBACK_PROVINCE_DEFAULTS = Object.freeze({
+    mechanismEnabled: true,
+    mechanismRatio: 0.3,
+    mechanismPrice: 340,
+    marketOpFee: 6,
+    gridAssessFee: 8,
+    ancillaryFee: 16,
+    otherFee: 3,
+    greenCertPrice: 18,
+    greenPremiumPrice: 10,
+    storageArbitragePrice: 14,
+    storageCapacityCompPrice: 8,
+    storageAncillaryRevenuePrice: 10,
+    storageOtherRevenuePrice: 3
+  });
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -158,6 +173,30 @@
     return next;
   }
 
+  function resolveProvinceDefaults(provinceKey, options = {}) {
+    const provinceDefaultParams = isPlainObject(options.provinceDefaultParams)
+      ? options.provinceDefaultParams
+      : {};
+    const provinceBenchmarks = isPlainObject(options.provinceBenchmarks)
+      ? options.provinceBenchmarks
+      : {};
+    if (isPlainObject(provinceDefaultParams[provinceKey])) {
+      return { ...provinceDefaultParams[provinceKey] };
+    }
+    const benchmark = isPlainObject(provinceBenchmarks[provinceKey])
+      ? provinceBenchmarks[provinceKey]
+      : null;
+    if (!benchmark) return { ...FALLBACK_PROVINCE_DEFAULTS };
+    const mechanismEnabled = benchmark.mechanismState !== "逐步退出";
+    return {
+      ...FALLBACK_PROVINCE_DEFAULTS,
+      mechanismEnabled,
+      mechanismRatio: mechanismEnabled ? 0.32 : 0.12,
+      mechanismPrice: benchmark.capturePrice + 6,
+      ancillaryFee: benchmark.ancillaryFee
+    };
+  }
+
   return Object.freeze({
     createEmptyHistorySpotImport,
     createDefaultSpotMarketConfig,
@@ -167,6 +206,7 @@
     sanitizePolicyFilters,
     isIsoDateString,
     sanitizeHistoryAnalysis,
-    sanitizeBenchmarkMap
+    sanitizeBenchmarkMap,
+    resolveProvinceDefaults
   });
 });

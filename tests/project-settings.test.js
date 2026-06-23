@@ -10,7 +10,8 @@ const {
   sanitizePolicyFilters,
   isIsoDateString,
   sanitizeHistoryAnalysis,
-  sanitizeBenchmarkMap
+  sanitizeBenchmarkMap,
+  resolveProvinceDefaults
 } = require("../src/domain/project-settings");
 
 assert.deepEqual(createEmptyHistorySpotImport(), {
@@ -106,5 +107,62 @@ assert.deepEqual(sanitizeBenchmarkMap({
   rangeMin: null,
   rangeMax: null
 });
+
+const explicitDefaults = {
+  jiangsu: {
+    mechanismEnabled: true,
+    mechanismRatio: 0.36,
+    mechanismPrice: 365,
+    marketOpFee: 6,
+    gridAssessFee: 7,
+    ancillaryFee: 14,
+    otherFee: 3,
+    greenCertPrice: 22,
+    greenPremiumPrice: 12,
+    storageArbitragePrice: 18,
+    storageCapacityCompPrice: 7,
+    storageAncillaryRevenuePrice: 10,
+    storageOtherRevenuePrice: 3
+  }
+};
+const resolvedExplicit = resolveProvinceDefaults("jiangsu", { provinceDefaultParams: explicitDefaults });
+assert.deepEqual(resolvedExplicit, explicitDefaults.jiangsu);
+resolvedExplicit.mechanismPrice = 1;
+assert.equal(explicitDefaults.jiangsu.mechanismPrice, 365);
+
+assert.deepEqual(resolveProvinceDefaults("zhejiang", {
+  provinceBenchmarks: {
+    zhejiang: {
+      mechanismState: "建设中",
+      capturePrice: 330,
+      ancillaryFee: 19
+    }
+  }
+}), {
+  mechanismEnabled: true,
+  mechanismRatio: 0.32,
+  mechanismPrice: 336,
+  marketOpFee: 6,
+  gridAssessFee: 8,
+  ancillaryFee: 19,
+  otherFee: 3,
+  greenCertPrice: 18,
+  greenPremiumPrice: 10,
+  storageArbitragePrice: 14,
+  storageCapacityCompPrice: 8,
+  storageAncillaryRevenuePrice: 10,
+  storageOtherRevenuePrice: 3
+});
+
+assert.equal(resolveProvinceDefaults("xinjiang", {
+  provinceBenchmarks: {
+    xinjiang: {
+      mechanismState: "逐步退出",
+      capturePrice: 276,
+      ancillaryFee: 24
+    }
+  }
+}).mechanismRatio, 0.12);
+assert.equal(resolveProvinceDefaults("missing").mechanismPrice, 340);
 
 console.log("project settings tests passed");

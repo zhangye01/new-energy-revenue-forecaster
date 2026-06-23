@@ -1413,41 +1413,10 @@ function getActiveRun(project) {
 }
 
 function getProvinceDefaults(provinceKey) {
-  if (PROVINCE_DEFAULT_PARAMS[provinceKey]) return { ...PROVINCE_DEFAULT_PARAMS[provinceKey] };
-  const benchmark = PROVINCE_BENCHMARKS[provinceKey];
-  if (!benchmark) {
-    return {
-      mechanismEnabled: true,
-      mechanismRatio: 0.3,
-      mechanismPrice: 340,
-      marketOpFee: 6,
-      gridAssessFee: 8,
-      ancillaryFee: 16,
-      otherFee: 3,
-      greenCertPrice: 18,
-      greenPremiumPrice: 10,
-      storageArbitragePrice: 14,
-      storageCapacityCompPrice: 8,
-      storageAncillaryRevenuePrice: 10,
-      storageOtherRevenuePrice: 3
-    };
-  }
-  const mechanismEnabled = benchmark.mechanismState !== "逐步退出";
-  return {
-    mechanismEnabled,
-    mechanismRatio: mechanismEnabled ? 0.32 : 0.12,
-    mechanismPrice: benchmark.capturePrice + 6,
-    marketOpFee: 6,
-    gridAssessFee: 8,
-    ancillaryFee: benchmark.ancillaryFee,
-    otherFee: 3,
-    greenCertPrice: 18,
-    greenPremiumPrice: 10,
-    storageArbitragePrice: 14,
-    storageCapacityCompPrice: 8,
-    storageAncillaryRevenuePrice: 10,
-    storageOtherRevenuePrice: 3
-  };
+  return projectSettings.resolveProvinceDefaults(provinceKey, {
+    provinceDefaultParams: PROVINCE_DEFAULT_PARAMS,
+    provinceBenchmarks: PROVINCE_BENCHMARKS
+  });
 }
 
 function resetProjectProvinceContextSync() {
