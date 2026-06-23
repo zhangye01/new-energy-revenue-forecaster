@@ -695,41 +695,7 @@ function toggleSidebarGroup(groupKey) {
 }
 
 function applyAuthLayout() {
-  const loggedIn = appState.auth.loggedIn;
-  refs.authOnlyNavBlocks.forEach((block) => {
-    if (!loggedIn) {
-      block.hidden = true;
-      return;
-    }
-    const selfGroup = block.dataset.groupBody;
-    const parentGroup = block.closest("[data-group-body]")?.dataset.groupBody;
-    const group = selfGroup || parentGroup;
-    if (group) {
-      block.hidden = appState.sidebarGroups[group] === false;
-    } else {
-      block.hidden = false;
-    }
-  });
-  if (refs.loginEntryButton) {
-    refs.loginEntryButton.hidden = loggedIn;
-  }
-  if (refs.accountModule) {
-    refs.accountModule.hidden = !loggedIn;
-  }
-  if (refs.accountTriggerButton) {
-    refs.accountTriggerButton.setAttribute("aria-expanded", "false");
-  }
-  if (refs.accountDropdown) {
-    refs.accountDropdown.hidden = true;
-  }
-  if (refs.accountNameDisplay) {
-    const accountDisplayName = (appState.auth.accountName || appState.auth.account || "").trim();
-    refs.accountNameDisplay.textContent = loggedIn ? (accountDisplayName || "当前账号") : "-";
-  }
-  if (refs.accountAvatar) {
-    const name = (appState.auth.accountName || appState.auth.account || "").trim();
-    refs.accountAvatar.textContent = loggedIn && name ? name.slice(0, 1).toUpperCase() : "-";
-  }
+  shellEvents.applyAuthLayout({ refs, auth: appState.auth, sidebarGroups: appState.sidebarGroups });
 }
 
 function formatAuthTime(isoText) {

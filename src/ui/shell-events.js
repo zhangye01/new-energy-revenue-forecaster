@@ -63,6 +63,37 @@
     return { pageId, topMetaMessage: "" };
   }
 
+  function applyAuthLayout(input = {}) {
+    const {
+      refs = {},
+      auth = {},
+      sidebarGroups = {}
+    } = input;
+    const loggedIn = Boolean(auth.loggedIn);
+    (refs.authOnlyNavBlocks || []).forEach((block) => {
+      if (!loggedIn) {
+        block.hidden = true;
+        return;
+      }
+      const selfGroup = block.dataset?.groupBody;
+      const parentGroup = block.closest?.("[data-group-body]")?.dataset?.groupBody;
+      const group = selfGroup || parentGroup;
+      block.hidden = group ? sidebarGroups[group] === false : false;
+    });
+    if (refs.loginEntryButton) refs.loginEntryButton.hidden = loggedIn;
+    if (refs.accountModule) refs.accountModule.hidden = !loggedIn;
+    refs.accountTriggerButton?.setAttribute?.("aria-expanded", "false");
+    if (refs.accountDropdown) refs.accountDropdown.hidden = true;
+    if (refs.accountNameDisplay) {
+      const accountDisplayName = (auth.accountName || auth.account || "").trim();
+      refs.accountNameDisplay.textContent = loggedIn ? (accountDisplayName || "当前账号") : "-";
+    }
+    if (refs.accountAvatar) {
+      const name = (auth.accountName || auth.account || "").trim();
+      refs.accountAvatar.textContent = loggedIn && name ? name.slice(0, 1).toUpperCase() : "-";
+    }
+  }
+
   function bindShellEvents(input = {}) {
     const {
       refs = {},
@@ -252,6 +283,7 @@
   }
 
   return Object.freeze({
+    applyAuthLayout,
     bindShellEvents,
     bindNavigationEvents,
     resolveActivePageRequest,

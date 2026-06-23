@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  applyAuthLayout,
   bindNavigationEvents,
   bindShellEvents,
   createAppShellHandlers,
@@ -12,10 +13,15 @@ class FakeTarget {
   constructor(dataset = {}) {
     this.dataset = dataset;
     this.handlers = {};
+    this.attributes = {};
   }
 
   addEventListener(name, handler) {
     this.handlers[name] = handler;
+  }
+
+  setAttribute(name, value) {
+    this.attributes[name] = value;
   }
 
   dispatch(name, event = {}) {
@@ -161,6 +167,47 @@ assert.deepEqual(resolveActivePageRequest({
   hasProject: false,
   projectRequiredMessage: "请选择项目"
 }), { pageId: "projects-page", topMetaMessage: "请选择项目" });
+
+const selfGroupedBlock = new FakeTarget({ groupBody: "settings" });
+const parentGroupedBlock = new FakeTarget();
+parentGroupedBlock.closest = () => ({ dataset: { groupBody: "projects" } });
+const freeBlock = new FakeTarget();
+const authRefs = {
+  authOnlyNavBlocks: [selfGroupedBlock, parentGroupedBlock, freeBlock],
+  loginEntryButton: new FakeTarget(),
+  accountModule: new FakeTarget(),
+  accountTriggerButton: new FakeTarget(),
+  accountDropdown: new FakeTarget(),
+  accountNameDisplay: { textContent: "" },
+  accountAvatar: { textContent: "" }
+};
+applyAuthLayout({
+  refs: authRefs,
+  auth: { loggedIn: true, accountName: "张三", account: "demo1" },
+  sidebarGroups: { settings: false, projects: true }
+});
+assert.equal(selfGroupedBlock.hidden, true);
+assert.equal(parentGroupedBlock.hidden, false);
+assert.equal(freeBlock.hidden, false);
+assert.equal(authRefs.loginEntryButton.hidden, true);
+assert.equal(authRefs.accountModule.hidden, false);
+assert.equal(authRefs.accountTriggerButton.attributes["aria-expanded"], "false");
+assert.equal(authRefs.accountDropdown.hidden, true);
+assert.equal(authRefs.accountNameDisplay.textContent, "张三");
+assert.equal(authRefs.accountAvatar.textContent, "张");
+
+applyAuthLayout({
+  refs: authRefs,
+  auth: { loggedIn: false, accountName: "张三", account: "demo1" },
+  sidebarGroups: { settings: true, projects: true }
+});
+assert.equal(selfGroupedBlock.hidden, true);
+assert.equal(parentGroupedBlock.hidden, true);
+assert.equal(freeBlock.hidden, true);
+assert.equal(authRefs.loginEntryButton.hidden, false);
+assert.equal(authRefs.accountModule.hidden, true);
+assert.equal(authRefs.accountNameDisplay.textContent, "-");
+assert.equal(authRefs.accountAvatar.textContent, "-");
 
 const hiddenTarget = new FakeTarget();
 hiddenTarget.hidden = true;
