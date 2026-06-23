@@ -3532,24 +3532,6 @@ function ensureEnergyAnnualChart() {
   return energyAnnualChart;
 }
 
-function setEnergyChartEmpty(chart, message) {
-  if (!chart) return;
-  const tokens = historyThemeTokens();
-  chart.clear();
-  chart.setOption(energyCharts.buildEnergyChartEmptyOption(message, tokens), true);
-}
-
-function setEnergyChartsNoData(noteMessage, annualMessage = noteMessage, typicalMessage = noteMessage) {
-  if (refs.energyCurveNote) {
-    refs.energyCurveNote.textContent = noteMessage;
-  }
-  if (refs.energyCurveSubtitle) {
-    refs.energyCurveSubtitle.textContent = "按月份拆解典型年24小时曲线，支持后续替换为正式数据库结果。";
-  }
-  setEnergyChartEmpty(ensureEnergyAnnualChart(), annualMessage);
-  setEnergyChartEmpty(ensureEnergyCurveChart(), typicalMessage);
-}
-
 function renderEnergyCurveChart() {
   if (appState.activePage !== "energy-page") return;
   if (!refs.energyCurveChart || !refs.energyAnnualChart) return;
@@ -3563,29 +3545,16 @@ function renderEnergyCurveChart() {
     energyState,
     previewMeta: project && energyState.hasTypicalCurve ? getEnergyCurvePreviewProfile(project) : null
   });
-  if (chartModel.state === "empty") {
-    setEnergyChartsNoData(chartModel.noteMessage, chartModel.annualMessage, chartModel.typicalMessage);
-    return;
-  }
   const chart = ensureEnergyCurveChart();
   const annualChart = ensureEnergyAnnualChart();
   if (!chart || !annualChart) return;
-  const tokens = historyThemeTokens();
-
-  if (chartModel.hasAnnualValues) {
-    annualChart.setOption(energyCharts.buildAnnualHoursOption(chartModel.annualRows, tokens), true);
-  } else {
-    setEnergyChartEmpty(annualChart, chartModel.annualEmptyMessage);
-  }
-
-  const typicalOption = energyCharts.buildTypicalDayCurveOption(chartModel.typicalProfile, tokens);
-  if (typicalOption) {
-    chart.setOption(typicalOption, true);
-  } else {
-    setEnergyChartEmpty(chart, chartModel.typicalEmptyMessage);
-  }
-  if (refs.energyCurveSubtitle) refs.energyCurveSubtitle.textContent = chartModel.chartText.subtitle;
-  if (refs.energyCurveNote) refs.energyCurveNote.textContent = chartModel.chartText.note;
+  energyCharts.applyEnergyCurveChartRender({
+    refs,
+    chartModel,
+    annualChart,
+    typicalChart: chart,
+    tokens: historyThemeTokens()
+  });
 }
 
 function buildHistorySpotAnalysisDataset(project) {

@@ -37,6 +37,12 @@
     };
   }
 
+  function setEnergyChartEmpty(chart, message, tokens) {
+    if (!chart) return;
+    chart.clear?.();
+    chart.setOption?.(buildEnergyChartEmptyOption(message, tokens), true);
+  }
+
   function buildAnnualRows(project, energyData) {
     const forecastYears = Number.isInteger(project?.forecastYears) && project.forecastYears > 0
       ? project.forecastYears
@@ -269,6 +275,38 @@
     };
   }
 
+  function applyEnergyCurveChartRender(input = {}) {
+    const {
+      refs = {},
+      chartModel = {},
+      annualChart = null,
+      typicalChart = null,
+      tokens = {}
+    } = input;
+    if (chartModel.state === "empty") {
+      if (refs.energyCurveNote) refs.energyCurveNote.textContent = chartModel.noteMessage;
+      if (refs.energyCurveSubtitle) {
+        refs.energyCurveSubtitle.textContent = "按月份拆解典型年24小时曲线，支持后续替换为正式数据库结果。";
+      }
+      setEnergyChartEmpty(annualChart, chartModel.annualMessage, tokens);
+      setEnergyChartEmpty(typicalChart, chartModel.typicalMessage, tokens);
+      return;
+    }
+    if (chartModel.hasAnnualValues) {
+      annualChart?.setOption?.(buildAnnualHoursOption(chartModel.annualRows, tokens), true);
+    } else {
+      setEnergyChartEmpty(annualChart, chartModel.annualEmptyMessage, tokens);
+    }
+    const typicalOption = buildTypicalDayCurveOption(chartModel.typicalProfile, tokens);
+    if (typicalOption) {
+      typicalChart?.setOption?.(typicalOption, true);
+    } else {
+      setEnergyChartEmpty(typicalChart, chartModel.typicalEmptyMessage, tokens);
+    }
+    if (refs.energyCurveSubtitle) refs.energyCurveSubtitle.textContent = chartModel.chartText.subtitle;
+    if (refs.energyCurveNote) refs.energyCurveNote.textContent = chartModel.chartText.note;
+  }
+
   return Object.freeze({
     buildEnergyChartEmptyOption,
     buildAnnualRows,
@@ -277,6 +315,7 @@
     buildTypicalMonthHourlyHours,
     buildTypicalDayCurveOption,
     buildEnergyCurveText,
-    buildEnergyCurveChartViewModel
+    buildEnergyCurveChartViewModel,
+    applyEnergyCurveChartRender
   });
 });

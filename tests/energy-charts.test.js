@@ -9,7 +9,8 @@ const {
   buildTypicalMonthHourlyHours,
   buildTypicalDayCurveOption,
   buildEnergyCurveChartViewModel,
-  buildEnergyCurveText
+  buildEnergyCurveText,
+  applyEnergyCurveChartRender
 } = require("../src/ui/energy-charts");
 
 const tokens = {
@@ -116,5 +117,56 @@ assert.deepEqual(chartModel.annualRows, [
 ]);
 assert.equal(chartModel.chartText.subtitle, "当前来源：江苏典型曲线；横轴为1-24时，图例区分1-12月。");
 assert.equal(chartModel.annualEmptyMessage, "请先导出逐年总量模板并上传结果。");
+
+function makeChart() {
+  return {
+    cleared: 0,
+    options: [],
+    clear() {
+      this.cleared += 1;
+    },
+    setOption(option, replace) {
+      this.options.push({ option, replace });
+    }
+  };
+}
+
+const emptyAnnualChart = makeChart();
+const emptyTypicalChart = makeChart();
+const emptyRefs = {
+  energyCurveNote: { textContent: "" },
+  energyCurveSubtitle: { textContent: "" }
+};
+applyEnergyCurveChartRender({
+  refs: emptyRefs,
+  chartModel: buildEnergyCurveChartViewModel(),
+  annualChart: emptyAnnualChart,
+  typicalChart: emptyTypicalChart,
+  tokens
+});
+assert.match(emptyRefs.energyCurveNote.textContent, /请先进入项目/);
+assert.match(emptyRefs.energyCurveSubtitle.textContent, /按月份拆解典型年24小时曲线/);
+assert.equal(emptyAnnualChart.cleared, 1);
+assert.equal(emptyAnnualChart.options[0].option.graphic[0].style.text, "请先进入项目，再查看逐年上网电量小时数。");
+assert.equal(emptyTypicalChart.options[0].replace, true);
+
+const readyAnnualChart = makeChart();
+const readyTypicalChart = makeChart();
+const readyRefs = {
+  energyCurveNote: { textContent: "" },
+  energyCurveSubtitle: { textContent: "" }
+};
+applyEnergyCurveChartRender({
+  refs: readyRefs,
+  chartModel,
+  annualChart: readyAnnualChart,
+  typicalChart: readyTypicalChart,
+  tokens
+});
+assert.equal(readyAnnualChart.cleared, 0);
+assert.deepEqual(readyAnnualChart.options[0].option.xAxis.data, ["2026", "2027"]);
+assert.equal(readyTypicalChart.options[0].option.series.length, 12);
+assert.match(readyRefs.energyCurveNote.textContent, /江苏典型曲线/);
+assert.match(readyRefs.energyCurveSubtitle.textContent, /当前来源：江苏典型曲线/);
 
 console.log("energy charts tests passed");
