@@ -4038,42 +4038,22 @@ function renderHistoryPrices() {
 }
 
 function applyProvinceDefaultsToProject(provinceKey) {
-  const project = getActiveProject();
-  if (!project) {
-    refs.provinceApplyMessage.textContent = "请先创建或选择项目，再带入省份默认参数。";
-    refs.provinceApplyMessage.style.borderColor = "#d39191";
-    refs.provinceApplyMessage.style.background = "#fff2f2";
-    return;
-  }
-  ensureScenarioMetadata(project);
-  const scenario = getActiveScenario(project);
-  if (!scenario) return;
-  if (scenario.locked) {
-    refs.provinceApplyMessage.textContent = "当前场景已锁定，请先切换到可编辑场景。";
-    refs.provinceApplyMessage.style.borderColor = "#d39191";
-    refs.provinceApplyMessage.style.background = "#fff2f2";
-    return;
-  }
-
-  scenarioModel.applyProvinceDefaultsToScenario(project, scenario, {
+  provinceDefaultsView.applyProvinceDefaultsToProjectFlow({
+    provinceKey,
+    refs,
+    scenarioModel,
     provinceDefaults: getProvinceDefaults(provinceKey),
-    nowIso: () => new Date().toISOString()
+    nowIso: () => new Date().toISOString(),
+    getProvinceName,
+    actions: {
+      getActiveProject,
+      ensureScenarioMetadata,
+      getActiveScenario,
+      markDownstreamStale,
+      renderAll,
+      schedulePersistAppData
+    }
   });
-  project.statuses["scenario-page"] = "completed";
-  markDownstreamStale(project, "scenario-page");
-
-  const sourceProvinceName = getProvinceName(provinceKey);
-  const projectProvinceName = getProvinceName(project.province);
-  refs.provinceApplyMessage.textContent = provinceKey === project.province
-    ? `已带入 ${sourceProvinceName} 默认参数，并应用到当前场景“${scenario.name}”。`
-    : `已调用 ${sourceProvinceName} 默认参数，并应用到当前场景“${scenario.name}”。项目省份仍为 ${projectProvinceName}。`;
-  refs.provinceApplyMessage.style.borderColor = "#8fb48d";
-  refs.provinceApplyMessage.style.background = "#f1fbf1";
-  refs.scenarioMessage.textContent = `场景“${scenario.name}”已按 ${sourceProvinceName} 参数更新。`;
-  refs.scenarioMessage.style.borderColor = "#8fb48d";
-  refs.scenarioMessage.style.background = "#f1fbf1";
-  renderAll();
-  schedulePersistAppData();
 }
 
 function toggleProvinceDefaultDetails(provinceKey) {

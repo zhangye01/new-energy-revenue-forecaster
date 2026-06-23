@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  applyProvinceDefaultsToProjectFlow,
   bindProvinceDefaultActions,
   buildProvinceDefaultsViewModel,
   shouldRefreshProvinceDefaultMessage
@@ -157,5 +158,77 @@ const preservedMessage = buildProvinceDefaultsViewModel({
   getRegionKey
 });
 assert.equal(preservedMessage.message, null);
+
+function makeMessageElement() {
+  return {
+    textContent: "",
+    style: {
+      borderColor: "",
+      background: ""
+    }
+  };
+}
+
+const missingProjectMessage = makeMessageElement();
+const missingProjectResult = applyProvinceDefaultsToProjectFlow({
+  provinceKey: "jiangsu",
+  refs: { provinceApplyMessage: missingProjectMessage }
+});
+assert.equal(missingProjectResult.ok, false);
+assert.equal(missingProjectResult.reason, "missing_project");
+assert.match(missingProjectMessage.textContent, /请先创建或选择项目/);
+assert.equal(missingProjectMessage.style.borderColor, "#d39191");
+
+const lockedProject = { province: "jiangsu", statuses: {} };
+const lockedMessage = makeMessageElement();
+const lockedResult = applyProvinceDefaultsToProjectFlow({
+  provinceKey: "jiangsu",
+  project: lockedProject,
+  scenario: { name: "锁定场景", locked: true },
+  refs: { provinceApplyMessage: lockedMessage }
+});
+assert.equal(lockedResult.ok, false);
+assert.equal(lockedResult.reason, "locked_scenario");
+assert.match(lockedMessage.textContent, /当前场景已锁定/);
+assert.equal(lockedProject.statuses["scenario-page"], undefined);
+
+const appliedProject = { province: "jiangsu", statuses: {}, hasStorage: true };
+const appliedScenario = { name: "基准场景", locked: false, config: {} };
+const flowCalls = [];
+const provinceApplyMessage = makeMessageElement();
+const scenarioMessage = makeMessageElement();
+const appliedResult = applyProvinceDefaultsToProjectFlow({
+  provinceKey: "shanghai",
+  project: appliedProject,
+  scenario: appliedScenario,
+  refs: { provinceApplyMessage, scenarioMessage },
+  scenarioModel: {
+    applyProvinceDefaultsToScenario: (project, scenario, options) => {
+      flowCalls.push(["apply", project.province, scenario.name, options.provinceDefaults.marketOpFee]);
+      scenario.config.marketOpFee = options.provinceDefaults.marketOpFee;
+    }
+  },
+  provinceDefaults: getProvinceDefaults("shanghai"),
+  nowIso: () => "2026-01-01T00:00:00.000Z",
+  getProvinceName,
+  actions: {
+    markDownstreamStale: (project, pageId) => flowCalls.push(["stale", pageId]),
+    renderAll: () => flowCalls.push(["render"]),
+    schedulePersistAppData: () => flowCalls.push(["persist"])
+  }
+});
+assert.equal(appliedResult.ok, true);
+assert.equal(appliedProject.statuses["scenario-page"], "completed");
+assert.equal(appliedScenario.config.marketOpFee, 1);
+assert.deepEqual(flowCalls, [
+  ["apply", "jiangsu", "基准场景", 1],
+  ["stale", "scenario-page"],
+  ["render"],
+  ["persist"]
+]);
+assert.match(provinceApplyMessage.textContent, /已调用 上海 默认参数/);
+assert.match(provinceApplyMessage.textContent, /项目省份仍为 江苏/);
+assert.match(scenarioMessage.textContent, /场景“基准场景”已按 上海 参数更新/);
+assert.equal(scenarioMessage.style.background, "#f1fbf1");
 
 console.log("province defaults tests passed");

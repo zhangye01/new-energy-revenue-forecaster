@@ -25,6 +25,13 @@
     return { text, borderColor, background };
   }
 
+  function applyMessageToElement(element, viewModel) {
+    if (!element || !viewModel) return;
+    element.textContent = viewModel.text;
+    element.style.borderColor = viewModel.borderColor;
+    element.style.background = viewModel.background;
+  }
+
   function shouldRefreshProvinceDefaultMessage(currentMessage) {
     const text = String(currentMessage || "");
     return (
@@ -248,7 +255,66 @@
     });
   }
 
+  function applyProvinceDefaultsToProjectFlow(input = {}) {
+    const {
+      provinceKey = "",
+      project: inputProject = null,
+      scenario: inputScenario = null,
+      refs = {},
+      scenarioModel = null,
+      provinceDefaults = {},
+      nowIso = () => new Date().toISOString(),
+      getProvinceName = (key) => key || "",
+      actions = {}
+    } = input;
+    const project = inputProject || actions.getActiveProject?.() || null;
+    if (!project) {
+      applyMessageToElement(
+        refs.provinceApplyMessage,
+        message("请先创建或选择项目，再带入省份默认参数。", "#d39191", "#fff2f2")
+      );
+      return { ok: false, reason: "missing_project" };
+    }
+
+    actions.ensureScenarioMetadata?.(project);
+    const scenario = inputScenario || actions.getActiveScenario?.(project) || null;
+    if (!scenario) return { ok: false, reason: "missing_scenario" };
+    if (scenario.locked) {
+      applyMessageToElement(
+        refs.provinceApplyMessage,
+        message("当前场景已锁定，请先切换到可编辑场景。", "#d39191", "#fff2f2")
+      );
+      return { ok: false, reason: "locked_scenario" };
+    }
+
+    scenarioModel?.applyProvinceDefaultsToScenario?.(project, scenario, { provinceDefaults, nowIso });
+    if (!project.statuses || typeof project.statuses !== "object") project.statuses = {};
+    project.statuses["scenario-page"] = "completed";
+    actions.markDownstreamStale?.(project, "scenario-page");
+
+    const sourceProvinceName = getProvinceName(provinceKey);
+    const projectProvinceName = getProvinceName(project.province);
+    applyMessageToElement(
+      refs.provinceApplyMessage,
+      message(
+        provinceKey === project.province
+          ? `已带入 ${sourceProvinceName} 默认参数，并应用到当前场景“${scenario.name}”。`
+          : `已调用 ${sourceProvinceName} 默认参数，并应用到当前场景“${scenario.name}”。项目省份仍为 ${projectProvinceName}。`,
+        "#8fb48d",
+        "#f1fbf1"
+      )
+    );
+    applyMessageToElement(
+      refs.scenarioMessage,
+      message(`场景“${scenario.name}”已按 ${sourceProvinceName} 参数更新。`, "#8fb48d", "#f1fbf1")
+    );
+    actions.renderAll?.();
+    actions.schedulePersistAppData?.();
+    return { ok: true, reason: "applied", project, scenario, sourceProvinceName };
+  }
+
   return Object.freeze({
+    applyProvinceDefaultsToProjectFlow,
     bindProvinceDefaultActions,
     buildProvinceDefaultsViewModel,
     shouldRefreshProvinceDefaultMessage
