@@ -3655,16 +3655,11 @@ function queueScenarioVisualResize() {
 }
 
 function renderScenarioVisualPlaceholder(message) {
-  if (refs.scenarioVisualMessage) {
-    refs.scenarioVisualMessage.textContent = message;
-  }
-
-  if (resolveVisiblePageId(appState.activePage) !== "scenario-page") return;
-  const tokens = scenarioCharts.buildScenarioVisualThemeTokens(appState.theme);
-  const option = scenarioCharts.buildScenarioVisualEmptyOption(message, tokens);
-  getScenarioVisualCharts().forEach((chart) => {
-    chart.clear();
-    chart.setOption(option, true);
+  scenarioCharts.applyScenarioVisualPlaceholder({
+    refs,
+    message,
+    tokens: scenarioCharts.buildScenarioVisualThemeTokens(appState.theme),
+    charts: resolveVisiblePageId(appState.activePage) === "scenario-page" ? getScenarioVisualCharts() : []
   });
 }
 
@@ -3681,11 +3676,8 @@ function renderScenarioVisualization() {
     renderScenarioVisualPlaceholder("请选择方案后查看参数结构。");
     return;
   }
-
-  const provinceName = getProvinceName(project.province || "");
-
-  refs.scenarioVisualMessage.textContent = `当前展示：${scenario.name} | ${provinceName || "未选省份"} / ${getAssetTypeLabel(project.assetType)} / ${getSiteTypeLabel(project.siteType)} / ${getStorageConfigText(project)}`;
-
+  const message = `当前展示：${scenario.name} | ${getProvinceName(project.province || "") || "未选省份"} / ${getAssetTypeLabel(project.assetType)} / ${getSiteTypeLabel(project.siteType)} / ${getStorageConfigText(project)}`;
+  scenarioCharts.applyScenarioVisualMessage(refs, message);
   if (resolveVisiblePageId(appState.activePage) !== "scenario-page") return;
   const tokens = scenarioCharts.buildScenarioVisualThemeTokens(appState.theme);
   const visualRows = scenarioVisualData.buildScenarioVisualRows({
@@ -3698,10 +3690,12 @@ function renderScenarioVisualization() {
     getEnvValueAllocation,
     getFeeConfigForYear
   });
-  const options = scenarioCharts.buildScenarioVisualOptions(visualRows, tokens);
-  Object.entries(options).forEach(([key, option]) => {
-    const chart = ensureScenarioVisualChart(key);
-    if (chart) chart.setOption(option, true);
+  scenarioCharts.applyScenarioVisualOptions({
+    refs,
+    message,
+    rows: visualRows,
+    tokens,
+    getChart: ensureScenarioVisualChart
   });
   queueScenarioVisualResize();
 }

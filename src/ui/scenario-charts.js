@@ -110,6 +110,25 @@
     };
   }
 
+  function applyScenarioVisualMessage(refs = {}, message = "") {
+    if (refs.scenarioVisualMessage) refs.scenarioVisualMessage.textContent = message;
+  }
+
+  function applyScenarioVisualPlaceholder(input = {}) {
+    const {
+      refs = {},
+      message = "",
+      tokens = {},
+      charts = []
+    } = input;
+    applyScenarioVisualMessage(refs, message);
+    const option = buildScenarioVisualEmptyOption(message, tokens);
+    (charts || []).forEach((chart) => {
+      chart?.clear?.();
+      chart?.setOption?.(option, true);
+    });
+  }
+
   function scenarioVisualYearInterval(rows, targetTicks = 8) {
     return Math.max(0, Math.ceil((rows?.length || 0) / targetTicks) - 1);
   }
@@ -391,7 +410,27 @@
     };
   }
 
+  function applyScenarioVisualOptions(input = {}) {
+    const {
+      refs = {},
+      message = "",
+      rows = [],
+      tokens = {},
+      getChart = () => null
+    } = input;
+    applyScenarioVisualMessage(refs, message);
+    const options = buildScenarioVisualOptions(rows, tokens);
+    Object.entries(options).forEach(([key, option]) => {
+      const chart = getChart(key);
+      chart?.setOption?.(option, true);
+    });
+    return options;
+  }
+
   return Object.freeze({
+    applyScenarioVisualMessage,
+    applyScenarioVisualPlaceholder,
+    applyScenarioVisualOptions,
     buildScenarioVisualThemeTokens,
     buildScenarioVisualEmptyOption,
     scenarioVisualYearInterval,

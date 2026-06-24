@@ -2,6 +2,9 @@
 
 const assert = require("node:assert/strict");
 const {
+  applyScenarioVisualMessage,
+  applyScenarioVisualPlaceholder,
+  applyScenarioVisualOptions,
   buildScenarioVisualThemeTokens,
   buildScenarioVisualEmptyOption,
   scenarioVisualYearInterval,
@@ -99,5 +102,52 @@ assert.equal(options.trend.tooltip.valueFormatter(12.345), "12.35 元/MWh");
 
 const emptyOptions = buildScenarioVisualOptions([{ yearLabel: "2026", energyMwh: 0 }], tokens);
 assert.equal(emptyOptions.energy.graphic[0].style.text, "请先完成上网电量配置");
+
+function makeChart() {
+  return {
+    cleared: 0,
+    options: [],
+    clear() {
+      this.cleared += 1;
+    },
+    setOption(option, replace) {
+      this.options.push({ option, replace });
+    }
+  };
+}
+
+const messageRefs = { scenarioVisualMessage: { textContent: "" } };
+applyScenarioVisualMessage(messageRefs, "当前展示：基准场景");
+assert.equal(messageRefs.scenarioVisualMessage.textContent, "当前展示：基准场景");
+
+const placeholderChart = makeChart();
+applyScenarioVisualPlaceholder({
+  refs: messageRefs,
+  message: "请选择项目后查看参数结构。",
+  tokens,
+  charts: [placeholderChart]
+});
+assert.equal(messageRefs.scenarioVisualMessage.textContent, "请选择项目后查看参数结构。");
+assert.equal(placeholderChart.cleared, 1);
+assert.equal(placeholderChart.options[0].replace, true);
+assert.equal(placeholderChart.options[0].option.graphic[0].style.text, "请选择项目后查看参数结构。");
+
+const chartByKey = {
+  energy: makeChart(),
+  unit: makeChart(),
+  trend: makeChart()
+};
+const appliedOptions = applyScenarioVisualOptions({
+  refs: messageRefs,
+  message: "当前展示：基准场景",
+  rows,
+  tokens,
+  getChart: (key) => chartByKey[key]
+});
+assert.deepEqual(Object.keys(appliedOptions), ["energy", "unit", "trend"]);
+assert.equal(messageRefs.scenarioVisualMessage.textContent, "当前展示：基准场景");
+assert.deepEqual(chartByKey.energy.options[0].option.xAxis.data, ["2026", "2030"]);
+assert.equal(chartByKey.unit.options[0].option.series.at(-1).name, "净影响");
+assert.equal(chartByKey.trend.options[0].replace, true);
 
 console.log("scenario charts tests passed");
