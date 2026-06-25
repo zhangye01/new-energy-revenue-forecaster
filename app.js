@@ -76,9 +76,10 @@ const themeController = window.NE_THEME_CONTROLLER;
 const shellEvents = window.NE_SHELL_EVENTS;
 const appEventBindings = window.NE_APP_EVENT_BINDINGS;
 const appStorage = window.NE_APP_STORAGE;
+const appPersistence = window.NE_APP_PERSISTENCE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -1343,35 +1344,24 @@ function setEnergyPaneCurrentState(pane, statusElement, message = "") {
 }
 
 function persistAppDataNow(options = {}) {
-  const snapshot = buildAppDataSnapshot();
-  const currentSeq = ++persistSequence;
-  const result = appStorage.persistSnapshotWithFallback({
+  const result = appPersistence.persistAppDataSnapshot({
+    appStorage,
     store: appDataSnapshotStore,
-    snapshot,
+    snapshot: buildAppDataSnapshot(),
     hasLocalStorage: Boolean(getBrowserStorage("localStorage")),
     storageMode: appDataStorageMode,
     forceLocal: Boolean(options.forceLocal),
     nowMs: Date.now(),
     lastLocalWriteAt: lastLocalStoragePersistAt,
     intervalMs: LOCAL_STORAGE_PERSIST_INTERVAL_MS,
-    sequence: currentSeq,
+    sequence: ++persistSequence,
     isLatestSequence: (seq) => seq === persistSequence,
-    onLocalWriteError: (error) => {
-      console.warn("localStorage容量不足，已切换IndexedDB持久化。", error);
+    getStorageWarningShown: () => storageWarningShown,
+    setStorageWarningShown: (value) => {
+      storageWarningShown = value;
     },
-    onDbWriteError: (error) => {
-      console.warn("写入IndexedDB业务快照失败。", error);
-    },
-    onStorageAvailable: () => {
-      storageWarningShown = false;
-    },
-    onStorageRisk: (reason) => {
-      if (storageWarningShown) return;
-      storageWarningShown = true;
-      setTopMeta(reason === "indexeddb_unsupported"
-        ? "浏览器不支持大容量本地存储，当前改动可能在刷新后丢失。"
-        : "本地存储不可用，当前改动可能在刷新后丢失。");
-    }
+    setTopMeta,
+    consoleRef: console
   });
   appDataStorageMode = result.storageMode;
   lastLocalStoragePersistAt = result.lastLocalWriteAt;
