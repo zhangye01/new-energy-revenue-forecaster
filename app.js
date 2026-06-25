@@ -61,6 +61,7 @@ const forecastPage = window.NE_FORECAST_PAGE;
 const forecastRunFlow = window.NE_FORECAST_RUN_FLOW;
 const projectListView = window.NE_PROJECT_LIST_VIEW;
 const resultPage = window.NE_RESULT_PAGE;
+const resultRunner = window.NE_RESULT_RUNNER;
 const resultPrint = window.NE_RESULT_PRINT;
 const resultCharts = window.NE_RESULT_CHARTS;
 const scenarioCharts = window.NE_SCENARIO_CHARTS;
@@ -77,7 +78,7 @@ const appEventBindings = window.NE_APP_EVENT_BINDINGS;
 const appStorage = window.NE_APP_STORAGE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !projectListView || !resultPage || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -4506,35 +4507,18 @@ function runCalculation() {
   if (!project) return;
   const scenario = getActiveScenario(project);
   const run = getActiveRun(project);
-  const readiness = resultCalculation.validateCalculationReadiness({
+  resultRunner.runScenarioCalculation({
     project,
     scenario,
     run,
-    scenarioConfig
+    scenarioConfig,
+    resultCalculation,
+    prepareEnergy: ensureHourlyEnergyForCalculation,
+    calculateScenarioResult,
+    countScenariosForCompare,
+    setTopMeta,
+    renderAll
   });
-  if (!readiness.ok) {
-    setTopMeta(readiness.message);
-    return;
-  }
-
-  const energyPrepared = ensureHourlyEnergyForCalculation(project);
-  const result = calculateScenarioResult(project, scenario, run);
-  if (result.missingYears.length) {
-    setTopMeta(resultCalculation.buildMissingCurveMessage(result));
-    if (energyPrepared.changed) {
-      renderAll();
-    }
-    return;
-  }
-
-  project.resultsByScenario[scenario.id] = result;
-  project.statuses["results-page"] = "completed";
-  project.statuses["compare-page"] = countScenariosForCompare(project) >= 2 ? "completed" : "in_progress";
-  if (energyPrepared.changed) {
-    const fillText = energyPrepared.defaultAnnualFilled ? "补齐默认逐年总量并" : "";
-    setTopMeta(`已自动${fillText}调用省份典型曲线生成 ${energyPrepared.completed}/${energyPrepared.total} 年上网电量，并完成测算。`);
-  }
-  renderAll();
 }
 
 function setResultReportView(view) {
