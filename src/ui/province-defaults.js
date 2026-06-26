@@ -255,6 +255,27 @@
     });
   }
 
+  function applyProvinceDefaultsView(input = {}) {
+    const {
+      refs = {},
+      model = null,
+      root = null,
+      handlers = {}
+    } = input;
+    if (!model) return false;
+    if (refs.provinceDefaultSelector && model.selector) {
+      refs.provinceDefaultSelector.disabled = model.selector.disabled;
+      refs.provinceDefaultSelector.innerHTML = model.selector.html;
+      refs.provinceDefaultSelector.value = model.selector.value;
+    }
+    applyMessageToElement(refs.provinceApplyMessage, model.message);
+    if (refs.provinceParamBody) {
+      refs.provinceParamBody.innerHTML = model.bodyHtml;
+    }
+    bindProvinceDefaultActions({ root, handlers });
+    return true;
+  }
+
   function applyProvinceDefaultsToProjectFlow(input = {}) {
     const {
       provinceKey = "",
@@ -314,6 +335,7 @@
   }
 
   return Object.freeze({
+    applyProvinceDefaultsView,
     applyProvinceDefaultsToProjectFlow,
     bindProvinceDefaultActions,
     buildProvinceDefaultsViewModel,

@@ -3898,19 +3898,9 @@ function renderProvinceLibrary() {
   });
   selectedProvinceDefaultKey = model.selectedKey;
   selectedProvinceDefaultContextKey = model.contextKey;
-  if (refs.provinceDefaultSelector) {
-    refs.provinceDefaultSelector.disabled = model.selector.disabled;
-    refs.provinceDefaultSelector.innerHTML = model.selector.html;
-    refs.provinceDefaultSelector.value = model.selector.value;
-  }
-  if (model.message) {
-    refs.provinceApplyMessage.textContent = model.message.text;
-    refs.provinceApplyMessage.style.borderColor = model.message.borderColor;
-    refs.provinceApplyMessage.style.background = model.message.background;
-  }
-  refs.provinceParamBody.innerHTML = model.bodyHtml;
-
-  provinceDefaultsView.bindProvinceDefaultActions({
+  provinceDefaultsView.applyProvinceDefaultsView({
+    refs,
+    model,
     root: document,
     handlers: { toggleProvinceDefaultDetails, applyProvinceDefaultsToProject }
   });

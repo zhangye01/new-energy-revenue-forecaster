@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  applyProvinceDefaultsView,
   applyProvinceDefaultsToProjectFlow,
   bindProvinceDefaultActions,
   buildProvinceDefaultsViewModel,
@@ -159,6 +160,14 @@ const preservedMessage = buildProvinceDefaultsViewModel({
 });
 assert.equal(preservedMessage.message, null);
 
+function makeSelectorElement() {
+  return {
+    disabled: false,
+    innerHTML: "",
+    value: ""
+  };
+}
+
 function makeMessageElement() {
   return {
     textContent: "",
@@ -168,6 +177,42 @@ function makeMessageElement() {
     }
   };
 }
+
+const viewApplyCalls = [];
+const viewSelector = makeSelectorElement();
+const viewBody = { innerHTML: "" };
+const viewMessage = makeMessageElement();
+const viewToggleButton = new FakeButton({ toggleProvinceDetails: "guangdong" });
+const viewApplyButton = new FakeButton({ applyProvince: "jiangsu" });
+const viewApplied = applyProvinceDefaultsView({
+  refs: {
+    provinceDefaultSelector: viewSelector,
+    provinceApplyMessage: viewMessage,
+    provinceParamBody: viewBody
+  },
+  model: selectedOther,
+  root: {
+    querySelectorAll: (selector) => {
+      if (selector === "[data-toggle-province-details]") return [viewToggleButton];
+      if (selector === "[data-apply-province]") return [viewApplyButton];
+      return [];
+    }
+  },
+  handlers: {
+    toggleProvinceDefaultDetails: (provinceKey) => viewApplyCalls.push(`toggle:${provinceKey}`),
+    applyProvinceDefaultsToProject: (provinceKey) => viewApplyCalls.push(`apply:${provinceKey}`)
+  }
+});
+assert.equal(viewApplied, true);
+assert.equal(viewSelector.disabled, selectedOther.selector.disabled);
+assert.equal(viewSelector.value, "guangdong");
+assert.match(viewSelector.innerHTML, /调用其他省份参数：广东/);
+assert.match(viewMessage.textContent, /广东<script>默认参数/);
+assert.match(viewBody.innerHTML, /广东&lt;script&gt;/);
+viewToggleButton.dispatch("click");
+viewApplyButton.dispatch("click");
+assert.deepEqual(viewApplyCalls, ["toggle:guangdong", "apply:jiangsu"]);
+assert.equal(applyProvinceDefaultsView(), false);
 
 const missingProjectMessage = makeMessageElement();
 const missingProjectResult = applyProvinceDefaultsToProjectFlow({
