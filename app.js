@@ -3184,38 +3184,9 @@ function ensureHourlyEnergyForCalculation(project) {
 }
 
 function getHourlyEnergyForCalculation(project, year, yearIndex) {
-  const energyData = ensureProjectEnergyDataState(project);
-  const existing = energyData.hourlyByYear?.[year];
-  if (Array.isArray(existing) && existing.length === 8760) {
-    return existing;
-  }
-
-  const annualFromInput = Number(energyData.annualInputByYear?.[year]);
-  const annualFromSummary = Number(energyData.annualSummary?.[year]?.annualHours);
-  const annualHours = Number.isFinite(annualFromInput) && annualFromInput > 0
-    ? annualFromInput
-    : (Number.isFinite(annualFromSummary) && annualFromSummary > 0
-      ? annualFromSummary
-      : defaultAnnualEquivalentHours(project, yearIndex - 1));
-
-  let hourlyValues = [];
-  const profile = normalizeTypicalCurveProfile(energyData.typicalCurveProfile);
-  if (profile.length === 8760) {
-    hourlyValues = profile.map((weight) => annualHours * weight);
-  } else {
-    hourlyValues = generateHourlyHoursFromAnnual(annualHours, project.assetType, project.startYear + yearIndex);
-  }
-
-  if (hourlyValues.length !== 8760) return [];
-  energyData.annualInputByYear[year] = Number(annualHours.toFixed(2));
-  energyData.hourlyByYear[year] = hourlyValues;
-  energyData.annualSummary[year] = {
-    annualHours,
-    energyMwh: annualHours * project.capacityMw,
-    status: "完整"
-  };
-  project.energyMode = energyData.mode;
-  return hourlyValues;
+  return energyDataRules.getHourlyEnergyForCalculation(project, year, yearIndex, {
+    defaultAnnualEquivalentHours
+  });
 }
 
 function getPriceBaseForProvince(province) {

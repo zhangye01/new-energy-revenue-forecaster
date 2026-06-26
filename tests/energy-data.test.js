@@ -12,6 +12,7 @@ const {
   getCompleteEnergyYears,
   getContiguousAnnualInputPeriod,
   getEnergyModeMeta,
+  getHourlyEnergyForCalculation,
   getProvinceTypicalCurveRecordKey,
   hasEnergyTypicalCurve,
   parseYearRangeFromLabel,
@@ -190,6 +191,59 @@ approx(
   "重建后逐小时电量合计守恒",
   1e-6
 );
+
+const existingHourly = Array.from({ length: 8760 }, () => 0.5);
+const existingHourlyProject = {
+  startYear: 2026,
+  forecastYears: 1,
+  capacityMw: 10,
+  energyData: {
+    mode: "annual_hours",
+    hourlyByYear: { 2026: existingHourly }
+  }
+};
+assert.equal(getHourlyEnergyForCalculation(existingHourlyProject, 2026, 1), existingHourly);
+
+const calculationWithCurve = {
+  startYear: 2026,
+  forecastYears: 1,
+  capacityMw: 100,
+  assetType: "wind",
+  energyData: {
+    mode: "typical_curve_8760",
+    annualInputByYear: { 2026: 8760 },
+    typicalCurveSource: "typical_curve_8760",
+    typicalCurveProfile: flatProfile,
+    annualSummary: {},
+    hourlyByYear: {}
+  }
+};
+const curveHours = getHourlyEnergyForCalculation(calculationWithCurve, 2026, 1);
+assert.equal(curveHours.length, 8760);
+approx(curveHours.reduce((sum, value) => sum + value, 0), 8760, "测算曲线合计守恒", 1e-6);
+assert.equal(calculationWithCurve.energyData.annualInputByYear[2026], 8760);
+assert.equal(calculationWithCurve.energyData.annualSummary[2026].status, "完整");
+assert.equal(calculationWithCurve.energyData.annualSummary[2026].energyMwh, 876000);
+
+const calculationWithFallback = {
+  startYear: 2026,
+  forecastYears: 2,
+  capacityMw: 50,
+  assetType: "photovoltaic",
+  energyData: {
+    mode: "annual_hours",
+    annualSummary: {},
+    annualInputByYear: {},
+    hourlyByYear: {}
+  }
+};
+const fallbackHours = getHourlyEnergyForCalculation(calculationWithFallback, 2027, 2, {
+  defaultAnnualEquivalentHours: (_project, offset) => 1200 + offset
+});
+assert.equal(fallbackHours.length, 8760);
+approx(fallbackHours.reduce((sum, value) => sum + value, 0), 1201, "fallback 逐小时合计守恒", 1e-6);
+assert.equal(calculationWithFallback.energyData.annualInputByYear[2027], 1201);
+assert.equal(calculationWithFallback.energyData.annualSummary[2027].energyMwh, 60050);
 
 const derivedWithoutCurve = {
   startYear: 2026,

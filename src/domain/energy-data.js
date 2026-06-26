@@ -259,6 +259,41 @@
     project.energyMode = energyData.mode;
   }
 
+  function getHourlyEnergyForCalculation(project, year, yearIndex, options = {}) {
+    const energyData = ensureProjectEnergyDataState(project);
+    const existing = energyData.hourlyByYear?.[year];
+    if (Array.isArray(existing) && existing.length === 8760) {
+      return existing;
+    }
+
+    const annualFromInput = Number(energyData.annualInputByYear?.[year]);
+    const annualFromSummary = Number(energyData.annualSummary?.[year]?.annualHours);
+    const fallbackAnnualHours = typeof options.defaultAnnualEquivalentHours === "function"
+      ? options.defaultAnnualEquivalentHours(project, yearIndex - 1)
+      : 0;
+    const annualHours = Number.isFinite(annualFromInput) && annualFromInput > 0
+      ? annualFromInput
+      : (Number.isFinite(annualFromSummary) && annualFromSummary > 0
+        ? annualFromSummary
+        : fallbackAnnualHours);
+
+    const profile = energyProfiles.normalizeTypicalCurveProfile(energyData.typicalCurveProfile);
+    const hourlyValues = profile.length === 8760
+      ? profile.map((weight) => annualHours * weight)
+      : energyProfiles.generateHourlyHoursFromAnnual(annualHours, project.assetType, project.startYear + yearIndex);
+
+    if (hourlyValues.length !== 8760) return [];
+    energyData.annualInputByYear[year] = Number(annualHours.toFixed(2));
+    energyData.hourlyByYear[year] = hourlyValues;
+    energyData.annualSummary[year] = {
+      annualHours,
+      energyMwh: annualHours * project.capacityMw,
+      status: "完整"
+    };
+    project.energyMode = energyData.mode;
+    return hourlyValues;
+  }
+
   function ensureProjectEnergyDataDerivedState(project) {
     const energyData = ensureProjectEnergyDataState(project);
     if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears <= 0) {
@@ -520,6 +555,7 @@
     parseYearRangeFromLabel,
     deriveEnergyModeFromInputs,
     rebuildProjectEnergyData,
+    getHourlyEnergyForCalculation,
     detectEnergyModeByHeader,
     buildEnergyTemplateRows,
     validateAndBuildEnergyData
