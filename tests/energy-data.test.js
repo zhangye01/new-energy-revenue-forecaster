@@ -15,7 +15,9 @@ const {
   getHourlyEnergyForCalculation,
   getProvinceTypicalCurveRecordKey,
   hasEnergyTypicalCurve,
+  ensureAnnualEnergyInputsForCalculation,
   parseYearRangeFromLabel,
+  prepareHourlyEnergyForCalculation,
   rebuildProjectEnergyData,
   validateAndBuildEnergyData
 } = require("../src/domain/energy-data");
@@ -244,6 +246,84 @@ assert.equal(fallbackHours.length, 8760);
 approx(fallbackHours.reduce((sum, value) => sum + value, 0), 1201, "fallback 逐小时合计守恒", 1e-6);
 assert.equal(calculationWithFallback.energyData.annualInputByYear[2027], 1201);
 assert.equal(calculationWithFallback.energyData.annualSummary[2027].energyMwh, 60050);
+
+assert.equal(ensureAnnualEnergyInputsForCalculation(null), false);
+const annualFillProject = {
+  startYear: 2026,
+  forecastYears: 2,
+  capacityMw: 100,
+  energyData: {
+    annualInputByYear: { 2026: 2400 }
+  }
+};
+assert.equal(
+  ensureAnnualEnergyInputsForCalculation(annualFillProject, {
+    defaultAnnualEquivalentHours: (_project, offset) => 2000 + offset
+  }),
+  true
+);
+assert.deepEqual(annualFillProject.energyData.annualInputByYear, { 2026: 2400, 2027: 2001 });
+assert.equal(
+  ensureAnnualEnergyInputsForCalculation(annualFillProject, {
+    defaultAnnualEquivalentHours: () => 9999
+  }),
+  false
+);
+
+assert.deepEqual(
+  prepareHourlyEnergyForCalculation(null),
+  { changed: false, completed: 0, total: 0, defaultAnnualFilled: false }
+);
+const prepareWithoutCurve = {
+  startYear: 2026,
+  forecastYears: 1,
+  capacityMw: 100,
+  assetType: "wind",
+  statuses: {},
+  energyData: {
+    annualInputByYear: {},
+    annualSummary: {},
+    hourlyByYear: {}
+  }
+};
+assert.deepEqual(
+  prepareHourlyEnergyForCalculation(prepareWithoutCurve, {
+    defaultAnnualEquivalentHours: () => 2300,
+    getProvinceTypicalCurveRecord: () => null
+  }),
+  { changed: true, completed: 0, total: 1, defaultAnnualFilled: true }
+);
+assert.equal(prepareWithoutCurve.energyData.annualInputByYear[2026], 2300);
+assert.deepEqual(prepareWithoutCurve.statuses, {});
+
+const prepareWithCurve = {
+  startYear: 2026,
+  forecastYears: 1,
+  capacityMw: 100,
+  assetType: "wind",
+  statuses: {},
+  energyData: {
+    annualInputByYear: {},
+    annualSummary: {},
+    hourlyByYear: {}
+  }
+};
+assert.deepEqual(
+  prepareHourlyEnergyForCalculation(prepareWithCurve, {
+    defaultAnnualEquivalentHours: () => 2400,
+    getProvinceTypicalCurveRecord: () => ({ profile: flatProfile })
+  }),
+  {
+    changed: true,
+    completed: 1,
+    total: 1,
+    defaultAnnualFilled: true,
+    nextEnergyStep2Choice: "province"
+  }
+);
+assert.equal(prepareWithCurve.energyData.typicalCurveSource, "province_typical_curve");
+assert.equal(prepareWithCurve.energyData.hourlyByYear[2026].length, 8760);
+assert.equal(prepareWithCurve.statuses["energy-page"], "completed");
 
 const derivedWithoutCurve = {
   startYear: 2026,

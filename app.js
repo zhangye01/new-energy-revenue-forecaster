@@ -3141,46 +3141,15 @@ function defaultAnnualEquivalentHours(project, offset = 0) {
   return Number(Math.max(800, base + provinceShift * 4).toFixed(2)) * annualDrift;
 }
 
-function ensureAnnualEnergyInputsForCalculation(project) {
-  const energyData = ensureProjectEnergyDataState(project);
-  let changed = false;
-  for (let i = 0; i < project.forecastYears; i += 1) {
-    const year = project.startYear + i;
-    const value = Number(energyData.annualInputByYear?.[year]);
-    if (Number.isFinite(value) && value > 0) continue;
-    energyData.annualInputByYear[year] = Number(defaultAnnualEquivalentHours(project, i).toFixed(2));
-    changed = true;
-  }
-  return changed;
-}
-
 function ensureHourlyEnergyForCalculation(project) {
-  if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears < 1) {
-    return { changed: false, completed: 0, total: 0, defaultAnnualFilled: false };
+  const result = energyDataRules.prepareHourlyEnergyForCalculation(project, {
+    defaultAnnualEquivalentHours,
+    getProvinceTypicalCurveRecord
+  });
+  if (result.nextEnergyStep2Choice) {
+    appState.energyStep2Choice = result.nextEnergyStep2Choice;
   }
-  const before = countCompleteEnergyYears(project);
-  const total = project.forecastYears;
-  if (before === total) {
-    return { changed: false, completed: before, total, defaultAnnualFilled: false };
-  }
-
-  const defaultAnnualFilled = ensureAnnualEnergyInputsForCalculation(project);
-
-  const energyData = ensureProjectEnergyDataState(project);
-  if (!hasEnergyTypicalCurve(project)) {
-    const curveRecord = getProvinceTypicalCurveRecord(project);
-    if (!curveRecord?.profile?.length) {
-      return { changed: defaultAnnualFilled, completed: before, total, defaultAnnualFilled };
-    }
-    energyData.typicalCurveProfile = curveRecord.profile;
-    energyData.typicalCurveSource = "province_typical_curve";
-    appState.energyStep2Choice = "province";
-  }
-
-  rebuildProjectEnergyData(project);
-  const completed = countCompleteEnergyYears(project);
-  project.statuses["energy-page"] = completed === total ? "completed" : "in_progress";
-  return { changed: completed !== before || defaultAnnualFilled, completed, total, defaultAnnualFilled };
+  return result;
 }
 
 function getHourlyEnergyForCalculation(project, year, yearIndex) {

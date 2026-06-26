@@ -294,6 +294,61 @@
     return hourlyValues;
   }
 
+  function ensureAnnualEnergyInputsForCalculation(project, options = {}) {
+    if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears < 1) {
+      return false;
+    }
+    const energyData = ensureProjectEnergyDataState(project);
+    const defaultAnnualEquivalentHours = typeof options.defaultAnnualEquivalentHours === "function"
+      ? options.defaultAnnualEquivalentHours
+      : () => 0;
+    let changed = false;
+    for (let offset = 0; offset < project.forecastYears; offset += 1) {
+      const year = project.startYear + offset;
+      const value = Number(energyData.annualInputByYear?.[year]);
+      if (Number.isFinite(value) && value > 0) continue;
+      energyData.annualInputByYear[year] = Number(defaultAnnualEquivalentHours(project, offset).toFixed(2));
+      changed = true;
+    }
+    return changed;
+  }
+
+  function prepareHourlyEnergyForCalculation(project, options = {}) {
+    if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears < 1) {
+      return { changed: false, completed: 0, total: 0, defaultAnnualFilled: false };
+    }
+    const before = getCompleteEnergyYears(project).length;
+    const total = project.forecastYears;
+    if (before === total) {
+      return { changed: false, completed: before, total, defaultAnnualFilled: false };
+    }
+
+    const defaultAnnualFilled = ensureAnnualEnergyInputsForCalculation(project, options);
+    const energyData = ensureProjectEnergyDataState(project);
+    let nextEnergyStep2Choice = "";
+    if (!hasStoredEnergyTypicalCurve(energyData)) {
+      const curveRecord = options.getProvinceTypicalCurveRecord?.(project);
+      if (!curveRecord?.profile?.length) {
+        return { changed: defaultAnnualFilled, completed: before, total, defaultAnnualFilled };
+      }
+      energyData.typicalCurveProfile = curveRecord.profile;
+      energyData.typicalCurveSource = "province_typical_curve";
+      nextEnergyStep2Choice = "province";
+    }
+
+    rebuildProjectEnergyData(project);
+    const completed = getCompleteEnergyYears(project).length;
+    if (!isPlainObject(project.statuses)) project.statuses = {};
+    project.statuses["energy-page"] = completed === total ? "completed" : "in_progress";
+    return {
+      changed: completed !== before || defaultAnnualFilled,
+      completed,
+      total,
+      defaultAnnualFilled,
+      nextEnergyStep2Choice
+    };
+  }
+
   function ensureProjectEnergyDataDerivedState(project) {
     const energyData = ensureProjectEnergyDataState(project);
     if (!project || !Number.isInteger(project.startYear) || !Number.isInteger(project.forecastYears) || project.forecastYears <= 0) {
@@ -556,6 +611,8 @@
     deriveEnergyModeFromInputs,
     rebuildProjectEnergyData,
     getHourlyEnergyForCalculation,
+    ensureAnnualEnergyInputsForCalculation,
+    prepareHourlyEnergyForCalculation,
     detectEnergyModeByHeader,
     buildEnergyTemplateRows,
     validateAndBuildEnergyData
