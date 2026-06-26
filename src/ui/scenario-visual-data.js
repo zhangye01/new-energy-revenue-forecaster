@@ -131,7 +131,39 @@
     });
   }
 
+  function buildScenarioVisualMessage(input = {}) {
+    const {
+      project,
+      scenario,
+      getProvinceName = () => "",
+      getAssetTypeLabel = () => "",
+      getSiteTypeLabel = () => "",
+      getStorageConfigText = () => ""
+    } = input;
+    const provinceName = getProvinceName(project?.province || "") || "未选省份";
+    return `当前展示：${scenario.name} | ${provinceName} / ${getAssetTypeLabel(project?.assetType)} / ${getSiteTypeLabel(project?.siteType)} / ${getStorageConfigText(project)}`;
+  }
+
+  function buildScenarioVisualViewModel(input = {}) {
+    const {
+      project = null,
+      scenario = null,
+      includeRows = false
+    } = input;
+    if (!project) {
+      return { ok: false, message: "请选择项目后查看参数结构。", rows: [] };
+    }
+    if (!scenario) {
+      return { ok: false, message: "请选择方案后查看参数结构。", rows: [] };
+    }
+    const message = buildScenarioVisualMessage(input);
+    const rows = includeRows ? buildScenarioVisualRows(input) : [];
+    return { ok: true, message, rows };
+  }
+
   return Object.freeze({
+    buildScenarioVisualMessage,
+    buildScenarioVisualViewModel,
     buildScenarioVisualRows,
     getScenarioVisualEnergyMwh,
     getScenarioVisualYears

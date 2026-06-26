@@ -3597,36 +3597,23 @@ function renderScenarioVisualPlaceholder(message) {
 function renderScenarioVisualization() {
   if (!refs.scenarioVisualMessage) return;
   const project = getActiveProject();
-  if (!project) {
-    renderScenarioVisualPlaceholder("请选择项目后查看参数结构。");
-    return;
-  }
-  ensureScenarioMetadata(project);
-  const scenario = getActiveScenario(project);
-  if (!scenario) {
-    renderScenarioVisualPlaceholder("请选择方案后查看参数结构。");
-    return;
-  }
-  const message = `当前展示：${scenario.name} | ${getProvinceName(project.province || "") || "未选省份"} / ${getAssetTypeLabel(project.assetType)} / ${getSiteTypeLabel(project.siteType)} / ${getStorageConfigText(project)}`;
-  scenarioCharts.applyScenarioVisualMessage(refs, message);
-  if (resolveVisiblePageId(appState.activePage) !== "scenario-page") return;
-  const tokens = scenarioCharts.buildScenarioVisualThemeTokens(appState.theme);
-  const visualRows = scenarioVisualData.buildScenarioVisualRows({
-    project,
-    scenario,
-    energyData: ensureProjectEnergyDataDerivedState(project),
-    clamp,
-    mechanismActiveMonthsForYear,
-    tradeStrategyPnlPriceForYear,
-    getEnvValueAllocation,
-    getFeeConfigForYear
+  if (project) ensureScenarioMetadata(project);
+  const includeRows = resolveVisiblePageId(appState.activePage) === "scenario-page";
+  const view = scenarioVisualData.buildScenarioVisualViewModel({
+    project, includeRows, scenario: project ? getActiveScenario(project) : null,
+    energyData: includeRows && project ? ensureProjectEnergyDataDerivedState(project) : null,
+    clamp, getProvinceName, getAssetTypeLabel, getSiteTypeLabel, getStorageConfigText,
+    mechanismActiveMonthsForYear, tradeStrategyPnlPriceForYear, getEnvValueAllocation, getFeeConfigForYear
   });
+  if (!view.ok) {
+    renderScenarioVisualPlaceholder(view.message);
+    return;
+  }
+  scenarioCharts.applyScenarioVisualMessage(refs, view.message);
+  if (!includeRows) return;
+  const tokens = scenarioCharts.buildScenarioVisualThemeTokens(appState.theme);
   scenarioCharts.applyScenarioVisualOptions({
-    refs,
-    message,
-    rows: visualRows,
-    tokens,
-    getChart: ensureScenarioVisualChart
+    refs, tokens, message: view.message, rows: view.rows, getChart: ensureScenarioVisualChart
   });
   queueScenarioVisualResize();
 }
