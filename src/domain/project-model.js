@@ -103,6 +103,43 @@
     return project;
   }
 
+  function buildMockHistoryProjectSeed(options = {}) {
+    const ownerAccount = typeof options.ownerAccount === "string" ? options.ownerAccount.trim() : "";
+    if (!options.loggedIn) return { created: false, reason: "not_logged_in", project: null };
+    if (!ownerAccount) return { created: false, reason: "missing_owner", project: null };
+    const accountProjects = Array.isArray(options.accountProjects) ? options.accountProjects : [];
+    const isNewWorkspaceProject = typeof options.isNewWorkspaceProject === "function"
+      ? options.isNewWorkspaceProject
+      : ((project) => project?.workspaceBucket === "new");
+    if (accountProjects.some((project) => !isNewWorkspaceProject(project))) {
+      return { created: false, reason: "history_project_exists", project: null };
+    }
+
+    const now = options.now instanceof Date ? options.now : new Date();
+    const currentYear = Number.isInteger(options.currentYear) ? options.currentYear : now.getFullYear();
+    const startYear = Math.max(2026, currentYear);
+    const nowIso = typeof options.nowIso === "string" && options.nowIso ? options.nowIso : now.toISOString();
+    return {
+      created: true,
+      reason: "created",
+      project: createMockHistoryProject({
+        id: resolveMakeId(options)("proj"),
+        ownerAccount,
+        name: typeof options.resolveUniqueName === "function"
+          ? options.resolveUniqueName("江苏海上风电示例项目")
+          : "江苏海上风电示例项目",
+        startYear,
+        nowIso,
+        statuses: options.statuses,
+        historySpotImport: options.historySpotImport,
+        spotMarketConfig: options.spotMarketConfig,
+        createBaselineScenario: typeof options.createBaselineScenario === "function"
+          ? (projectDraft) => options.createBaselineScenario(projectDraft, { currentYear: startYear, nowIso })
+          : undefined
+      })
+    };
+  }
+
   function createEmptyWorkspaceProject(options = {}) {
     const nowIso = resolveNowIso(options);
     const project = {
@@ -450,6 +487,7 @@
     createProjectRecord,
     createProjectRecordWithBaseline,
     createMockHistoryProject,
+    buildMockHistoryProjectSeed,
     createEmptyWorkspaceProject,
     createEmptyEnergyDataState,
     createEmptyEnergyTemplateExports,

@@ -804,35 +804,23 @@ function syncActiveProjectForCurrentAccount(options = {}) {
 }
 
 function ensureMockHistoryProjectForCurrentAccount() {
-  if (!appState.auth.loggedIn) return false;
-  const ownerAccount = String(appState.auth.account || "").trim();
-  if (!ownerAccount) return false;
-  const accountProjects = getProjectsForCurrentAccount();
-  if (accountProjects.some((project) => !isNewWorkspaceProject(project))) {
-    return false;
-  }
-
-  const now = new Date();
-  const year = Math.max(2026, now.getFullYear());
-  const nowIso = now.toISOString();
-  const project = projectModel.createMockHistoryProject({
-    id: makeId("proj"),
-    ownerAccount,
-    name: resolveUniqueProjectName("江苏海上风电示例项目"),
-    startYear: year,
-    nowIso,
+  const seed = projectModel.buildMockHistoryProjectSeed({
+    loggedIn: appState.auth.loggedIn,
+    ownerAccount: appState.auth.account,
+    accountProjects: getProjectsForCurrentAccount(),
+    isNewWorkspaceProject,
+    makeId,
+    resolveUniqueName: resolveUniqueProjectName,
     statuses: statusMapTemplate(),
     historySpotImport: createEmptyHistorySpotImport(),
     spotMarketConfig: createDefaultSpotMarketConfig(),
-    createBaselineScenario: (projectDraft) => createBaselineScenario(projectDraft, {
-      currentYear: year,
-      nowIso
-    })
+    createBaselineScenario
   });
+  if (!seed.created) return false;
 
-  appState.projects.unshift(project);
+  appState.projects.unshift(seed.project);
   if (!getActiveProject()) {
-    appState.activeProjectId = project.id;
+    appState.activeProjectId = seed.project.id;
   }
   return true;
 }

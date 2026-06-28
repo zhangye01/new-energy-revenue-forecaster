@@ -37,7 +37,7 @@
 | `scenario-config.js` | 场景配置清洗、逐年 CSV 模板和导入校验 |
 | `scenario-model.js` | 场景默认值、复制、重命名、基准锁定规则 |
 | `project-settings.js` | 项目默认设置、配置清洗 |
-| `project-model.js` | 项目创建、项目清洗、基础字段默认值 |
+| `project-model.js` | 项目创建、项目清洗、基础字段默认值、历史示例项目 seed 决策 |
 | `project-display.js` | 项目省份、风光类型、陆海类型、周期和导出时间等展示辅助 |
 | `app-storage.js` | 业务快照的 localStorage / IndexedDB 读写、最新快照选择 |
 

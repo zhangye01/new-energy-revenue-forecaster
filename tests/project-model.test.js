@@ -8,6 +8,7 @@ const {
   validateCreateProjectFormInput,
   hasProjectBaseInputChanged,
   applyCreateProjectInput,
+  buildMockHistoryProjectSeed,
   createProjectRecord,
   createProjectRecordWithBaseline,
   createMockHistoryProject,
@@ -344,6 +345,48 @@ assert.deepEqual(mockHistoryProject.spotMarketConfig, { market: "jiangsu" });
 assert.equal(mockHistoryProject.scenarios[0].id, "scn-demo");
 assert.equal(mockHistoryProject.scenarios[0].name, "示例项目-基准");
 assert.equal(mockHistoryProject.activeScenarioId, "scn-demo");
+
+assert.deepEqual(buildMockHistoryProjectSeed({
+  loggedIn: false,
+  ownerAccount: "demo"
+}), { created: false, reason: "not_logged_in", project: null });
+assert.deepEqual(buildMockHistoryProjectSeed({
+  loggedIn: true,
+  ownerAccount: " "
+}), { created: false, reason: "missing_owner", project: null });
+assert.deepEqual(buildMockHistoryProjectSeed({
+  loggedIn: true,
+  ownerAccount: "demo",
+  accountProjects: [{ workspaceBucket: "history" }]
+}), { created: false, reason: "history_project_exists", project: null });
+
+const mockSeed = buildMockHistoryProjectSeed({
+  loggedIn: true,
+  ownerAccount: " demo ",
+  accountProjects: [{ workspaceBucket: "new" }],
+  isNewWorkspaceProject: (project) => project.workspaceBucket === "new",
+  makeId: (prefix) => `${prefix}-seed`,
+  resolveUniqueName: (name) => `${name}2`,
+  now: new Date("2027-06-10T00:00:00.000Z"),
+  statuses: { "home-page": "completed" },
+  historySpotImport: { source: "seed" },
+  spotMarketConfig: { market: "seed" },
+  createBaselineScenario: (project, context) => ({
+    id: `scn-${project.id}`,
+    name: `${project.name}-${context.currentYear}-${context.nowIso}`,
+    isBaseline: true
+  })
+});
+assert.equal(mockSeed.created, true);
+assert.equal(mockSeed.reason, "created");
+assert.equal(mockSeed.project.id, "proj-seed");
+assert.equal(mockSeed.project.ownerAccount, "demo");
+assert.equal(mockSeed.project.name, "江苏海上风电示例项目2");
+assert.equal(mockSeed.project.startYear, 2027);
+assert.equal(mockSeed.project.createdAt, "2027-06-10T00:00:00.000Z");
+assert.deepEqual(mockSeed.project.historySpotImport, { source: "seed" });
+assert.deepEqual(mockSeed.project.spotMarketConfig, { market: "seed" });
+assert.equal(mockSeed.project.scenarios[0].name, "江苏海上风电示例项目2-2027-2027-06-10T00:00:00.000Z");
 
 const emptyWorkspaceProject = createEmptyWorkspaceProject({
   id: "proj-new",
