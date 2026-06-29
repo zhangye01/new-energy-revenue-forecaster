@@ -4500,29 +4500,21 @@ function resetResultDom() {
 }
 
 function renderResults() {
-  const project = getActiveProject();
   resetResultDom();
   setResultReportView(activeResultReportView);
-  const scenario = project ? getActiveScenario(project) : null;
-  updatePrintReportHeader(project, scenario);
-  const result = project ? project.resultsByScenario[scenario?.id || ""] : null;
-  const cfg = scenario?.config || {};
-  const view = resultPage.buildResultPageViewModel({
-    project,
-    scenario,
-    result,
-    summaryData: result ? resultReport.buildResultSummaryData(result) : null,
-    labels: {
-      projectName: project?.name || "-",
-      scenarioName: scenario?.name || "-",
-      periodText: project ? getForecastPeriodDisplayRange(project) : "-",
-      assetTypeLabel: project ? getAssetTypeLabel(project.assetType) : "-",
-      siteTypeLabel: project ? getSiteTypeLabel(project.siteType) : "-",
-      storageText: project ? getStorageConfigText(project) : "-"
-    },
-    envValueMode: getEnvValueMode(cfg),
-    feeConfigMode: getFeeConfigMode(cfg)
+  const state = resultPage.buildResultPageRenderState({
+    project: getActiveProject(),
+    getActiveScenario,
+    buildResultSummaryData: resultReport.buildResultSummaryData,
+    getForecastPeriodDisplayRange,
+    getAssetTypeLabel,
+    getSiteTypeLabel,
+    getStorageConfigText,
+    getEnvValueMode,
+    getFeeConfigMode
   });
+  const { project, scenario, result, view } = state;
+  updatePrintReportHeader(project, scenario);
 
   resultPage.applyResultPageViewModel({ refs, view });
   if (view.chartPlaceholder) {

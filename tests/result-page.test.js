@@ -7,6 +7,7 @@ const {
   bindResultActionEvents,
   buildEmptyMetricCards,
   buildResultMetaHtml,
+  buildResultPageRenderState,
   buildResultPageViewModel,
   resetResultDom
 } = require("../src/ui/result-page");
@@ -111,6 +112,11 @@ const noProject = buildResultPageViewModel();
 assert.equal(noProject.state, "no_project");
 assert.equal(noProject.chartPlaceholder, "请选择项目后发起测算");
 assert.match(noProject.metaHtml, /项目：-/);
+const noProjectState = buildResultPageRenderState();
+assert.equal(noProjectState.project, null);
+assert.equal(noProjectState.scenario, null);
+assert.equal(noProjectState.result, null);
+assert.equal(noProjectState.view.state, "no_project");
 
 const resultDomRefs = {
   resultReportMeta: { innerHTML: "old" },
@@ -248,6 +254,30 @@ assert.match(ready.assumptionHtml, /综合费用与其他收入采用逐年导�
 assert.match(ready.annualRowsHtml, /¥3,500,000/);
 assert.match(ready.hourlyRowsHtml, /2026-01-01 00:00/);
 assert.match(ready.hourlyPreviewHint, /预览前 1 条，共 1 条/);
+
+const renderState = buildResultPageRenderState({
+  project: {
+    ...project,
+    resultsByScenario: {
+      scenario1: result
+    },
+    assetType: "wind",
+    siteType: "offshore"
+  },
+  getActiveScenario: () => ({ ...scenario, id: "scenario1" }),
+  buildResultSummaryData: () => summaryData,
+  getForecastPeriodDisplayRange: () => "2026-2050",
+  getAssetTypeLabel: () => "风电",
+  getSiteTypeLabel: () => "海上",
+  getStorageConfigText: () => "配储",
+  getEnvValueMode: () => "manual",
+  getFeeConfigMode: () => "manual"
+});
+assert.equal(renderState.scenario.id, "scenario1");
+assert.equal(renderState.result, result);
+assert.equal(renderState.view.state, "ready");
+assert.match(renderState.view.metaHtml, /项目：江苏海上风电示例项目/);
+assert.match(renderState.view.assumptionHtml, /环境价值采用逐年导入配置/);
 
 const emptyRows = buildResultPageViewModel({
   project,

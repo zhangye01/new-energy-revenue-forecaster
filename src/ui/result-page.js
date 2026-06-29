@@ -326,12 +326,47 @@
     };
   }
 
+  function buildResultPageRenderState(input = {}) {
+    const {
+      project = null,
+      getActiveScenario = () => null,
+      buildResultSummaryData = () => null,
+      getForecastPeriodDisplayRange = () => "-",
+      getAssetTypeLabel = () => "-",
+      getSiteTypeLabel = () => "-",
+      getStorageConfigText = () => "-",
+      getEnvValueMode = () => "global",
+      getFeeConfigMode = () => "global"
+    } = input;
+    const scenario = project ? getActiveScenario(project) : null;
+    const result = project ? project.resultsByScenario?.[scenario?.id || ""] : null;
+    const cfg = scenario?.config || {};
+    const view = buildResultPageViewModel({
+      project,
+      scenario,
+      result,
+      summaryData: result ? buildResultSummaryData(result) : null,
+      labels: {
+        projectName: project?.name || "-",
+        scenarioName: scenario?.name || "-",
+        periodText: project ? getForecastPeriodDisplayRange(project) : "-",
+        assetTypeLabel: project ? getAssetTypeLabel(project.assetType) : "-",
+        siteTypeLabel: project ? getSiteTypeLabel(project.siteType) : "-",
+        storageText: project ? getStorageConfigText(project) : "-"
+      },
+      envValueMode: getEnvValueMode(cfg),
+      feeConfigMode: getFeeConfigMode(cfg)
+    });
+    return { project, scenario, result, view };
+  }
+
   return Object.freeze({
     applyResultPageViewModel,
     applyResultReportView,
     bindResultActionEvents,
     buildEmptyMetricCards,
     buildResultMetaHtml,
+    buildResultPageRenderState,
     buildResultPageViewModel,
     resetResultDom
   });
