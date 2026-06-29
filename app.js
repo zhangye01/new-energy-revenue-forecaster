@@ -4557,11 +4557,9 @@ function renderCompare() {
     activeSensitivityFactorKey,
     sensitivitySettings: compareSensitivitySettings
   });
-  if (frameState.hasResults) {
-    compareSensitivitySettings.selectedKeys = frameState.sensitivitySelection.selectedKeys;
-    activeSensitivityFactorKey = frameState.sensitivitySelection.activeFactorKey;
-    activeCompareScenarioId = frameState.activeCompareScenarioId;
-  }
+  ({ activeCompareScenarioId, activeSensitivityFactorKey } = compareAnalysis.applyCompareFrameSelection({
+    frameState, sensitivitySettings: compareSensitivitySettings, activeCompareScenarioId, activeSensitivityFactorKey
+  }));
   comparePage.renderCompareFrame({
     refs,
     setCompareMetric,

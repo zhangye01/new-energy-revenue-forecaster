@@ -314,7 +314,27 @@
     };
   }
 
+  function applyCompareFrameSelection(input = {}) {
+    const {
+      frameState = {},
+      sensitivitySettings = {},
+      activeCompareScenarioId = "",
+      activeSensitivityFactorKey = ""
+    } = input;
+    if (!frameState.hasResults) {
+      return { activeCompareScenarioId, activeSensitivityFactorKey };
+    }
+    if (Array.isArray(frameState.sensitivitySelection?.selectedKeys)) {
+      sensitivitySettings.selectedKeys = frameState.sensitivitySelection.selectedKeys;
+    }
+    return {
+      activeCompareScenarioId: frameState.activeCompareScenarioId || activeCompareScenarioId,
+      activeSensitivityFactorKey: frameState.sensitivitySelection?.activeFactorKey || activeSensitivityFactorKey
+    };
+  }
+
   return Object.freeze({
+    applyCompareFrameSelection,
     sanitizeCompareSensitivitySettings,
     sensitivityAxisLabels,
     buildSensitivitySeries,

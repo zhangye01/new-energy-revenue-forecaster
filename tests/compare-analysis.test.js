@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  applyCompareFrameSelection,
   buildAvailableScenarioResults,
   buildCompareFrameState,
   buildCompareRenderState,
@@ -247,5 +248,31 @@ assert.equal(frameState.compareState.baseline.scenario.id, "base");
 assert.equal(frameState.activeCompareScenarioId, "up");
 assert.equal(frameState.sensitivitySelection.activeFactorKey, "fee");
 assert.deepEqual(frameState.sensitivitySelection.selectedKeys, ["fee"]);
+
+const compareSelectionSettings = { selectedKeys: ["spot"] };
+const compareSelection = applyCompareFrameSelection({
+  frameState,
+  sensitivitySettings: compareSelectionSettings,
+  activeCompareScenarioId: "base",
+  activeSensitivityFactorKey: "spot"
+});
+assert.deepEqual(compareSelection, {
+  activeCompareScenarioId: "up",
+  activeSensitivityFactorKey: "fee"
+});
+assert.deepEqual(compareSelectionSettings.selectedKeys, ["fee"]);
+
+const inactiveSelectionSettings = { selectedKeys: ["spot"] };
+const inactiveSelection = applyCompareFrameSelection({
+  frameState: emptyFrameState,
+  sensitivitySettings: inactiveSelectionSettings,
+  activeCompareScenarioId: "base",
+  activeSensitivityFactorKey: "spot"
+});
+assert.deepEqual(inactiveSelection, {
+  activeCompareScenarioId: "base",
+  activeSensitivityFactorKey: "spot"
+});
+assert.deepEqual(inactiveSelectionSettings.selectedKeys, ["spot"]);
 
 console.log("compare analysis tests passed");
