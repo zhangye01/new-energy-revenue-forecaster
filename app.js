@@ -49,6 +49,7 @@ const energyImportFlow = window.NE_ENERGY_IMPORT_FLOW;
 const csvUtils = window.NE_CSV_UTILS;
 const exportBuilders = window.NE_EXPORT_BUILDERS;
 const fileImportUtils = window.NE_FILE_IMPORT_UTILS;
+const scriptLoader = window.NE_SCRIPT_LOADER;
 const policyPanel = window.NE_POLICY_PANEL;
 const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
@@ -79,7 +80,7 @@ const appStorage = window.NE_APP_STORAGE;
 const appPersistence = window.NE_APP_PERSISTENCE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !scriptLoader || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -96,6 +97,7 @@ const {
   hasNonEmptyObject
 } = appUtils;
 const { normalizeTheme } = themeController;
+const loadScriptResourceOnce = scriptLoader.loadScriptResourceOnce;
 const {
   getProvinceName,
   getAssetTypeLabel,
@@ -1959,38 +1961,6 @@ function normalizeRegionName(name) {
 function resolveProvinceKeyFromGeoName(name) {
   const normalized = normalizeRegionName(name);
   return PROVINCE_NAME_KEY_MAP[normalized] || null;
-}
-
-function loadScriptResourceOnce(src, key) {
-  if (typeof document === "undefined") {
-    return Promise.reject(new Error("当前环境不支持动态加载脚本"));
-  }
-  const loadedTag = `data-loaded-${key}`;
-  const existingLoaded = document.querySelector(`script[${loadedTag}="1"]`);
-  if (existingLoaded) {
-    return Promise.resolve();
-  }
-  const existingLoading = document.querySelector(`script[data-loading-key="${key}"]`);
-  if (existingLoading) {
-    return new Promise((resolve, reject) => {
-      existingLoading.addEventListener("load", () => resolve(), { once: true });
-      existingLoading.addEventListener("error", () => reject(new Error(`脚本加载失败：${src}`)), { once: true });
-    });
-  }
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = src;
-    script.dataset.loadingKey = key;
-    script.addEventListener("load", () => {
-      script.setAttribute(loadedTag, "1");
-      resolve();
-    }, { once: true });
-    script.addEventListener("error", () => {
-      reject(new Error(`脚本加载失败：${src}`));
-    }, { once: true });
-    document.head.appendChild(script);
-  });
 }
 
 async function ensureMapRuntimeReady() {
