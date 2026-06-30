@@ -6,6 +6,7 @@ const {
   applyEnvValueControlState,
   applyScenarioManagerView,
   applyScenarioFieldLocks,
+  applyScenarioSaveDraft,
   bindForecastScenarioEvents,
   bindScenarioDerivedFieldEvents,
   buildScenarioManagerView,
@@ -491,6 +492,35 @@ assert.equal(saveDraft.scenarioName, "基准场景");
 assert.equal(saveDraft.config.ltPricingMode, "manual");
 assert.deepEqual(saveDraft.config.ltManualPricesByYear, { 2026: 8, 2027: 6 });
 assert.equal(saveDraft.config.feeConfigMode, "manual");
+
+const applySaveProject = { statuses: {} };
+const applySaveScenario = { id: "s1", name: "旧场景", config: {}, updatedAt: "" };
+const applySaveResult = applyScenarioSaveDraft({
+  project: applySaveProject,
+  scenario: applySaveScenario,
+  draft: {
+    ok: true,
+    scenarioName: "新场景",
+    config: { mechanismPrice: 365 }
+  },
+  nowIso: () => "2026-06-30T00:00:00.000Z"
+});
+assert.deepEqual(applySaveResult, {
+  ok: true,
+  message: "场景“新场景”已保存。"
+});
+assert.equal(applySaveScenario.name, "新场景");
+assert.deepEqual(applySaveScenario.config, { mechanismPrice: 365 });
+assert.equal(applySaveScenario.updatedAt, "2026-06-30T00:00:00.000Z");
+assert.equal(applySaveProject.statuses["scenario-page"], "completed");
+assert.deepEqual(applyScenarioSaveDraft({
+  project: applySaveProject,
+  scenario: applySaveScenario,
+  draft: { ok: false, message: "不能保存" }
+}), {
+  ok: false,
+  message: "不能保存"
+});
 
 const duplicateDraft = buildScenarioSaveDraft({
   project: saveProject,

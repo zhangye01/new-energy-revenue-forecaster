@@ -19,6 +19,7 @@ dist/
 build/
 coverage/
 playwright-report/
+output/
 
 # Logs and temporary files
 *.log

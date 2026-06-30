@@ -532,10 +532,32 @@
     };
   }
 
+  function applyScenarioSaveDraft(input = {}) {
+    const {
+      project = null,
+      scenario = null,
+      draft = null,
+      nowIso = () => new Date().toISOString()
+    } = input;
+    if (!project || !scenario || !draft?.ok) {
+      return invalid(draft?.message || "场景保存失败。");
+    }
+    scenario.name = draft.scenarioName;
+    scenario.config = draft.config;
+    scenario.updatedAt = nowIso();
+    project.statuses = project.statuses || {};
+    project.statuses["scenario-page"] = "completed";
+    return {
+      ok: true,
+      message: `场景“${scenario.name}”已保存。`
+    };
+  }
+
   return Object.freeze({
     applyEnvValueControlState,
     applyScenarioManagerView,
     applyScenarioFieldLocks,
+    applyScenarioSaveDraft,
     bindForecastScenarioEvents,
     bindScenarioDerivedFieldEvents,
     buildScenarioManagerView,

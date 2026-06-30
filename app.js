@@ -4304,34 +4304,22 @@ function renderScenarioForm() {
 }
 
 function saveScenarioFromForm() {
-  const project = getActiveProject();
-  if (!project) return;
+  const project = getActiveProject(); if (!project) return;
   ensureScenarioMetadata(project);
-
-  let scenario = getActiveScenario(project);
-  if (!scenario) return;
+  const scenario = getActiveScenario(project); if (!scenario) return;
 
   const draft = scenarioForm.buildScenarioSaveDraft({
-    project,
-    scenario,
-    refs,
+    project, scenario, refs, clamp, monthSerial, scenarioConfig,
     querySelector: (selector) => document.querySelector(selector),
-    clamp,
-    monthSerial,
-    scenarioConfig,
     readEnvValueAllocationDraft
   });
   if (!draft.ok) {
     setScenarioImportMessage(draft.message, "error");
     return;
   }
-  scenario.name = draft.scenarioName;
-  scenario.config = draft.config;
-  scenario.updatedAt = new Date().toISOString();
-
-  project.statuses["scenario-page"] = "completed";
+  const saved = scenarioForm.applyScenarioSaveDraft({ project, scenario, draft, nowIso: () => new Date().toISOString() });
   markDownstreamStale(project, "scenario-page");
-  setScenarioImportMessage(`场景“${scenario.name}”已保存。`, "success");
+  setScenarioImportMessage(saved.message, "success");
   renderAll();
 }
 
@@ -4659,17 +4647,7 @@ function printScenarioReport() {
   });
 }
 
-function renderAll() {
-  syncProjectProvinceScopedState();
-  reconcileAllProjectStatuses();
-  applySidebarGroups();
-  applyAuthLayout();
-  refreshNavigationAvailability();
-  syncCreateProjectFormWithActiveProject();
-  renderCreateWorkspaceState();
-  renderStatuses();
-  renderTopbar();
-  renderSettings();
+function renderWorkflowViews() {
   renderHome();
   renderProjects();
   renderEnergyWorkspaceState();
@@ -4684,6 +4662,20 @@ function renderAll() {
   renderResults();
   renderCompareWorkspaceState();
   renderCompare();
+}
+
+function renderAll() {
+  syncProjectProvinceScopedState();
+  reconcileAllProjectStatuses();
+  applySidebarGroups();
+  applyAuthLayout();
+  refreshNavigationAvailability();
+  syncCreateProjectFormWithActiveProject();
+  renderCreateWorkspaceState();
+  renderStatuses();
+  renderTopbar();
+  renderSettings();
+  renderWorkflowViews();
   if (suppressNextRenderPersist) {
     suppressNextRenderPersist = false;
   } else {
