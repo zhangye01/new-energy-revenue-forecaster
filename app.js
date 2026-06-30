@@ -2698,34 +2698,17 @@ function renderHome() {
 }
 
 function renderProjects() {
-  projectListView.renderProjectListFrame({
-    refs,
-    projects: getProjectsForCurrentAccount(),
-    isNewWorkspaceProject,
-    itemViewBuilderInput: {
-      isProjectCreateCompleted,
-      getActiveRun,
-      getActiveScenario,
-      statusMapTemplate,
-      getForecastPeriodDisplayRange,
-      getProvinceName,
-      getStorageConfigText
+  projectListView.renderProjectListFrameFromContext({
+    refs, appState, projects: getProjectsForCurrentAccount(), isNewWorkspaceProject,
+    workflowPages: WORKFLOW_PAGES, pageTitles: PAGE_TITLES, statusText,
+    windowRef: typeof window !== "undefined" ? window : null,
+    projectQueries: {
+      isProjectCreateCompleted, getActiveRun, getActiveScenario, statusMapTemplate,
+      getForecastPeriodDisplayRange, getProvinceName, getStorageConfigText
     },
-    workflowPages: WORKFLOW_PAGES,
-    pageTitles: PAGE_TITLES,
-    statusText,
-    actionHandlersInput: {
-      appState,
-      windowRef: typeof window !== "undefined" ? window : null,
-      createEmptyWorkspaceProject,
-      setTopMeta,
-      renderAll,
-      setActivePage,
-      cloneData,
-      makeId,
-      resolveUniqueProjectName,
-      projectBelongsToCurrentAccount,
-      getProjectsForCurrentAccount
+    projectActions: {
+      createEmptyWorkspaceProject, setTopMeta, renderAll, setActivePage, cloneData,
+      makeId, resolveUniqueProjectName, projectBelongsToCurrentAccount, getProjectsForCurrentAccount
     }
   });
 }

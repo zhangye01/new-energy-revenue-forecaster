@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  buildProjectListFrameInput,
   buildProjectListItem,
   createProjectListItemViewBuilder,
   buildProjectCardHtml,
@@ -9,7 +10,8 @@ const {
   buildProjectListView,
   createProjectListActionHandlers,
   bindProjectListActions,
-  renderProjectListFrame
+  renderProjectListFrame,
+  renderProjectListFrameFromContext
 } = require("../src/ui/project-list");
 
 class FakeButton {
@@ -236,6 +238,48 @@ assert.deepEqual(frameCalls, [
   "render",
   "page:create-page"
 ]);
+
+const contextRoot = new FakeRoot({
+  "[data-create-new-project]": [new FakeButton()]
+});
+const contextState = {
+  activeProjectId: "",
+  projects: [
+    { id: "context-new", name: "上下文新建", workspaceBucket: "new", ready: false },
+    { id: "context-history", name: "上下文历史", workspaceBucket: "history", ready: true }
+  ]
+};
+const contextInput = {
+  refs: { projectList: contextRoot },
+  appState: contextState,
+  windowRef: { confirm: () => true },
+  projects: contextState.projects,
+  isNewWorkspaceProject: (item) => item.workspaceBucket === "new",
+  workflowPages,
+  pageTitles,
+  statusText,
+  projectQueries: {
+    isProjectCreateCompleted: (item) => item.ready,
+    getActiveRun: () => ({ algorithmVersion: "context-run" }),
+    getActiveScenario: () => ({ name: "上下文场景" }),
+    statusMapTemplate: () => ({}),
+    getForecastPeriodDisplayRange: () => "2026-2050",
+    getProvinceName: () => "江苏",
+    getStorageConfigText: () => "配储"
+  },
+  projectActions: {
+    createEmptyWorkspaceProject: () => ({ id: "context-created" }),
+    renderAll: () => {},
+    setActivePage: () => {}
+  }
+};
+const contextFrameInput = buildProjectListFrameInput(contextInput);
+assert.equal(contextFrameInput.actionHandlersInput.appState, contextState);
+assert.equal(contextFrameInput.actionHandlersInput.windowRef.confirm(), true);
+assert.equal(contextFrameInput.itemViewBuilderInput.getActiveRun().algorithmVersion, "context-run");
+const contextFrameView = renderProjectListFrameFromContext(contextInput);
+assert.equal(contextFrameView.historyCount, 1);
+assert.match(contextRoot.innerHTML, /上下文历史/);
 
 const createButton = new FakeButton();
 const openButton = new FakeButton({ openProject: "p1" });

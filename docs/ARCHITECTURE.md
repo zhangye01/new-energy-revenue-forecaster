@@ -45,7 +45,7 @@
 
 | 模块 | 责任 |
 | --- | --- |
-| `project-list.js` | 我的项目列表、工作区和项目卡片 HTML 构造 |
+| `project-list.js` | 我的项目列表、工作区、项目卡片 HTML 构造和 frame 上下文装配 |
 | `file-import-utils.js` | 浏览器侧 CSV/TXT/Excel 文件读取与 Excel 转 CSV 适配 |
 | `policy-panel.js` | 首页地区政策筛选 view model 和政策卡片 HTML 构造 |
 | `province-defaults.js` | 省份默认参数展示 view model、选择器排序、消息文案、参数卡片 HTML 构造和 DOM 写回 |

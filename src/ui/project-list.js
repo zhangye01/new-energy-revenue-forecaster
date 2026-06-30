@@ -285,7 +285,37 @@
     return view;
   }
 
+  function buildProjectListFrameInput(input = {}) {
+    const {
+      refs = {},
+      appState = {},
+      windowRef = null,
+      projects = [],
+      isNewWorkspaceProject = () => false,
+      workflowPages = [],
+      pageTitles = {},
+      statusText = (state) => state,
+      projectQueries = {},
+      projectActions = {}
+    } = input;
+    return {
+      refs,
+      projects,
+      isNewWorkspaceProject,
+      itemViewBuilderInput: projectQueries,
+      workflowPages,
+      pageTitles,
+      statusText,
+      actionHandlersInput: { appState, windowRef, ...projectActions }
+    };
+  }
+
+  function renderProjectListFrameFromContext(input = {}) {
+    return renderProjectListFrame(buildProjectListFrameInput(input));
+  }
+
   return Object.freeze({
+    buildProjectListFrameInput,
     buildProjectListItem,
     createProjectListItemViewBuilder,
     buildProjectCardHtml,
@@ -293,6 +323,7 @@
     buildProjectListView,
     createProjectListActionHandlers,
     bindProjectListActions,
-    renderProjectListFrame
+    renderProjectListFrame,
+    renderProjectListFrameFromContext
   });
 });
