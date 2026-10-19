@@ -150,7 +150,9 @@
   }
 
   function savedResultPeriod(result) {
-    const years = (result?.annualRows || []).map((row) => Number(row.year)).filter(Number.isInteger);
+    const rows = Array.isArray(result?.annualRows) ? result.annualRows : [];
+    const years = rows.filter((row) => row?.year !== null && row?.year !== undefined)
+      .map((row) => Number(row.year)).filter(Number.isInteger);
     return years.length ? `${Math.min(...years)}-${Math.max(...years)}` : "";
   }
 
@@ -295,6 +297,11 @@
     };
   }
 
+  function resultRowsAreRenderable(result) {
+    const validRows = (rows) => Array.isArray(rows) && rows.every((row) => row && typeof row === "object" && !Array.isArray(row));
+    return validRows(result?.annualRows) && (result.hourlyPreview == null || validRows(result.hourlyPreview));
+  }
+
   function buildResultPageViewModel(input = {}) {
     const {
       project = null,
@@ -325,6 +332,15 @@
         metaHtml,
         metricHtml: buildEmptyMetricCards(),
         chartPlaceholder: "请先发起基准测算"
+      };
+    }
+
+    if (resultState?.reason === "incomplete_result" || !resultRowsAreRenderable(result)) {
+      return {
+        state: "invalid_result", isHistorical: true, metaHtml,
+        executiveSummary: "已保存的结果明细不完整或无法对账，请重新发起基准测算。",
+        metricHtml: buildEmptyMetricCards(), annualRowsHtml: "", hourlyRowsHtml: "",
+        chartPlaceholder: "结果明细不完整，请重新测算"
       };
     }
 
@@ -366,12 +382,14 @@
     const scenario = project ? getActiveScenario(project) : null;
     const result = project ? project.resultsByScenario?.[scenario?.id || ""] : null;
     const cfg = scenario?.config || {};
+    const resultState = result ? getBaselineResultState(project, scenario, result) : null;
+    const canSummarize = result && resultState?.reason !== "incomplete_result" && resultRowsAreRenderable(result);
     const view = buildResultPageViewModel({
       project,
       scenario,
       result,
-      resultState: result ? getBaselineResultState(project, scenario, result) : null,
-      summaryData: result ? buildResultSummaryData(result) : null,
+      resultState,
+      summaryData: canSummarize ? buildResultSummaryData(result) : null,
       labels: {
         projectName: project?.name || "-",
         scenarioName: scenario?.name || "-",

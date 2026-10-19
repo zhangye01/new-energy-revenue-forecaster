@@ -329,3 +329,33 @@ for (const [view, disabled] of [[{ state: 'ready', isHistorical: true }, true], 
   require('../src/ui/result-page').applyResultPageViewModel({ refs: buttons, view });
   for (const button of Object.values(buttons)) assert.equal(button.disabled, disabled);
 }
+
+// Damaged persisted rows must not reach summary rendering or block the recovery UI.
+for (const saved of [
+  { annualRows: [null], hourlyPreview: [] },
+  { annualRows: [{ year: 2026 }, null], hourlyPreview: [] },
+  { annualRows: { 2026: {} }, hourlyPreview: [] },
+  { annualRows: [{ year: 2026 }], hourlyPreview: [null] },
+  { annualRows: [{ year: 2026 }], hourlyPreview: {} }
+]) {
+  const original = JSON.stringify(saved);
+  for (const reason of ["incomplete_result", "legacy_baseline"]) {
+    let summaryCalled = false;
+    const damaged = buildResultPageRenderState({
+      project: { ...project, resultsByScenario: { scenario1: saved } },
+      getActiveScenario: () => ({ ...scenario, id: "scenario1" }),
+      getBaselineResultState: () => ({ current: false, reason, message: "请重新测算。" }),
+      buildResultSummaryData: (value) => { summaryCalled = true; return require("../src/domain/result-report").buildResultSummaryData(value); }
+    });
+    assert.equal(summaryCalled, false, "损坏明细不进入摘要或数值渲染");
+    assert.equal(damaged.view.state, "invalid_result");
+    assert.match(damaged.view.chartPlaceholder, /重新测算/);
+    const buttons = { exportAnnualButton: {}, exportHourlyButton: {}, printReportButton: {} };
+    applyResultPageViewModel({ refs: buttons, view: damaged.view });
+    assert.ok(Object.values(buttons).every((button) => button.disabled));
+    assert.doesNotThrow(() => savedResultPeriod(saved), "打印页头的周期读取也必须容忍损坏行");
+  }
+  assert.equal(JSON.stringify(saved), original, "不清洗或改写原存档数值");
+}
+assert.equal(savedResultPeriod({ annualRows: [null, { year: 2026 }] }), "2026-2026");
+assert.equal(savedResultPeriod({ annualRows: {} }), "");
