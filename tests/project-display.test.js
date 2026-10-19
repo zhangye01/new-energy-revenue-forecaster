@@ -25,7 +25,8 @@ assert.equal(projectDisplay.getForecastPeriodDisplayRange({ startYear: 2026, for
 assert.equal(projectDisplay.getForecastPeriodDisplayRange({ startYear: 2026, forecastYears: 0 }), "-");
 assert.equal(projectDisplay.formatExportStatusTime(""), "");
 assert.equal(projectDisplay.formatExportStatusTime("not-a-date"), "");
-assert.match(projectDisplay.formatExportStatusTime("2026-05-15T10:19:57+08:00"), /^05-15 10:19$/);
+const localExportTime = new Date(2026, 4, 15, 10, 19, 57).toISOString();
+assert.match(projectDisplay.formatExportStatusTime(localExportTime), /^05-15 10:19$/);
 
 const helpers = projectDisplay.createProjectDisplayHelpers({ provinces });
 assert.equal(helpers.getProvinceName("shandong"), "山东");
