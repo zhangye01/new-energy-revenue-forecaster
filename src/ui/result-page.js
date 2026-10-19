@@ -123,6 +123,12 @@
       refs = {},
       view = {}
     } = input;
+    for (const button of [refs.exportAnnualButton, refs.exportHourlyButton, refs.printReportButton]) {
+      if (button) {
+        button.disabled = view.state !== "ready" || Boolean(view.isHistorical);
+        button.title = button.disabled ? "请先生成当前参数的基准结果" : "";
+      }
+    }
     setHtml(refs.resultReportMeta, view.metaHtml);
     setText(refs.resultExecutiveSummary, view.executiveSummary);
     setHtml(refs.resultMetricGrid, view.metricHtml);

@@ -323,3 +323,9 @@ assert.equal(savedResultPeriod(result), "2026-2026");
 assert.equal(savedResultPeriod(null), "");
 
 console.log("result page tests passed");
+
+for (const [view, disabled] of [[{ state: 'ready', isHistorical: true }, true], [{ state: 'no_result' }, true], [{ state: 'ready', isHistorical: false }, false]]) {
+  const buttons = { exportAnnualButton: {}, exportHourlyButton: {}, printReportButton: {} };
+  require('../src/ui/result-page').applyResultPageViewModel({ refs: buttons, view });
+  for (const button of Object.values(buttons)) assert.equal(button.disabled, disabled);
+}

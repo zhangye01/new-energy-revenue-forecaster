@@ -38,9 +38,14 @@ const response = buildSensitivityResponseOption(
   ["-20%", "0%", "+20%"],
   tokens
 );
+assert.equal(response.series[0].smooth, false, "比例边界按真实折线展示，不作平滑外插");
 assert.deepEqual(response.xAxis.data, ["-20%", "0%", "+20%"]);
 assert.equal(response.series[0].markLine.data[0].yAxis, 680.5);
 assert.ok(response.tooltip.formatter([{ axisValue: "+20%", value: 760 }]).includes("相对基准"));
+
+const negativeResponse = buildSensitivityResponseOption({ name: "费用", series: [-80, -100.123456, -120] }, -100.123456, ["-20%", "0%", "+20%"], tokens);
+assert.equal(negativeResponse.series[0].data[1], -100.123456);
+assert.equal(negativeResponse.series[0].markLine.data[0].yAxis, -100.123456, "基准线保留原精度和负值");
 
 const available = [
   {

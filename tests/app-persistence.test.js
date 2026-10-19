@@ -3,7 +3,8 @@
 const assert = require("node:assert/strict");
 const {
   buildStorageRiskMessage,
-  persistAppDataSnapshot
+  persistAppDataSnapshot,
+  applyStorageStatus
 } = require("../src/ui/app-persistence");
 
 assert.equal(
@@ -86,4 +87,18 @@ assert.deepEqual(
   { storageMode: "hybrid", lastLocalWriteAt: 4000 }
 );
 
+assert.match(buildStorageRiskMessage("conflict"), /自动保存已暂停/);
+assert.match(buildStorageRiskMessage("not_initialized"), /尚未读取完成/);
+assert.match(buildStorageRiskMessage("safe_storage_unavailable"), /下载本页备份/);
+const noticeRefs = { notice: { hidden: true, dataset: {} }, message: {}, reloadButton: {}, backupButton: {} };
+applyStorageStatus({ refs: noticeRefs, status: { state: "conflict", reason: "conflict" } });
+assert.equal(noticeRefs.notice.hidden, false);
+assert.equal(noticeRefs.reloadButton.hidden, false);
+assert.equal(noticeRefs.backupButton.hidden, false);
+const conflictText = noticeRefs.message.textContent;
+applyStorageStatus({ refs: noticeRefs, status: { state: "pending" } });
+assert.equal(noticeRefs.notice.hidden, false, "retrying does not hide the persistent conflict warning");
+assert.equal(noticeRefs.message.textContent, conflictText);
+applyStorageStatus({ refs: noticeRefs, status: { state: "saved" } });
+assert.equal(noticeRefs.notice.hidden, true);
 console.log("app persistence tests passed");

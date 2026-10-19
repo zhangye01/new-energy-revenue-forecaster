@@ -453,5 +453,7 @@
   }
 
   return Object.freeze({ renderWorkspace, escapeHtml, csvText, buildRoughCsv, buildComparisonCsv,
-    roughHtml, compareHtml, comparisonSummaryHtml, validateShared });
+    roughHtml, compareHtml, comparisonSummaryHtml, validateShared,
+    hasUnsubmittedChanges: (documentRef, projects = []) => projects.some((project) =>
+      project.scenarios?.some((scenario) => states.get(documentRef)?.entries.get(`${project.id}:${scenario.id}`)?.dirty)) });
 });

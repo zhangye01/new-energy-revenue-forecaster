@@ -493,7 +493,7 @@
         if (!Number.isInteger(hourIndex) || hourIndex < 1 || hourIndex > 8760) {
           return { ok: false, message: `第 ${i + 1} 行第2列（hour_index）无效：${hourRaw || "(空)"}。要求 1-8760。` };
         }
-        if (!Number.isFinite(hours) || hours < 0) {
+        if (hoursRaw === undefined || String(hoursRaw).trim() === "" || !Number.isFinite(hours) || hours < 0) {
           return { ok: false, message: `第 ${i + 1} 行第3列（equivalent_hours_h）无效：${hoursRaw || "(空)"}。要求 >=0 数值。` };
         }
         if (!hourlyByYear[year]) hourlyByYear[year] = Array(8760).fill(null);
@@ -541,7 +541,7 @@
         if (!Number.isInteger(hourIndex) || hourIndex < 1 || hourIndex > 8760) {
           return { ok: false, message: `第 ${i + 1} 行第1列（hour_index）无效：${hourRaw || "(空)"}。要求 1-8760。` };
         }
-        if (!Number.isFinite(hours) || hours < 0) {
+        if (hoursRaw === undefined || String(hoursRaw).trim() === "" || !Number.isFinite(hours) || hours < 0) {
           return { ok: false, message: `第 ${i + 1} 行第2列（equivalent_hours_h）无效：${hoursRaw || "(空)"}。要求 >=0 数值。` };
         }
         if (values[hourIndex - 1] !== null) {

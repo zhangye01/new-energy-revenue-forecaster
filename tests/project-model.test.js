@@ -497,6 +497,16 @@ assert.equal(draftProject.siteType, "");
 assert.equal(draftProject.capacityMw, null);
 assert.equal(draftProject.startYear, null);
 assert.equal(draftProject.forecastYears, null);
+for (const missing of [null, undefined, "", "   "]) {
+  const draft = sanitizeProjectBase({ workspaceBucket: "new", capacityMw: missing, startYear: missing, forecastYears: missing }, 0, options);
+  assert.equal(draft.capacityMw, null);
+  assert.equal(draft.startYear, null);
+  assert.equal(draft.forecastYears, null);
+}
+assert.equal(sanitizeProjectBase({ ...historyProject, restoredFromProjectId: "origin" }, 0, options).restoredFromProjectId, "origin");
+assert.equal(sanitizeProjectBase({ ...historyProject, restoredFromProjectId: 123 }, 0, options).restoredFromProjectId, undefined);
+assert.deepEqual(sanitizeProjectBase({ ...historyProject, restoredFromProjectId: "origin",
+  restoredFromProjectIds: ["copy", "origin", "copy", "", null, 5, historyProject.id] }, 0, options).restoredFromProjectIds, ["origin", "copy"]);
 
 const runs = sanitizePriceRuns([
   null,

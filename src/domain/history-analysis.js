@@ -33,8 +33,7 @@
   const {
     makeIsoDate,
     compareIsoDate,
-    clampIsoDate,
-    noLeapDayOfYear
+    clampIsoDate
   } = appUtils;
 
   function clamp(value, min, max) {
@@ -250,8 +249,6 @@
     if (compareIsoDate(yearEndDate, range.startDate) < 0 || compareIsoDate(yearStartDate, range.endDate) > 0) {
       return null;
     }
-    const startDay = yearData.year === Number(range.startDate.slice(0, 4)) ? noLeapDayOfYear(range.startDate) : 1;
-    const endDay = yearData.year === Number(range.endDate.slice(0, 4)) ? noLeapDayOfYear(range.endDate) : 365;
     const monthValues = Array.from({ length: 12 }, () => []);
     const hourlySumsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
     const hourlyCountsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
@@ -260,8 +257,10 @@
     const typical = createHistoryTypicalAccumulator();
     const values = [];
 
-    for (let day = startDay; day <= endDay; day += 1) {
+    for (let day = 1; day <= 365; day += 1) {
       const { month, day: dayOfMonth } = energyProfiles.dayOfYearToMonthDay(day);
+      const date = makeIsoDate(yearData.year, month, dayOfMonth);
+      if (compareIsoDate(date, range.startDate) < 0 || compareIsoDate(date, range.endDate) > 0) continue;
       const monthIndex = month - 1;
       const dayOfWeek = new Date(Date.UTC(yearData.year, monthIndex, dayOfMonth)).getUTCDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
@@ -367,8 +366,8 @@
       const weekendValue = typicalMerged.weekendCount[i]
         ? typicalMerged.weekendSum[i] / typicalMerged.weekendCount[i]
         : null;
-      typicalWorkday.push(workValue ? Number(workValue.toFixed(1)) : null);
-      typicalWeekend.push(weekendValue ? Number(weekendValue.toFixed(1)) : null);
+      typicalWorkday.push(Number.isFinite(workValue) ? Number(workValue.toFixed(1)) : null);
+      typicalWeekend.push(Number.isFinite(weekendValue) ? Number(weekendValue.toFixed(1)) : null);
     }
 
     const heatData = [];
@@ -388,7 +387,7 @@
     }
 
     const boxplotData = monthMerged.map((values) => {
-      if (!values.length) return [0, 0, 0, 0, 0];
+      if (!values.length) return [null, null, null, null, null];
       const sorted = [...values].sort((a, b) => a - b);
       return [
         Number(sorted[0].toFixed(1)),
@@ -399,12 +398,12 @@
       ];
     });
     for (let i = 0; i < 12; i += 1) {
-      monthlyStd.push(stddev(monthMerged[i]));
+      monthlyStd.push(monthMerged[i].length ? stddev(monthMerged[i]) : null);
     }
-    let maxStdMonth = 0;
-    let maxStd = monthlyStd[0] || 0;
-    for (let i = 1; i < 12; i += 1) {
-      if ((monthlyStd[i] || 0) > maxStd) {
+    let maxStdMonth = -1;
+    let maxStd = 0;
+    for (let i = 0; i < 12; i += 1) {
+      if (Number.isFinite(monthlyStd[i]) && (maxStdMonth < 0 || monthlyStd[i] > maxStd)) {
         maxStd = monthlyStd[i];
         maxStdMonth = i;
       }

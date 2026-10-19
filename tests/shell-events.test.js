@@ -333,3 +333,9 @@ assert.deepEqual(shellCalls, [
 ]);
 
 console.log("shell events tests passed");
+const unsavedEvents = [];
+const dirtyHandlers = createAppShellHandlers({ actions: { hasUnpersistedAppData: () => true, persistAppDataNow: () => unsavedEvents.push('save'), disposeResultCharts: () => unsavedEvents.push('dispose') } });
+const unloadEvent = { preventDefault() { unsavedEvents.push('prevent'); } };
+dirtyHandlers.handleBeforeUnload(unloadEvent);
+assert.equal(unloadEvent.returnValue, '');
+assert.deepEqual(unsavedEvents, ['save', 'prevent'], 'pending changes prompt before leaving; cancel keeps charts alive');

@@ -433,8 +433,9 @@
       ? options.resolveUniqueName
       : ((name) => name);
     const isNewDraft = rawProject.workspaceBucket === "new";
+    const inputNumber = (value) => isNewDraft && (value == null || (typeof value === "string" && !value.trim())) ? NaN : Number(value);
     const rawName = typeof rawProject.name === "string" ? rawProject.name.trim() : "";
-    const rawCapacity = Number(rawProject.capacityMw);
+    const rawCapacity = inputNumber(rawProject.capacityMw);
     const rawStoragePower = Number(rawProject.storagePowerMw);
     const rawStorageDuration = Number(rawProject.storageDurationH);
     const hasStorage = Boolean(rawProject.hasStorage);
@@ -444,10 +445,17 @@
     const migratedStorageDuration = hasStorage && (!Number.isFinite(rawStorageDuration) || rawStorageDuration <= 0)
       ? 2
       : null;
-    const rawStartYear = Number(rawProject.startYear);
-    const rawForecastYears = Number(rawProject.forecastYears);
+    const rawStartYear = inputNumber(rawProject.startYear);
+    const rawForecastYears = inputNumber(rawProject.forecastYears);
+    const restoredFromProjectIds = Array.from(new Set([
+      rawProject.restoredFromProjectId,
+      ...(Array.isArray(rawProject.restoredFromProjectIds) ? rawProject.restoredFromProjectIds : [])
+    ].filter((id) => typeof id === "string" && id.trim() && id !== rawProject.id)));
     return {
       id: typeof rawProject.id === "string" && rawProject.id ? rawProject.id : makeId("proj"),
+      ...(typeof rawProject.restoredFromProjectId === "string" && rawProject.restoredFromProjectId.trim()
+        && rawProject.restoredFromProjectId !== rawProject.id ? { restoredFromProjectId: rawProject.restoredFromProjectId } : {}),
+      ...(restoredFromProjectIds.length ? { restoredFromProjectIds } : {}),
       ownerAccount: typeof rawProject.ownerAccount === "string"
         ? rawProject.ownerAccount.trim()
         : (typeof rawProject.account === "string" ? rawProject.account.trim() : ""),

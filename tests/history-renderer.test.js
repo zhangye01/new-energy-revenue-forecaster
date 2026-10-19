@@ -49,4 +49,24 @@ renderHistoryPrices({
 assert.equal(noDataMessage, "图表引擎未加载完成，请稍后重试。");
 assert.equal(refs.historyInsightBox.textContent, "图表引擎未加载完成，请稍后重试。");
 
+renderHistoryPrices({
+  refs,
+  appState: { activePage: "history-page", historyAnalysis: { startDate: "2024-02-29", endDate: "2024-02-29" } },
+  windowRef: { echarts: {} },
+  getActiveProject: () => ({ id: "leap-day-test", province: "jiangsu" }),
+  isProjectCreateCompleted: () => true,
+  buildHistorySpotAnalysisDataset: () => ({ startYear: 2024, endYear: 2024, years: [{ year: 2024, values: Array(365 * 96).fill(300) }] }),
+  historyAnalysis: require("../src/domain/history-analysis"),
+  ensureHistoryCharts: () => ({
+    monthTrend: {
+      clear: () => {},
+      setOption: (option) => { noDataMessage = option.graphic[0].style.text; }
+    }
+  }),
+  historyCharts: { buildHistoryNoDataOption: (message) => ({ graphic: [{ style: { text: message } }] }) }
+});
+assert.match(noDataMessage, /所选日期范围暂无可分析数据/);
+assert.match(refs.historyInsightBox.textContent, /不包含2月29日/);
+assert.equal(refs.historyKpiAvg.textContent, "-", "a missing leap day must not show a zero or the previous day's price");
+
 console.log("history renderer tests passed");

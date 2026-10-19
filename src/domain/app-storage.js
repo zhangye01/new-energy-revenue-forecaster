@@ -153,58 +153,203 @@
       });
     }
 
+    async function compareAndWrite(snapshot, expected, beforeWrite) {
+      const db = await openDb();
+      if (!db) return { ok: false, reason: "indexeddb_unsupported" };
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readwrite");
+        const store = tx.objectStore(storeName);
+        const entries = Object.entries(expected);
+        const found = {};
+        let result = { ok: false, reason: "conflict" };
+        tx.oncomplete = () => resolve(result);
+        tx.onerror = tx.onabort = () => reject(tx.error || new Error("写入IndexedDB快照失败"));
+        function check(index) {
+          if (index < entries.length) {
+            const [key, identity] = entries[index];
+            const request = store.get(key);
+            request.onsuccess = () => {
+              found[key] = request.result || null;
+              if (snapshotIdentity(found[key]) !== identity) {
+                result = { ok: false, reason: "conflict", latest: found[key] };
+              } else check(index + 1);
+            };
+            return;
+          }
+          const conflict = beforeWrite?.();
+          if (conflict) { result = { ok: false, reason: "conflict", latest: conflict }; return; }
+          store.put(snapshot, dbKey);
+          result = { ok: true, snapshot };
+        }
+        check(0);
+      });
+    }
+
     return {
       supportsIndexedDb,
       readSnapshot,
-      writeSnapshot
+      writeSnapshot,
+      compareAndWrite
     };
+  }
+
+  function snapshotIdentity(snapshot) {
+    if (!snapshot) return "";
+    if (snapshot.storageRevision?.id) return `revision:${snapshot.storageRevision.id}`;
+    // Legacy records have no revision. Compare their complete content, never just savedAt.
+    return JSON.stringify(snapshot);
+  }
+
+  function snapshotDataSignature(snapshot) {
+    const payload = snapshot?.payload;
+    // Navigation, account display and filters do not change stored project data.
+    return JSON.stringify(Array.isArray(payload?.projects) ? payload.projects : payload);
   }
 
   function createAppDataSnapshotStore(options = {}) {
     const storageKey = options.storageKey;
+    const protectedKey = `${storageKey}:revisioned`;
+    const protectedDbKey = `${options.dbKey}:revisioned`;
     const localStorageRef = Object.prototype.hasOwnProperty.call(options, "localStorage")
-      ? options.localStorage
-      : resolveGlobalValue("localStorage");
+      ? options.localStorage : resolveGlobalValue("localStorage");
+    const locks = Object.prototype.hasOwnProperty.call(options, "locks")
+      ? options.locks : resolveGlobalValue("navigator")?.locks;
     const indexedDbStore = createIndexedDbSnapshotStore(options);
+    const protectedDbStore = createIndexedDbSnapshotStore({ ...options, dbKey: protectedDbKey });
+    let ready = false, dbReadable = false, conflictState = null, pendingSnapshot = null;
+    let baseline = null, expectedLocal = "", expectedLegacyLocal = "";
+    let expectedDb = "", expectedLegacyDb = "", lastDataSignature;
+    let writeQueue = Promise.resolve(), serial = 0, writing = false;
+    const queuedSignatures = new Map();
 
-    function supportsIndexedDb() {
-      return indexedDbStore.supportsIndexedDb();
-    }
+    function supportsIndexedDb() { return indexedDbStore.supportsIndexedDb(); }
 
-    function readLocalSnapshot(callbacks = {}) {
-      return readJsonFromStorage(localStorageRef, storageKey, {
-        onReadError: callbacks.onLocalReadError,
-        onParseError: callbacks.onLocalParseError
+    function readLocal(key, callbacks = {}) {
+      return readJsonFromStorage(localStorageRef, key, {
+        onReadError: callbacks.onLocalReadError, onParseError: callbacks.onLocalParseError
       }).value;
     }
 
+    function readLocalSnapshot(callbacks = {}) { return readLocal(storageKey, callbacks); }
+
     async function readLatestSnapshot(callbacks = {}) {
-      const localSnapshot = readLocalSnapshot(callbacks);
-      let dbSnapshot = null;
+      await writeQueue;
+      ready = false;
+      const local = readLocal(protectedKey, callbacks), legacyLocal = readLocalSnapshot(callbacks);
+      let db = null, legacyDb = null;
+      dbReadable = !supportsIndexedDb();
       try {
-        dbSnapshot = await indexedDbStore.readSnapshot();
-      } catch (error) {
-        if (typeof callbacks.onDbReadError === "function") callbacks.onDbReadError(error);
-      }
-      return selectLatestSnapshot(localSnapshot, dbSnapshot);
+        if (supportsIndexedDb()) {
+          db = await protectedDbStore.readSnapshot();
+          if (!db) legacyDb = await indexedDbStore.readSnapshot();
+          dbReadable = true;
+        }
+      } catch (error) { callbacks.onDbReadError?.(error); }
+      // Compare ancestry, not wall clocks: local-only commits may be newer when IDB returns.
+      const localId = local?.storageRevision?.id, dbId = db?.storageRevision?.id;
+      const localDescends = localId && dbId && local.storageRevision.ancestors?.includes(dbId);
+      const dbDescends = localId && dbId && db.storageRevision.ancestors?.includes(localId);
+      const diverged = local && db && snapshotIdentity(local) !== snapshotIdentity(db) && !localDescends && !dbDescends;
+      baseline = localDescends ? local : db || local || selectLatestSnapshot(legacyLocal, legacyDb);
+      expectedLocal = snapshotIdentity(local); expectedLegacyLocal = snapshotIdentity(legacyLocal);
+      expectedDb = snapshotIdentity(db); expectedLegacyDb = snapshotIdentity(legacyDb);
+      lastDataSignature = snapshotDataSignature(baseline);
+      conflictState = diverged ? { latest: db, alternate: local } : null;
+      pendingSnapshot = diverged ? JSON.parse(JSON.stringify(local)) : null;
+      ready = true;
+      return baseline;
     }
 
     function writeLocalSnapshot(snapshot, callbacks = {}) {
-      return writeJsonToStorage(localStorageRef, storageKey, snapshot, {
-        onError: callbacks.onLocalWriteError
-      });
+      return writeJsonToStorage(localStorageRef, storageKey, snapshot, { onError: callbacks.onLocalWriteError });
+    }
+    function writeDbSnapshot(snapshot) { return indexedDbStore.writeSnapshot(snapshot); }
+
+    function localConflict() {
+      const current = readLocal(protectedKey);
+      if (snapshotIdentity(current) !== expectedLocal) return current || { missing: true };
+      if (!expectedLocal && snapshotIdentity(readLocalSnapshot()) !== expectedLegacyLocal) {
+        return readLocalSnapshot() || { missing: true };
+      }
+      return null;
     }
 
-    function writeDbSnapshot(snapshot) {
-      return indexedDbStore.writeSnapshot(snapshot);
+    function nextRevision(snapshot) {
+      const random = resolveGlobalValue("crypto")?.randomUUID?.()
+        || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+      return { ...snapshot, storageRevision: {
+        id: random, parentId: baseline?.storageRevision?.id || "", version: 1,
+        ancestors: [baseline?.storageRevision?.id, ...(baseline?.storageRevision?.ancestors || [])].filter(Boolean).slice(0, 64)
+      } };
+    }
+
+    function accept(snapshot, localWritten, requestSerial) {
+      baseline = snapshot;
+      lastDataSignature = snapshotDataSignature(snapshot);
+      if (localWritten) expectedLocal = snapshotIdentity(snapshot);
+      if (requestSerial === serial) pendingSnapshot = null;
+      return { ok: true, snapshot, localWritten };
+    }
+
+    async function commitPrepared(snapshot, requestSerial) {
+      if (!ready) return { ok: false, reason: "not_initialized" };
+      if (conflictState) return { ok: false, reason: "conflict", latest: conflictState.latest };
+      if (supportsIndexedDb() && !dbReadable) return { ok: false, reason: "db_read_failed" };
+      if (baseline && snapshotDataSignature(snapshot) === lastDataSignature) {
+        if (requestSerial === serial) pendingSnapshot = null;
+        return { ok: true, unchanged: true, snapshot: baseline };
+      }
+      const next = nextRevision(snapshot);
+      let result;
+      if (supportsIndexedDb()) {
+        const expected = { [protectedDbKey]: expectedDb };
+        if (!expectedDb) expected[options.dbKey] = expectedLegacyDb;
+        result = await protectedDbStore.compareAndWrite(next, expected, localConflict);
+        if (result.ok) {
+          expectedDb = snapshotIdentity(next);
+          const localWritten = writeJsonToStorage(localStorageRef, protectedKey, next);
+          return accept(next, localWritten, requestSerial);
+        }
+      } else if (locks?.request) {
+        result = await locks.request(`ne-snapshot:${storageKey}`, async () => {
+          const latest = localConflict();
+          if (latest) return { ok: false, reason: "conflict", latest };
+          return writeJsonToStorage(localStorageRef, protectedKey, next)
+            ? accept(next, true, requestSerial) : { ok: false, reason: "local_write_failed" };
+        });
+      } else result = { ok: false, reason: "safe_storage_unavailable" };
+      if (result.reason === "conflict") conflictState = { latest: result.latest || null };
+      return result;
+    }
+
+    function commitSnapshot(snapshot) {
+      // Capture now: IndexedDB opening/queuing must not observe later in-memory mutations.
+      let captured;
+      try { captured = JSON.parse(JSON.stringify(snapshot)); }
+      catch (error) { return Promise.resolve({ ok: false, reason: "snapshot_invalid", error }); }
+      const signature = snapshotDataSignature(captured);
+      if (!conflictState?.alternate || signature !== lastDataSignature) pendingSnapshot = captured;
+      const requestSerial = ++serial;
+      queuedSignatures.set(requestSerial, signature);
+      const task = writeQueue.then(async () => {
+        writing = ready && !conflictState && signature !== lastDataSignature;
+        try { return await commitPrepared(captured, requestSerial); }
+        catch (error) { return { ok: false, reason: "db_write_failed", error }; }
+        finally { writing = false; queuedSignatures.delete(requestSerial); }
+      });
+      writeQueue = task.then(() => undefined);
+      return task;
     }
 
     return {
-      supportsIndexedDb,
-      readLocalSnapshot,
-      readLatestSnapshot,
-      writeLocalSnapshot,
-      writeDbSnapshot
+      supportsIndexedDb, readLocalSnapshot, readLatestSnapshot, writeLocalSnapshot, writeDbSnapshot,
+      commitSnapshot,
+      getPendingSnapshot: () => pendingSnapshot,
+      getConflictState: () => conflictState,
+      isReady: () => ready,
+      isWriting: () => writing,
+      hasUnpersistedChanges: (snapshot) => snapshotDataSignature(snapshot) !== lastDataSignature
+        || Array.from(queuedSignatures.values()).some((signature) => signature !== lastDataSignature)
     };
   }
 
@@ -247,6 +392,22 @@
   }
 
   function persistSnapshotWithFallback(input = {}) {
+    if (typeof input.store?.commitSnapshot === "function") {
+      input.onStorageStateChange?.({ state: "pending" });
+      const completion = input.store.commitSnapshot(input.snapshot).then((result) => {
+        if (input.isLatestSequence && !input.isLatestSequence(input.sequence)) return result;
+        if (result.ok) {
+          input.onStorageAvailable?.();
+          input.onStorageStateChange?.({ state: "saved", unchanged: Boolean(result.unchanged) });
+        } else {
+          if (result.error) input.onDbWriteError?.(result.error);
+          input.onStorageRisk?.(result.reason);
+          input.onStorageStateChange?.({ state: result.reason === "conflict" ? "conflict" : "error", reason: result.reason });
+        }
+        return result;
+      });
+      return { storageMode: input.storageMode, lastLocalWriteAt: input.lastLocalWriteAt, completion };
+    }
     const {
       store,
       snapshot,
@@ -276,8 +437,10 @@
     });
 
     void Promise.resolve(store?.writeDbSnapshot?.(snapshot) || false)
-      .then(() => {
-        if (isLatestSequence(sequence)) onStorageAvailable?.();
+      .then((written) => {
+        if (!isLatestSequence(sequence)) return;
+        if (written === true) onStorageAvailable?.();
+        else if (!localWrite.succeeded && store?.supportsIndexedDb?.()) onStorageRisk?.("db_write_failed");
       })
       .catch((error) => {
         if (!isLatestSequence(sequence)) return;
@@ -285,7 +448,7 @@
         if (!localWrite.succeeded) onStorageRisk?.("db_write_failed");
       });
 
-    if (localWrite.succeeded || !localWrite.attempted) {
+    if (localWrite.succeeded) {
       onStorageAvailable?.();
     } else if (!store?.supportsIndexedDb?.()) {
       onStorageRisk?.("indexeddb_unsupported");

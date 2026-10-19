@@ -169,6 +169,8 @@ const originalPrice = scenario.config.mechanismPrice;
 fixture.controls.sharedPrice.value = "400";
 fixture.controls.sharedPrice.oninput();
 assert.equal(scenario.config.mechanismPrice, originalPrice, "shared parameters are not written before save");
+assert.equal(workspace.hasUnsubmittedChanges(fixture.documentRef, [project]), true,
+  "uncommitted rough shared fields participate in the browser unload guard");
 workspace.renderWorkspace(options);
 assert.match(fixture.rough.innerHTML, /data-shared-key="mechanismPrice"[^>]*value="400"/,
   "uncommitted shared edits survive rerenders");
@@ -182,6 +184,8 @@ fixture.controls.form.onsubmit({ preventDefault() {} });
 assert.equal(changes, 1);
 assert.deepEqual(changesMetadata[0], { sharedChanged: true });
 assert.equal(scenario.config.mechanismPrice, 400);
+assert.equal(workspace.hasUnsubmittedChanges(fixture.documentRef, [project]), false,
+  "successful rough confirmation clears the unsubmitted guard");
 assert.equal(project.roughPrice.snapshots.length, 1);
 const snapshot = project.roughPrice.snapshots[0];
 assert.equal(snapshot.config.mechanismPrice, 400);

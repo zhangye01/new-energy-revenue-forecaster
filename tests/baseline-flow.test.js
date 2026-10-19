@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { stampBaselineResult } = require("../src/domain/rough-price");
 const { calculateScenarioResult } = require("../src/domain/revenue-calculator");
 const {
   buildResultChartData,
@@ -8,6 +9,7 @@ const {
 } = require("../src/domain/result-report");
 const {
   detectTopDriver,
+  buildAvailableScenarioResults,
   resultComponentTotals
 } = require("../src/domain/compare-analysis");
 const {
@@ -54,6 +56,7 @@ function createScenario() {
   return {
     id: "baseline",
     name: "基准场景",
+    isBaseline: true,
     config: {
       mechanismEnabled: true,
       mechanismRatio: 0.4,
@@ -99,7 +102,10 @@ const run = {
   }
 };
 
-const result = calculateScenarioResult(project, scenario, run);
+project.activeRunId = run.id;
+project.scenarios = [scenario];
+const result = stampBaselineResult(project, scenario, run, calculateScenarioResult(project, scenario, run));
+project.resultsByScenario = { [scenario.id]: result };
 const chartData = buildResultChartData(result, scenario.config);
 const summary = buildResultSummaryData(result);
 const annualExportRows = buildAnnualResultExportRows(result);
@@ -111,7 +117,16 @@ assert.deepEqual(chartData.years, ["2026", "2027"]);
 assert.equal(chartData.priceSeries.find((item) => item.name === "机制电价").data[1], null);
 assert.equal(summary.leadingPositive.label, "配储补充收益");
 assert.equal(summary.leadingNegative.label, "综合费用");
-assert.equal(detectTopDriver(result), "现货收入");
+assert.equal(detectTopDriver(result, result), "无差异", "基准对自身没有差异驱动");
+const feeScenario = { ...scenario, id: "higher-fee", name: "费用调整", isBaseline: false, config: { ...scenario.config, otherFee: 13 } };
+const feeResult = stampBaselineResult(project, feeScenario, run, calculateScenarioResult(project, feeScenario, run));
+project.scenarios.push(feeScenario);
+project.resultsByScenario[feeScenario.id] = feeResult;
+assert.equal(detectTopDriver(feeResult, result), "综合费用", "真实引擎仅提高费用，差额驱动应为费用而非收入规模最大的现货");
+approx(feeResult.totalFullRevenue - result.totalFullRevenue, -410000, "两年电量4.1万MWh乘以费用增加10元/MWh");
+assert.deepEqual(buildAvailableScenarioResults(project).map((item) => item.scenario.id), [scenario.id, feeScenario.id], "真实引擎与当前来源指纹可进入对比");
+feeScenario.config.otherFee += 1;
+assert.deepEqual(buildAvailableScenarioResults(project).map((item) => item.scenario.id), [scenario.id], "已修改未重算的真实结果退出对比");
 approx(summary.firstMarketRatio, 0.6, "首年市场化交易电量比例");
 approx(totals.mechanismRevenue, 400000, "周期机制收入");
 approx(totals.comprehensiveFee, -1230000, "周期综合费用以负值参与对比");

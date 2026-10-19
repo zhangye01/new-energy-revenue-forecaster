@@ -189,4 +189,52 @@ assert.equal(forceProject.activationLogs[0].reason, "人工放行");
 assert.equal(forceProject.statuses["forecast-page"], "completed");
 assert.ok(forceCalls.includes("render"));
 
+for (const [invalidValues, message] of [
+  [{ "#train-start": "2030", "#train-end": "2025" }, /起始年份不能晚于结束年份/],
+  [{ "#train-start": "2020.5" }, /整数年份/],
+  [{ "#train-end": "bad" }, /整数年份/],
+  [{ "#algo-growth": "-100" }, /大于-100%/],
+  [{ "#algo-growth": "-150" }, /大于-100%/],
+  [{ "#algo-growth": "Infinity" }, /大于-100%/],
+  [{ "#algo-growth": "bad" }, /大于-100%/],
+  [{ "#algo-seed": "0" }, /随机种子/],
+  [{ "#algo-seed": "1.5" }, /随机种子/]
+]) {
+  const original = JSON.stringify(project);
+  const calls = [];
+  assert.equal(generateForecastRun({
+    project,
+    documentRef: createDocument({ "#train-start": "2018", "#train-end": "2025", ...invalidValues }),
+    modelDefinitions: [{ family: "ensemble" }],
+    services: createServices(calls),
+    actions: createActions(calls)
+  }), false);
+  assert.equal(JSON.stringify(project), original, "invalid inputs must not change runs, active version, logs or statuses");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], message);
+}
+
+const validBoundaryCalls = [];
+assert.equal(generateForecastRun({
+  project: { id: "boundary", startYear: 2026, forecastYears: 1 },
+  documentRef: createDocument({ "#train-start": "2025", "#train-end": "2025", "#algo-growth": "-99.9", "#algo-seed": "1" }),
+  modelDefinitions: [{ family: "ensemble" }],
+  services: createServices(validBoundaryCalls),
+  actions: createActions(validBoundaryCalls)
+}), true);
+
+for (const badParameters of [{ trainStart: 2030, trainEnd: 2025 }, { growth: -1 }, { growth: -1.5 }]) {
+  const badRun = { id: "invalid-parameters", status: "publishable", ...badParameters };
+  const p = { activeRunId: "old", priceRuns: [{ id: "old", status: "publishable" }, badRun], activationLogs: [], statuses: {} };
+  const original = JSON.stringify(p);
+  assert.equal(canActivateRun(badRun), false);
+  for (const activate of [setActiveRun, forceActivateRun]) {
+    const calls = [];
+    assert.equal(activate({ project: p, runId: badRun.id, services: createServices(calls), actions: createActions(calls) }), false);
+    assert.equal(JSON.stringify(p), original, "invalid historical parameters must be preserved but cannot become active");
+    assert.equal(calls.length, 1);
+    assert.match(calls[0], /参数无效/);
+  }
+}
+
 console.log("forecast run flow tests passed");

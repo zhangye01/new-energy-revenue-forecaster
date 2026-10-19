@@ -124,6 +124,23 @@ const invalidTypical = validateAndBuildEnergyData(
 assert.equal(invalidTypical.ok, false);
 assert.match(invalidTypical.message, /缺少第 2 小时/);
 
+for (const mode of ["typical_curve_8760", "hourly_8760"]) {
+  const rows = mode === "typical_curve_8760"
+    ? typicalRows.map((row) => row.slice())
+    : hourlyRows.map((row) => row.slice());
+  const valueColumn = mode === "typical_curve_8760" ? 1 : 2;
+  for (const blank of ["", "   "]) {
+    rows[4321][valueColumn] = blank;
+    const parsed = validateAndBuildEnergyData({ ...baseProject, forecastYears: 1 }, csvFromRows(rows), mode);
+    assert.equal(parsed.ok, false, `${mode} must reject an empty cell instead of treating it as zero`);
+    assert.match(parsed.message, /第 4322 行/);
+  }
+  rows[4321][valueColumn] = 0;
+  const zeroParsed = validateAndBuildEnergyData({ ...baseProject, forecastYears: 1 }, csvFromRows(rows), mode);
+  assert.equal(zeroParsed.ok, true, `${mode} must preserve explicit zero`);
+  assert.equal(mode === "typical_curve_8760" ? zeroParsed.typicalCurveProfile[4320] : zeroParsed.hourlyByYear[2026][4320], 0);
+}
+
 const migratedProject = {
   energyMode: "typical_curve_8760",
   energyData: {

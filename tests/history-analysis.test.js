@@ -134,6 +134,34 @@ const selectedByRange = selectHistoryYearsByDateRange({
 }, range);
 assert.deepEqual(selectedByRange.map((item) => item.year), [2026]);
 
+const leapYearData = { year: 2024, values: fullYearValues };
+const leapDataset = { startYear: 2024, endYear: 2024, years: [leapYearData] };
+const leapOnly = { startDate: "2024-02-29", endDate: "2024-02-29" };
+assert.equal(buildHistoryYearSlice(leapYearData, leapOnly).values.length, 0);
+assert.deepEqual(selectHistoryYearsByDateRange(leapDataset, leapOnly), []);
+const leapToMarch = buildHistoryYearSlice(leapYearData, { startDate: "2024-02-29", endDate: "2024-03-01" });
+assert.equal(leapToMarch.values.length, 96);
+assert.equal(leapToMarch.values[0], 59 * 96, "Feb 29 must not introduce Feb 28 data");
+const februaryEnd = buildHistoryYearSlice(leapYearData, { startDate: "2024-02-28", endDate: "2024-02-29" });
+assert.equal(februaryEnd.values.length, 96);
+assert.equal(februaryEnd.values[0], 58 * 96);
+
+const zeroPriceAnalysis = buildHistorySelectedAnalysis([
+  createYearData(2024, [0, 0], { 2: [0, 0] }, [
+    { isWeekend: false, quarterIndex: 0, price: 0 },
+    { isWeekend: true, quarterIndex: 0, price: 0 }
+  ])
+]);
+assert.equal(zeroPriceAnalysis.typicalWorkday[0], 0);
+assert.equal(zeroPriceAnalysis.typicalWeekend[0], 0);
+assert.equal(zeroPriceAnalysis.typicalWorkday[1], null);
+assert.deepEqual(zeroPriceAnalysis.boxplotData[2], [0, 0, 0, 0, 0]);
+assert.deepEqual(zeroPriceAnalysis.boxplotData[0], [null, null, null, null, null]);
+assert.equal(zeroPriceAnalysis.monthlyStd[0], null);
+assert.equal(zeroPriceAnalysis.maxStdMonth, 2, "the only observed month is March, even when its variance is zero");
+assert.deepEqual(zeroPriceAnalysis.exportRows.typicalDay[1], ["00:00", "0.0", "0.0"]);
+assert.deepEqual(zeroPriceAnalysis.exportRows.boxplot[1], ["1月", "", "", "", "", "", ""]);
+
 assert.equal(dayModeMatchesMonth("summer", 7), true);
 assert.equal(dayModeMatchesMonth("summer", 1), false);
 assert.equal(dayModeMatchesMonth("winter", 12), true);

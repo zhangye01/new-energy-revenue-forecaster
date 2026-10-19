@@ -215,6 +215,7 @@
       };
     }
     const prices = {};
+    const yearRows = new Map();
     for (let i = 1; i < rows.length; i += 1) {
       const row = rows[i];
       const year = Number(row[0]);
@@ -222,6 +223,10 @@
       if (!Number.isInteger(year)) {
         return { ok: false, message: `第 ${i + 1} 行 year 无效：${row[0] || "(空)"}` };
       }
+      if (yearRows.has(year)) {
+        return { ok: false, message: `第 ${i + 1} 行 year 重复：${year}（已在第 ${yearRows.get(year)} 行填写）。` };
+      }
+      yearRows.set(year, i + 1);
       if (isBlank(row[1]) || !Number.isFinite(price)) {
         return { ok: false, message: `第 ${i + 1} 行 trade_strategy_pnl_yuan_per_mwh 无效：${row[1] || "(空)"}` };
       }
@@ -294,6 +299,7 @@
       };
     }
     const values = {};
+    const yearRows = new Map();
     for (let i = 1; i < rows.length; i += 1) {
       const row = rows[i];
       const rowNumber = i + 1;
@@ -301,6 +307,10 @@
       if (!Number.isInteger(year)) {
         return { ok: false, message: `第 ${rowNumber} 行 year 无效：${row[0] || "(空)"}` };
       }
+      if (yearRows.has(year)) {
+        return { ok: false, message: `第 ${rowNumber} 行 year 重复：${year}（已在第 ${yearRows.get(year)} 行填写）。` };
+      }
+      yearRows.set(year, rowNumber);
       const greenCertPrice = parseNonNegativeNumber(row[1], "green_cert_price_yuan_per_mwh", rowNumber);
       if (!greenCertPrice.ok) return greenCertPrice;
       const greenCertRatio = parseRatio(row[2], "green_cert_realize_ratio_pct", rowNumber);
@@ -381,6 +391,7 @@
       };
     }
     const values = {};
+    const yearRows = new Map();
     for (let i = 1; i < rows.length; i += 1) {
       const row = rows[i];
       const rowNumber = i + 1;
@@ -388,6 +399,10 @@
       if (!Number.isInteger(year)) {
         return { ok: false, message: `第 ${rowNumber} 行 year 无效：${row[0] || "(空)"}` };
       }
+      if (yearRows.has(year)) {
+        return { ok: false, message: `第 ${rowNumber} 行 year 重复：${year}（已在第 ${yearRows.get(year)} 行填写）。` };
+      }
+      yearRows.set(year, rowNumber);
       const marketOpFee = parseNonNegativeNumber(row[1], "market_op_fee_yuan_per_mwh", rowNumber);
       if (!marketOpFee.ok) return marketOpFee;
       const gridAssessFee = parseNonNegativeNumber(row[2], "grid_assess_fee_yuan_per_mwh", rowNumber);

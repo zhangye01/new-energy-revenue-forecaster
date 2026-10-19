@@ -32,6 +32,7 @@
 | `revenue-rules.js` | 机制月份、交易策略收敛、环境价值、综合费用规则 |
 | `revenue-calculator.js` | 场景全口径收入主计算 |
 | `result-report.js` | 基准结果总览的数据摘要和图表数据 |
+| `compare-sensitivity.js` | 真实参数扰动与年度等价收益重算，和8760引擎对账 |
 | `compare-analysis.js` | 多方案对比、敏感性分析数据、对比页 frame 状态和选择态回写 |
 | `history-analysis.js` | 历史电价模拟样本、日期范围切片、统计、典型日、热力图、分布和导出数据 |
 | `workflow-status.js` | 流程状态和缺失项判断 |
@@ -40,12 +41,13 @@
 | `project-settings.js` | 项目默认设置、配置清洗 |
 | `project-model.js` | 项目创建、项目清洗、基础字段默认值、历史示例项目 seed 决策 |
 | `project-display.js` | 项目省份、风光类型、陆海类型、周期和导出时间等展示辅助 |
-| `app-storage.js` | 业务快照的 localStorage / IndexedDB 读写、最新快照选择 |
+| `app-storage.js` | 受版本保护的事务提交、跨页冲突检测、旧版迁移隔离和本地持久化 |
 
 ## 3. `src/ui/` 模块责任
 
 | 模块 | 责任 |
 | --- | --- |
+| `project-backup.js` | 当前账号完整项目备份、恢复副本及保存状态提示 |
 | `project-list.js` | 我的项目列表、工作区、项目卡片 HTML 构造和 frame 上下文装配 |
 | `file-import-utils.js` | 浏览器侧 CSV/TXT/Excel 文件读取与 Excel 转 CSV 适配 |
 | `script-loader.js` | ECharts 与地图等外部脚本的按需加载、复用和失败提示 |
@@ -56,15 +58,15 @@
 | `energy-template-flow.js` | 结算电量模板导出、文件导入、示例模板和省份典型曲线调用流程 |
 | `chart-lifecycle.js` | ECharts 实例存活判断、批量 resize、窗口 resize 绑定和双帧延迟刷新 |
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
-| `rough-price-workspace.js` | 粗算/精算/对照页签、共用参数编辑、粗算草稿与CSV导出 |
+| `rough-price-workspace.js` | 独立粗算页面、共用参数编辑、粗算快照与结果阶段交叉验证 |
 | `forecast-page.js` | 电价预测版本列表、质量门槛和激活日志 HTML 构造 |
 | `forecast-run-flow.js` | 电价预测运行生成、自动激活、手动切换和强制发布流程 |
 | `result-page.js` | 基准结果总览报告文案、指标卡、假设说明、明细表 HTML 和渲染状态构造 |
 | `result-print.js` | 基准结果总览打印前展开、图表刷新和打印后恢复控制 |
 | `result-charts.js` | 基准结果总览四张 ECharts 图的 option 构造和图表 token 扩展 |
-| `scenario-charts.js` | 全口径收入配置页参数可视化三张 ECharts 图的 option 和主题 token 构造 |
-| `scenario-form.js` | 全口径收入配置页表单读写和场景配置构造 |
-| `scenario-visual-data.js` | 全口径收入配置页参数可视化年度行数据构造 |
+| `scenario-charts.js` | 收益参数补充与细化页参数可视化三张 ECharts 图的 option 和主题 token 构造 |
+| `scenario-form.js` | 收益参数补充与细化页表单读写和场景配置构造 |
+| `scenario-visual-data.js` | 收益参数补充与细化页参数可视化年度行数据构造 |
 | `manual-scenario-flow.js` | 交易策略、环境价值、综合费用三类逐年手工模板的导出、导入和状态回写流程 |
 | `compare-charts.js` | 多方案对比和敏感性分析图表 option、对比页主题 token 构造 |
 | `compare-page.js` | 多方案对比页变量列表、方案焦点列表和对比表格 HTML 构造 |
@@ -90,7 +92,7 @@
   -> price-forecast
   -> project.priceRuns / project.activeRunId
 
-全口径收入配置
+收益参数补充与细化
   -> scenario-model / scenario-config
   -> scenario.config
 
@@ -121,7 +123,7 @@ src/storage/app-storage.js
 
 ### P1：整理样式边界
 
-当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/components/data-display.css` 放置面板辅助、指标卡和表格样式，`styles/components/forms.css` 放置表单字段与表单栅格样式，`styles/components/buttons.css` 放置按钮变体与行内操作样式，`styles/components/workflow.css` 放置跨流程跳转条样式，`styles/components/auth.css` 放置登录与账号设置辅助样式，`styles/components/context-help.css` 放置可悬停、点击和键盘访问的上下文说明样式，`styles/pages/home.css` 放置首页政策轮播、标杆地图和政策卡片样式，`styles/pages/projects.css` 放置项目列表页样式，`styles/pages/create.css` 放置创建项目页样式，`styles/pages/help.css` 放置帮助文档页样式，`styles/pages/energy.css` 放置结算电量配置页样式，`styles/pages/scenario.css` 放置全口径收入配置页样式，`styles/pages/results.css` 放置基准结果总览与打印报告样式，`styles/pages/compare.css` 放置多方案对比页样式，`styles/pages/history.css` 放置历史电价页样式，`styles/responsive.css` 放置跨页面响应式兜底，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 只保留最终覆盖入口，不应继续承载业务样式。
+当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/components/data-display.css` 放置面板辅助、指标卡和表格样式，`styles/components/forms.css` 放置表单字段与表单栅格样式，`styles/components/buttons.css` 放置按钮变体与行内操作样式，`styles/components/workflow.css` 放置跨流程跳转条样式，`styles/components/auth.css` 放置登录与账号设置辅助样式，`styles/components/context-help.css` 放置可悬停、点击和键盘访问的上下文说明样式，`styles/pages/home.css` 放置首页政策轮播、标杆地图和政策卡片样式，`styles/pages/projects.css` 放置项目列表页样式，`styles/pages/create.css` 放置创建项目页样式，`styles/pages/help.css` 放置帮助文档页样式，`styles/pages/energy.css` 放置结算电量配置页样式，`styles/pages/scenario.css` 放置收益参数补充与细化页样式，`styles/pages/results.css` 放置基准结果总览与打印报告样式，`styles/pages/compare.css` 放置多方案对比页样式，`styles/pages/history.css` 放置历史电价页样式，`styles/responsive.css` 放置跨页面响应式兜底，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 只保留最终覆盖入口，不应继续承载业务样式。
 
 在没有构建工具前，可以继续用多个 `<link rel="stylesheet">` 按顺序加载；新增主题令牌与全局密度基线必须进入 `styles/theme.css`，新增壳层基础样式必须进入 `styles/base.css`，新增通用组件样式必须进入 `styles/components/`，新增页面样式必须进入 `styles/pages/`，新增跨页面移动端兜底必须进入 `styles/responsive.css`。页面和组件优先复用 `--page-gutter`、`--panel-padding`、`--component-gap`、`--control-height` 等共享密度令牌，避免重新散布尺寸常量。
 

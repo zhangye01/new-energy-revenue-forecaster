@@ -61,3 +61,5 @@ body[data-theme="dark"] .setting-badge {
   background: #1f3c31;
   color: #9ed9ba;
 }
+
+#change-password-form[hidden], #account-password-button[hidden] { display: none; }

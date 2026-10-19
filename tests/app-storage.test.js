@@ -229,7 +229,7 @@ function flushAsyncStorageCallbacks() {
   });
   assert.deepEqual(calls, ["risk:indexeddb_unsupported"]);
   await flushAsyncStorageCallbacks();
-  assert.deepEqual(calls, ["risk:indexeddb_unsupported", "available"]);
+  assert.deepEqual(calls, ["risk:indexeddb_unsupported"]);
 })();
 
 (async () => {

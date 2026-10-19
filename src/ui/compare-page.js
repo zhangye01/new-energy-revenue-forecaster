@@ -43,7 +43,7 @@
         {
           refKey: "compareMetricCompareCount",
           value: `${available.length} 个`,
-          hint: available.length ? "已完成测算" : "等待测算"
+          hint: available.length ? "当前有效结果" : "等待基准重算"
         },
         {
           refKey: "compareMetricScenarioCount",
@@ -62,8 +62,10 @@
       baselineRevenueWan = 0,
       comparePeriod = "-",
       sensitivityFactors = [],
+      sensitivityNotice = "",
       sensitivitySettings = {},
       bestScenario = null,
+      excludedCount = 0,
       maxGapWan = 0,
       asCompactMoney = (value) => String(value),
       asNum = (value, digits = 1) => {
@@ -73,16 +75,17 @@
     } = input;
     const baselineName = baseline?.scenario?.name || "-";
     const baselineRevenueText = baselineFirst ? asCompactMoney(baselineFirst.fullRevenue) : "-";
+    const excludedNotice = excludedCount > 0 ? ` · ${excludedCount} 个历史或无效结果已排除，请重新测算。` : "";
     return {
       labels: {
         compareBaselineLabel: `基准：${baselineName}`,
         compareScenarioLabel: available.length >= 2 ? `${available.length} 个方案已纳入对比` : "当前仅基准方案已测算"
       },
       messages: {
-        compareSensitivityMessage: `基准：${baselineName} · 首年总收益 ${baselineRevenueText} · ${sensitivityFactors.length} 项变量 · 扰动 ±${sensitivitySettings.rangePercent}% / 步长 ${sensitivitySettings.stepPercent}%`,
-        compareScenarioMessage: available.length >= 2
+        compareSensitivityMessage: sensitivityNotice || `基准：${baselineName} · 首年总收益 ${baselineRevenueText} · ${sensitivityFactors.length} 项变量 · 扰动 ±${sensitivitySettings.rangePercent}% / 步长 ${sensitivitySettings.stepPercent}%`,
+        compareScenarioMessage: (available.length >= 2
           ? `${available.length} 个已测算方案 · 对照基准：${baselineName}`
-          : `仅“${baselineName}”已测算，其他方案完成测算后加入对比。`
+          : `仅“${baselineName}”有当前有效结果，待其他方案重算后比较。`) + excludedNotice
       },
       metrics: [
         { refKey: "compareMetricBaselineScenario", value: baselineName, hint: "当前基准方案" },
@@ -98,8 +101,8 @@
         },
         {
           refKey: "compareMetricBestScenario",
-          value: bestScenario?.scenario?.name || "-",
-          hint: bestScenario ? `周期总收益 ${asCompactMoney(bestScenario.result.totalFullRevenue)}` : ""
+          value: available.length >= 2 && bestScenario ? bestScenario.scenario.name : "待比较",
+          hint: available.length >= 2 && bestScenario ? `周期总收益 ${asCompactMoney(bestScenario.result.totalFullRevenue)}` : "至少 2 个当前有效方案"
         },
         {
           refKey: "compareMetricMaxGap",
@@ -217,7 +220,7 @@
       changeSensitivityControls: () => {
         sensitivitySettings.rangePercent = Number(refs.compareSensitivityRange?.value) || sensitivitySettings.rangePercent;
         sensitivitySettings.stepPercent = Number(refs.compareSensitivityStep?.value) || sensitivitySettings.stepPercent;
-        sensitivitySettings.responseScalePercent = Number(refs.compareSensitivityScale?.value) || sensitivitySettings.responseScalePercent;
+        sensitivitySettings.responseScalePercent = 100;
         sensitivitySettings.topN = refs.compareSensitivityTopn?.value === "all" ? "all" : Number(refs.compareSensitivityTopn?.value);
         sanitizeCompareSensitivitySettings();
         renderCompare();
@@ -253,7 +256,7 @@
     setText(refs.compareBaselineLabel, "等待基准方案结果");
     setText(refs.compareScenarioLabel, "等待方案结果");
     setText(refs.compareSensitivityMessage, "请先在基准结果总览完成基准方案测算，再查看敏感性分析。");
-    setText(refs.compareScenarioMessage, "当前仅展示已完成测算的方案结果；新增方案并测算后即可加入对比。");
+    setText(refs.compareScenarioMessage, "仅纳入当前有效且电量口径一致的结果；过期方案请重新测算。");
     syncCompareSensitivityControls();
   }
 
@@ -272,11 +275,13 @@
   function renderCompareNoResultsState(input = {}) {
     const {
       refs = {},
+      excludedCount = 0,
       renderPlaceholder = () => {}
     } = input;
-    setHtml(refs.compareBody, `<tr><td colspan="7">暂无可对比结果，请先在基准结果总览页完成基准方案测算。</td></tr>`);
-    renderPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, "基准方案未测算，暂无法展示。");
-    renderPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, "基准方案未测算，暂无法展示。");
+    if (excludedCount > 0) setText(refs.compareScenarioMessage, `${excludedCount} 个已保存结果暂未纳入，请先重新测算基准方案。`);
+    setHtml(refs.compareBody, `<tr><td colspan="7">暂无当前有效的基准结果，请在基准结果总览重新测算；历史或过期结果不参与排名。</td></tr>`);
+    renderPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, "请先生成当前口径的基准结果。");
+    renderPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, "请先生成当前口径的基准结果。");
     renderPlaceholder("scenarioRanking", refs.compareRankingChart, "暂无方案结果，无法生成收益排名。");
     renderPlaceholder("scenarioTrend", refs.compareTrendChart, "暂无方案结果，无法生成年度走势。");
     renderPlaceholder("scenarioBridge", refs.compareBridgeChart, "请选择方案查看差异归因。");
@@ -342,7 +347,7 @@
       asCompactMoney = (value) => String(value)
     } = input;
     return available.map((item, index) => {
-      const firstRow = item.result.annualRows.find((row) => row.energyMwh > 0) || item.result.annualRows[0] || {};
+      const firstRow = item.result.annualRows[0] || {};
       const deltaWan = baseline ? (item.result.totalFullRevenue - baseline.result.totalFullRevenue) / 10000 : 0;
       const isActive = item.scenario.id === activeScenarioId;
       return `
@@ -367,8 +372,8 @@
     } = input;
     return available.map((item) => {
       const deltaRevenue = item.result.totalFullRevenue - baseline.result.totalFullRevenue;
-      const topDriver = detectTopDriver(item.result);
-      const firstRow = item.result.annualRows.find((row) => row.energyMwh > 0) || item.result.annualRows[0] || {};
+      const topDriver = detectTopDriver(item.result, baseline.result);
+      const firstRow = item.result.annualRows[0] || {};
       const scenarioLabel = item.scenario.isBaseline
         ? `${escapeHtml(item.scenario.name)} <span class="table-tag">基准</span>`
         : escapeHtml(item.scenario.name);
@@ -418,8 +423,10 @@
         baselineRevenueWan: compareState.baselineRevenueWan,
         comparePeriod,
         sensitivityFactors: compareState.sensitivityFactors,
+        sensitivityNotice: compareState.sensitivityNotice,
         sensitivitySettings,
         bestScenario: compareState.bestScenario,
+        excludedCount: compareState.excludedCount,
         maxGapWan: compareState.maxGapWan,
         asCompactMoney,
         asNum
@@ -471,7 +478,7 @@
       view: buildCompareAvailabilityView({ available, comparePeriod })
     });
     if (!available.length) {
-      renderCompareNoResultsState({ refs, renderPlaceholder });
+      renderCompareNoResultsState({ refs, renderPlaceholder, excludedCount: compareState.excludedCount });
       return "no-results";
     }
 

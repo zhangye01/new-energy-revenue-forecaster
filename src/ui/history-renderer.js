@@ -135,7 +135,8 @@
     }
     const selectedYears = historyAnalysis.selectHistoryYearsByDateRange(dataset, range);
     if (!selectedYears.length) {
-      renderUnavailable(input, "当前项目暂无可分析数据。", "当前项目暂无可分析数据。", project);
+      const message = "所选日期范围暂无可分析数据；当前365天曲线不包含2月29日。";
+      renderUnavailable(input, message, message, project);
       return;
     }
 

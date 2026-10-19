@@ -6,12 +6,12 @@
     <title>新能源全口径收入预测工作台</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="./styles/theme.css?v=20260714d">
-    <link rel="stylesheet" href="./styles/base.css?v=20261019l">
+    <link rel="stylesheet" href="./styles/base.css?v=20261019s">
     <link rel="stylesheet" href="./styles/components/data-display.css?v=20260714d">
     <link rel="stylesheet" href="./styles/components/forms.css?v=20260714d">
     <link rel="stylesheet" href="./styles/components/buttons.css?v=20260714d">
     <link rel="stylesheet" href="./styles/components/workflow.css?v=20260714d">
-    <link rel="stylesheet" href="./styles/components/auth.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/components/auth.css?v=20261019s">
     <link rel="stylesheet" href="./styles/components/context-help.css?v=20261019e">
     <link rel="stylesheet" href="./styles/pages/home.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/projects.css?v=20260714d">
@@ -87,62 +87,64 @@
     </script>
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
-    <script src="./config.js?v=20261019o" defer></script>
+    <script src="./config.js?v=20261019s" defer></script>
     <script src="./runtime.js?v=20260515t" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
-    <script src="./src/domain/csv-utils.js?v=20260609a" defer></script>
-    <script src="./src/domain/export-builders.js?v=20260609a" defer></script>
-    <script src="./src/ui/file-import-utils.js?v=20260611a" defer></script>
-    <script src="./src/ui/script-loader.js?v=20260630a" defer></script>
-    <script src="./src/ui/context-help.js?v=20261019e" defer></script>
-    <script src="./src/domain/energy-profiles.js?v=20260609a" defer></script>
-    <script src="./src/domain/app-utils.js?v=20260609a" defer></script>
-    <script src="./src/domain/price-forecast.js?v=20260609a" defer></script>
-    <script src="./src/domain/revenue-rules.js?v=20261019a" defer></script>
-    <script src="./src/domain/revenue-calculator.js?v=20261019a" defer></script>
-    <script src="./src/domain/result-calculation.js?v=20261019o" defer></script>
-    <script src="./src/domain/result-report.js?v=20260609a" defer></script>
-    <script src="./src/ui/policy-panel.js?v=20261019e" defer></script>
-    <script src="./src/ui/province-defaults.js?v=20261019e" defer></script>
-    <script src="./src/ui/energy-workspace.js?v=20261019l" defer></script>
-    <script src="./src/ui/create-project-flow.js?v=20261019o" defer></script>
-    <script src="./src/ui/energy-template-flow.js?v=20261019f" defer></script>
-    <script src="./src/ui/chart-lifecycle.js?v=20260611a" defer></script>
-    <script src="./src/ui/energy-charts.js?v=20261019i" defer></script>
-    <script src="./src/ui/forecast-page.js?v=20261019f" defer></script>
-    <script src="./src/ui/forecast-run-flow.js?v=20260611a" defer></script>
-    <script src="./src/ui/project-list.js?v=20260609a" defer></script>
-    <script src="./src/ui/result-page.js?v=20261019n" defer></script>
-    <script src="./src/ui/result-runner.js?v=20261019l" defer></script>
-    <script src="./src/ui/result-print.js?v=20260609a" defer></script>
-    <script src="./src/ui/result-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/scenario-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20261019q" defer></script>
-    <script src="./src/ui/scenario-visual-data.js?v=20260609a" defer></script>
-    <script src="./src/ui/manual-scenario-flow.js?v=20261019l" defer></script>
-    <script src="./src/ui/compare-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/compare-page.js?v=20261019e" defer></script>
-    <script src="./src/domain/compare-analysis.js?v=20260609a" defer></script>
-    <script src="./src/domain/history-analysis.js?v=20260609a" defer></script>
-    <script src="./src/ui/history-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/history-page.js?v=20261019f" defer></script>
-    <script src="./src/ui/history-renderer.js?v=20261019f" defer></script>
-    <script src="./src/ui/theme-controller.js?v=20260611a" defer></script>
-    <script src="./src/ui/shell-events.js?v=20260609a" defer></script>
-    <script src="./src/ui/app-event-bindings.js?v=20260611a" defer></script>
-    <script src="./src/domain/workflow-status.js?v=20261019o" defer></script>
-    <script src="./src/domain/scenario-config.js?v=20261019o" defer></script>
-    <script src="./src/domain/rough-price.js?v=20261019o" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261019p" defer></script>
-    <script src="./src/domain/scenario-model.js?v=20261019q" defer></script>
-    <script src="./src/domain/project-settings.js?v=20260609a" defer></script>
-    <script src="./src/domain/project-model.js?v=20261019n" defer></script>
-    <script src="./src/domain/project-display.js?v=20260611a" defer></script>
-    <script src="./src/domain/energy-data.js?v=20260609a" defer></script>
-    <script src="./src/domain/energy-import-flow.js?v=20260609a" defer></script>
-    <script src="./src/domain/app-storage.js?v=20260609a" defer></script>
-    <script src="./src/ui/app-persistence.js?v=20260625a" defer></script>
-    <script src="./app.js?v=20261019p" defer></script>
+    <script src="./src/domain/csv-utils.js?v=20261019s" defer></script>
+    <script src="./src/domain/export-builders.js?v=20261019s" defer></script>
+    <script src="./src/ui/file-import-utils.js?v=20261019s" defer></script>
+    <script src="./src/ui/script-loader.js?v=20261019s" defer></script>
+    <script src="./src/ui/context-help.js?v=20261019s" defer></script>
+    <script src="./src/domain/energy-profiles.js?v=20261019s" defer></script>
+    <script src="./src/domain/app-utils.js?v=20261019s" defer></script>
+    <script src="./src/domain/price-forecast.js?v=20261019s" defer></script>
+    <script src="./src/domain/revenue-rules.js?v=20261019s" defer></script>
+    <script src="./src/domain/revenue-calculator.js?v=20261019s" defer></script>
+    <script src="./src/domain/result-calculation.js?v=20261019s" defer></script>
+    <script src="./src/domain/result-report.js?v=20261019s" defer></script>
+    <script src="./src/ui/policy-panel.js?v=20261019s" defer></script>
+    <script src="./src/ui/province-defaults.js?v=20261019s" defer></script>
+    <script src="./src/ui/energy-workspace.js?v=20261019s" defer></script>
+    <script src="./src/ui/create-project-flow.js?v=20261019s" defer></script>
+    <script src="./src/ui/energy-template-flow.js?v=20261019s" defer></script>
+    <script src="./src/ui/chart-lifecycle.js?v=20261019s" defer></script>
+    <script src="./src/ui/energy-charts.js?v=20261019s" defer></script>
+    <script src="./src/ui/forecast-page.js?v=20261019s" defer></script>
+    <script src="./src/ui/forecast-run-flow.js?v=20261019s" defer></script>
+    <script src="./src/ui/project-list.js?v=20261019s" defer></script>
+    <script src="./src/ui/result-page.js?v=20261019s" defer></script>
+    <script src="./src/ui/result-runner.js?v=20261019s" defer></script>
+    <script src="./src/ui/result-print.js?v=20261019s" defer></script>
+    <script src="./src/ui/result-charts.js?v=20261019s" defer></script>
+    <script src="./src/ui/scenario-charts.js?v=20261019s" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261019s" defer></script>
+    <script src="./src/ui/scenario-visual-data.js?v=20261019s" defer></script>
+    <script src="./src/ui/manual-scenario-flow.js?v=20261019s" defer></script>
+    <script src="./src/ui/compare-charts.js?v=20261019s" defer></script>
+    <script src="./src/ui/compare-page.js?v=20261019s" defer></script>
+    <script src="./src/domain/compare-sensitivity.js?v=20261019s" defer></script>
+    <script src="./src/domain/compare-analysis.js?v=20261019s" defer></script>
+    <script src="./src/domain/history-analysis.js?v=20261019s" defer></script>
+    <script src="./src/ui/history-charts.js?v=20261019s" defer></script>
+    <script src="./src/ui/history-page.js?v=20261019s" defer></script>
+    <script src="./src/ui/history-renderer.js?v=20261019s" defer></script>
+    <script src="./src/ui/theme-controller.js?v=20261019s" defer></script>
+    <script src="./src/ui/shell-events.js?v=20261019s" defer></script>
+    <script src="./src/ui/app-event-bindings.js?v=20261019s" defer></script>
+    <script src="./src/domain/workflow-status.js?v=20261019s" defer></script>
+    <script src="./src/domain/scenario-config.js?v=20261019s" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261019s" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261019s" defer></script>
+    <script src="./src/domain/scenario-model.js?v=20261019s" defer></script>
+    <script src="./src/domain/project-settings.js?v=20261019s" defer></script>
+    <script src="./src/domain/project-model.js?v=20261019s" defer></script>
+    <script src="./src/domain/project-display.js?v=20261019s" defer></script>
+    <script src="./src/domain/energy-data.js?v=20261019s" defer></script>
+    <script src="./src/domain/energy-import-flow.js?v=20261019s" defer></script>
+    <script src="./src/domain/app-storage.js?v=20261019s" defer></script>
+    <script src="./src/ui/app-persistence.js?v=20261019s" defer></script>
+    <script src="./src/ui/project-backup.js?v=20261019s" defer></script>
+    <script src="./app.js?v=20261019s" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -277,12 +279,17 @@
               </button>
               <div class="account-dropdown" id="account-dropdown" hidden>
                 <button type="button" class="account-dropdown-item" id="account-profile-button">个人信息</button>
-                <button type="button" class="account-dropdown-item" id="account-password-button">修改密码</button>
+                <button type="button" class="account-dropdown-item" id="account-password-button" hidden>修改密码</button>
                 <button type="button" class="account-dropdown-item danger" id="logout-button">退出登录</button>
               </div>
             </div>
           </div>
         </header>
+      <div id="storage-status-banner" class="storage-status-banner" role="alert" hidden>
+        <span id="storage-status-message"></span>
+        <button id="storage-backup" type="button" class="ghost-button">下载本页备份</button>
+        <button id="storage-reload" type="button" class="ghost-button">载入最新（放弃本页未保存改动）</button>
+      </div>
 
         <section class="page active" id="home-page">
           <section class="overview-band">
@@ -389,7 +396,7 @@
                     <div class="overview-copy">
                       <div class="overview-headline-group">
                         <h2>新型电力系统调节保障</h2>
-                        <p class="overview-docline">《电力辅助服务市场基本规则》（发改能源规〔2024〕XX号）</p>
+                        <p class="overview-docline">《电力辅助服务市场基本规则》（发改能源规〔2025〕411号） <a href="https://zfxxgk.ndrc.gov.cn/web/iteminfo.jsp?id=20504" target="_blank" rel="noopener noreferrer">官方原文</a></p>
                         <p class="overview-summary">在高比例新能源场景下，把储能、负荷侧灵活性和辅助服务收益、费用、考核统一进可执行的市场框架。</p>
                       </div>
                       <div class="overview-meta-grid">
@@ -477,7 +484,7 @@
               <div class="benchmark-map-shell">
                 <div class="benchmark-map-toolbar">
                   <button type="button" class="ghost-button" id="benchmark-back-button" hidden>返回全国</button>
-                  <span class="hint" id="benchmark-map-subtitle">全国省级电价</span>
+                  <span class="hint" id="benchmark-map-subtitle">全国省级电价（演示样例）</span>
                 </div>
                 <div class="benchmark-map-wrap">
                   <div class="benchmark-map-scale">
@@ -504,7 +511,7 @@
                 </div>
                 <div class="benchmark-map-foot">
                   <span id="benchmark-map-tip" data-help="地图操作" data-help-anchor="#benchmark-map-heading">提示：鼠标悬停查看电价数据，点击省份可查看地州详情。</span>
-                  <span id="benchmark-map-updated">数据更新时间：2026-04-13</span>
+                  <span id="benchmark-map-updated">演示样例 · 待接入实测数据</span>
                 </div>
               </div>
             </section>
@@ -512,7 +519,7 @@
             <section class="panel policy-panel">
               <div class="panel-head">
                 <h3>地区政策</h3>
-                <span class="hint">省级口径 / 最新基线</span>
+                <span class="hint">演示样例 / 待核验</span>
               </div>
               <div class="policy-tools">
                 <label class="block-label">区域筛选
@@ -949,7 +956,7 @@
                 <input id="algo-seed" type="number" min="1" max="99999" value="2027">
               </label>
               <label>价格增长率 %
-                <input id="algo-growth" type="number" step="0.1" value="0.5">
+                <input id="algo-growth" type="number" min="-99.9" step="0.1" value="0.5">
               </label>
               <div class="actions-row">
                 <button type="submit" class="primary-button">生成三种模型电价曲线</button>
@@ -1623,7 +1630,7 @@
               <div class="panel-head">
                 <div>
                   <h3>基准敏感性分析</h3>
-                  <p class="hint" data-help="基准敏感性分析">围绕基准方案做关键变量扰动，识别收益弹性和主要风险来源，无需新增方案。统一设置扰动范围与步长，变量清单默认收起。</p>
+                  <p class="hint" data-help="基准敏感性分析">按实际收益规则逐点扰动参数并重算首年收入，与当前有效基准对照。比例受0—100%边界约束，不适用的变量自动排除。</p>
                 </div>
                 <span class="hint" id="compare-baseline-label">等待基准方案结果</span>
               </div>
@@ -1639,9 +1646,7 @@
                 <label>步长 %
                   <input id="compare-sensitivity-step" type="number" min="1" max="20" step="1" value="5">
                 </label>
-                <label>响应强度 %
-                  <input id="compare-sensitivity-scale" type="number" min="25" max="200" step="5" value="100">
-                </label>
+                <input id="compare-sensitivity-scale" type="hidden" value="100">
                 <label>排序展示
                   <select id="compare-sensitivity-topn">
                     <option value="5">前5项</option>
@@ -2092,7 +2097,7 @@
                   <input type="text" id="settings-last-login" readonly>
                 </label>
               </div>
-              <form id="change-password-form" class="form-grid">
+              <form id="change-password-form" class="form-grid" hidden>
                 <label>
                   当前密码
                   <input type="password" id="password-current" autocomplete="current-password" required>
@@ -2107,12 +2112,12 @@
                 </label>
                 <div class="actions-row">
                   <button type="submit" class="primary-button">修改密码</button>
-                  <button type="button" class="ghost-button" id="settings-logout-button">退出当前账号</button>
                 </div>
                 <div class="hint" id="account-manage-message"></div>
               </form>
             </section>
 
+            <div class="actions-row"><span class="hint">演示账号，不支持修改密码。</span><button type="button" class="ghost-button" id="settings-logout-button">退出当前账号</button></div>
             <section class="subsection">
               <div class="setting-row">
                 <div>
@@ -2126,10 +2131,15 @@
             <section class="subsection">
               <div class="setting-row">
                 <div>
-                  <strong id="settings-persistence-title">输入持久化</strong>
+                  <strong id="settings-persistence-title">本地保存与备份</strong>
                   <div class="hint" data-help="输入持久化" data-help-anchor="#settings-persistence-title">页面切换与刷新后，已保存的项目输入自动恢复。</div>
                 </div>
-                <span class="setting-badge">已启用</span>
+                <span class="setting-badge" id="settings-storage-state">待保存</span>
+              </div>
+              <div class="actions-row">
+                <button id="backup-export" type="button" class="ghost-button">下载项目备份</button>
+                <button id="backup-import" type="button" class="ghost-button">恢复项目备份</button>
+                <input id="backup-import-file" type="file" accept=".json,application/json" hidden>
               </div>
             </section>
           </section>

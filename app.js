@@ -23,6 +23,7 @@ const {
   POLICY_REGIONS,
   PROVINCE_BENCHMARKS,
   POLICY_CARDS,
+  OVERVIEW_POLICY_DETAILS,
   QUALITY_GATE,
   PROVINCE_DEFAULT_PARAMS,
   BATCH_PARAM_SPECS
@@ -228,6 +229,7 @@ let suppressNextRenderPersist = false;
 let storageWarningShown = false;
 let appDataStorageMode = "hybrid";
 let persistSequence = 0;
+let allowStorageReload = false;
 let lastLocalStoragePersistAt = 0;
 let topMetaHideTimer = null;
 let overviewAutoTimer = null;
@@ -319,73 +321,6 @@ const PAGE_VIEW_ALIAS = {
   "energy-page": "create-page",
   "province-page": "scenario-page"
 };
-const OVERVIEW_POLICY_DETAILS = [
-  {
-    title: "政策卡1：新一轮电改顶层设计",
-    policyName: "关于进一步深化电力体制改革的若干意见",
-    docNo: "中发〔2015〕9号",
-    position: "新一轮电力市场化改革总纲领、根本遵循。",
-    highlights: [
-      "确立“管住中间、放开两头”总体思路。",
-      "放开竞争性环节电价、放开发用电计划。",
-      "推进配售电业务放开、交易机构独立规范运行。",
-      "还原电力商品属性，构建有效竞争市场结构。"
-    ],
-    meaning: "打破统购统销模式，开启电力市场化全新时代。"
-  },
-  {
-    title: "政策卡2：全国统一电力市场体系建设",
-    policyName: "关于加快建设全国统一电力市场体系的指导意见",
-    docNo: "发改体改〔2022〕118号",
-    position: "从分散试点走向全国一体化的里程碑文件。",
-    highlights: [
-      "构建国家—区域—省三级电力市场体系。",
-      "破除省间壁垒，推进跨省跨区优化配置。",
-      "统一交易规则、计量标准、技术支撑。",
-      "明确2025/2030年市场化电量占比目标。"
-    ],
-    meaning: "实现大范围资源优化，支撑新能源跨省消纳。"
-  },
-  {
-    title: "政策卡3：电力现货市场顶层规则",
-    policyName: "电力现货市场基本规则（试行）",
-    docNo: "发改能源规〔2023〕1217号",
-    position: "电力市场价格发现与实时平衡核心制度。",
-    highlights: [
-      "统一全国现货市场模式、出清与结算机制。",
-      "规范中长期与现货衔接、新能源入市方式。",
-      "明确储能、虚拟电厂等主体参与规则。",
-      "推动2025年底前现货市场全覆盖连续运行。"
-    ],
-    meaning: "实现分时电价、精准供需匹配，市场进入精细化运行。"
-  },
-  {
-    title: "政策卡4：新型电力系统调节保障",
-    policyName: "电力辅助服务市场基本规则",
-    docNo: "发改能源规〔2024〕XX号（通用权威版）",
-    position: "高比例新能源下电网安全稳定的市场化支撑。",
-    highlights: [
-      "统一调频、备用、调压、爬坡等服务品种。",
-      "落实“谁受益、谁承担，谁提供、谁获利”。",
-      "支持储能、负荷聚合商、虚拟电厂广泛参与。",
-      "推动电能量与辅助服务联合优化出清。"
-    ],
-    meaning: "激活灵活性资源，保障新型电力系统安全运行。"
-  },
-  {
-    title: "政策卡5：绿色转型与市场深化实施",
-    policyName: "关于完善全国统一电力市场体系的实施意见",
-    docNo: "国办发〔2026〕4号",
-    position: "面向新型电力系统的市场机制升级版施工图。",
-    highlights: [
-      "明确2030年基本建成、2035年全面建成统一市场。",
-      "完善容量成本回收、用户侧响应机制。",
-      "强化跨省互济、新能源全额保障消纳。",
-      "统筹能源安全、绿色转型与市场化改革。"
-    ],
-    meaning: "适配高比例新能源格局，完善市场化长效机制。"
-  }
-];
 const OVERVIEW_IMAGE_FALLBACK = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#10243b"/><stop offset="100%" stop-color="#1f4f7d"/></linearGradient></defs><rect width="1600" height="900" fill="url(#g)"/><circle cx="1300" cy="180" r="120" fill="#f9c55d" opacity=".85"/><path d="M0 760 L420 620 L740 690 L1080 610 L1600 760 L1600 900 L0 900Z" fill="#1a3f63" opacity=".72"/><path d="M220 760 L300 420 L380 760 M255 580 L345 580 M760 760 L840 360 L920 760 M795 540 L885 540 M1180 760 L1240 470 L1300 760 M1210 620 L1270 620" stroke="#f2e3c0" stroke-width="12" stroke-linecap="round" fill="none"/><text x="80" y="150" fill="#ffffff" font-family="Arial,sans-serif" font-size="68" font-weight="700">NEW ENERGY</text></svg>')}`;
 
 function alignDefaultForecastYearsToAnnualTemplate(project, annualInputByYear, sourceLabel = "") {
@@ -993,7 +928,7 @@ async function handleChangePassword(event) {
   if (refs.changePasswordForm) {
     refs.changePasswordForm.reset();
   }
-  setAccountManageMessage("密码修改成功。", "success");
+  setAccountManageMessage("当前为演示账号，未修改密码。", "error");
 }
 
 function getThemeControllerInput() {
@@ -1356,10 +1291,12 @@ function persistAppDataNow(options = {}) {
       storageWarningShown = value;
     },
     setTopMeta,
+    onStorageStateChange: (state) => window.NE_PROJECT_BACKUP.renderStorageState(document, state),
     consoleRef: console
   });
   appDataStorageMode = result.storageMode;
   lastLocalStoragePersistAt = result.lastLocalWriteAt;
+  return result.completion;
 }
 
 function schedulePersistAppData() {
@@ -1480,7 +1417,7 @@ function getBaselineScenario(project) {
 }
 
 function countScenariosForCompare(project) {
-  return project.scenarios.filter((scenario) => project.resultsByScenario[scenario.id]).length;
+  return compareAnalysis.buildAvailableScenarioResults(project).length;
 }
 
 function isProjectCreateCompleted(project) {
@@ -2429,7 +2366,7 @@ async function renderBenchmarkMap() {
   if (refs.benchmarkMapSubtitle) {
     refs.benchmarkMapSubtitle.textContent = isProvinceLevel
       ? `${getProvinceName(view.provinceKey)}地州电价分布（虚拟样例）`
-      : "全国省级电价";
+      : "全国省级电价（演示样例）";
   }
   if (refs.benchmarkMapTip) {
     refs.benchmarkMapTip.innerHTML = isProvinceLevel
@@ -2437,7 +2374,7 @@ async function renderBenchmarkMap() {
       : "提示：鼠标悬停查看详细电价数据，点击省份可查看地州详情，<br>可拖动左侧图例游标筛选电价区间。";
   }
   if (refs.benchmarkMapUpdated) {
-    refs.benchmarkMapUpdated.textContent = "数据更新时间：2026-04-13";
+    refs.benchmarkMapUpdated.textContent = "演示样例 · 待接入实测数据";
   }
 
   const chart = ensureBenchmarkChart();
@@ -3191,7 +3128,9 @@ function forecastRunFlowContext() {
 }
 
 function generateForecastRun() {
-  return forecastRunFlow.generateForecastRun(forecastRunFlowContext());
+  const generated = forecastRunFlow.generateForecastRun(forecastRunFlowContext());
+  if (generated) window.NE_PROJECT_BACKUP.captureFormState(document, ["#forecast-run-form"]);
+  return generated;
 }
 
 function setActiveRun(runId) {
@@ -4439,7 +4378,7 @@ function renderResults() {
   const state = resultPage.buildResultPageRenderState({
     project: getActiveProject(),
     getActiveScenario,
-    getBaselineResultState: roughPrice.baselineResultState,
+    getBaselineResultState: getValidatedResultState,
     buildResultSummaryData: resultReport.buildResultSummaryData,
     getForecastPeriodDisplayRange,
     getAssetTypeLabel,
@@ -4596,35 +4535,40 @@ function exportHistoryChartData(key) {
   downloadCsv(payload.filename, payload.rows);
 }
 
-function exportAnnualCsv() {
-  const project = getActiveProject();
-  if (!project) return;
-  const scenario = getActiveScenario(project);
-  const result = project.resultsByScenario[scenario?.id || ""];
-  if (!result) return;
-  downloadCsv(
-    exportBuilders.buildAnnualResultExportFilename(project, scenario),
-    exportBuilders.buildAnnualResultExportRows(result)
-  );
+function getValidatedResultState(project, scenario, result, options = {}) {
+  const state = roughPrice.baselineResultState(project, scenario, result);
+  if (state.current && !compareAnalysis.isResultComplete(project, scenario, result, options)) {
+    return { current: false, reason: "incomplete_result", message: "结果明细缺失或金额无法对账，请重新发起基准测算。" };
+  }
+  return state;
 }
 
-function exportHourlyCsv() {
+function getCurrentExportContext(options = {}) {
   const project = getActiveProject();
-  if (!project) return;
-  const scenario = getActiveScenario(project);
-  const result = project.resultsByScenario[scenario?.id || ""];
-  if (!result) return;
-  downloadCsv(
-    exportBuilders.buildHourlyResultExportFilename(project, scenario),
-    exportBuilders.buildHourlyResultExportRows(result)
-  );
+  const scenario = project ? getActiveScenario(project) : null;
+  const result = project?.resultsByScenario?.[scenario?.id];
+  const state = getValidatedResultState(project, scenario, result, options);
+  if (!state.current) { setTopMeta(state.message); return null; }
+  return { project, scenario, result };
 }
+
+function exportResultCsv(kind) {
+  const context = getCurrentExportContext({ includeHourly: kind === "hourly" });
+  if (!context) return;
+  const { project, scenario, result } = context;
+  const hourly = kind === "hourly";
+  const filename = hourly ? exportBuilders.buildHourlyResultExportFilename : exportBuilders.buildAnnualResultExportFilename;
+  const rows = hourly ? exportBuilders.buildHourlyResultExportRows : exportBuilders.buildAnnualResultExportRows;
+  downloadCsv(filename(project, scenario), rows(result, { includeSource: true }));
+}
+
+function exportAnnualCsv() { exportResultCsv("annual"); }
+function exportHourlyCsv() { exportResultCsv("hourly"); }
 
 function printScenarioReport() {
-  const project = getActiveProject();
-  if (project) ensureScenarioMetadata(project);
-  const scenario = project ? getActiveScenario(project) : null;
-  const result = project ? project.resultsByScenario[scenario?.id || ""] : null;
+  const context = getCurrentExportContext();
+  if (!context) return;
+  const { project, scenario, result } = context;
   resultPrint.printScenarioReport({
     project,
     scenario,
@@ -4670,6 +4614,7 @@ function renderAll() {
   renderTopbar();
   renderSettings();
   renderWorkflowViews();
+  window.NE_PROJECT_BACKUP.captureFormState(document);
   if (suppressNextRenderPersist) {
     suppressNextRenderPersist = false;
   } else {
@@ -4761,6 +4706,7 @@ function createEventBindingActions() {
     handleChangePassword, closeLoginModal, handleLoginSubmit, closeOverviewPolicyDetail,
     closeAccountDropdown, closePageHelp, stopOverviewAutoplay, disposeHistoryCharts,
     disposeCompareCharts, disposeResultCharts, persistAppDataNow, normalizeUserFacingError,
+    hasUnpersistedAppData: () => !allowStorageReload && (hasUnsubmittedInputs() || appDataSnapshotStore.hasUnpersistedChanges(buildAppDataSnapshot())),
     setTopMeta, sanitizeHistoryAnalysis, renderPolicyPanel, renderHistoryPrices,
     exportHistoryChartData, setActivePage, setResultReportView, queueResultChartsResize,
     sanitizeCompareView, sanitizeCompareSensitivitySettings, renderCompareWorkspaceState,
@@ -4792,6 +4738,32 @@ function bindEvents() {
   });
 }
 
+function hasUnsubmittedInputs() {
+  return window.NE_PROJECT_BACKUP.hasUnsubmittedFormChanges(document)
+    || roughPriceWorkspace.hasUnsubmittedChanges(document, appState.projects);
+}
+
+function bindProjectBackup() {
+  window.NE_PROJECT_BACKUP.bind({
+    documentRef: document, getSnapshot: buildAppDataSnapshot, hasUnsubmittedChanges: hasUnsubmittedInputs,
+    getRecoverySnapshots: () => [
+      { label: "其他页面已保存版本", snapshot: appDataSnapshotStore.getConflictState()?.latest },
+      { label: "本地存储恢复分支", snapshot: appDataSnapshotStore.getConflictState()?.alternate },
+      { label: "本页待保存分支", snapshot: appDataSnapshotStore.getPendingSnapshot() }
+    ],
+    getAccount: () => appState.auth.loggedIn ? appState.auth.account : "", makeId,
+    notify: setTopMeta,
+    reload: () => { allowStorageReload = true; cancelScheduledPersistAppData(); window.location.reload(); },
+    restore: (projects) => {
+      const restored = projects.map((project, index) => sanitizeProject(project, index));
+      if (restored.some((project) => !project)) throw new Error("备份结构无效，未恢复项目。");
+      appState.projects.push(...restored);
+      appState.activeProjectId = restored[0].id;
+      setActivePage("projects-page"); renderAll();
+    }
+  });
+}
+
 async function init() {
   initTheme();
   initAuth();
@@ -4809,6 +4781,7 @@ async function init() {
   initBatchParamSelect();
   bindOverviewImageFallbacks();
   bindEvents();
+  bindProjectBackup();
   syncScenarioFieldLocks();
   setActivePage(appState.activePage || "home-page");
 }

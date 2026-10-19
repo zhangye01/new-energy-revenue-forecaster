@@ -78,3 +78,10 @@ assert.deepEqual(hourlyRows[1], [
 
 console.log("export builders tests passed");
 
+
+const tracedResult = { sourceContext: { generatedAt: '2026-10-19T00:00:00Z', projectId: 'p', scenarioId: 's', runId: 'r', contextFingerprint: 'fingerprint' }, annualRows: [{}], hourlyPreview: [{}] };
+for (const build of [buildAnnualResultExportRows, buildHourlyResultExportRows]) {
+  const rows = build(tracedResult, { includeSource: true });
+  assert.deepEqual(rows[0].slice(-5), ['generated_at', 'project_id', 'scenario_id', 'price_run_id', 'input_fingerprint']);
+  assert.deepEqual(rows[1].slice(-5), ['2026-10-19T00:00:00Z', 'p', 's', 'r', 'fingerprint']);
+}

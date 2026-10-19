@@ -131,7 +131,7 @@ assert.equal(activeScenario, "up");
 assert.deepEqual(sensitivitySettings.selectedKeys, ["price"]);
 assert.equal(sensitivitySettings.rangePercent, 30);
 assert.equal(sensitivitySettings.stepPercent, 10);
-assert.equal(sensitivitySettings.responseScalePercent, 80);
+assert.equal(sensitivitySettings.responseScalePercent, 100, "历史响应强度输入不再参与测算");
 assert.equal(sensitivitySettings.topN, "all");
 assert.deepEqual(handlerCalls, [
   "workspace",
@@ -153,7 +153,7 @@ assert.deepEqual(
   availabilityView.metrics.map((metric) => [metric.refKey, metric.value, metric.hint]),
   [
     ["compareMetricPeriod", "2026-2056", undefined],
-    ["compareMetricCompareCount", "1 个", "已完成测算"],
+    ["compareMetricCompareCount", "1 个", "当前有效结果"],
     ["compareMetricScenarioCount", "1 个", "至少 2 个方案"]
   ]
 );
@@ -207,7 +207,7 @@ const tableHtml = buildCompareTableRowsHtml({
   available,
   baseline: available[0],
   asCompactMoney: (value) => `${Math.round(value / 10000)}万元`,
-  detectTopDriver: () => "交易<策略>"
+  detectTopDriver: (result, baselineResult) => { assert.equal(baselineResult, available[0].result); return "交易<策略>"; }
 });
 assert.match(tableHtml, /基准&lt;场景&gt; <span class="table-tag">基准<\/span>/);
 assert.match(tableHtml, /交易&lt;策略&gt;/);
@@ -240,6 +240,10 @@ assert.deepEqual(
     ["compareMetricMaxGap", "20.0 万元"]
   ]
 );
+
+const singleOverview = buildCompareOverviewView({ available: [available[0]], baseline: available[0], bestScenario: available[0], excludedCount: 1 });
+assert.equal(singleOverview.metrics.find((item) => item.refKey === "compareMetricBestScenario").value, "待比较");
+assert.match(singleOverview.messages.compareScenarioMessage, /1 个历史或无效结果已排除/);
 
 function makeNode() {
   return {
@@ -310,7 +314,7 @@ assert.match(placeholders[0].message, /请选择项目/);
 
 placeholders.length = 0;
 renderCompareNoResultsState({ refs, renderPlaceholder });
-assert.match(refs.compareBody.innerHTML, /暂无可对比结果/);
+assert.match(refs.compareBody.innerHTML, /暂无当前有效的基准结果/);
 assert.equal(placeholders.length, 5);
 assert.equal(placeholders[2].key, "scenarioRanking");
 assert.match(placeholders[2].message, /暂无方案结果/);
@@ -422,7 +426,7 @@ const noResultsStatus = renderCompareFrame({
   renderPlaceholder: (key, node, message) => framePlaceholders.push({ key, node, message })
 });
 assert.equal(noResultsStatus, "no-results");
-assert.match(noResultsRefs.compareBody.innerHTML, /暂无可对比结果/);
+assert.match(noResultsRefs.compareBody.innerHTML, /暂无当前有效的基准结果/);
 assert.equal(framePlaceholders.length, 5);
 
 const frameReadyCalls = [];

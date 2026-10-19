@@ -223,7 +223,13 @@
           actions.setHistoryDatePanelOpen?.(false);
         }
       },
-      handleBeforeUnload: () => {
+      handleBeforeUnload: (event) => {
+        if (actions.hasUnpersistedAppData?.()) {
+          actions.persistAppDataNow?.({ forceLocal: true });
+          event?.preventDefault?.();
+          if (event) event.returnValue = "";
+          return "";
+        }
         actions.stopOverviewAutoplay?.();
         actions.disposeHistoryCharts?.();
         actions.disposeCompareCharts?.();

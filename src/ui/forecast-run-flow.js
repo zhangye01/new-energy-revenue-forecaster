@@ -10,8 +10,24 @@
     root.window.NE_FORECAST_RUN_FLOW = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
+  function forecastParameterError(options = {}, isRun = false) {
+    const hasWindow = !isRun || options.trainStart !== undefined || options.trainEnd !== undefined;
+    if (hasWindow && (![options.trainStart, options.trainEnd].every((year) => Number.isInteger(year) && year >= 2010 && year <= 2100))) {
+      return "训练窗口应填写2010至2100之间的整数年份。";
+    }
+    if (hasWindow && options.trainStart > options.trainEnd) return "训练窗口起始年份不能晚于结束年份。";
+    if ((!isRun || options.growth !== undefined) && (!Number.isFinite(options.growth) || options.growth <= -1)) {
+      return "价格增长率应为有效数字且大于-100%。";
+    }
+    if (!isRun && (!Number.isInteger(options.seed) || options.seed < 1 || options.seed > 99999)) {
+      return "随机种子应为1至99999之间的整数。";
+    }
+    return "";
+  }
+
   function canActivateRun(run) {
-    return ["publishable", "publishable_warn", "publishable_forced"].includes(run?.status);
+    return ["publishable", "publishable_warn", "publishable_forced"].includes(run?.status)
+      && !forecastParameterError(run, true);
   }
 
   function statusLabel(run) {
@@ -73,15 +89,12 @@
     const dataSnapshotId = queryValue("#data-snapshot-id") || `snapshot-${nowIso.slice(0, 10)}`;
     const trainStartRaw = queryValue("#train-start");
     const trainEndRaw = queryValue("#train-end");
-    const trainStartInput = trainStartRaw ? Number(trainStartRaw) : NaN;
-    const trainEndInput = trainEndRaw ? Number(trainEndRaw) : NaN;
-    const trainStart = Number.isFinite(trainStartInput) ? trainStartInput : Math.max(2010, project.startYear - 8);
-    const trainEnd = Number.isFinite(trainEndInput) ? trainEndInput : Math.max(trainStart, project.startYear - 1);
+    const trainStart = trainStartRaw ? Number(trainStartRaw) : Math.max(2010, project.startYear - 8);
+    const trainEnd = trainEndRaw ? Number(trainEndRaw) : Math.max(trainStart, project.startYear - 1);
     const seedRaw = queryValue("#algo-seed");
-    const seed = seedRaw ? Number(seedRaw) || 2027 : 2027;
+    const seed = seedRaw ? Number(seedRaw) : 2027;
     const growthRaw = queryValue("#algo-growth");
-    const growthInput = growthRaw ? Number(growthRaw) : NaN;
-    const growth = Number.isFinite(growthInput) ? growthInput / 100 : 0;
+    const growth = growthRaw ? Number(growthRaw) / 100 : 0;
     return {
       algorithmVersion,
       featureVersion,
@@ -121,6 +134,11 @@
       project,
       nowIso: actions.nowIso?.() || new Date().toISOString()
     });
+    const parameterError = forecastParameterError(options);
+    if (parameterError) {
+      actions.setTopMeta?.(parameterError);
+      return false;
+    }
     const generatedRuns = modelDefinitions.map((model) => services.createForecastRunForModel?.(project, model, options));
     const validRuns = generatedRuns.filter(Boolean);
     if (!Array.isArray(project.priceRuns)) project.priceRuns = [];
@@ -155,6 +173,11 @@
     if (!project) return false;
     const target = Array.isArray(project.priceRuns) ? project.priceRuns.find((run) => run.id === runId) : null;
     if (!target) return false;
+    const parameterError = forecastParameterError(target, true);
+    if (parameterError) {
+      actions.setTopMeta?.(`该版本参数无效，不能生效：${parameterError}`);
+      return false;
+    }
     if (!canActivateRun(target)) {
       actions.setTopMeta?.("该版本未通过硬门槛，不能直接生效。");
       return false;
@@ -183,6 +206,11 @@
     if (!project) return false;
     const target = Array.isArray(project.priceRuns) ? project.priceRuns.find((run) => run.id === runId) : null;
     if (!target) return false;
+    const parameterError = forecastParameterError(target, true);
+    if (parameterError) {
+      actions.setTopMeta?.(`该版本参数无效，不能强制生效：${parameterError}`);
+      return false;
+    }
     const reason = actions.promptForceReason?.();
     if (reason === null) return false;
     target.status = "publishable_forced";
@@ -203,6 +231,7 @@
     addActivationLog,
     canActivateRun,
     forceActivateRun,
+    forecastParameterError,
     formatForecastGranularity,
     generateForecastRun,
     hasActiveActivatableRun,

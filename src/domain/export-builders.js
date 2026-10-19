@@ -45,9 +45,17 @@
     return scenarioFilename(project, scenario, "首年8760小时明细");
   }
 
-  function buildAnnualResultExportRows(result) {
+  function withSourceMetadata(rows, result, options) {
+    if (!options.includeSource) return rows;
+    const source = result.sourceContext || {};
+    const headers = ["generated_at", "project_id", "scenario_id", "price_run_id", "input_fingerprint"];
+    const values = [source.generatedAt, source.projectId, source.scenarioId, source.runId, source.contextFingerprint].map((value) => value || "");
+    return rows.map((row, index) => [...row, ...(index === 0 ? headers : values)]);
+  }
+
+  function buildAnnualResultExportRows(result, options = {}) {
     const rows = Array.isArray(result?.annualRows) ? result.annualRows : [];
-    return [
+    return withSourceMetadata([
       ["year", "annual_hours_h", "energy_mwh", "spot_avg_price", "capture_price", "spot_revenue", "mechanism_revenue", "lt_pnl_revenue", "env_revenue", "storage_supplement_revenue", "comprehensive_fee", "other_income", "full_revenue", "full_revenue_price"],
       ...rows.map((row) => [
         row.year,
@@ -65,12 +73,12 @@
         Number(row.fullRevenue || 0).toFixed(2),
         Number(row.fullRevenuePrice || 0).toFixed(6)
       ])
-    ];
+    ], result, options);
   }
 
-  function buildHourlyResultExportRows(result) {
+  function buildHourlyResultExportRows(result, options = {}) {
     const rows = Array.isArray(result?.hourlyPreview) ? result.hourlyPreview : [];
-    return [
+    return withSourceMetadata([
       ["time", "equivalent_hours_h", "energy_mwh", "spot_price_yuan_per_mwh", "spot_revenue", "full_revenue"],
       ...rows.map((row) => [
         row.time,
@@ -80,7 +88,7 @@
         Number(row.spotRevenue || 0).toFixed(2),
         Number(row.fullRevenue || 0).toFixed(2)
       ])
-    ];
+    ], result, options);
   }
 
   return Object.freeze({

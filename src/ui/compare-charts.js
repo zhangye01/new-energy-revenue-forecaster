@@ -186,7 +186,7 @@
       series: [{
         name: selected.name,
         type: "line",
-        smooth: true,
+        smooth: false,
         symbolSize: 6,
         lineStyle: { width: 3, color: tokens.primary },
         itemStyle: { color: tokens.primary },
@@ -196,7 +196,7 @@
           symbol: ["none", "none"],
           lineStyle: { type: "dashed", color: tokens.baseline },
           label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineRevenueWan, 1)} 万元` },
-          data: [{ yAxis: Number(baselineRevenueWan.toFixed(1)) }]
+          data: [{ yAxis: baselineRevenueWan }]
         }
       }]
     };

@@ -166,14 +166,25 @@
     return `rough-v1-${(hash >>> 0).toString(16)}-${(second >>> 0).toString(16)}-${text.length}`;
   }
 
+  function snapshotContextMatches(project, scenario, snapshot, config) {
+    if (snapshot.scenarioId !== scenario?.id) return false;
+    const originalScenario = { ...scenario, config };
+    if (snapshot.contextFingerprint === contextFingerprint(project, originalScenario)) return true;
+    const sourceIds = Array.from(new Set([project?.restoredFromProjectId,
+      ...(Array.isArray(project?.restoredFromProjectIds) ? project.restoredFromProjectIds : [])]));
+    // A restore may change only the project identity. Recheck the complete original
+    // fingerprint with that recorded identity; never rewrite the immutable snapshot.
+    return sourceIds.some((sourceId) => typeof sourceId === "string" && Boolean(sourceId.trim()) && sourceId !== project.id
+      && snapshot.contextFingerprint === contextFingerprint({ ...project, id: sourceId }, originalScenario));
+  }
+
   function snapshotState(project, scenario, snapshot) {
     if (!validSnapshot(snapshot)) {
       return { comparable: false, refined: false, reason: "missing_snapshot", message: "请先保存项目电价粗算，再进行交叉验证。" };
     }
     // Keep the original config in the signature so existing snapshots remain usable after
     // revenue assumptions are refined, without changing their immutable prices or inputs.
-    const originalContext = contextFingerprint(project, { ...scenario, config: snapshot.config });
-    if (snapshot.scenarioId !== scenario?.id || snapshot.contextFingerprint !== originalContext) {
+    if (!snapshotContextMatches(project, scenario, snapshot, snapshot.config)) {
       return { comparable: false, refined: false, reason: "stale_snapshot", message: "项目、测算期或电量口径已变化，请更新项目电价粗算后再对照。" };
     }
     const refined = stableStringify(normalizedConfig(project, snapshot.config)) !==
@@ -500,7 +511,7 @@
 
   function compareSnapshot(project, scenario, snapshot, run, getHourlyEnergyForCalculation) {
     if (!validSnapshot(snapshot)) return failedComparison(["请选择有效的粗算版本。"]);
-    if (snapshot.scenarioId !== scenario?.id || snapshot.contextFingerprint !== contextFingerprint(project, scenario)) {
+    if (!snapshotContextMatches(project, scenario, snapshot, scenario?.config)) {
       return failedComparison(["共用参数、项目或电量已变化，请生成新版粗算后再交叉验证。"], true);
     }
     const years = yearsForProject(project);

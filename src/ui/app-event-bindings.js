@@ -24,7 +24,7 @@
     ],
     lifecycle: [
       "disposeHistoryCharts", "disposeCompareCharts", "disposeResultCharts",
-      "persistAppDataNow", "normalizeUserFacingError", "setTopMeta"
+      "persistAppDataNow", "hasUnpersistedAppData", "normalizeUserFacingError", "setTopMeta"
     ],
     history: ["sanitizeHistoryAnalysis", "renderPolicyPanel", "renderHistoryPrices", "exportHistoryChartData"],
     navigation: ["setActivePage", "setResultReportView", "queueResultChartsResize"],

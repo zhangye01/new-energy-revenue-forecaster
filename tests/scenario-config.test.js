@@ -218,4 +218,19 @@ assert.equal(parseEnvManualValuesCsv(offshoreCarbonRows.map((row) => row.join(",
   ...singleYearProject, siteType: "onshore"
 }).ok, true, "onshore projects do not require inactive carbon inputs");
 
+const oneYearProject = { ...offshoreProject, forecastYears: 1 };
+for (const [name, template, parse, first, repeated] of [
+  ["strategy", buildLtManualTemplateRows, parseLtManualPricesCsv, "2026,8", "2026,50"],
+  ["environment", buildEnvManualTemplateRows, parseEnvManualValuesCsv, "2026,20,100,0,0,no,0,0", "2026,99,100,0,0,no,0,0"],
+  ["fee", buildFeeManualTemplateRows, parseFeeManualValuesCsv, "2026,7,8,18,4.75,2", "2026,7,8,18,14.75,2"]
+]) {
+  const header = template(oneYearProject)[0].join(",");
+  for (const duplicate of [repeated, first]) {
+    const result = parse([header, first, duplicate].join("\n"), oneYearProject);
+    assert.equal(result.ok, false, `${name} must reject duplicate years, even if values match`);
+    assert.match(result.message, /第 3 行 year 重复：2026.*第 2 行/);
+  }
+  assert.equal(parse([header, first].join("\n"), oneYearProject).ok, true);
+}
+
 console.log("scenario config tests passed");

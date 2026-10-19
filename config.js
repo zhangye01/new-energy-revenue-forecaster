@@ -95,9 +95,9 @@ const PAGE_HELP_TEXTS = {
     guide: "建议先阅读推荐工作流，再按页面说明准备数据；遇到导入、状态或结果问题时优先查看本页FAQ。"
   },
   "settings-page": {
-    purpose: "用于账号安全与界面偏好设置。",
-    meaning: "保持账号可用和阅读体验稳定。",
-    guide: "可在此修改密码、切换主题，并确认持久化状态。"
+    purpose: "用于查看演示账号、界面偏好和本地备份。",
+    meaning: "查看保存状态并备份项目输入与计算快照。",
+    guide: "可在此切换主题、下载或恢复项目备份；演示账号不支持修改密码。"
   }
 };
 
@@ -255,21 +255,19 @@ function resolvePolicyBenchmark(provinceKey) {
   };
 }
 
-const POLICY_CARDS = PROVINCES.map((province, index) => {
+const POLICY_CARDS = PROVINCES.map((province) => {
   const regionKey = PROVINCE_POLICY_REGION_MAP[province.key] || "east";
   const regionName = getPolicyRegionName(regionKey);
   const bench = resolvePolicyBenchmark(province.key);
-  const monthSeed = String((index % 9) + 1).padStart(2, "0");
-  const daySeed = String((index % 27) + 1).padStart(2, "0");
   return {
     provinceKey: province.key,
     regionKey,
     regionName,
     title: `${province.name}地区政策与市场概览`,
-    updatedAt: `2026-${monthSeed}-${daySeed}`,
-    milestoneReview: `${province.name}电力市场已形成“中长期交易 + 现货结算 + 辅助服务”协同框架，当前建设阶段为${bench.mechanismState}。`,
-    ruleSystemReview: `省内执行规则以交易组织、结算口径和并网考核三类细则为主，新能源项目按统一颗粒度进行月度校核与年度复盘。`,
-    supplyPriceBrief: `供需总体平衡偏紧时段与新能源出力波动并存；历史均价约${bench.historyPrice.toFixed(1)}元/MWh，捕获均价约${bench.capturePrice.toFixed(1)}元/MWh，辅助服务折算约${bench.ancillaryFee.toFixed(1)}元/MWh。`
+    updatedAt: "演示样例 · 未核验",
+    milestoneReview: "待补充官方市场建设进程与实施日期。",
+    ruleSystemReview: "待补充省级规则原文、适用范围与核验日期。",
+    supplyPriceBrief: `演示假设：均价约${bench.historyPrice.toFixed(1)}元/MWh，捕获均价约${bench.capturePrice.toFixed(1)}元/MWh，辅助服务折算约${bench.ancillaryFee.toFixed(1)}元/MWh。`
   };
 });
 
@@ -317,6 +315,74 @@ const BATCH_PARAM_SPECS = {
   storageOtherRevenuePrice: { label: "其他配储收益(元/MWh)", type: "number", min: 0, max: 2000 }
 };
 
+const OVERVIEW_POLICY_DETAILS = [
+  {
+    title: "政策卡1：新一轮电改顶层设计",
+    policyName: "关于进一步深化电力体制改革的若干意见",
+    docNo: "中发〔2015〕9号",
+    position: "新一轮电力市场化改革总纲领、根本遵循。",
+    highlights: [
+      "确立“管住中间、放开两头”总体思路。",
+      "放开竞争性环节电价、放开发用电计划。",
+      "推进配售电业务放开、交易机构独立规范运行。",
+      "还原电力商品属性，构建有效竞争市场结构。"
+    ],
+    meaning: "打破统购统销模式，开启电力市场化全新时代。"
+  },
+  {
+    title: "政策卡2：全国统一电力市场体系建设",
+    policyName: "关于加快建设全国统一电力市场体系的指导意见",
+    docNo: "发改体改〔2022〕118号",
+    position: "从分散试点走向全国一体化的里程碑文件。",
+    highlights: [
+      "构建国家—区域—省三级电力市场体系。",
+      "破除省间壁垒，推进跨省跨区优化配置。",
+      "统一交易规则、计量标准、技术支撑。",
+      "明确2025/2030年市场化电量占比目标。"
+    ],
+    meaning: "实现大范围资源优化，支撑新能源跨省消纳。"
+  },
+  {
+    title: "政策卡3：电力现货市场顶层规则",
+    policyName: "电力现货市场基本规则（试行）",
+    docNo: "发改能源规〔2023〕1217号",
+    position: "电力市场价格发现与实时平衡核心制度。",
+    highlights: [
+      "统一全国现货市场模式、出清与结算机制。",
+      "规范中长期与现货衔接、新能源入市方式。",
+      "明确储能、虚拟电厂等主体参与规则。",
+      "推动2025年底前现货市场全覆盖连续运行。"
+    ],
+    meaning: "实现分时电价、精准供需匹配，市场进入精细化运行。"
+  },
+  {
+    title: "政策卡4：新型电力系统调节保障",
+    policyName: "电力辅助服务市场基本规则",
+    docNo: "发改能源规〔2025〕411号",
+    position: "高比例新能源下电网安全稳定的市场化支撑。",
+    highlights: [
+      "规范调峰、调频、备用、爬坡等有功辅助服务品种。",
+      "落实“谁受益、谁承担，谁提供、谁获利”。",
+      "支持储能、负荷聚合商、虚拟电厂广泛参与。",
+      "推动电能量与辅助服务联合优化出清。"
+    ],
+    meaning: "激活灵活性资源，保障新型电力系统安全运行。"
+  },
+  {
+    title: "政策卡5：绿色转型与市场深化实施",
+    policyName: "关于完善全国统一电力市场体系的实施意见",
+    docNo: "国办发〔2026〕4号",
+    position: "面向新型电力系统的市场机制升级版施工图。",
+    highlights: [
+      "明确2030年基本建成、2035年全面建成统一市场。",
+      "完善容量成本回收、用户侧响应机制。",
+      "强化跨省互济、新能源全额保障消纳。",
+      "统筹能源安全、绿色转型与市场化改革。"
+    ],
+    meaning: "适配高比例新能源格局，完善市场化长效机制。"
+  }
+];
+
 window.NE_CONFIG = {
   PAGE_TITLES,
   PAGE_GROUPS,
@@ -333,6 +399,7 @@ window.NE_CONFIG = {
   POLICY_REGIONS,
   PROVINCE_BENCHMARKS,
   POLICY_CARDS,
+  OVERVIEW_POLICY_DETAILS,
   QUALITY_GATE,
   PROVINCE_DEFAULT_PARAMS,
   BATCH_PARAM_SPECS
