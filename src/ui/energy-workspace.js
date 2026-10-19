@@ -190,7 +190,7 @@
       forecastYears: finiteNumberValue(project.forecastYears),
       note: project.note || "",
       energyMode,
-      message: `正在编辑当前项目：${project.name}（保存后更新此项目）`
+      message: `正在编辑：${project.name}`
     };
   }
 
@@ -357,6 +357,7 @@
       || message.includes("当前识别模式")
       || message.includes("当前已生成")
       || message.includes("当前生成")
+      || message.startsWith("已生成 ")
     );
   }
 
@@ -471,17 +472,17 @@
       step2Actions.typicalExportText = "重新导出模板";
       step2Actions.typicalImportText = "读取文件并更新典型曲线";
       step2Actions.typicalImportVariant = "ghost";
-      step2Actions.typicalPaneMessage = "当前正在使用这套典型年8760模板；如需替换，可重新上传覆盖。";
+      step2Actions.typicalPaneMessage = "已使用导入的典型年8760曲线。";
     } else if (annualReady && energyData.typicalCurveSource === "province_typical_curve") {
       step2Actions.provinceApplyText = "重新调用当前省份曲线";
-      step2Actions.provincePaneMessage = `当前正在使用 ${labels.provinceCurveText || ""} 典型曲线；如需刷新，可重新调用。`;
+      step2Actions.provincePaneMessage = `已使用 ${labels.provinceCurveText || ""} 典型曲线。`;
     }
 
     let message = null;
     if (shouldRefreshEnergyMessage(currentMessage, BLOCKED_MESSAGE, isProjectSwitched)) {
       if (!annualInputYears) {
         message = {
-          text: "步骤1必做：请先导出并上传逐年总量模板，填写测算周期内各年的总小时数。",
+          text: "请先导入逐年总量模板。",
           tone: "info"
         };
       } else if (!annualReady) {
@@ -491,18 +492,18 @@
         };
       } else if (!hasTypicalCurve) {
         message = {
-          text: "步骤2二选一：请上传典型年8760小时模板，或直接调用所选省份典型曲线。",
+          text: "请选择典型曲线来源：上传模板或调用省份曲线。",
           tone: "info"
         };
       } else if (ready) {
         message = {
-          text: `逐年总量与典型曲线来源已配置完成，可进入历史电价分析。当前已生成 ${completeYears}/${totalYears} 年上网电量。`,
+          text: `已生成 ${completeYears}/${totalYears} 年上网电量，可进入历史电价分析。`,
           tone: "success"
         };
       } else {
         const missingHint = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "";
         message = {
-          text: `已完成逐年总量与典型曲线配置，当前生成 ${completeYears}/${totalYears} 年上网电量${missingHint}。`,
+          text: `已生成 ${completeYears}/${totalYears} 年上网电量${missingHint}。`,
           tone: "warn"
         };
       }
@@ -643,10 +644,10 @@
       return "当前预测周期未设定，暂无法生成结算电量配置摘要。";
     }
     if (!annualInputYears) {
-      return "当前尚未导入逐年总量模板数据。请先完成步骤1逐年总量导入。";
+      return "待导入逐年总量模板。";
     }
     if (!hasTypicalCurve) {
-      return `已录入 ${annualInputYears}/${totalYears} 年逐年总量；第二步待完成，当前尚未选择典型曲线来源。请上传典型年8760小时模板，或调用所选省份典型曲线。`;
+      return `已录入 ${annualInputYears}/${totalYears} 年逐年总量，待选择典型曲线来源。`;
     }
     const annualRows = collectCompleteAnnualEnergyRows(project, energyData);
     if (!annualRows.length) {
@@ -657,8 +658,8 @@
       : "来源：已导入典型年8760小时模板";
     const hoursValues = annualRows.map((item) => item.annualHours);
     const energyValues = annualRows.map((item) => item.energyMwh);
-    const missingText = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "；预测周期内年份已全部覆盖";
-    return `${sourceText}；已完成 ${completeYears}/${totalYears} 年电量导入；年度小时范围 ${Math.min(...hoursValues).toFixed(2)}-${Math.max(...hoursValues).toFixed(2)} h；年度上网电量范围 ${Math.min(...energyValues).toFixed(2)}-${Math.max(...energyValues).toFixed(2)} MWh${missingText}。`;
+    const missingText = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "";
+    return `${sourceText}；已完成 ${completeYears}/${totalYears} 年；年度小时 ${Math.min(...hoursValues).toFixed(2)}-${Math.max(...hoursValues).toFixed(2)} h；年度电量 ${Math.min(...energyValues).toFixed(2)}-${Math.max(...energyValues).toFixed(2)} MWh${missingText}。`;
   }
 
   return Object.freeze({

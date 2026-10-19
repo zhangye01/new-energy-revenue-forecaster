@@ -8,15 +8,15 @@
 /* Results page report and charts */
 .results-report-panel {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .result-report-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(240px, 0.34fr);
-  gap: 14px;
+  gap: 10px;
   align-items: stretch;
-  padding: 16px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: linear-gradient(135deg, color-mix(in srgb, var(--panel) 92%, var(--blue)), var(--panel));
@@ -39,8 +39,8 @@
 .result-report-meta {
   display: grid;
   align-content: center;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: color-mix(in srgb, var(--panel) 82%, var(--panel-soft));
@@ -72,8 +72,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 8px;
+  padding: 8px 10px;
   cursor: pointer;
   color: var(--text);
   font-weight: 900;
@@ -115,7 +115,7 @@
 }
 
 .result-disclosure > :not(summary) {
-  margin: 0 14px 14px;
+  margin: 0 10px 10px;
 }
 
 .result-disclosure-primary {
@@ -126,13 +126,13 @@
 .result-assumption-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .result-insight-item,
 .result-assumption-item {
   min-width: 0;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
   border-radius: 6px;
   background: color-mix(in srgb, var(--panel) 78%, var(--panel-soft));
@@ -164,8 +164,8 @@
 }
 
 .result-report-tab {
-  min-height: 64px;
-  padding: 12px 16px;
+  min-height: 52px;
+  padding: 8px 10px;
   border: 0;
   border-bottom: 3px solid transparent;
   background: transparent;
@@ -199,7 +199,7 @@
 
 .result-report-pane {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -210,7 +210,7 @@
 .result-chart-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -220,9 +220,9 @@
 
 .result-chart-card {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -236,7 +236,7 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 
 .result-chart-head strong {
@@ -281,7 +281,7 @@
   border-left: 4px solid #4872a3;
   border-radius: 6px;
   background: #ffffff;
-  padding: 10px;
+  padding: 8px;
 }
 
 .split-card.red {
@@ -493,4 +493,9 @@
   body.print-report-mode #print-report-hint {
     color: #333;
   }
+}
+
+.result-chart-head .result-print-caption { display: none; }
+@media print {
+  .result-chart-head .result-print-caption { display: block; }
 }

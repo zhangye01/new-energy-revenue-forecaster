@@ -99,16 +99,16 @@
     if (!project) {
       renderUnavailable(
         input,
-        "请先在“我的项目”中进入一个项目，再查看当前省份历史现货展示。",
-        "进入项目后，系统会自动按当前项目省份展示15分钟历史现货样本。"
+        "请先选择项目。",
+        "请在“我的项目”中选择项目。"
       );
       return;
     }
     if (!isProjectCreateCompleted(project)) {
       renderUnavailable(
         input,
-        "请先完成项目基础信息保存，系统才会按省份自动展示历史现货样本。",
-        "完成项目基础信息保存后，本页会自动切换到对应省份的历史现货展示范围。",
+        "请先保存基础信息。",
+        "项目基础信息未保存。",
         project
       );
       return;

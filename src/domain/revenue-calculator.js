@@ -112,7 +112,8 @@
         : 0;
       const mechanismRatio = cfg.mechanismEnabled ? cfg.mechanismRatio * (months / 12) : 0;
       const mechanismEnergy = energyMwh * mechanismRatio;
-      const mechanismRevenue = mechanismEnergy * (cfg.mechanismPrice - capturePrice);
+      const mechanismReferencePrice = rules.mechanismReferencePrice(cfg, capturePrice);
+      const mechanismRevenue = mechanismEnergy * (cfg.mechanismPrice - mechanismReferencePrice);
       const nonMechanismEnergy = Math.max(0, energyMwh - mechanismEnergy);
 
       const ltPnlPrice = rules.tradeStrategyPnlPriceForYear(cfg, yearIndex, year);
@@ -168,7 +169,7 @@
         const marketTradeRatio = 1 - mechanismRatio;
         const envValuePerMwh = envAllocation.unitValuePerMarketMwh;
         const adjustmentPerMwh =
-          mechanismRatio * (cfg.mechanismPrice - capturePrice)
+          mechanismRatio * (cfg.mechanismPrice - mechanismReferencePrice)
           + (1 - mechanismRatio) * ltPnlPrice
           + marketTradeRatio * envValuePerMwh
           + storageSupplementPerMwh

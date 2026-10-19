@@ -44,6 +44,8 @@ assert.equal(defaultConfig.mechanismStartYm, "2026-01");
 assert.equal(defaultConfig.mechanismEndYm, "2028-12");
 assert.equal(defaultConfig.carbonEnabled, true);
 assert.equal(defaultConfig.storageArbitragePrice, 18);
+assert.equal(defaultConfig.mechanismReferenceMode, "project_capture");
+assert.equal(defaultConfig.sameTypeSpread, 0);
 
 const fallbackConfig = defaultScenarioConfig({
   startYear: 2024,
@@ -120,6 +122,13 @@ assert.equal(sanitized.config.carbonPrice, 0);
 assert.equal(sanitized.config.feeConfigMode, "manual");
 assert.deepEqual(Object.keys(sanitized.config.feeManualValuesByYear), ["2026", "2028"]);
 assert.equal(sanitized.config.storageArbitragePrice, 0);
+assert.equal(sanitized.config.mechanismReferenceMode, "project_capture");
+assert.equal(sanitized.config.sameTypeSpread, 0);
+const sameTypeScenario = sanitizeScenario(offshoreStorageProject, {
+  config: { mechanismReferenceMode: "same_type", sameTypeSpread: -15 }
+});
+assert.equal(sameTypeScenario.config.mechanismReferenceMode, "same_type");
+assert.equal(sameTypeScenario.config.sameTypeSpread, -15);
 
 const applyTarget = {
   config: {

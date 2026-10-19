@@ -3,14 +3,14 @@
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .form-section-header {
   grid-column: 1 / -1;
   display: grid;
   gap: 3px;
-  padding-top: 6px;
+  padding-top: 4px;
   border-top: 1px dashed var(--line-strong);
 }
 
@@ -30,7 +30,7 @@
 label,
 .block-label {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   color: var(--muted);
   font-size: 0.84rem;
   font-weight: 700;
@@ -41,8 +41,8 @@ select,
 textarea {
   border: 1px solid var(--field-border);
   border-radius: 6px;
-  min-height: 38px;
-  padding: 7px 9px;
+  min-height: var(--control-height-prominent);
+  padding: 5px 8px;
   color: var(--ink);
   background: var(--field-bg);
 }
@@ -68,13 +68,13 @@ select optgroup {
 select {
   appearance: none;
   -webkit-appearance: none;
-  padding-right: 34px;
+  padding-right: 30px;
   background-image:
     linear-gradient(45deg, transparent 50%, var(--field-icon-color) 50%),
     linear-gradient(135deg, var(--field-icon-color) 50%, transparent 50%);
   background-position:
-    calc(100% - 18px) calc(50% - 1px),
-    calc(100% - 12px) calc(50% - 1px);
+    calc(100% - 16px) calc(50% - 1px),
+    calc(100% - 10px) calc(50% - 1px);
   background-size: 6px 6px, 6px 6px;
   background-repeat: no-repeat;
 }
@@ -92,19 +92,19 @@ input[type="month"]::-webkit-calendar-picker-indicator {
 }
 
 input[type="file"] {
-  padding: 5px 8px;
+  padding: 3px 6px;
   line-height: 1.3;
 }
 
 input[type="file"]::file-selector-button,
 input[type="file"]::-webkit-file-upload-button {
-  min-height: 28px;
-  margin-right: 10px;
+  min-height: 26px;
+  margin-right: 8px;
   border: 1px solid var(--field-file-button-border);
   border-radius: 6px;
   background: var(--field-file-button-bg);
   color: var(--field-file-button-ink);
-  padding: 0 12px;
+  padding: 0 10px;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -117,7 +117,7 @@ input[type="file"]:disabled::-webkit-file-upload-button {
 }
 
 textarea {
-  min-height: 200px;
+  min-height: 160px;
   resize: vertical;
 }
 
@@ -132,6 +132,6 @@ textarea:focus {
 .actions-row {
   grid-column: 1 / -1;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }

@@ -209,7 +209,7 @@ assert.deepEqual(createProjectFormValues, {
   forecastYears: "25",
   note: "示例项目",
   energyMode: "province_typical_curve",
-  message: "正在编辑当前项目：江苏海上风电（保存后更新此项目）"
+  message: "正在编辑：江苏海上风电"
 });
 
 assert.equal(
@@ -250,7 +250,7 @@ assert.deepEqual(
     forecastYears: "",
     note: "",
     energyMode: "hourly_8760",
-    message: "正在编辑当前项目：非法枚举（保存后更新此项目）"
+    message: "正在编辑：非法枚举"
   }
 );
 
@@ -422,6 +422,7 @@ assert.equal(
 );
 
 assert.equal(shouldRefreshEnergyMessage("", BLOCKED_MESSAGE, false), true);
+assert.equal(shouldRefreshEnergyMessage("已生成 2/3 年上网电量；待补年份：2028。", BLOCKED_MESSAGE, false), true);
 assert.equal(shouldRefreshEnergyMessage("用户刚手动上传了文件", BLOCKED_MESSAGE, false), false);
 assert.equal(shouldRefreshEnergyMessage("用户刚手动上传了文件", BLOCKED_MESSAGE, true), true);
 
@@ -542,7 +543,7 @@ assert.equal(
     createReady: true,
     energyState: { totalYears: 3, annualInputYears: 0 }
   }),
-  "当前尚未导入逐年总量模板数据。请先完成步骤1逐年总量导入。"
+  "待导入逐年总量模板。"
 );
 assert.equal(
   buildEnergySummaryNote({
@@ -550,7 +551,7 @@ assert.equal(
     createReady: true,
     energyState: { totalYears: 3, annualInputYears: 2, hasTypicalCurve: false }
   }),
-  "已录入 2/3 年逐年总量；第二步待完成，当前尚未选择典型曲线来源。请上传典型年8760小时模板，或调用所选省份典型曲线。"
+  "已录入 2/3 年逐年总量，待选择典型曲线来源。"
 );
 
 const completeEnergyData = {
@@ -592,7 +593,7 @@ assert.equal(
     sourceLabel: "江苏海上风电",
     missingYears: [2027]
   }),
-  "来源：已调用 江苏海上风电 典型曲线；已完成 2/3 年电量导入；年度小时范围 2100.12-2300.00 h；年度上网电量范围 1000.46-1200.00 MWh；待补年份：2027。"
+  "来源：已调用 江苏海上风电 典型曲线；已完成 2/3 年；年度小时 2100.12-2300.00 h；年度电量 1000.46-1200.00 MWh；待补年份：2027。"
 );
 assert.equal(
   buildEnergySummaryNote({

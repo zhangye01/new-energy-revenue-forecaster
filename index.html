@@ -5,23 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>新能源全口径收入预测工作台</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="./styles/theme.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/base.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/components/data-display.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/components/forms.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/components/buttons.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/components/workflow.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/components/auth.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/pages/home.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/pages/projects.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/pages/create.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/pages/help.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/pages/energy.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/pages/scenario.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/pages/results.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/pages/compare.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/pages/history.css?v=20260610a">
-    <link rel="stylesheet" href="./styles/responsive.css?v=20260610a">
+    <link rel="stylesheet" href="./styles/theme.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/base.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/components/data-display.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/components/forms.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/components/buttons.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/components/workflow.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/components/auth.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/components/context-help.css?v=20261019e">
+    <link rel="stylesheet" href="./styles/pages/home.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/projects.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/create.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/help.css?v=20261019f">
+    <link rel="stylesheet" href="./styles/pages/energy.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/scenario.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/results.css?v=20261019f">
+    <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/history.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261019f">
+    <link rel="stylesheet" href="./styles/responsive.css?v=20261019e">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
       window.__openLoginModal = function () {
@@ -85,28 +87,29 @@
     </script>
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
-    <script src="./config.js?v=20260515j" defer></script>
+    <script src="./config.js?v=20261019a" defer></script>
     <script src="./runtime.js?v=20260515t" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20260609a" defer></script>
     <script src="./src/domain/export-builders.js?v=20260609a" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20260611a" defer></script>
     <script src="./src/ui/script-loader.js?v=20260630a" defer></script>
+    <script src="./src/ui/context-help.js?v=20261019e" defer></script>
     <script src="./src/domain/energy-profiles.js?v=20260609a" defer></script>
     <script src="./src/domain/app-utils.js?v=20260609a" defer></script>
     <script src="./src/domain/price-forecast.js?v=20260609a" defer></script>
-    <script src="./src/domain/revenue-rules.js?v=20260609a" defer></script>
-    <script src="./src/domain/revenue-calculator.js?v=20260609a" defer></script>
+    <script src="./src/domain/revenue-rules.js?v=20261019a" defer></script>
+    <script src="./src/domain/revenue-calculator.js?v=20261019a" defer></script>
     <script src="./src/domain/result-calculation.js?v=20260609a" defer></script>
     <script src="./src/domain/result-report.js?v=20260609a" defer></script>
-    <script src="./src/ui/policy-panel.js?v=20260609a" defer></script>
-    <script src="./src/ui/province-defaults.js?v=20260609a" defer></script>
-    <script src="./src/ui/energy-workspace.js?v=20260609a" defer></script>
+    <script src="./src/ui/policy-panel.js?v=20261019e" defer></script>
+    <script src="./src/ui/province-defaults.js?v=20261019e" defer></script>
+    <script src="./src/ui/energy-workspace.js?v=20261019f" defer></script>
     <script src="./src/ui/create-project-flow.js?v=20260611a" defer></script>
-    <script src="./src/ui/energy-template-flow.js?v=20260611a" defer></script>
+    <script src="./src/ui/energy-template-flow.js?v=20261019f" defer></script>
     <script src="./src/ui/chart-lifecycle.js?v=20260611a" defer></script>
     <script src="./src/ui/energy-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/forecast-page.js?v=20260609a" defer></script>
+    <script src="./src/ui/forecast-page.js?v=20261019f" defer></script>
     <script src="./src/ui/forecast-run-flow.js?v=20260611a" defer></script>
     <script src="./src/ui/project-list.js?v=20260609a" defer></script>
     <script src="./src/ui/result-page.js?v=20260609a" defer></script>
@@ -114,22 +117,24 @@
     <script src="./src/ui/result-print.js?v=20260609a" defer></script>
     <script src="./src/ui/result-charts.js?v=20260609a" defer></script>
     <script src="./src/ui/scenario-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20260609a" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261019e" defer></script>
     <script src="./src/ui/scenario-visual-data.js?v=20260609a" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20260611a" defer></script>
     <script src="./src/ui/compare-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/compare-page.js?v=20260609a" defer></script>
+    <script src="./src/ui/compare-page.js?v=20261019e" defer></script>
     <script src="./src/domain/compare-analysis.js?v=20260609a" defer></script>
     <script src="./src/domain/history-analysis.js?v=20260609a" defer></script>
     <script src="./src/ui/history-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/history-page.js?v=20260609a" defer></script>
-    <script src="./src/ui/history-renderer.js?v=20260609a" defer></script>
+    <script src="./src/ui/history-page.js?v=20261019f" defer></script>
+    <script src="./src/ui/history-renderer.js?v=20261019f" defer></script>
     <script src="./src/ui/theme-controller.js?v=20260611a" defer></script>
     <script src="./src/ui/shell-events.js?v=20260609a" defer></script>
     <script src="./src/ui/app-event-bindings.js?v=20260611a" defer></script>
     <script src="./src/domain/workflow-status.js?v=20260609a" defer></script>
     <script src="./src/domain/scenario-config.js?v=20260609a" defer></script>
-    <script src="./src/domain/scenario-model.js?v=20260609a" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261019c" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261019e" defer></script>
+    <script src="./src/domain/scenario-model.js?v=20261019a" defer></script>
     <script src="./src/domain/project-settings.js?v=20260609a" defer></script>
     <script src="./src/domain/project-model.js?v=20260609a" defer></script>
     <script src="./src/domain/project-display.js?v=20260611a" defer></script>
@@ -137,7 +142,7 @@
     <script src="./src/domain/energy-import-flow.js?v=20260609a" defer></script>
     <script src="./src/domain/app-storage.js?v=20260609a" defer></script>
     <script src="./src/ui/app-persistence.js?v=20260625a" defer></script>
-    <script src="./app.js?v=20260516a" defer></script>
+    <script src="./app.js?v=20261019f" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -243,7 +248,7 @@
             <div class="topbar-pathline">
               <p class="eyebrow" id="top-section-path">平台概览 / 首页</p>
               <div class="page-help" id="page-help">
-                <button type="button" class="page-help-button" id="page-help-button" aria-label="本页说明" aria-expanded="false">i</button>
+                <button type="button" class="page-help-button" id="page-help-button" aria-label="本页说明" aria-expanded="false">?</button>
                 <div class="page-help-card" id="page-help-card" role="tooltip">
                   <h4 id="page-help-title">本页说明</h4>
                   <p id="page-help-purpose"></p>
@@ -459,12 +464,12 @@
           <div class="grid-2 home-main-grid">
             <section class="panel benchmark-map-panel">
               <div class="panel-head">
-                <h3>全国电力市场电价横向对比</h3>
+                <h3 id="benchmark-map-heading">全国电力市场电价横向对比</h3>
               </div>
               <div class="benchmark-map-shell">
                 <div class="benchmark-map-toolbar">
                   <button type="button" class="ghost-button" id="benchmark-back-button" hidden>返回全国</button>
-                  <span class="hint" id="benchmark-map-subtitle">点击省份查看地州详情</span>
+                  <span class="hint" id="benchmark-map-subtitle">全国省级电价</span>
                 </div>
                 <div class="benchmark-map-wrap">
                   <div class="benchmark-map-scale">
@@ -490,7 +495,7 @@
                   </div>
                 </div>
                 <div class="benchmark-map-foot">
-                  <span id="benchmark-map-tip">提示：鼠标悬停查看电价数据，点击省份可查看地州详情。</span>
+                  <span id="benchmark-map-tip" data-help="地图操作" data-help-anchor="#benchmark-map-heading">提示：鼠标悬停查看电价数据，点击省份可查看地州详情。</span>
                   <span id="benchmark-map-updated">数据更新时间：2026-04-13</span>
                 </div>
               </div>
@@ -523,8 +528,8 @@
             <div class="workspace-step-head">
               <div class="workspace-step-chip">步骤1</div>
               <div class="workspace-step-meta">
-                <h3>基础信息</h3>
-                <p>先保存项目基础口径，再进入结算电量配置。</p>
+                <h3 id="create-basics-title">基础信息</h3>
+                <p data-help="基础信息" data-help-anchor="#create-basics-title">先保存项目基础口径，再进入结算电量配置。</p>
               </div>
             </div>
             <form id="create-project-form" class="form-grid">
@@ -561,8 +566,8 @@
                 <input id="create-note" type="text" placeholder="可选备注">
               </label>
               <div class="form-section-header">
-                <strong>配建储能信息</strong>
-                <span>储能配置与场站基础属性分开填写；仅在配储项目中录入功率与时长。</span>
+                <strong id="create-storage-title">配建储能信息</strong>
+                <span data-help="配建储能信息" data-help-anchor="#create-storage-title">储能配置与场站基础属性分开填写；仅在配储项目中录入功率与时长。</span>
               </div>
               <label>是否配建储能
                 <select id="create-has-storage">
@@ -586,7 +591,6 @@
               <div class="info-box" id="create-save-message">当前为新建模板，填写后先保存基础信息。</div>
             </form>
             <div class="create-next-step-bar">
-              <div class="hint">基础信息保存完成后，再进入结算电量配置。</div>
               <button type="button" class="primary-button next-step-button" id="create-to-energy-button">进入结算电量配置</button>
             </div>
           </section>
@@ -595,8 +599,7 @@
             <div class="workspace-step-head">
               <div class="workspace-step-chip">步骤2</div>
               <div class="workspace-step-meta">
-                  <h3>结算电量配置</h3>
-                <p>先配置逐年总量，再通过典型年8760模板或省份典型曲线生成测算周期内的上网电量曲线。</p>
+                <h3>结算电量配置</h3>
               </div>
             </div>
             <div class="info-box energy-project-context" id="energy-project-context">
@@ -605,17 +608,38 @@
             <div class="energy-workspace-grid">
               <section class="energy-subpanel">
                 <div class="energy-subpanel-head">
-                  <div>
+                  <div class="energy-section-heading">
                     <h4>上网电量配置</h4>
-                    <p>第一步必须导入逐年总量模板；第二步二选一，可上传典型年8760小时模板，或直接调用所选省份典型曲线。</p>
+                    <div class="context-help" data-context-help>
+                      <button class="context-help-button" type="button" aria-label="查看上网电量配置说明" aria-expanded="false" aria-controls="energy-config-help" aria-describedby="energy-config-help" data-context-help-button>
+                        <span class="context-help-glyph" aria-hidden="true">?</span>
+                      </button>
+                      <div class="context-help-card" id="energy-config-help" role="tooltip">
+                        <strong>配置顺序</strong>
+                        <p>第一步必须导入逐年总量模板；第二步二选一，可上传典型年8760小时模板，或直接调用所选省份典型曲线。</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="energy-flow-summary" aria-label="配置顺序：第一步逐年总量必做，第二步曲线来源二选一">
+                    <span><b>1</b> 逐年总量 <small>必做</small></span>
+                    <span aria-hidden="true">→</span>
+                    <span><b>2</b> 曲线来源 <small>二选一</small></span>
                   </div>
                 </div>
                 <div class="energy-config-list">
                   <article class="energy-config-row">
                     <div class="energy-config-row-head">
-                      <div>
+                      <div class="energy-config-title">
                         <strong>第一步｜逐年总量模板（必做）</strong>
-                        <p>用于填写测算周期内各年度总小时数，仅包含“年度 / 小时数”两个字段。</p>
+                        <div class="context-help" data-context-help>
+                          <button class="context-help-button" type="button" aria-label="查看逐年总量模板说明" aria-expanded="false" aria-controls="energy-annual-help" aria-describedby="energy-annual-help" data-context-help-button>
+                            <span class="context-help-glyph" aria-hidden="true">?</span>
+                          </button>
+                          <div class="context-help-card" id="energy-annual-help" role="tooltip">
+                            <strong>逐年总量模板</strong>
+                            <p>用于填写测算周期内各年度总小时数，仅包含“年度 / 小时数”两个字段。</p>
+                          </div>
+                        </div>
                       </div>
                       <span class="energy-template-status" id="energy-template-annual-status">待基础信息保存</span>
                     </div>
@@ -635,14 +659,23 @@
 
                   <article class="energy-config-row energy-step2-row">
                     <div class="energy-config-row-head">
-                      <div>
+                      <div class="energy-config-title">
                         <strong>第二步｜典型年曲线来源（二选一）</strong>
-                        <p>逐年总量模板完整导入后，从“上传典型年8760小时模板”和“调用所选省份典型曲线”中二选一完成后续配置。</p>
+                        <div class="context-help" data-context-help>
+                          <button class="context-help-button" type="button" aria-label="查看典型年曲线来源说明" aria-expanded="false" aria-controls="energy-source-help" aria-describedby="energy-source-help" data-context-help-button>
+                            <span class="context-help-glyph" aria-hidden="true">?</span>
+                          </button>
+                          <div class="context-help-card" id="energy-source-help" role="tooltip">
+                            <strong>曲线来源选择</strong>
+                            <p>逐年总量模板完整导入后，从“上传典型年8760小时模板”和“调用所选省份典型曲线”中二选一完成后续配置。</p>
+                            <p>上传典型年模板适合已有一套标准典型年曲线的项目；调用省份典型曲线适合直接采用当前省份典型曲线样本的项目。</p>
+                            <p id="energy-step2-choice-detail">完成第二步后，系统将按所选典型曲线来源生成测算周期内各年上网电量。</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                     <div class="energy-choice-summary">
                       <div class="energy-choice-summary-main" id="energy-step2-choice-summary">当前选择：待选择</div>
-                      <div class="energy-choice-summary-sub" id="energy-step2-choice-detail">完成第二步后，系统将按所选典型曲线来源生成测算周期内各年上网电量。</div>
                     </div>
                     <div class="energy-choice-tabs" role="tablist" aria-label="第二步配置方式">
                       <button
@@ -656,7 +689,6 @@
                         <span class="energy-choice-card-indicator" aria-hidden="true"></span>
                         <span class="energy-choice-card-copy">
                           <span class="energy-choice-card-title">上传典型年8760小时模板</span>
-                          <span class="energy-choice-card-desc">适合已有一套标准典型年曲线的项目。</span>
                         </span>
                         <span class="energy-template-status" id="energy-template-typical-status">待基础信息保存</span>
                       </button>
@@ -671,7 +703,6 @@
                         <span class="energy-choice-card-indicator" aria-hidden="true"></span>
                         <span class="energy-choice-card-copy">
                           <span class="energy-choice-card-title">调用所选省份典型曲线</span>
-                          <span class="energy-choice-card-desc">适合直接采用当前省份典型曲线样本的项目。</span>
                         </span>
                         <span class="energy-template-status" id="energy-template-province-status">待基础信息保存</span>
                       </button>
@@ -680,7 +711,7 @@
                       <div class="energy-choice-pane-head">
                         <div>
                           <h5>典型年8760小时模板</h5>
-                          <p>导入一套典型年8760小时分布曲线，系统将按该曲线拆分逐年总量。</p>
+                          <p data-help="典型年8760小时模板">导入一套典型年8760小时分布曲线，系统将按该曲线拆分逐年总量。</p>
                           <div class="energy-pane-current-note" id="energy-step2-typical-pane-status" hidden></div>
                         </div>
                       </div>
@@ -701,7 +732,7 @@
                       <div class="energy-choice-pane-head">
                         <div>
                           <h5>调用所选省份典型曲线</h5>
-                          <p>直接调用当前项目所属省份的典型曲线样本，后续正式版可替换为数据库实时取数。</p>
+                          <p data-help="省份典型曲线来源">直接调用当前项目所属省份的典型曲线样本，后续正式版可替换为数据库实时取数。</p>
                           <div class="energy-pane-current-note" id="energy-step2-province-pane-status" hidden></div>
                         </div>
                       </div>
@@ -741,18 +772,18 @@
                 <div class="energy-subpanel-head energy-chart-head">
                   <div>
                     <h4>8760电量曲线展示</h4>
-                    <p>左侧展示测算周期内逐年上网电量小时数，右侧展示典型年按月份拆解的24小时曲线。</p>
+                    <div data-help="8760电量曲线">
+                      <p>左侧展示测算周期内逐年上网电量小时数，右侧展示典型年按月份拆解的24小时曲线。</p>
+                      <p id="energy-curve-note">请先完成结算电量配置，再查看上网电量图形展示。</p>
+                    </div>
                   </div>
-                </div>
-                <div class="info-box energy-chart-note" id="energy-curve-note">
-                  请先完成结算电量配置，再查看上网电量图形展示。
                 </div>
                 <div class="energy-chart-grid">
                   <section class="energy-chart-card">
                     <div class="energy-chart-card-head">
                       <div>
                         <h5>逐年上网电量小时数</h5>
-                        <p>按测算周期展示各年度总小时数。</p>
+                        <p data-help="逐年上网电量小时数">按测算周期展示各年度总小时数。</p>
                       </div>
                     </div>
                     <div class="energy-chart-canvas energy-annual-chart-canvas" id="energy-annual-chart"></div>
@@ -761,7 +792,7 @@
                     <div class="energy-chart-card-head">
                       <div>
                         <h5>典型年日内曲线（月度）</h5>
-                        <p id="energy-curve-subtitle">横轴为1-24时，纵轴为小时数，图例区分1-12月。</p>
+                        <p id="energy-curve-subtitle" data-help="典型年月度曲线读法">横轴为1-24时，纵轴为小时数，图例区分1-12月。</p>
                       </div>
                     </div>
                     <div class="energy-chart-canvas energy-typical-chart-canvas" id="energy-curve-chart"></div>
@@ -770,7 +801,7 @@
               </section>
 
               <div class="energy-next-step-row">
-                <div class="hint">全部预测年份完成后，再进入历史电价分析。</div>
+                <div class="hint" data-help="下一步">全部预测年份完成后，再进入历史电价分析。</div>
                 <button type="button" class="primary-button next-step-button" id="energy-to-history-button" disabled>进入历史电价分析</button>
               </div>
             </div>
@@ -800,7 +831,7 @@
               <div class="history-source-left">
                 <div class="history-subhead">
                   <h4>当前数据范围</h4>
-                  <p>按当前项目已选省份自动展示省级15分钟历史现货样本，可按日选择开始日期与结束日期，不支持手动替换数据源。</p>
+                  <p data-help="数据范围与日期筛选">按当前项目已选省份自动展示省级15分钟历史现货样本，可按日选择开始日期与结束日期，不支持手动替换数据源。</p>
                 </div>
                 <div class="history-source-tags">
                   <span class="history-source-chip" id="history-source-province">当前省份：-</span>
@@ -821,7 +852,7 @@
 
             <div class="history-section-head">
               <h4>趋势观察</h4>
-              <p>先看所选日期区间内的价格趋势和日内轮廓，判断整体水平、季节性和峰谷特征。</p>
+              <p data-help="趋势观察">先看所选日期区间内的价格趋势和日内轮廓，判断整体水平、季节性和峰谷特征。</p>
             </div>
             <div class="history-grid history-grid-top">
               <article class="history-card">
@@ -842,7 +873,7 @@
 
             <div class="history-section-head">
               <h4>分布与波动</h4>
-              <p>再看样本分布、分时热力和月度箱线，帮助识别尖峰、负价和波动强度。</p>
+              <p data-help="分布与波动">再看样本分布、分时热力和月度箱线，帮助识别尖峰、负价和波动强度。</p>
             </div>
             <div class="history-grid history-grid-bottom">
               <article class="history-card">
@@ -868,14 +899,23 @@
               </article>
             </div>
             <div class="history-next-step-row">
-              <div class="hint">历史现货样本查看完成后，进入电价预测工作台生成并选择生效曲线。</div>
+              <div class="hint" data-help="下一步">历史现货样本查看完成后，进入电价预测工作台生成并选择生效曲线。</div>
               <button type="button" class="primary-button next-step-button" data-jump="forecast-page">进入电价预测工作台</button>
             </div>
           </section>
         </section>
 
         <section class="page" id="forecast-page">
-          <section class="panel">
+          <div class="forecast-tabs" role="tablist" aria-label="电价预测工作台">
+            <button type="button" id="forecast-tab-rough" role="tab" data-forecast-tab="rough" aria-selected="true" aria-controls="forecast-rough-panel">关键参数粗算</button>
+            <button type="button" id="forecast-tab-fine" role="tab" data-forecast-tab="fine" aria-selected="false" aria-controls="forecast-fine-panel">模型精算</button>
+            <button type="button" id="forecast-tab-compare" role="tab" data-forecast-tab="compare" aria-selected="false" aria-controls="forecast-compare-panel">交叉验证</button>
+          </div>
+          <section class="panel" id="forecast-rough-panel" role="tabpanel" aria-labelledby="forecast-tab-rough">
+            <div id="rough-price-root"></div>
+          </section>
+          <section class="panel" id="forecast-fine-panel" role="tabpanel" aria-labelledby="forecast-tab-fine" hidden>
+            <div class="panel-head"><strong id="forecast-model-scope">模拟曲线</strong><span data-help="模型精算口径" data-help-anchor="#forecast-model-scope">当前曲线含模拟逻辑，用于流程与口径演示。精算版本可与独立保存的粗算基准交叉对照。</span></div>
             <form id="forecast-run-form" class="form-grid">
               <label>算法类型
                 <select id="algo-family">
@@ -907,7 +947,11 @@
                 <button type="submit" class="primary-button">生成三种模型电价曲线</button>
               </div>
             </form>
-            <div class="info-box" id="forecast-gate-message">质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。</div>
+            <div class="info-box forecast-quality">
+              <span id="forecast-quality-heading">质量状态</span>
+              <span data-help="精算质量门槛" data-help-anchor="#forecast-quality-heading" data-forecast-gate-help>质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。</span>
+              <span id="forecast-gate-message">尚未生成预测版本</span>
+            </div>
             <div class="table-scroll">
               <table>
                 <thead>
@@ -943,6 +987,9 @@
               </table>
             </div>
           </section>
+          <section class="panel" id="forecast-compare-panel" role="tabpanel" aria-labelledby="forecast-tab-compare" hidden>
+            <div id="rough-compare-root"></div>
+          </section>
         </section>
 
 
@@ -971,9 +1018,8 @@
                 <div class="scenario-workspace-head">
                   <div>
                     <h3>选配方案</h3>
-                    <p>选择当前方案，完成复制、锁定、删除，并查看不同方案的摘要差异。</p>
+                    <p data-help="选配方案">选择当前方案，完成复制、锁定、删除，并查看不同方案的摘要差异。</p>
                   </div>
-                  <span class="hint">用于切换当前测算口径</span>
                 </div>
                 <label class="block-label">当前方案
                   <select id="scenario-selector"></select>
@@ -1036,7 +1082,7 @@
                 <div class="scenario-workspace-head">
                   <div>
                     <h3>默认参数展示</h3>
-                    <p>按当前项目所属省份展示默认机制、绿色价值、配储补充收益和综合费用口径，可一键带入当前方案。</p>
+                    <p data-help="省份默认参数">按当前项目所属省份展示默认机制、绿色价值、配储补充收益和综合费用口径，可一键带入当前方案。</p>
                   </div>
                   <div class="scenario-workspace-tools">
                     <select
@@ -1056,15 +1102,14 @@
                 <div class="scenario-workspace-head">
                   <div>
                     <h3>填写 / 调整参数</h3>
-                    <p>在当前方案内录入口径参数，保存后只更新当前方案。</p>
+                    <p data-help="保存当前配置">在当前方案内录入口径参数，保存后只更新当前方案。</p>
                   </div>
-                  <span class="hint">保存后将更新当前方案</span>
                 </div>
                 <form id="scenario-form" class="scenario-form">
                   <section class="scenario-form-section">
                     <div class="scenario-form-section-title">
-                      <strong>方案与差价机制</strong>
-                      <span>按年结算，机制电量占比只作用于纳入机制部分。</span>
+                      <strong id="scenario-mechanism-title">方案与差价机制</strong>
+                      <span data-help="差价机制口径" data-help-anchor="#scenario-mechanism-title">按年结算，机制电量占比只作用于纳入机制部分。</span>
                     </div>
                     <div class="scenario-form-grid">
                       <label>方案名称
@@ -1088,13 +1133,23 @@
                       <label>机制执行结束年月
                         <input id="mechanism-end-ym" type="month" value="2030-12">
                       </label>
+                      <label>机制补差参照
+                        <select id="mechanism-reference-mode">
+                          <option value="project_capture">项目捕获电价（原有口径）</option>
+                          <option value="same_type">同类型机组均价</option>
+                        </select>
+                      </label>
+                      <label id="same-type-spread-field"><span id="same-type-spread-heading">同类型机组价差 元/MWh</span>
+                        <input id="same-type-spread" type="number" step="0.01" value="0">
+                        <span class="hint" data-help="同类型机组价差" data-help-anchor="#same-type-spread-heading">同类型机组均价＝项目捕获电价＋价差；粗算与精算共用。</span>
+                      </label>
                     </div>
                   </section>
 
                   <section class="scenario-form-section">
                     <div class="scenario-form-section-title">
-                      <strong>交易策略损益</strong>
-                      <span>以市场化交易电量为基数，按度电损益向目标值收敛。</span>
+                      <strong id="scenario-trade-title">交易策略损益</strong>
+                      <span data-help="交易策略损益口径" data-help-anchor="#scenario-trade-title">以市场化交易电量为基数，按度电损益向目标值收敛。逐年导入模板字段为 year、trade_strategy_pnl_yuan_per_mwh。</span>
                     </div>
                     <div class="scenario-form-grid scenario-form-grid-compact scenario-trade-grid">
                       <label class="scenario-trade-field-wide">市场化交易电量比例
@@ -1125,14 +1180,14 @@
                         </label>
                         <button type="button" class="ghost-button" id="import-lt-template-button">读取文件并导入</button>
                       </div>
-                      <div class="hint" id="lt-manual-status">导入模板字段：year,trade_strategy_pnl_yuan_per_mwh。</div>
+                      <div class="hint" id="lt-manual-status">尚未导入逐年损益值。</div>
                     </div>
                   </section>
 
                   <section class="scenario-form-section">
                     <div class="scenario-form-section-title">
-                      <strong>环境价值兑现</strong>
-                      <span>以市场化交易电量为最大空间，三条路径兑现空间合计不超过100%。</span>
+                      <strong id="scenario-environment-title">环境价值兑现</strong>
+                      <span data-help="环境价值兑现口径" data-help-anchor="#scenario-environment-title">以市场化交易电量为最大空间，三条路径兑现空间合计不超过100%。逐年导入模板包含年份、绿证/绿电/碳收益价格和兑现空间占比。</span>
                     </div>
                     <div class="scenario-form-grid scenario-env-grid">
                       <label class="scenario-env-field-third">最大可兑现空间（总电量）
@@ -1181,14 +1236,14 @@
                         </label>
                         <button type="button" class="ghost-button" id="import-env-template-button">读取文件并导入</button>
                       </div>
-                      <div class="hint" id="env-manual-status">导入模板字段包含年份、绿证/绿电/碳收益价格和兑现空间占比。</div>
+                      <div class="hint" id="env-manual-status">尚未导入逐年环境价值兑现配置。</div>
                     </div>
                   </section>
 
                   <section class="scenario-form-section">
                     <div class="scenario-form-section-title">
-                      <strong>综合扣费与其他收益</strong>
-                      <span>默认按全周期统一口径执行，也可导入逐年扣费与收益配置。</span>
+                      <strong id="scenario-fee-title">综合扣费与其他收益</strong>
+                      <span data-help="扣费与收益口径" data-help-anchor="#scenario-fee-title">默认按全周期统一口径执行，也可导入逐年扣费与收益配置。导入模板包含年份、四类扣费和其他收入。</span>
                     </div>
                     <div class="scenario-form-grid">
                       <label>配置方式
@@ -1222,14 +1277,14 @@
                         </label>
                         <button type="button" class="ghost-button" id="import-fee-template-button">读取文件并导入</button>
                       </div>
-                      <div class="hint" id="fee-manual-status">导入模板字段包含年份、四类扣费和其他收入。</div>
+                      <div class="hint" id="fee-manual-status">尚未导入逐年扣费收益配置。</div>
                     </div>
                   </section>
 
                   <section class="scenario-storage-revenue-section" id="scenario-storage-revenue-section" hidden>
                     <div class="form-section-header">
-                      <strong>配储补充收益配置</strong>
-                      <span class="section-note">仅配储项目显示；用于录入储能带来的现货套利、容量补偿、辅助服务和其他补充收益口径。</span>
+                      <strong id="scenario-storage-title">配储补充收益配置</strong>
+                      <span class="section-note" data-help="配储补充收益口径" data-help-anchor="#scenario-storage-title">仅配储项目显示；用于录入储能带来的现货套利、容量补偿、辅助服务和其他补充收益口径。</span>
                     </div>
                     <div class="scenario-storage-revenue-grid">
                       <label>现货价差套利 元/MWh
@@ -1257,30 +1312,29 @@
                 <div class="scenario-workspace-head">
                   <div>
                     <h3>参数可视化展示</h3>
-                    <p>按测算周期查看电量口径、度电参数和年度收益影响，辅助校核当前方案是否合理。</p>
+                    <p data-help="参数可视化">按测算周期查看电量口径、度电参数和年度收益影响，辅助校核当前方案是否合理。</p>
                   </div>
-                  <span class="hint">周期参数图表</span>
                 </div>
                 <div class="info-box" id="scenario-visual-message">请选择项目并保存方案后查看参数结构。</div>
                 <div class="scenario-visual-chart-grid" aria-label="参数结构可视化图组">
                   <article class="scenario-visual-chart-card scenario-visual-chart-card-wide">
                     <div class="scenario-visual-chart-head">
-                      <strong>机制与环境电量口径</strong>
-                      <span>机制电量、绿色价值兑现电量与未兑现市场化电量</span>
+                      <strong id="scenario-energy-chart-title">机制与环境电量口径</strong>
+                      <span data-help="机制与环境电量口径" data-help-anchor="#scenario-energy-chart-title">机制电量、绿色价值兑现电量与未兑现市场化电量</span>
                     </div>
                     <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-energy-chart" aria-label="机制与环境电量口径组合图"></div>
                   </article>
                   <article class="scenario-visual-chart-card scenario-visual-chart-card-wide">
                     <div class="scenario-visual-chart-head">
-                      <strong>其他收入项目度电路径</strong>
-                      <span>交易、环境、费用、其他收入和配储收益</span>
+                      <strong id="scenario-trend-chart-title">其他收入项目度电路径</strong>
+                      <span data-help="度电参数路径" data-help-anchor="#scenario-trend-chart-title">交易、环境、费用、其他收入和配储收益</span>
                     </div>
                     <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-trend-chart" aria-label="度电参数周期曲线图"></div>
                   </article>
                   <article class="scenario-visual-chart-card scenario-visual-chart-card-wide">
                     <div class="scenario-visual-chart-head">
-                      <strong>年度补充收益净影响构成</strong>
-                      <span>折算至总上网电量口径</span>
+                      <strong id="scenario-unit-chart-title">年度补充收益净影响构成</strong>
+                      <span data-help="补充收益净影响口径" data-help-anchor="#scenario-unit-chart-title">折算至总上网电量口径</span>
                     </div>
                     <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-unit-chart" aria-label="年度补充收益净影响构成图"></div>
                   </article>
@@ -1328,7 +1382,11 @@
             <div class="panel-head result-actionbar">
               <div>
                 <h3>简报预览</h3>
-                <p>面向基准场景的报告正文预览，支持打印导出与年度/小时数据附件导出。</p>
+                <div data-help="简报预览与导出">
+                  <p>面向基准场景的报告正文预览，支持打印导出与年度/小时数据附件导出。</p>
+                  <p>年度收益查看收入构成与累计贡献；度电路径查看价格路径与收益桥；明细附表包含年度表与8760附件。</p>
+                  <p id="print-report-hint">打印报告展示简报正文与年度附表，8760小时明细建议另行CSV导出。</p>
+                </div>
               </div>
               <div class="button-inline">
                 <button type="button" class="ghost-button" id="run-calc-button">发起基准测算</button>
@@ -1343,8 +1401,8 @@
 
             <details class="result-disclosure result-disclosure-primary" open>
               <summary>
-                <span>核心结论</span>
-                <small>自动提取首年与周期关键变化</small>
+                <span id="result-insight-heading">核心结论</span>
+                <small data-help="核心结论" data-help-anchor="#result-insight-heading">自动提取首年与周期关键变化</small>
               </summary>
               <div class="result-insight-list" id="result-insight-list"></div>
             </details>
@@ -1352,15 +1410,12 @@
             <div class="result-report-tabbar" role="tablist" aria-label="基准结果简报模块切换">
               <button class="result-report-tab active" type="button" role="tab" aria-selected="true" data-result-view="annual">
                 <span>年度收益</span>
-                <small>收入构成与累计贡献</small>
               </button>
               <button class="result-report-tab" type="button" role="tab" aria-selected="false" data-result-view="price">
                 <span>度电路径</span>
-                <small>价格路径与收益桥</small>
               </button>
               <button class="result-report-tab" type="button" role="tab" aria-selected="false" data-result-view="detail">
                 <span>明细附表</span>
-                <small>年度表与8760附件</small>
               </button>
             </div>
 
@@ -1369,15 +1424,15 @@
                 <article class="result-chart-card result-chart-card-wide">
                   <div class="result-chart-head">
                     <strong>年度全口径收入构成</strong>
-                    <span>按年度展示收入来源、扣费与全口径收入</span>
+                    <span data-help="年度全口径收入构成">按年度展示收入来源、扣费与全口径收入</span><span class="result-print-caption">按年度展示收入来源、扣费与全口径收入</span>
                   </div>
                   <div class="result-chart result-chart-tall" id="result-annual-stack-chart" aria-label="年度全口径收入构成图"></div>
                 </article>
               </section>
               <details class="result-disclosure result-drill" open>
                 <summary>
-                  <span>周期累计贡献钻取</span>
-                  <small>展开查看全周期各收入与扣费项累计贡献</small>
+                  <span id="result-contribution-heading">周期累计贡献钻取</span>
+                  <small data-help="周期累计贡献钻取" data-help-anchor="#result-contribution-heading">展开查看全周期各收入与扣费项累计贡献</small>
                 </summary>
                 <div class="result-chart" id="result-contribution-chart" aria-label="周期累计贡献分析图"></div>
               </details>
@@ -1388,22 +1443,22 @@
                 <article class="result-chart-card">
                   <div class="result-chart-head">
                     <strong>度电价格路径</strong>
-                    <span>市场价格与全口径度电净价</span>
+                    <span data-help="度电价格路径">市场价格与全口径度电净价</span><span class="result-print-caption">市场价格与全口径度电净价</span>
                   </div>
                   <div class="result-chart" id="result-price-path-chart" aria-label="度电价格路径图"></div>
                 </article>
                 <article class="result-chart-card">
                   <div class="result-chart-head">
                     <strong>首年度电收益桥</strong>
-                    <span>从捕获电价到全口径度电净价</span>
+                    <span data-help="首年度电收益桥">从捕获电价到全口径度电净价</span><span class="result-print-caption">从捕获电价到全口径度电净价</span>
                   </div>
                   <div class="result-chart" id="result-waterfall-chart" aria-label="首年度电收益桥图"></div>
                 </article>
               </section>
               <details class="result-disclosure result-drill">
                 <summary>
-                  <span>关键测算口径</span>
-                  <small>展开查看简报正文使用的配置口径</small>
+                  <span id="result-assumption-heading">关键测算口径</span>
+                  <small data-help="关键测算口径" data-help-anchor="#result-assumption-heading">展开查看简报正文使用的配置口径</small>
                 </summary>
                 <div class="result-assumption-list" id="result-assumption-list"></div>
               </details>
@@ -1412,8 +1467,8 @@
             <section class="result-report-pane" data-result-pane="detail" hidden>
               <details class="result-disclosure result-drill" open>
                 <summary>
-                  <span>年度结果明细附表</span>
-                  <small>用于校核简报图表，导出年度CSV保留完整口径</small>
+                  <span id="result-annual-detail-heading">年度结果明细附表</span>
+                  <small data-help="年度结果明细附表" data-help-anchor="#result-annual-detail-heading">用于校核简报图表，导出年度CSV保留完整口径</small>
                 </summary>
                 <div class="table-scroll">
                   <table>
@@ -1442,8 +1497,8 @@
 
               <details class="result-disclosure result-drill result-hourly-detail">
                 <summary>
-                  <span>首年8760小时明细附件预览</span>
-                  <small>展开查看前240条，完整数据请导出CSV</small>
+                  <span id="result-hourly-detail-heading">首年8760小时明细附件预览</span>
+                  <small>前 240 条</small><span data-help="小时明细附件" data-help-anchor="#result-hourly-detail-heading">页面仅预览前240条，完整数据请导出8760 CSV。</span>
                 </summary>
                 <div class="table-scroll">
                   <table>
@@ -1462,7 +1517,6 @@
                 </div>
               </details>
             </section>
-            <div class="hint" id="print-report-hint">打印报告展示简报正文与年度附表，8760小时明细建议另行CSV导出。</div>
             <div class="hint" id="hourly-preview-hint">等待测算</div>
           </section>
         </section>
@@ -1478,7 +1532,6 @@
                 data-compare-view="scenario"
               >
                 <span class="compare-tab-title">方案对标</span>
-                <span class="compare-tab-note">多个已测算方案横向比较</span>
               </button>
               <button
                 class="compare-tab compare-tab-sensitivity"
@@ -1488,18 +1541,14 @@
                 data-compare-view="sensitivity"
               >
                 <span class="compare-tab-title">基准敏感性</span>
-                <span class="compare-tab-note">基准方案扰动分析</span>
               </button>
             </div>
 
             <section class="subsection compare-workspace compare-pane compare-pane-sensitivity" data-compare-pane="sensitivity">
-              <div class="compare-pane-banner">
-                不新增方案，仅围绕基准方案做关键变量扰动，识别收益弹性和主要风险来源。
-              </div>
               <div class="panel-head">
                 <div>
                   <h3>基准敏感性分析</h3>
-                  <p class="hint">以基准方案为锚，统一设置扰动范围与步长，变量清单默认收起。</p>
+                  <p class="hint" data-help="基准敏感性分析">围绕基准方案做关键变量扰动，识别收益弹性和主要风险来源，无需新增方案。统一设置扰动范围与步长，变量清单默认收起。</p>
                 </div>
                 <span class="hint" id="compare-baseline-label">等待基准方案结果</span>
               </div>
@@ -1571,8 +1620,8 @@
               </section>
               <details class="compare-disclosure">
                 <summary>
-                  <span>逐项敏感性明细</span>
-                  <small>展开查看每个变量的扰动区间和方向</small>
+                  <span id="compare-sensitivity-detail-heading">逐项敏感性明细</span>
+                  <small data-help="逐项敏感性明细" data-help-anchor="#compare-sensitivity-detail-heading">展开查看每个变量的扰动区间和方向</small>
                 </summary>
                 <div class="table-scroll">
                   <table>
@@ -1592,21 +1641,12 @@
             </section>
 
             <section class="subsection compare-workspace compare-pane compare-pane-scenario" data-compare-pane="scenario">
-              <div class="compare-pane-banner">
-                基于已命名且完成测算的方案做横向对标，重点比较收益排名、年度走势和相对基准的差异归因。
-              </div>
               <div class="panel-head">
                 <div>
                   <h3>方案对标</h3>
-                  <p class="hint">以基准方案为锚点，比较多个方案的周期收益、度电净价和主要差异来源。</p>
+                  <p class="hint" data-help="方案对标">基于已命名且完成测算的方案，以当前基准方案为锚点，比较全周期收益、度电净价、年度走势及相对基准的差异归因。点击方案可钻取查看。</p>
                 </div>
                 <span class="hint" id="compare-scenario-label">等待方案结果</span>
-              </div>
-              <div class="compare-control-strip" aria-label="方案对标设置">
-                <span>基准：当前基准方案</span>
-                <span>口径：全周期</span>
-                <span>展示：已完成测算方案</span>
-                <span>钻取：点击方案</span>
               </div>
               <div class="info-box" id="compare-scenario-message">
                 当前仅展示已完成测算的方案结果；新增方案并测算后即可加入对比。
@@ -1632,15 +1672,15 @@
               <section class="compare-chart-grid">
                 <article class="compare-chart-card">
                   <div class="compare-chart-head">
-                    <strong>方案收益排名</strong>
-                    <span>周期全口径收入，显示相对基准水平</span>
+                    <strong id="compare-ranking-title">方案收益排名</strong>
+                    <span data-help="方案收益排名口径" data-help-anchor="#compare-ranking-title">周期全口径收入，显示相对基准水平</span>
                   </div>
                   <div class="compare-chart" id="compare-ranking-chart"></div>
                 </article>
                 <article class="compare-chart-card">
                   <div class="compare-chart-head">
-                    <strong>年度总收益走势</strong>
-                    <span>按已测算方案展示周期年度收益变化</span>
+                    <strong id="compare-trend-title">年度总收益走势</strong>
+                    <span data-help="年度收益走势" data-help-anchor="#compare-trend-title">按已测算方案展示周期年度收益变化</span>
                   </div>
                   <div class="compare-chart" id="compare-trend-chart"></div>
                 </article>
@@ -1648,8 +1688,8 @@
               <section class="compare-drill-grid">
                 <article class="compare-drill-panel">
                   <div class="compare-chart-head">
-                    <strong>方案钻取</strong>
-                    <span>选择一个方案与基准做差异归因</span>
+                    <strong id="compare-focus-title">方案钻取</strong>
+                    <span data-help="方案钻取" data-help-anchor="#compare-focus-title">选择一个方案与基准做差异归因</span>
                   </div>
                   <div class="compare-factor-list" id="compare-scenario-focus-list"></div>
                 </article>
@@ -1663,8 +1703,8 @@
               </section>
               <details class="compare-disclosure">
                 <summary>
-                  <span>方案对标明细表</span>
-                  <small>展开查看所有方案关键指标</small>
+                  <span id="compare-detail-heading">方案对标明细表</span>
+                  <small data-help="方案对标明细表" data-help-anchor="#compare-detail-heading">展开查看所有方案关键指标</small>
                 </summary>
                 <div class="table-scroll">
                   <table>
@@ -1719,11 +1759,8 @@
               </div>
             </section>
 
-            <section class="subsection">
-              <div class="panel-head">
-                <h3>一、使用边界与基础规则</h3>
-                <span class="hint">先理解边界，再开始录入口径，后面会省很多来回。</span>
-              </div>
+            <details class="subsection help-chapter">
+              <summary class="help-chapter-title"><h3>一、使用边界与基础规则</h3></summary>
               <div class="help-grid-2">
                 <article class="help-card">
                   <strong>账号与访问范围</strong>
@@ -1742,13 +1779,10 @@
                   </ul>
                 </article>
               </div>
-            </section>
+            </details>
 
-            <section class="subsection">
-              <div class="panel-head">
-                <h3>二、推荐工作流</h3>
-                <span class="hint">建议按步骤推进，系统状态点也按这个顺序判断。</span>
-              </div>
+            <details class="subsection help-chapter">
+              <summary class="help-chapter-title"><h3>二、推荐工作流</h3></summary>
               <div class="help-flow">
                 <article class="help-step-card">
                   <div class="help-step-index">1</div>
@@ -1800,13 +1834,10 @@
                   </div>
                 </article>
               </div>
-            </section>
+            </details>
 
-            <section class="subsection">
-              <div class="panel-head">
-                <h3>三、各页面用途说明</h3>
-                <span class="hint">下面这部分可作为日常使用时的快速索引。</span>
-              </div>
+            <details class="subsection help-chapter">
+              <summary class="help-chapter-title"><h3>三、各页面用途说明</h3></summary>
               <div class="help-grid-2">
                 <article class="help-card">
                   <strong>首页</strong>
@@ -1841,13 +1872,10 @@
                   <p>用于查看分项收入、年度测算、首年小时结果和不同场景之间的横向差异。</p>
                 </article>
               </div>
-            </section>
+            </details>
 
-            <section class="subsection">
-              <div class="panel-head">
-                <h3>四、数据模板与导入口径</h3>
-                <span class="hint">这部分建议直接按文档执行，避免因为表头、颗粒度和年份范围被校验拦住。</span>
-              </div>
+            <details class="subsection help-chapter">
+              <summary class="help-chapter-title"><h3>四、数据模板与导入口径</h3></summary>
               <div class="table-scroll help-table-scroll">
                 <table class="help-mini-table">
                   <thead>
@@ -1892,13 +1920,10 @@
                   </ul>
                 </article>
               </div>
-            </section>
+            </details>
 
-            <section class="subsection">
-              <div class="panel-head">
-                <h3>五、全口径收入测算口径</h3>
-                <span class="hint">以下口径是当前原型的核心业务结构。</span>
-              </div>
+            <details class="subsection help-chapter">
+              <summary class="help-chapter-title"><h3>五、全口径收入测算口径</h3></summary>
               <div class="help-grid-2">
                 <article class="help-card">
                   <strong>现货市场捕获电价</strong>
@@ -1925,13 +1950,10 @@
                   <p>用于承接前述标准项以外的补充收入，保持结构开放，便于后续扩展。</p>
                 </article>
               </div>
-            </section>
+            </details>
 
-            <section class="subsection">
-              <div class="panel-head">
-                <h3>六、状态点与完成标准</h3>
-                <span class="hint">侧边栏状态点不是“点过就完成”，而是按页面任务是否真正达标来判断。</span>
-              </div>
+            <details class="subsection help-chapter">
+              <summary class="help-chapter-title"><h3>六、状态点与完成标准</h3></summary>
               <div class="help-grid-2">
                 <article class="help-card">
                   <strong>状态含义</strong>
@@ -1954,36 +1976,18 @@
                   </ul>
                 </article>
               </div>
-            </section>
+            </details>
 
-            <section class="subsection">
-              <div class="panel-head">
-                <h3>七、常见问题</h3>
-                <span class="hint">遇到拦截、状态异常或导入失败时，建议先看这里。</span>
-              </div>
+            <details class="subsection help-chapter">
+              <summary class="help-chapter-title"><h3>七、常见问题</h3></summary>
               <div class="help-faq">
-                <article class="help-faq-item">
-                  <strong>1. 为什么导不出8760模板？</strong>
-                  <p>请先进入一个项目，并完成“项目创建”页面的基础信息保存。未保存前，系统会阻止模板导出。</p>
-                </article>
-                <article class="help-faq-item">
-                  <strong>2. 为什么导入后侧边栏状态没有变绿？</strong>
-                  <p>状态点按完成标准判断，不是点一下页面就完成。比如结算电量配置只有在满足页面要求后才会变为已完成。</p>
-                </article>
-                <article class="help-faq-item">
-                  <strong>3. 为什么结果页不能直接测算？</strong>
-                  <p>通常是上游环节尚未满足条件，例如8760未补齐、历史现货未导入、电价版本未生效，或场景还未保存。</p>
-                </article>
-                <article class="help-faq-item">
-                  <strong>4. 为什么页面刷新后输入还在？</strong>
-                  <p>当前原型默认开启输入持久化，已保存的项目数据会在页面切换和刷新后自动恢复。</p>
-                </article>
-                <article class="help-faq-item">
-                  <strong>5. 省份参数库去哪了？</strong>
-                  <p>省份参数库已合并进“全口径收入配置”页面，现在以“省份默认参数带入”的方式提供默认值，再在同页内完成微调。</p>
-                </article>
+                <details class="help-faq-item"><summary>1. 为什么导不出8760模板？</summary><p>请先进入一个项目，并完成“项目创建”页面的基础信息保存。未保存前，系统会阻止模板导出。</p></details>
+                <details class="help-faq-item"><summary>2. 为什么导入后侧边栏状态没有变绿？</summary><p>状态点按完成标准判断，不是点一下页面就完成。比如结算电量配置只有在满足页面要求后才会变为已完成。</p></details>
+                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>通常是上游环节尚未满足条件，例如8760未补齐、历史现货未导入、电价版本未生效，或场景还未保存。</p></details>
+                <details class="help-faq-item"><summary>4. 为什么页面刷新后输入还在？</summary><p>当前原型默认开启输入持久化，已保存的项目数据会在页面切换和刷新后自动恢复。</p></details>
+                <details class="help-faq-item"><summary>5. 省份参数库去哪了？</summary><p>省份参数库已合并进“全口径收入配置”页面，现在以“省份默认参数带入”的方式提供默认值，再在同页内完成微调。</p></details>
               </div>
-            </section>
+            </details>
           </section>
         </section>
 
@@ -1992,7 +1996,7 @@
             <section class="subsection">
               <div class="panel-head">
                 <h3>账号管理</h3>
-                <span class="hint">账号信息与安全设置</span>
+                <span class="hint" data-help="账号管理">账号信息与安全设置</span>
               </div>
               <div class="form-grid">
                 <label>
@@ -2042,8 +2046,8 @@
             <section class="subsection">
               <div class="setting-row">
                 <div>
-                  <strong>输入持久化</strong>
-                  <div class="hint">页面切换与刷新后，已保存的项目输入自动恢复。</div>
+                  <strong id="settings-persistence-title">输入持久化</strong>
+                  <div class="hint" data-help="输入持久化" data-help-anchor="#settings-persistence-title">页面切换与刷新后，已保存的项目输入自动恢复。</div>
                 </div>
                 <span class="setting-badge">已启用</span>
               </div>
@@ -2056,7 +2060,7 @@
     <div class="login-modal" id="login-modal" hidden>
       <section class="login-panel" role="dialog" aria-modal="true" aria-labelledby="login-title">
         <h3 id="login-title">登录系统</h3>
-        <p class="hint">登录后可访问项目创建、测算流程与结果输出。</p>
+        <div data-help="登录与演示账号" data-help-anchor="#login-title"><p>登录后可访问项目创建、测算流程与结果输出。</p><p>演示账号：demo1 / demo2 / demo3 / demo4 / demo5，密码均为 demo123。</p></div>
         <form class="login-form" id="login-form" onsubmit="return window.__submitLoginForm ? window.__submitLoginForm(event) : false">
           <label>
             账号
@@ -2073,7 +2077,6 @@
             <option value="demo4"></option>
             <option value="demo5"></option>
           </datalist>
-          <div class="hint">演示账号：demo1 / demo2 / demo3 / demo4 / demo5（密码统一为 `demo123`）。</div>
           <div class="button-inline">
             <button type="submit" class="primary-button" id="login-submit-button">登录</button>
             <button type="button" class="ghost-button" id="login-cancel-button">取消</button>

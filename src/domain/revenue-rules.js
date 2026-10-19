@@ -35,6 +35,13 @@
     return Math.max(0, overlapEnd - overlapStart + 1);
   }
 
+  function mechanismReferencePrice(config, capturePrice) {
+    const spread = config?.mechanismReferenceMode === "same_type"
+      ? Number(config.sameTypeSpread) || 0
+      : 0;
+    return capturePrice + spread;
+  }
+
   function getLtPricingMode(config) {
     return config?.ltPricingMode === "manual" ? "manual" : "auto";
   }
@@ -121,6 +128,7 @@
   return Object.freeze({
     monthSerial,
     mechanismActiveMonthsForYear,
+    mechanismReferencePrice,
     ltPnlPriceForYear,
     tradeStrategyPnlPriceForYear,
     getEnvValueAllocation,

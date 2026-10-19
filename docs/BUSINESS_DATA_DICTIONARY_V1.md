@@ -1,5 +1,18 @@
 # 字段字典 V1（业务层）
 
+## 2026-10-19 新增字段
+
+| 对象 | 字段 | 说明 |
+| --- | --- | --- |
+| scenario.config | mechanismReferenceMode | project_capture / same_type，缺省兼容原捕获价参照 |
+| scenario.config | sameTypeSpread | 同类型均价减项目捕获价，元/MWh，可正负 |
+| project | roughPrice | 粗算工作区，与当前项目共同持久化 |
+| roughPrice | draftsByScenario | 各方案独立草稿，含spotNodes、captureRate（百分数）、sourceNote |
+| roughPrice | snapshots | 生成时不可变的年度粗算基准，包含方案、参数、假设、时间、年度结果、汇总及上下文指纹 |
+| snapshot | contextFingerprint | 识别项目、电量及方案配置变化；不包含后来生成的精算曲线 |
+
+粗算快照在读取旧项目时保留原结果，不按新参数重算。对照结果为只读临时结果，绑定粗算快照与所选精算版本。
+
 ## 1. 项目基础信息
 
 | 字段 | 英文字段名 | 类型 | 单位 | 必填 | 约束/取值 | 说明 |

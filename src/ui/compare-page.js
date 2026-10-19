@@ -79,10 +79,10 @@
         compareScenarioLabel: available.length >= 2 ? `${available.length} 个方案已纳入对比` : "当前仅基准方案已测算"
       },
       messages: {
-        compareSensitivityMessage: `基于基准方案“${baselineName}”的首年总收益 ${baselineRevenueText}，按 ±${sensitivitySettings.rangePercent}% / ${sensitivitySettings.stepPercent}% 步长，对 ${sensitivityFactors.length} 个已启用变量做扰动。`,
+        compareSensitivityMessage: `基准：${baselineName} · 首年总收益 ${baselineRevenueText} · ${sensitivityFactors.length} 项变量 · 扰动 ±${sensitivitySettings.rangePercent}% / 步长 ${sensitivitySettings.stepPercent}%`,
         compareScenarioMessage: available.length >= 2
-          ? `当前已纳入 ${available.length} 个已测算方案，方案名称沿用全口径收入配置页中的命名；以下对比均以“${baselineName}”作为基准。`
-          : `当前仅“${baselineName}”完成测算。可在全口径收入配置页新增并命名方案，完成测算后自动加入对比。`
+          ? `${available.length} 个已测算方案 · 对照基准：${baselineName}`
+          : `仅“${baselineName}”已测算，其他方案完成测算后加入对比。`
       },
       metrics: [
         { refKey: "compareMetricBaselineScenario", value: baselineName, hint: "当前基准方案" },
@@ -295,13 +295,13 @@
     const optionHtml = allFactors.map((factor) => {
       const checked = enabledSet.has(factor.key);
       return `
-      <label class="compare-variable-option ${checked ? "" : "muted"}">
-        <input type="checkbox" data-sensitivity-variable="${escapeHtml(factor.key)}" ${checked ? "checked" : ""}>
-        <span>
-          <strong>${escapeHtml(factor.name)}</strong>
-          <small>${escapeHtml(factor.note)}</small>
-        </span>
-      </label>
+      <div class="compare-variable-help-row">
+        <label class="compare-variable-option ${checked ? "" : "muted"}">
+          <input type="checkbox" data-sensitivity-variable="${escapeHtml(factor.key)}" ${checked ? "checked" : ""}>
+          <span><strong>${escapeHtml(factor.name)}</strong></span>
+        </label>
+        <small data-help="${escapeHtml(factor.name)}计算口径">${escapeHtml(factor.note)}</small>
+      </div>
     `;
     }).join("");
 
@@ -311,14 +311,14 @@
       const colorIndex = Number.isFinite(Number(factor.colorIndex)) ? Number(factor.colorIndex) : 0;
       const color = palette[colorIndex % palette.length] || tokens.primary || palette[0];
       return `
-      <button class="compare-factor-button ${isActive ? "active" : ""}" type="button" data-sensitivity-factor="${escapeHtml(factor.key)}">
-        <span class="compare-factor-rank" style="--factor-color:${color}">${index + 1}</span>
-        <span class="compare-factor-main">
-          <strong>${escapeHtml(factor.name)}</strong>
-          <small>${escapeHtml(factor.note)}</small>
-        </span>
-        <span class="compare-factor-value">${asNum(factor.sensitivity, 1)} 万元</span>
-      </button>
+      <div class="compare-factor-help-row">
+        <button class="compare-factor-button ${isActive ? "active" : ""}" type="button" data-sensitivity-factor="${escapeHtml(factor.key)}">
+          <span class="compare-factor-rank" style="--factor-color:${color}">${index + 1}</span>
+          <span class="compare-factor-main"><strong>${escapeHtml(factor.name)}</strong></span>
+          <span class="compare-factor-value">${asNum(factor.sensitivity, 1)} 万元</span>
+        </button>
+        <small data-help="${escapeHtml(factor.name)}计算口径">${escapeHtml(factor.note)}</small>
+      </div>
     `;
     }).join("");
 
@@ -326,7 +326,7 @@
     <div class="compare-variable-grid">${optionHtml}</div>
     <div class="compare-factor-subhead">
       <strong>响应曲线变量</strong>
-      <span>点击下方变量切换右侧曲线</span>
+      <span data-help="切换响应曲线">点击下方变量切换右侧曲线。</span>
     </div>
     <div class="compare-factor-drill-list">
       ${drillHtml || `<div class="hint">请至少启用一个变量。</div>`}

@@ -3,16 +3,16 @@
 /* Projects page list and actions */
 .project-workspaces {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .project-workspace {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   background: #ffffff;
-  padding: 10px;
+  padding: 8px;
   align-content: start;
 }
 
@@ -20,8 +20,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 7px;
+  gap: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -34,13 +34,13 @@
 
 .project-workspace .project-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .project-item {
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 10px;
+  padding: 8px;
   display: grid;
   gap: 6px;
   background: #fbfcfe;
@@ -53,8 +53,8 @@
 .project-empty {
   border: 1px dashed var(--line-strong);
   border-radius: 6px;
-  min-height: 84px;
-  padding: 10px;
+  min-height: 64px;
+  padding: 8px;
   background: #f6f8fb;
   color: var(--muted);
   display: grid;
@@ -74,14 +74,14 @@
 
 .project-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .project-progress {
   margin-top: 2px;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .project-progress-head {

@@ -8,7 +8,7 @@
 .help-grid-2,
 .help-grid-3 {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .help-grid-2 {
@@ -23,9 +23,9 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel-soft);
-  padding: 10px 12px;
+  padding: 8px 10px;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .help-card strong,
@@ -49,7 +49,7 @@
   margin: 0;
   padding-left: 18px;
   display: grid;
-  gap: 5px;
+  gap: 4px;
   color: var(--muted);
   font-size: 0.84rem;
   line-height: 1.55;
@@ -58,17 +58,17 @@
 .help-flow {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .help-step-card {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel-soft);
-  padding: 10px 12px;
+  padding: 8px 10px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
 }
 
@@ -113,7 +113,7 @@
 
 .help-faq {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .help-faq-item {
@@ -181,3 +181,18 @@ body[data-theme="eye"] .help-mini-table code {
     grid-template-columns: 1fr;
   }
 }
+
+/* Long reference chapters stay readable on demand. */
+.help-chapter { display: block; }
+.help-chapter > .help-chapter-title {
+  display: list-item;
+  cursor: pointer;
+  color: var(--ink);
+  padding: 4px 0;
+}
+.help-chapter-title h3 { display: inline; margin: 0; font-size: 0.96rem; }
+.help-chapter[open] > .help-chapter-title { margin-bottom: 12px; }
+.help-chapter > :not(summary) + :not(summary) { margin-top: 10px; }
+.help-faq-item { display: block; }
+.help-faq-item summary { cursor: pointer; color: var(--ink); font-weight: 600; font-size: 0.9rem; }
+.help-faq-item p { margin-top: 8px; }

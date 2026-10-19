@@ -1,0 +1,119 @@
+/* Section and field explanations share one hover / focus / touch control. */
+.context-help {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  vertical-align: middle;
+  text-align: left;
+}
+
+.context-help-auto { margin-inline-start: 4px; }
+
+.context-help-button {
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+}
+
+.context-help-glyph {
+  width: 17px;
+  height: 17px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 12px/1 system-ui, sans-serif;
+}
+
+.context-help-button:hover,
+.context-help-button:focus-visible,
+.context-help.open .context-help-button,
+.context-help.hover-open .context-help-button,
+.context-help.focus-open .context-help-button { color: var(--blue); }
+
+.context-help-button:focus-visible {
+  outline: 2px solid rgba(41, 115, 203, 0.42);
+  outline-offset: 1px;
+}
+
+.context-help > .context-help-card {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 10px 28px rgba(26, 45, 71, 0.18);
+  color: var(--muted);
+  font: 400 13px/1.6 var(--font-family, system-ui, sans-serif);
+  letter-spacing: normal;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  display: none;
+  gap: 5px;
+  z-index: 1000;
+}
+
+.context-help.open > .context-help-card,
+.context-help.hover-open > .context-help-card,
+.context-help.focus-open > .context-help-card { display: grid; }
+
+.context-help > .context-help-card strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.context-help-card .context-help-copy,
+.context-help-card p {
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  max-width: none;
+  width: auto;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.context-help-card .context-help-copy[hidden] { display: none; }
+.context-help-card .context-help-copy p + p { margin-top: 6px; }
+.context-help-card strong:not(:first-child) { margin-top: 6px; }
+
+.compare-variable-help-row,
+.compare-factor-help-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+@media print {
+  .context-help { display: none !important; }
+  .context-help > .context-help-card { display: none !important; }
+}

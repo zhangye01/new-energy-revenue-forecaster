@@ -57,8 +57,15 @@
   --policy-detail-heading: #3f5470;
   --modal-scrim: rgba(8, 13, 22, 0.58);
   --elevated-shadow: rgba(20, 36, 58, 0.16);
-  --topbar-safe-offset: 96px;
-  --toast-left: 272px;
+  --shell-sidebar-width: 236px;
+  --shell-topbar-height: 64px;
+  --page-gutter: 10px;
+  --panel-padding: 10px;
+  --component-gap: 8px;
+  --control-height: 32px;
+  --control-height-prominent: 34px;
+  --topbar-safe-offset: 76px;
+  --toast-left: 250px;
   --toast-right-gap: 14px;
 }
 

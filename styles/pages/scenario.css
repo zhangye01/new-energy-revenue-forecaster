@@ -3,22 +3,22 @@
 .scenario-workspace-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: 8px;
   align-items: start;
 }
 
 .scenario-page-summary {
   display: grid;
   grid-template-columns: minmax(260px, 1.35fr) repeat(3, minmax(160px, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .scenario-summary-card {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  padding: 12px 14px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: color-mix(in srgb, var(--panel-soft) 72%, var(--panel));
@@ -46,8 +46,8 @@
 
 .scenario-workspace {
   display: grid;
-  gap: 12px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel-soft);
@@ -59,12 +59,12 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 
 .scenario-workspace-head > div {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -82,15 +82,15 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 6px;
   flex: 0 0 auto;
 }
 
 .province-default-selector {
   width: auto;
   min-width: 300px;
-  min-height: 38px;
-  padding: 7px 38px 7px 14px;
+  min-height: var(--control-height-prominent);
+  padding: 5px 34px 5px 10px;
   border-color: color-mix(in srgb, var(--brand) 32%, var(--field-border));
   border-radius: 6px;
   color: var(--brand);
@@ -142,11 +142,11 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
-  gap: 10px;
+  gap: 8px;
 }
 
 .scenario-name-edit-row .ghost-button {
-  min-height: 42px;
+  min-height: var(--control-height-prominent);
   white-space: nowrap;
 }
 
@@ -179,9 +179,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  min-height: 52px;
-  padding: 8px 12px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 10px;
   color: var(--text);
   font-weight: 900;
   cursor: pointer;
@@ -207,8 +207,8 @@
   content: "展开";
   flex: 0 0 auto;
   min-width: 56px;
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: var(--control-height);
+  padding: 0 10px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   color: #24466f;
@@ -216,7 +216,7 @@
   font-size: 0.86rem;
   font-weight: 900;
   text-align: center;
-  line-height: 36px;
+  line-height: var(--control-height);
   box-shadow: none;
 }
 
@@ -243,7 +243,7 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
 .scenario-batch-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   align-items: end;
 }
 
@@ -257,18 +257,18 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
 }
 
 .scenario-workspace-editor .form-grid {
-  gap: 10px 12px;
+  gap: 8px 10px;
 }
 
 .scenario-form {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .scenario-form-section {
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: color-mix(in srgb, var(--panel) 88%, var(--panel-soft));
@@ -278,8 +278,8 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 8px;
+  gap: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px dashed var(--line-strong);
 }
 
@@ -299,7 +299,7 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
 .scenario-form-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 12px;
+  gap: 8px 10px;
 }
 
 .scenario-form-grid-compact {
@@ -343,26 +343,26 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
 .scenario-trade-manual-actions {
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(220px, 1fr) minmax(0, auto);
-  gap: 10px;
+  gap: 8px;
   align-items: end;
 }
 
 .scenario-trade-manual-actions .ghost-button {
-  min-height: 38px;
+  min-height: var(--control-height-prominent);
 }
 
 .scenario-visual-chart-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
 .scenario-visual-chart-card {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
@@ -417,8 +417,8 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
 .scenario-storage-revenue-section {
   grid-column: 1 / -1;
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   border: 1px dashed var(--line-strong);
   border-radius: 6px;
   background: color-mix(in srgb, var(--panel) 88%, var(--panel-soft));
@@ -427,7 +427,7 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
 .scenario-storage-revenue-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 12px;
+  gap: 8px 10px;
 }
 
 .scenario-storage-revenue-section .section-note {
@@ -453,13 +453,13 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
 
 .province-default-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .province-default-item {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
@@ -474,12 +474,12 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
 }
 
 .province-default-main {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -518,7 +518,7 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
 .province-default-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .province-default-metric,
@@ -548,7 +548,7 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 6px;
   flex: 0 0 auto;
   align-self: center;
 }
@@ -564,20 +564,20 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
 .province-default-details {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  padding-top: 12px;
+  gap: 8px;
+  padding-top: 8px;
   border-top: 1px dashed var(--line-strong);
 }
 
 .province-default-detail {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: color-mix(in srgb, var(--panel-soft) 92%, var(--panel));
 }
 
 .empty-box.compact {
-  padding: 16px;
+  padding: 10px;
   border: 1px dashed var(--line-strong);
   border-radius: 6px;
   color: var(--muted);

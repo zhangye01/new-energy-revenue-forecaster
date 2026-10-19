@@ -60,6 +60,8 @@ const chartLifecycle = window.NE_CHART_LIFECYCLE;
 const energyCharts = window.NE_ENERGY_CHARTS;
 const forecastPage = window.NE_FORECAST_PAGE;
 const forecastRunFlow = window.NE_FORECAST_RUN_FLOW;
+const roughPrice = window.NE_ROUGH_PRICE;
+const roughPriceWorkspace = window.NE_ROUGH_PRICE_WORKSPACE;
 const projectListView = window.NE_PROJECT_LIST_VIEW;
 const resultPage = window.NE_RESULT_PAGE;
 const resultRunner = window.NE_RESULT_RUNNER;
@@ -80,7 +82,7 @@ const appStorage = window.NE_APP_STORAGE;
 const appPersistence = window.NE_APP_PERSISTENCE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !scriptLoader || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
+if (!energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !scriptLoader || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !roughPrice || !roughPriceWorkspace || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -1179,6 +1181,7 @@ function sanitizeProject(rawProject, index) {
   sanitizeProjectEnergyState(project, rawProject);
   sanitizeProjectForecastState(project, rawProject);
   sanitizeProjectScenarioState(project, rawProject);
+  project.roughPrice = roughPrice.sanitizeWorkspace(rawProject.roughPrice, project);
   return project;
 }
 
@@ -2437,7 +2440,7 @@ async function renderBenchmarkMap() {
   if (refs.benchmarkMapSubtitle) {
     refs.benchmarkMapSubtitle.textContent = isProvinceLevel
       ? `${getProvinceName(view.provinceKey)}地州电价分布（虚拟样例）`
-      : "点击省份查看地州详情";
+      : "全国省级电价";
   }
   if (refs.benchmarkMapTip) {
     refs.benchmarkMapTip.innerHTML = isProvinceLevel
@@ -3221,20 +3224,18 @@ function renderForecastRuns() {
   const project = getActiveProject();
   forecastPage.applyForecastRunsView({
     refs,
-    view: forecastPage.buildForecastRunsView({
-      project,
-      qualityGate: QUALITY_GATE,
-      statusLabel,
-      formatForecastGranularity,
-      canActivateRun
-    })
+    view: forecastPage.buildForecastRunsView({ project, qualityGate: QUALITY_GATE, statusLabel, formatForecastGranularity, canActivateRun })
   });
   forecastPage.bindForecastRunActions({
     documentRef: typeof document !== "undefined" ? document : null,
-    handlers: {
-      setActiveRun,
-      forceActivateRun
-    }
+    handlers: { setActiveRun, forceActivateRun }
+  });
+  roughPriceWorkspace.renderWorkspace({
+    documentRef: typeof document !== "undefined" ? document : null,
+    project, scenario: project ? getActiveScenario(project) : null, domain: roughPrice, getProvinceName, isActive: appState.activePage === "forecast-page",
+    getHourlyEnergyForCalculation, makeId, nowIso: () => new Date().toISOString(),
+    onMessage: setTopMeta, onPersist: schedulePersistAppData,
+    onChange: (change = {}) => { if (change.sharedChanged) markDownstreamStale(project, "scenario-page"); renderAll(); }
   });
 }
 
@@ -3970,7 +3971,7 @@ function updateEnvManualStatus(project = getActiveProject(), scenario = null) {
     return;
   }
   if (!complete) {
-    refs.envManualStatus.textContent = "尚未导入逐年环境价值兑现配置。各年份三条路径兑现空间合计不能超过100%。";
+    refs.envManualStatus.textContent = "尚未导入逐年环境价值兑现配置。";
     return;
   }
   refs.envManualStatus.textContent = complete === total
@@ -4021,7 +4022,7 @@ function updateFeeManualStatus(project = getActiveProject(), scenario = null) {
     return;
   }
   if (!complete) {
-    refs.feeManualStatus.textContent = "尚未导入逐年扣费收益配置。模板字段包含四类扣费和其他收入。";
+    refs.feeManualStatus.textContent = "尚未导入逐年扣费收益配置。";
     return;
   }
   refs.feeManualStatus.textContent = complete === total
@@ -4072,7 +4073,7 @@ function updateLtManualStatus(project = getActiveProject(), scenario = null) {
     return;
   }
   if (!complete) {
-    refs.ltManualStatus.textContent = "尚未导入逐年损益值。模板字段：year,trade_strategy_pnl_yuan_per_mwh。";
+    refs.ltManualStatus.textContent = "尚未导入逐年损益值。";
     return;
   }
   refs.ltManualStatus.textContent = complete === total
@@ -4173,11 +4174,12 @@ function duplicateActiveScenario() {
   const clone = {
     id: makeId("scn"),
     name: makeScenarioCopyName(project, source.name),
-    isBaseline: false,
-    locked: false,
+    isBaseline: false, locked: false,
     config: cloneData(source.config),
     updatedAt: new Date().toISOString()
   };
+  const roughDraft = project.roughPrice?.draftsByScenario?.[source.id];
+  if (roughDraft) project.roughPrice.draftsByScenario[clone.id] = cloneData(roughDraft);
   project.scenarios.push(clone);
   project.activeScenarioId = clone.id;
   project.statuses["scenario-page"] = "in_progress";

@@ -141,9 +141,9 @@
       ? `${provinceLabel}${dataset.mock ? "省级现货模拟库" : "省级现货数据库"}`
       : "历史现货数据库";
     const storageLabel = hasStorage
-      ? `，已按配储(${storagePowerMw || 0}MW / ${storageDurationH || 0}h)对波动做平滑处理`
+      ? `；配储(${storagePowerMw || 0}MW / ${storageDurationH || 0}h)已做波动平滑`
       : "";
-    return `数据源：${sourceLabel}。当前口径：${assetLabel} / ${siteLabel}${storageLabel}。日期区间：${yearsRangeText}（15分钟颗粒度）。工作日高价时段约在 ${peakTime}，波动最大月份为 ${maxStdMonthLabel}（标准差 ${Number(maxStd || 0).toFixed(1)} 元/MWh）。`;
+    return `${sourceLabel} · ${assetLabel} / ${siteLabel} · ${yearsRangeText}（15分钟）${storageLabel}。工作日高价约 ${peakTime}；波动最大 ${maxStdMonthLabel}（标准差 ${Number(maxStd || 0).toFixed(1)} 元/MWh）。`;
   }
 
   function buildHistoryReadyViewModel(input = {}) {

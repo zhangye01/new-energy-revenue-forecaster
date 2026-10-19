@@ -80,7 +80,7 @@
     <article class="policy-card">
       <div class="label">${escapeHtml(card.regionName)} · 地区政策</div>
       <div class="title">${escapeHtml(card.title)}</div>
-      <div class="desc">围绕省级市场建设进程、规则口径与价格运行进行统一盘点。</div>
+      <div class="desc" data-help="政策盘点范围" data-help-anchor=".title">围绕省级市场建设进程、规则口径与价格运行进行统一盘点。</div>
       <div class="policy-meta-grid">
         <div class="meta-item">
           <span class="meta-key">省份</span>

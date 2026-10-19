@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const {
   DEFAULT_GATE_MESSAGE,
+  applyForecastRunsView,
   bindForecastRunActions,
   buildForecastRunsView
 } = require("../src/ui/forecast-page");
@@ -25,13 +26,15 @@ class FakeButton {
 assert.deepEqual(buildForecastRunsView({ project: null }), {
   runBodyHtml: "",
   activationBodyHtml: "",
-  gateMessage: DEFAULT_GATE_MESSAGE
+  gateMessage: "请选择项目",
+  gateHelpText: "硬门槛：MAPE ≤ 15%，sMAPE ≤ 18%，缺失点 ≤ 0；按完整测算周期检查价格曲线。软门槛：MAE ≤ -，RMSE ≤ -。"
 });
 
 const emptyView = buildForecastRunsView({ project: { priceRuns: [], activationLogs: [] } });
 assert.match(emptyView.runBodyHtml, /还没有电价预测版本/);
 assert.match(emptyView.activationBodyHtml, /暂无激活日志/);
 assert.equal(emptyView.gateMessage, DEFAULT_GATE_MESSAGE);
+assert.match(emptyView.gateHelpText, /MAPE ≤ 15%，sMAPE ≤ 18%，缺失点 ≤ 0/);
 
 const view = buildForecastRunsView({
   project: {
@@ -81,8 +84,9 @@ const view = buildForecastRunsView({
   formatDateTime: () => "2026/1/2 11:04:05"
 });
 
-assert.match(view.gateMessage, /软门槛：MAE ≤ 15，RMSE ≤ 20/);
-assert.match(view.gateMessage, /最新运行 run-1 状态：可发布/);
+assert.match(view.gateHelpText, /软门槛：MAE ≤ 15，RMSE ≤ 20/);
+assert.equal(view.gateMessage, "最新运行 run-1 · 可发布");
+assert.doesNotMatch(view.gateMessage, /门槛|MAPE|MAE/);
 assert.match(view.runBodyHtml, /Ensemble/);
 assert.match(view.runBodyHtml, /12\.00%/);
 assert.match(view.runBodyHtml, /run-1">设为生效/);
@@ -90,6 +94,39 @@ assert.match(view.runBodyHtml, /生效中/);
 assert.match(view.runBodyHtml, /run-2">强制发布/);
 assert.match(view.activationBodyHtml, /2026\/1\/2 11:04:05/);
 assert.match(view.activationBodyHtml, /&lt;manual&gt;/);
+
+const gateHelp = { textContent: "" };
+const gateStatus = {
+  textContent: "",
+  parentElement: {
+    querySelector(selector) {
+      assert.equal(selector, "[data-forecast-gate-help]");
+      return gateHelp;
+    }
+  }
+};
+const refs = { forecastGateMessage: gateStatus, forecastRunBody: {}, forecastActivationBody: {} };
+applyForecastRunsView({ refs, view });
+assert.equal(gateStatus.textContent, "最新运行 run-1 · 可发布");
+assert.equal(gateHelp.textContent, view.gateHelpText);
+assert.equal(refs.forecastRunBody.innerHTML, view.runBodyHtml);
+const changedThresholdsView = buildForecastRunsView({
+  project: { priceRuns: [{ id: "<run-3>", status: "validated" }] },
+  qualityGate: { hard: { mape: 0.1, smape: 0.12, missingPoints: 2 }, soft: { mae: 25, rmse: 35 } },
+  statusLabel: () => "待复核"
+});
+applyForecastRunsView({ refs, view: changedThresholdsView });
+assert.equal(gateStatus.textContent, "最新运行 <run-3> · 待复核");
+assert.match(gateHelp.textContent, /MAPE ≤ 10%，sMAPE ≤ 12%，缺失点 ≤ 2/);
+assert.match(gateHelp.textContent, /MAE ≤ 25，RMSE ≤ 35/);
+assert.doesNotMatch(gateHelp.textContent, /run-3|待复核/);
+const noRunsWithThresholds = buildForecastRunsView({
+  project: { priceRuns: [] }, qualityGate: { soft: { mae: 7, rmse: 9 } }
+});
+applyForecastRunsView({ refs, view: noRunsWithThresholds });
+assert.equal(gateStatus.textContent, DEFAULT_GATE_MESSAGE);
+assert.match(gateHelp.textContent, /MAE ≤ 7，RMSE ≤ 9/);
+assert.doesNotThrow(() => applyForecastRunsView({ refs: { forecastGateMessage: {} }, view }));
 
 const activeButton = new FakeButton({ activeRun: "run-1" });
 const forceButton = new FakeButton({ forceRun: "run-2" });

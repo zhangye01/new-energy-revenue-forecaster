@@ -208,6 +208,8 @@ loadScenarioToForm({
       mechanismEnabled: true,
       mechanismRatio: 0.36,
       mechanismPrice: 365,
+      mechanismReferenceMode: "same_type",
+      sameTypeSpread: 5,
       mechanismStartYm: "2026-01",
       mechanismEndYm: "2029-12",
       ltYear1Pnl: 8,
@@ -246,6 +248,8 @@ const lockHarness = makeFields({
   "#mechanism-enabled": "no",
   "#mechanism-ratio": "36",
   "#mechanism-price": "365",
+  "#mechanism-reference-mode": "same_type",
+  "#same-type-spread": "5",
   "#mechanism-start-ym": "2026-01",
   "#mechanism-end-ym": "2029-12"
 });
@@ -279,7 +283,7 @@ applyScenarioFieldLocks({
 assert.equal(lockHarness.fields.get("#mechanism-price").disabled, true);
 assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, false);
 assert.equal(lockRefs.storageCapacityCompPrice.disabled, true);
-assert.equal(lockRefs.scenarioLockHint.textContent, "当前为锁定场景，已禁止编辑。可切换场景或解锁基准场景。");
+assert.equal(lockRefs.scenarioLockHint.textContent, "当前场景已锁定，请切换场景或解锁。");
 
 const envHarness = makeFields({
   "#green-cert-price": "22",
@@ -355,10 +359,15 @@ assert.equal(envHarness.fields.get("#carbon-price").value, "0");
 assert.equal(envHarness.fields.get("#carbon-realize-ratio").value, "0");
 assert.equal(envRefs.exportEnvTemplateButton.disabled, true);
 
+assert.equal(loadHarness.fields.get("#mechanism-reference-mode").value, "same_type");
+assert.equal(Number(loadHarness.fields.get("#same-type-spread").value), 5);
+
 const saveHarness = makeFields({
   "#mechanism-enabled": "yes",
   "#mechanism-ratio": "120",
   "#mechanism-price": "365",
+  "#mechanism-reference-mode": "same_type",
+  "#same-type-spread": "5",
   "#mechanism-start-ym": "2026-01",
   "#mechanism-end-ym": "2029-12",
   "#lt-year1-pnl": "8",
@@ -398,6 +407,8 @@ const config = buildScenarioConfigFromForm({
   feeManualValuesByYear: { 2026: { marketOpFee: 6 } }
 });
 
+assert.equal(config.mechanismReferenceMode, "same_type");
+assert.equal(config.sameTypeSpread, 5);
 assert.equal(config.mechanismEnabled, true);
 assert.equal(config.mechanismRatio, 1);
 assert.equal(config.ltConvergeSpeedUnit, "fixed_step");

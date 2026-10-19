@@ -32,7 +32,7 @@
     exports[normalizedMode] = new Date().toISOString();
     const meta = services.getEnergyModeMeta?.(normalizedMode) || {};
     actions.setEnergyImportMessage?.(
-      `模板已导出（${meta.label || normalizedMode}）：${meta.header || ""}（${project.startYear}-${project.startYear + project.forecastYears - 1}）`,
+      `模板已导出：${meta.label || normalizedMode}（${project.startYear}-${project.startYear + project.forecastYears - 1}）`,
       "success"
     );
     return true;

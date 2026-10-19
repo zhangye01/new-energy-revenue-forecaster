@@ -222,7 +222,7 @@
       toggleBaselineText: baselineScenario?.locked ? "解锁基准场景" : "锁定基准场景",
       lockHint: baselineScenario?.locked
         ? "基准场景已锁定。切换到其他场景可继续编辑。"
-        : "基准场景未锁定。建议阶段性锁定用于对比。"
+        : "基准场景未锁定。"
     };
   }
 
@@ -263,6 +263,8 @@
     setValue(querySelector, "#mechanism-price", config.mechanismPrice);
     setValue(querySelector, "#mechanism-start-ym", config.mechanismStartYm);
     setValue(querySelector, "#mechanism-end-ym", config.mechanismEndYm);
+    setValue(querySelector, "#mechanism-reference-mode", config.mechanismReferenceMode || "project_capture");
+    setValue(querySelector, "#same-type-spread", config.sameTypeSpread || 0);
     if (refs.ltPricingMode) refs.ltPricingMode.value = modes.ltPricingMode || "auto";
     setValue(querySelector, "#lt-year1-pnl", config.ltYear1Pnl);
     setValue(querySelector, "#lt-target-pnl", config.ltTargetPnl);
@@ -302,6 +304,8 @@
     [
       "#mechanism-ratio",
       "#mechanism-price",
+      "#mechanism-reference-mode",
+      "#same-type-spread",
       "#mechanism-start-ym",
       "#mechanism-end-ym"
     ].forEach((selector) => {
@@ -323,7 +327,7 @@
     });
     if (refs.scenarioLockHint) {
       refs.scenarioLockHint.textContent = locked
-        ? "当前为锁定场景，已禁止编辑。可切换场景或解锁基准场景。"
+        ? "当前场景已锁定，请切换场景或解锁。"
         : "当前场景可编辑。";
     }
   }
@@ -403,6 +407,8 @@
       mechanismPrice: numberValue(querySelector, "#mechanism-price"),
       mechanismStartYm: selectValue(querySelector, "#mechanism-start-ym"),
       mechanismEndYm: selectValue(querySelector, "#mechanism-end-ym"),
+      mechanismReferenceMode: selectValue(querySelector, "#mechanism-reference-mode") === "same_type" ? "same_type" : "project_capture",
+      sameTypeSpread: numberValue(querySelector, "#same-type-spread"),
       ltPricingMode,
       ltManualPricesByYear,
       ltYear1Pnl: numberValue(querySelector, "#lt-year1-pnl"),

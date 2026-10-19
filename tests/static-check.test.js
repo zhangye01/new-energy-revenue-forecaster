@@ -28,6 +28,7 @@ assert.deepEqual(collectHtmlReferences([
   "<link href=\"./styles/components/buttons.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/components/workflow.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/components/auth.css?v=1\" rel=\"stylesheet\">",
+  "<link href=\"./styles/components/context-help.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/home.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/projects.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/create.css?v=1\" rel=\"stylesheet\">",
@@ -50,6 +51,7 @@ assert.deepEqual(collectHtmlReferences([
   { reference: "styles/components/buttons.css", source: "index.html" },
   { reference: "styles/components/workflow.css", source: "index.html" },
   { reference: "styles/components/auth.css", source: "index.html" },
+  { reference: "styles/components/context-help.css", source: "index.html" },
   { reference: "styles/pages/home.css", source: "index.html" },
   { reference: "styles/pages/projects.css", source: "index.html" },
   { reference: "styles/pages/create.css", source: "index.html" },
@@ -74,6 +76,7 @@ assert.deepEqual(collectCssEntryReferences([
   "<link href=\"./styles/components/buttons.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/components/workflow.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/components/auth.css?v=1\" rel=\"stylesheet\">",
+  "<link href=\"./styles/components/context-help.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/home.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/projects.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles/pages/create.css?v=1\" rel=\"stylesheet\">",
@@ -86,7 +89,7 @@ assert.deepEqual(collectCssEntryReferences([
   "<link href=\"./styles/responsive.css?v=1\" rel=\"stylesheet\">",
   "<link href=\"./styles.css?v=1\" rel=\"stylesheet\">",
   "<script src=\"./app.js\"></script>"
-].join("\n")), ["styles/theme.css", "styles/base.css", "styles/components/data-display.css", "styles/components/forms.css", "styles/components/buttons.css", "styles/components/workflow.css", "styles/components/auth.css", "styles/pages/home.css", "styles/pages/projects.css", "styles/pages/create.css", "styles/pages/help.css", "styles/pages/energy.css", "styles/pages/scenario.css", "styles/pages/results.css", "styles/pages/compare.css", "styles/pages/history.css", "styles/responsive.css", "styles.css"]);
+].join("\n")), ["styles/theme.css", "styles/base.css", "styles/components/data-display.css", "styles/components/forms.css", "styles/components/buttons.css", "styles/components/workflow.css", "styles/components/auth.css", "styles/components/context-help.css", "styles/pages/home.css", "styles/pages/projects.css", "styles/pages/create.css", "styles/pages/help.css", "styles/pages/energy.css", "styles/pages/scenario.css", "styles/pages/results.css", "styles/pages/compare.css", "styles/pages/history.css", "styles/responsive.css", "styles.css"]);
 
 assert.deepEqual(collectCssReferences("styles/theme.css"), []);
 

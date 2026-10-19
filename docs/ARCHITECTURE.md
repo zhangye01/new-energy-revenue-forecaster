@@ -27,6 +27,7 @@
 | `energy-data.js` | 电量导入模板校验、模式识别、电量状态重建、完整年份和逐年输入辅助判断 |
 | `energy-import-flow.js` | 结算电量导入后的状态更新、提示文案和下游置脏流程 |
 | `app-utils.js` | 页面主控共用的格式化、转义、日期裁剪、对象判断和基础工具函数 |
+| `rough-price.js` | 独立年度粗算、不可变快照、共用参数指纹、同口径交叉对照 |
 | `price-forecast.js` | 三模型模拟现货电价、预测质量校核 |
 | `revenue-rules.js` | 机制月份、交易策略收敛、环境价值、综合费用规则 |
 | `revenue-calculator.js` | 场景全口径收入主计算 |
@@ -55,6 +56,7 @@
 | `energy-template-flow.js` | 结算电量模板导出、文件导入、示例模板和省份典型曲线调用流程 |
 | `chart-lifecycle.js` | ECharts 实例存活判断、批量 resize、窗口 resize 绑定和双帧延迟刷新 |
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
+| `rough-price-workspace.js` | 粗算/精算/对照页签、共用参数编辑、粗算草稿与CSV导出 |
 | `forecast-page.js` | 电价预测版本列表、质量门槛和激活日志 HTML 构造 |
 | `forecast-run-flow.js` | 电价预测运行生成、自动激活、手动切换和强制发布流程 |
 | `result-page.js` | 基准结果总览报告文案、指标卡、假设说明、明细表 HTML 和渲染状态构造 |
@@ -119,9 +121,11 @@ src/storage/app-storage.js
 
 ### P1：整理样式边界
 
-当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/components/data-display.css` 放置面板辅助、指标卡和表格样式，`styles/components/forms.css` 放置表单字段与表单栅格样式，`styles/components/buttons.css` 放置按钮变体与行内操作样式，`styles/components/workflow.css` 放置跨流程跳转条样式，`styles/components/auth.css` 放置登录与账号设置辅助样式，`styles/pages/home.css` 放置首页政策轮播、标杆地图和政策卡片样式，`styles/pages/projects.css` 放置项目列表页样式，`styles/pages/create.css` 放置创建项目页样式，`styles/pages/help.css` 放置帮助文档页样式，`styles/pages/energy.css` 放置结算电量配置页样式，`styles/pages/scenario.css` 放置全口径收入配置页样式，`styles/pages/results.css` 放置基准结果总览与打印报告样式，`styles/pages/compare.css` 放置多方案对比页样式，`styles/pages/history.css` 放置历史电价页样式，`styles/responsive.css` 放置跨页面响应式兜底，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 只保留最终覆盖入口，不应继续承载业务样式。
+当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/components/data-display.css` 放置面板辅助、指标卡和表格样式，`styles/components/forms.css` 放置表单字段与表单栅格样式，`styles/components/buttons.css` 放置按钮变体与行内操作样式，`styles/components/workflow.css` 放置跨流程跳转条样式，`styles/components/auth.css` 放置登录与账号设置辅助样式，`styles/components/context-help.css` 放置可悬停、点击和键盘访问的上下文说明样式，`styles/pages/home.css` 放置首页政策轮播、标杆地图和政策卡片样式，`styles/pages/projects.css` 放置项目列表页样式，`styles/pages/create.css` 放置创建项目页样式，`styles/pages/help.css` 放置帮助文档页样式，`styles/pages/energy.css` 放置结算电量配置页样式，`styles/pages/scenario.css` 放置全口径收入配置页样式，`styles/pages/results.css` 放置基准结果总览与打印报告样式，`styles/pages/compare.css` 放置多方案对比页样式，`styles/pages/history.css` 放置历史电价页样式，`styles/responsive.css` 放置跨页面响应式兜底，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 只保留最终覆盖入口，不应继续承载业务样式。
 
-在没有构建工具前，可以继续用多个 `<link rel="stylesheet">` 按顺序加载；新增主题令牌必须进入 `styles/theme.css`，新增壳层基础样式必须进入 `styles/base.css`，新增通用组件样式必须进入 `styles/components/`，新增页面样式必须进入 `styles/pages/`，新增跨页面移动端兜底必须进入 `styles/responsive.css`。
+在没有构建工具前，可以继续用多个 `<link rel="stylesheet">` 按顺序加载；新增主题令牌与全局密度基线必须进入 `styles/theme.css`，新增壳层基础样式必须进入 `styles/base.css`，新增通用组件样式必须进入 `styles/components/`，新增页面样式必须进入 `styles/pages/`，新增跨页面移动端兜底必须进入 `styles/responsive.css`。页面和组件优先复用 `--page-gutter`、`--panel-padding`、`--component-gap`、`--control-height` 等共享密度令牌，避免重新散布尺寸常量。
+
+页面说明统一由 `src/ui/context-help.js` 增强：纯说明节点标记 `data-help="主题"`，需要指定位置时加 `data-help-anchor="选择器"`。组件将原节点移入问号浮层并保留 ID 与动态引用，自动绑定后续渲染内容；标题内同组说明合并。说明不得包含业务输入或操作按钮，错误、运行状态、关键边界标识和计算结果保持可见。帮助按钮放在字段标题旁，不放入已有按钮内部；字段标签内优先为标题提供单独的 `span` 锚点。
 
 ### P2：评估构建工具
 

@@ -205,8 +205,8 @@
     const nextMessage = currentProvinceName && shouldRefreshProvinceDefaultMessage(currentMessage)
       ? message(
         selectedKey === currentProvinceKey
-          ? `当前项目已选省份：${currentProvinceName}。后续场景默认以该省口径为基础，可直接带入当前场景后再微调。`
-          : `当前正在查看：${selectedProvinceName}默认参数。可调用该省参数带入当前场景，项目省份仍为${currentProvinceName}。`,
+          ? `当前项目已选省份：${currentProvinceName}。`
+          : `当前正在查看：${selectedProvinceName}默认参数；项目省份仍为${currentProvinceName}。`,
         "#9ab7e5",
         "#eff5ff"
       )

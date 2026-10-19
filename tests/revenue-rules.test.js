@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   monthSerial,
   mechanismActiveMonthsForYear,
+  mechanismReferencePrice,
   ltPnlPriceForYear,
   tradeStrategyPnlPriceForYear,
   getEnvValueAllocation,
@@ -18,6 +19,10 @@ assert.equal(mechanismActiveMonthsForYear(2026, "2026-07", "2027-06"), 6);
 assert.equal(mechanismActiveMonthsForYear(2027, "2026-07", "2027-06"), 6);
 assert.equal(mechanismActiveMonthsForYear(2025, "2026-07", "2027-06"), 0);
 assert.equal(mechanismActiveMonthsForYear(2026, "2027-01", "2026-01"), 0);
+assert.equal(mechanismReferencePrice({}, 100), 100);
+assert.equal(mechanismReferencePrice({ sameTypeSpread: 20 }, 100), 100);
+assert.equal(mechanismReferencePrice({ mechanismReferenceMode: "same_type", sameTypeSpread: 20 }, 100), 120);
+assert.equal(mechanismReferencePrice({ mechanismReferenceMode: "same_type", sameTypeSpread: -20 }, -100), -120);
 
 assert.equal(ltPnlPriceForYear({ ltYear1Pnl: 8, ltTargetPnl: 2, ltConvergeSpeed: 3 }, 1), 8);
 assert.equal(ltPnlPriceForYear({ ltYear1Pnl: 8, ltTargetPnl: 2, ltConvergeSpeed: 3 }, 2), 5);

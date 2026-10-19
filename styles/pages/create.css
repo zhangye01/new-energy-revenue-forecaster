@@ -1,7 +1,7 @@
 /* CSS governance: create-project workspace styles. Load after projects.css and before help.css. */
 
 .create-workspace-panel {
-  gap: 12px;
+  gap: 8px;
   align-content: start;
   scroll-margin-top: var(--topbar-safe-offset);
 }
@@ -13,15 +13,15 @@
 .workspace-step-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding-bottom: 8px;
+  gap: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px dashed var(--line-strong);
 }
 
 .workspace-step-chip {
   min-width: 48px;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 26px;
+  padding: 0 8px;
   border-radius: 6px;
   border: 1px solid #a9c2df;
   background: #edf4fd;

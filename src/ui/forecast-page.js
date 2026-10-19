@@ -10,7 +10,7 @@
     root.window.NE_FORECAST_PAGE = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
-  const DEFAULT_GATE_MESSAGE = "质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。";
+  const DEFAULT_GATE_MESSAGE = "尚未生成预测版本";
 
   function escapeHtml(text) {
     return String(text ?? "")
@@ -31,19 +31,28 @@
     return Number.isFinite(numeric) ? `${(numeric * 100).toFixed(2)}%` : "-";
   }
 
-  function buildEmptyForecastRunsView() {
+  function buildGateHelpText(qualityGate = {}) {
+    const hard = qualityGate.hard || {};
+    const mape = Number(((hard.mape ?? 0.15) * 100).toFixed(2));
+    const smape = Number(((hard.smape ?? 0.18) * 100).toFixed(2));
+    return `硬门槛：MAPE ≤ ${mape}%，sMAPE ≤ ${smape}%，缺失点 ≤ ${hard.missingPoints ?? 0}；按完整测算周期检查价格曲线。软门槛：MAE ≤ ${qualityGate.soft?.mae ?? "-"}，RMSE ≤ ${qualityGate.soft?.rmse ?? "-"}。`;
+  }
+
+  function buildEmptyForecastRunsView(qualityGate = {}) {
     return {
       runBodyHtml: "",
       activationBodyHtml: "",
-      gateMessage: DEFAULT_GATE_MESSAGE
+      gateMessage: "请选择项目",
+      gateHelpText: buildGateHelpText(qualityGate)
     };
   }
 
-  function buildNoRunsForecastView() {
+  function buildNoRunsForecastView(qualityGate = {}) {
     return {
       runBodyHtml: `<tr><td colspan="12">还没有电价预测版本，请先生成。</td></tr>`,
       activationBodyHtml: `<tr><td colspan="4">暂无激活日志。</td></tr>`,
-      gateMessage: DEFAULT_GATE_MESSAGE
+      gateMessage: DEFAULT_GATE_MESSAGE,
+      gateHelpText: buildGateHelpText(qualityGate)
     };
   }
 
@@ -56,13 +65,13 @@
       canActivateRun = () => false,
       formatDateTime = (value) => new Date(value).toLocaleString("zh-CN", { hour12: false })
     } = input;
-    if (!project) return buildEmptyForecastRunsView();
+    if (!project) return buildEmptyForecastRunsView(qualityGate);
     const priceRuns = Array.isArray(project.priceRuns) ? project.priceRuns : [];
-    if (!priceRuns.length) return buildNoRunsForecastView();
+    if (!priceRuns.length) return buildNoRunsForecastView(qualityGate);
 
     const latest = priceRuns[0];
     const gateMessage =
-      `硬门槛：MAPE ≤ 15%，sMAPE ≤ 18%，缺失点=0。软门槛：MAE ≤ ${qualityGate.soft?.mae ?? "-"}，RMSE ≤ ${qualityGate.soft?.rmse ?? "-"}。最新运行 ${escapeHtml(latest.id)} 状态：${escapeHtml(statusLabel(latest))}。`;
+      `最新运行 ${latest.id} · ${statusLabel(latest)}`;
     const runBodyHtml = priceRuns.map((run) => {
       const runId = escapeHtml(run.id);
       const activeSuffix = project.activeRunId === run.id ? " / 生效中" : "";
@@ -102,7 +111,8 @@
     return {
       runBodyHtml,
       activationBodyHtml,
-      gateMessage
+      gateMessage,
+      gateHelpText: buildGateHelpText(qualityGate)
     };
   }
 
@@ -114,6 +124,8 @@
     if (refs.forecastRunBody) refs.forecastRunBody.innerHTML = view.runBodyHtml;
     if (refs.forecastActivationBody) refs.forecastActivationBody.innerHTML = view.activationBodyHtml;
     if (refs.forecastGateMessage) refs.forecastGateMessage.textContent = view.gateMessage;
+    const gateHelp = refs.forecastGateMessage?.parentElement?.querySelector("[data-forecast-gate-help]");
+    if (gateHelp) gateHelp.textContent = view.gateHelpText;
   }
 
   function bindForecastRunActions(input = {}) {

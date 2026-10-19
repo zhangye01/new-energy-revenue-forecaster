@@ -35,13 +35,13 @@ button {
 .layout {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 258px minmax(0, 1fr);
+  grid-template-columns: var(--shell-sidebar-width) minmax(0, 1fr);
 }
 
 .sidebar {
   background: var(--nav-bg);
   color: var(--nav-ink);
-  padding: 12px 10px 14px;
+  padding: 8px 8px 10px;
   border-right: 1px solid var(--nav-section-border);
   position: sticky;
   top: 0;
@@ -53,21 +53,21 @@ button {
 
 .sidebar-main {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .sidebar-section {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   border: 1px solid var(--nav-section-border);
   border-radius: 6px;
-  padding: 6px 6px 8px;
+  padding: 4px 4px 6px;
   background: var(--nav-panel-bg);
 }
 
 .sidebar-group-toggle {
   width: 100%;
-  min-height: 28px;
+  min-height: 26px;
   border: 0;
   border-radius: 5px;
   background: var(--nav-toggle-bg);
@@ -105,7 +105,7 @@ button {
 
 .sidebar-group-body {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   padding-top: 1px;
 }
 
@@ -119,27 +119,27 @@ button {
 
 .auth-only-nav {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .sidebar-footer {
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 6px;
 }
 
 .sidebar-brand {
   display: grid;
-  grid-template-columns: 50px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 7px;
   align-items: center;
-  padding: 8px 6px 9px;
+  padding: 6px 5px 7px;
   border-bottom: 1px solid var(--nav-divider);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .brand-mark {
-  width: 50px;
-  height: 50px;
+  width: 44px;
+  height: 44px;
   border-radius: 2px;
   background: #eef3fa;
   border: 1px solid #d2dbea;
@@ -178,7 +178,7 @@ button {
   color: var(--nav-brand-sub);
   font-size: 0.76rem;
   line-height: 1.12;
-  margin-top: 6px;
+  margin-top: 4px;
   white-space: nowrap;
 }
 
@@ -202,14 +202,14 @@ button {
   border: 1px solid transparent;
   background: transparent;
   color: var(--nav-ink);
-  min-height: 35px;
+  min-height: 31px;
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  padding: 0 8px;
-  margin-bottom: 1px;
+  gap: 5px;
+  padding: 0 7px;
+  margin-bottom: 0;
   text-align: left;
   font-size: 0.82rem;
   font-weight: 700;
@@ -221,7 +221,7 @@ button {
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
 
 .nav-icon {
@@ -259,8 +259,8 @@ button {
 }
 
 .nav-badge {
-  min-width: 28px;
-  height: 20px;
+  min-width: 26px;
+  height: 18px;
   border-radius: 6px;
   background: #025AA7;
   color: #fff;
@@ -295,7 +295,7 @@ button {
 }
 
 .main-area {
-  padding: 0 0 14px;
+  padding: 0 0 10px;
   height: 100vh;
   min-height: 0;
   overflow-y: auto;
@@ -303,7 +303,7 @@ button {
   scroll-padding-top: var(--topbar-safe-offset);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 
 .topbar {
@@ -314,25 +314,25 @@ button {
   border-bottom: 1px solid #cfd9e7;
   border-radius: 0;
   background: linear-gradient(135deg, #f3f7fe 0%, #edf2fa 100%);
-  min-height: 80px;
-  padding: 8px 14px;
+  min-height: var(--shell-topbar-height);
+  padding: 6px 10px;
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
   flex: 1;
   min-width: 0;
 }
 
 .top-action-button {
-  min-width: 72px;
+  min-width: 64px;
   flex: 0 0 auto;
 }
 
@@ -350,11 +350,11 @@ button {
   border: 1px solid var(--account-trigger-border);
   border-radius: 999px;
   background: var(--account-trigger-bg);
-  min-height: 38px;
+  min-height: var(--control-height-prominent);
   padding: 0 10px 0 4px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--account-trigger-ink);
   transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
@@ -373,8 +373,8 @@ button {
 }
 
 .account-avatar {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: #2f7ae5;
   color: #fff;
@@ -409,7 +409,7 @@ button {
 
 .account-dropdown-item {
   width: 100%;
-  min-height: 40px;
+  min-height: 34px;
   border: 0;
   border-bottom: 1px solid var(--account-dropdown-divider);
   background: transparent;
@@ -454,7 +454,7 @@ body[data-theme="eye"] .topbar {
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .eyebrow {
@@ -634,9 +634,9 @@ body[data-theme="eye"] .global-toast {
 
 .page {
   display: none;
-  gap: 12px;
+  gap: var(--component-gap);
   min-height: 0;
-  padding: 0 14px;
+  padding: 0 var(--page-gutter);
 }
 
 .page.active {
@@ -653,9 +653,9 @@ body[data-theme="eye"] .global-toast {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
-  padding: 12px;
+  padding: var(--panel-padding);
   display: grid;
-  gap: 10px;
+  gap: var(--component-gap);
   align-content: start;
 }
 
@@ -664,9 +664,9 @@ body[data-theme="eye"] .global-toast {
 }
 
 .subsection {
-  padding: 8px 0;
+  padding: 6px 0;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   border-bottom: 1px dashed var(--line-strong);
   align-content: start;
 }

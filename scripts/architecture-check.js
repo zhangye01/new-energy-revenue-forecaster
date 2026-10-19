@@ -7,7 +7,7 @@ const ROOT = path.resolve(__dirname, "..");
 const APP_JS_MAX_LINES = 4825;
 const APP_JS_MAX_FUNCTION_LINES = 30;
 const STYLES_CSS_MAX_LINES = 20;
-const REQUIRED_CSS_ORDER = ["styles/theme.css", "styles/base.css", "styles/components/data-display.css", "styles/components/forms.css", "styles/components/buttons.css", "styles/components/workflow.css", "styles/components/auth.css", "styles/pages/home.css", "styles/pages/projects.css", "styles/pages/create.css", "styles/pages/help.css", "styles/pages/energy.css", "styles/pages/scenario.css", "styles/pages/results.css", "styles/pages/compare.css", "styles/pages/history.css", "styles/responsive.css", "styles.css"];
+const REQUIRED_CSS_ORDER = ["styles/theme.css", "styles/base.css", "styles/components/data-display.css", "styles/components/forms.css", "styles/components/buttons.css", "styles/components/workflow.css", "styles/components/auth.css", "styles/components/context-help.css", "styles/pages/home.css", "styles/pages/projects.css", "styles/pages/create.css", "styles/pages/help.css", "styles/pages/energy.css", "styles/pages/scenario.css", "styles/pages/results.css", "styles/pages/compare.css", "styles/pages/history.css", "styles/responsive.css", "styles.css"];
 const FORBIDDEN_APP_JS_PATTERNS = [
   {
     name: "stale energy mode UI sync",
