@@ -263,8 +263,8 @@ assert.equal(isConfigConfirmed(reviewedLegacy, "storageOtherRevenuePrice"), fals
   "legacy review uses the project's province defaults");
 assert.equal(isConfigConfirmed(reviewedLegacy, "mechanismPrice"), true,
   "legacy non-default assumptions retain their confirmation");
-assert.equal(isConfigConfirmed(reviewedLegacy, "ltManualPricesByYear"), true,
-  "legacy annual assumptions are not discarded merely because rough results exist");
+assert.equal(isConfigConfirmed(reviewedLegacy, "ltManualPricesByYear"), false,
+  "legacy annual assumptions without explicit origin require review even when non-default");
 assert.deepEqual(reviewedLegacy.config, legacyDefaultScenario.config);
 assert.equal(reviewedLegacy.confirmationReviewVersion, 1);
 assert.equal(JSON.stringify({ project: legacyProject, scenario: legacyDefaultScenario }), originalLegacyData,
@@ -339,8 +339,37 @@ modifiedAnnualDefaults.config.feeManualValuesByYear[2027].otherFee = 4;
 modifiedAnnualDefaults.confirmedConfig = JSON.parse(JSON.stringify(modifiedAnnualDefaults.config));
 const modifiedAnnualReload = sanitizeScenario(offshoreStorageProject, modifiedAnnualDefaults, 0, annualReviewOptions);
 for (const key of ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]) {
-  assert.equal(isConfigConfirmed(modifiedAnnualReload, key), true,
-    "partly modified legacy annual tables are retained because row-level origins are unavailable");
+  assert.equal(isConfigConfirmed(modifiedAnnualReload, key), false,
+    "partly modified legacy annual tables require review when row-level origins are unavailable");
+  assert.deepEqual(modifiedAnnualReload.config[key], modifiedAnnualDefaults.config[key]);
+}
+
+// Previous version 1 repair and absence of a rough snapshot must not authenticate
+// source-unknown tables. Reconfirmation changes only confirmation metadata.
+for (const locked of [false, true]) {
+  const migratedBefore = JSON.parse(JSON.stringify(modifiedAnnualDefaults));
+  migratedBefore.confirmationReviewVersion = 1;
+  migratedBefore.locked = locked;
+  migratedBefore.confirmedConfigSources = { ltManualPricesByYear: "rough_edit", envManualValuesByYear: "unknown" };
+  const original = JSON.stringify(migratedBefore);
+  const pendingAnnual = sanitizeScenario(offshoreStorageProject, migratedBefore, 0, { provinceDefaults });
+  for (const key of ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]) {
+    assert.equal(isConfigConfirmed(migratedBefore, key), false, "UI checks reject ambiguous old annual confirmation before hydration");
+    assert.equal(isConfigConfirmed(pendingAnnual, key), false);
+    assert.deepEqual(pendingAnnual.config[key], migratedBefore.config[key], "migration preserves exact annual values");
+    assert.equal(pendingAnnual.confirmedConfigSources[key], undefined);
+  }
+  assert.equal(JSON.stringify(migratedBefore), original, "the original persisted record is not mutated");
+  assert.equal(pendingAnnual.locked, locked);
+  if (!locked) {
+    const originalConfig = JSON.stringify(pendingAnnual.config);
+    confirmConfig(pendingAnnual, ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]);
+    const confirmedAgain = sanitizeScenario(offshoreStorageProject, JSON.parse(JSON.stringify(pendingAnnual)), 0, { provinceDefaults });
+    for (const key of ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]) {
+      assert.ok(isConfigConfirmed(confirmedAgain, key), "explicit customer review persists across reloads");
+    }
+    assert.equal(JSON.stringify(pendingAnnual.config), originalConfig, "explicit review does not overwrite values");
+  }
 }
 
 const metadataProject = {

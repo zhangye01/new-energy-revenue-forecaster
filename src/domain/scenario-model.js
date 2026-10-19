@@ -125,6 +125,7 @@
   }
 
   const CONFIG_KEYS = new Set(Object.keys(defaultScenarioConfig()));
+  const ANNUAL_CONFIG_KEYS = new Set(["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]);
   const CONFIRMATION_REVIEW_VERSION = 1;
   const CONFIRMATION_SOURCES = new Set(["explicit", "rough_edit"]);
 
@@ -141,31 +142,11 @@
     return JSON.parse(JSON.stringify(value));
   }
 
-  function matchesLegacyDefault(key, value, defaults, project) {
-    if (sameConfigValue(value, defaults[key])) return true;
-    const years = Number(project.forecastYears), startYear = Number(project.startYear);
-    if (!Number.isInteger(years) || years <= 0 || years > 100 || !Number.isInteger(startYear)) return false;
-    const annualFields = {
-      envManualValuesByYear: ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio",
-        "carbonEnabled", "carbonPrice", "carbonRealizeRatio"],
-      feeManualValuesByYear: ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]
-    };
-    if (key !== "ltManualPricesByYear" && !annualFields[key]) return false;
-    const expected = Object.fromEntries(Array.from({ length: years }, (_, index) => {
-      if (key !== "ltManualPricesByYear") {
-        return [startYear + index, Object.fromEntries(annualFields[key].map((field) => [field, defaults[field]]))];
-      }
-      const distance = defaults.ltTargetPnl - defaults.ltYear1Pnl;
-      return [startYear + index, defaults.ltYear1Pnl + Math.sign(distance)
-        * Math.min(Math.abs(distance), index * defaults.ltConvergeSpeed)];
-    }));
-    const normalize = key === "envManualValuesByYear" ? scenarioConfig.sanitizeEnvManualValuesByYear
-      : key === "feeManualValuesByYear" ? scenarioConfig.sanitizeFeeManualValuesByYear : scenarioConfig.sanitizeLtManualPricesByYear;
-    return sameConfigValue(value, normalize(expected, project));
-  }
-
   function isConfigConfirmed(scenario, key, value = scenario?.config?.[key]) {
     return CONFIG_KEYS.has(key)
+      // A partly edited historical table does not prove that its remaining years
+      // were reviewed. Require explicit table confirmation regardless of old migrations.
+      && (!ANNUAL_CONFIG_KEYS.has(key) || scenario?.confirmedConfigSources?.[key] === "explicit")
       && isPlainObject(scenario?.confirmedConfig)
       && Object.prototype.hasOwnProperty.call(scenario.confirmedConfig, key)
       && sameConfigValue(scenario.confirmedConfig[key], value);
@@ -273,11 +254,10 @@
         if (coverage.complete !== coverage.total || !sameConfigValue(value, next.config[key])) return;
       } else if (!isConfigConfirmed(scenario, key, next.config[key])) return;
       const source = scenario.confirmedConfigSources?.[key];
-      // Older rough generation confirmed every visible default without recording
-      // its origin. Reopen only ambiguous default confirmations, once, while
-      // retaining all input values and confirmed non-default assumptions.
+      // Unknown annual confirmations were rejected above. Review ambiguous scalar
+      // defaults once, retaining all values and confirmed non-default assumptions.
       if (reviewLegacyDefaults && !CONFIRMATION_SOURCES.has(source)
-          && matchesLegacyDefault(key, next.config[key], baseConfig, project)) return;
+          && sameConfigValue(next.config[key], baseConfig[key])) return;
       next.confirmedConfig[key] = cloneConfigValue(next.config[key]);
       if (CONFIRMATION_SOURCES.has(source)) next.confirmedConfigSources[key] = source;
     });

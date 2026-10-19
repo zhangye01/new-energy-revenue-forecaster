@@ -154,5 +154,46 @@ const { createBrowserSandbox } = require("../scripts/module-load-smoke");
   assert.equal(sandbox.NE_ROUGH_PRICE.baselineResultState(reloaded, activeScenario, updatedBaseline).current, true);
   const legacyResult = { ...updatedBaseline }; delete legacyResult.sourceContext;
   assert.equal(sandbox.NE_ROUGH_PRICE.baselineResultState(reloaded, activeScenario, legacyResult).reason, "legacy_baseline");
+  // Historical partial annual edits need review even after the previous migration,
+  // while prices, saved rough snapshots, and baseline comparisons remain identical.
+  const annualProject = sandbox.sanitizeProject(JSON.parse(JSON.stringify(reloaded)), 6);
+  const annualScenario = annualProject.scenarios[0];
+  const annualEnv = { greenCertPrice: 22.125, greenCertRealizeRatio: 0.8, greenPremiumPrice: 12.25,
+    greenPremiumRealizeRatio: 0.2, carbonEnabled: false, carbonPrice: 0, carbonRealizeRatio: 0 };
+  const annualFees = { marketOpFee: 6.125, gridAssessFee: 7, ancillaryFee: 14, otherFee: 3.25, otherIncome: 2 };
+  Object.assign(annualScenario.config, { ltPricingMode: "manual", ltManualPricesByYear: { 2026: 9.125, 2027: 8.25 },
+    envValueMode: "manual", envManualValuesByYear: { 2026: { ...annualEnv }, 2027: { ...annualEnv, greenCertPrice: 24.5 } },
+    feeConfigMode: "manual", feeManualValuesByYear: { 2026: { ...annualFees }, 2027: { ...annualFees, otherFee: 4.75 } } });
+  const annualKeys = ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"];
+  sandbox.NE_SCENARIO_MODEL.confirmConfig(annualScenario);
+  for (const key of annualKeys) delete annualScenario.confirmedConfigSources[key];
+  annualScenario.confirmationReviewVersion = 1;
+  const annualRough = sandbox.NE_ROUGH_PRICE.calculateRough(annualProject, annualScenario, draft, { id: "historical-annual-rough" });
+  assert.equal(annualRough.ok, true, annualRough.errors.join("；"));
+  annualProject.roughPrice = { draftsByScenario: {}, snapshots: [annualRough.snapshot] };
+  state.projects = [annualProject]; state.activeProjectId = annualProject.id;
+  annualProject.activeScenarioId = annualScenario.id;
+  sandbox.runCalculation();
+  const beforeAnnualReview = JSON.stringify(annualScenario.config);
+  const beforeAnnualSnapshot = JSON.stringify(annualProject.roughPrice.snapshots);
+  const beforeAnnualBaseline = JSON.stringify(annualProject.resultsByScenario);
+  const pendingProject = sandbox.sanitizeProject(JSON.parse(JSON.stringify(annualProject)), 7);
+  const pendingScenario = pendingProject.scenarios[0];
+  const pendingUi = sandbox.NE_SCENARIO_FORM.buildRefinementState({ project: pendingProject, scenario: pendingScenario });
+  for (const key of annualKeys) assert.equal(pendingUi.fields[key], "pending");
+  assert.equal(JSON.stringify(pendingScenario.config), beforeAnnualReview);
+  assert.equal(JSON.stringify(pendingProject.roughPrice.snapshots), beforeAnnualSnapshot);
+  assert.equal(JSON.stringify(pendingProject.resultsByScenario), beforeAnnualBaseline);
+  assert.equal(sandbox.NE_ROUGH_PRICE.compareBaselineResult(pendingProject, pendingScenario,
+    pendingProject.roughPrice.snapshots[0], pendingProject.resultsByScenario[pendingScenario.id]).ok, true);
+  const reviewSave = sandbox.NE_SCENARIO_FORM.applyScenarioSaveDraft({ project: pendingProject, scenario: pendingScenario,
+    draft: { ok: true, scenarioName: pendingScenario.name, config: pendingScenario.config },
+    nowIso: () => "2026-10-19T08:00:00.000Z" });
+  assert.equal(reviewSave.ok, true);
+  const confirmedProject = sandbox.sanitizeProject(JSON.parse(JSON.stringify(pendingProject)), 8);
+  for (const key of annualKeys) assert.ok(sandbox.NE_SCENARIO_MODEL.isConfigConfirmed(confirmedProject.scenarios[0], key));
+  assert.equal(JSON.stringify(confirmedProject.scenarios[0].config), beforeAnnualReview);
+  assert.equal(JSON.stringify(confirmedProject.roughPrice.snapshots), beforeAnnualSnapshot);
+  assert.equal(JSON.stringify(confirmedProject.resultsByScenario), beforeAnnualBaseline);
   console.log("rough price integration tests passed");
 })().catch((error) => { console.error(error); process.exit(1); });

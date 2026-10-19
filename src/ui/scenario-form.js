@@ -114,7 +114,43 @@
     });
     const progress = getField(querySelector, "#scenario-refinement-progress");
     if (progress) progress.textContent = `已确认 ${state.confirmed} / ${state.total} 项`;
+    refreshAnnualPreviews({ project, config, querySelector, resetOpen });
     return state;
+  }
+
+  function refreshAnnualPreviews({ project, config, querySelector, resetOpen }) {
+    const startYear = Number(project.startYear), count = Number(project.forecastYears);
+    const years = Number.isInteger(startYear) && Number.isInteger(count) && count > 0 && count <= 100
+      ? Array.from({ length: count }, (_, i) => startYear + i) : [];
+    const specifications = [
+      ["lt", "ltManualPricesByYear", "交易策略逐年损益", [[null, "策略损益 元/MWh"]]],
+      ["env", "envManualValuesByYear", "逐年环境价值兑现", [
+        ["greenCertPrice", "绿证价格 元/MWh"], ["greenCertRealizeRatio", "绿证兑现空间 %"],
+        ["greenPremiumPrice", "绿电溢价 元/MWh"], ["greenPremiumRealizeRatio", "绿电兑现空间 %"],
+        ...(project.siteType === "offshore" ? [["carbonEnabled", "碳收益"], ["carbonPrice", "碳收益 元/MWh"], ["carbonRealizeRatio", "碳兑现空间 %"]] : [])
+      ]],
+      ["fee", "feeManualValuesByYear", "逐年扣费与其他收益", [
+        ["marketOpFee", "市场运营费用 元/MWh"], ["gridAssessFee", "并网考核费用 元/MWh"],
+        ["ancillaryFee", "辅助服务费用 元/MWh"], ["otherFee", "其他费用 元/MWh"], ["otherIncome", "其他收入 元/MWh"]
+      ]]
+    ];
+    const display = (value, key) => {
+      if (key === "carbonEnabled") return typeof value === "boolean" ? value ? "是" : "否" : "未填写";
+      if (value === undefined || value === null || (typeof value === "string" && !value.trim()) || !Number.isFinite(Number(value))) return "未填写";
+      return String(key?.endsWith("Ratio") ? Number((Number(value) * 100).toPrecision(15)) : Number(value));
+    };
+    specifications.forEach(([id, key, title, columns]) => {
+      const preview = getField(querySelector, `#${id}-annual-preview`);
+      const summary = getField(querySelector, `#${id}-annual-preview-summary`);
+      const content = getField(querySelector, `#${id}-annual-preview-content`);
+      if (preview && resetOpen) preview.open = false;
+      if (summary) summary.textContent = `查看逐年数值（${years.length} 年）`;
+      if (!content) return;
+      content.innerHTML = `<table aria-label="${title}"><thead><tr><th scope="col">年份</th>${columns.map(([, label]) => `<th scope="col">${label}</th>`).join("")}</tr></thead><tbody>${years.map((year) => {
+        const row = config[key]?.[year];
+        return `<tr><td>${year}</td>${columns.map(([field]) => `<td>${display(field === null ? row : row?.[field], field)}</td>`).join("")}</tr>`;
+      }).join("")}</tbody></table>`;
+    });
   }
 
   function bindRefinementState(input) {

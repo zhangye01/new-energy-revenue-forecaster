@@ -117,7 +117,7 @@
     <script src="./src/ui/result-print.js?v=20260609a" defer></script>
     <script src="./src/ui/result-charts.js?v=20260609a" defer></script>
     <script src="./src/ui/scenario-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20261019o" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261019q" defer></script>
     <script src="./src/ui/scenario-visual-data.js?v=20260609a" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20261019l" defer></script>
     <script src="./src/ui/compare-charts.js?v=20260609a" defer></script>
@@ -134,7 +134,7 @@
     <script src="./src/domain/scenario-config.js?v=20261019o" defer></script>
     <script src="./src/domain/rough-price.js?v=20261019o" defer></script>
     <script src="./src/ui/rough-price-workspace.js?v=20261019p" defer></script>
-    <script src="./src/domain/scenario-model.js?v=20261019p" defer></script>
+    <script src="./src/domain/scenario-model.js?v=20261019q" defer></script>
     <script src="./src/domain/project-settings.js?v=20260609a" defer></script>
     <script src="./src/domain/project-model.js?v=20261019n" defer></script>
     <script src="./src/domain/project-display.js?v=20260611a" defer></script>
@@ -1189,6 +1189,10 @@
                       </div>
                       <span class="scenario-field-status" data-refinement-field="ltManualPricesByYear" hidden>待补充</span>
                       <div class="hint" id="lt-manual-status">尚未导入逐年损益值。</div>
+                      <details class="scenario-optional" id="lt-annual-preview">
+                        <summary id="lt-annual-preview-summary">查看逐年数值</summary>
+                        <div class="table-scroll scenario-table-wrap" id="lt-annual-preview-content"></div>
+                      </details>
                     </div>
                   </details>
 
@@ -1255,6 +1259,10 @@
                       </div>
                       <span class="scenario-field-status" data-refinement-field="envManualValuesByYear" hidden>待补充</span>
                       <div class="hint" id="env-manual-status">尚未导入逐年环境价值兑现配置。</div>
+                      <details class="scenario-optional" id="env-annual-preview">
+                        <summary id="env-annual-preview-summary">查看逐年数值</summary>
+                        <div class="table-scroll scenario-table-wrap" id="env-annual-preview-content"></div>
+                      </details>
                     </div>
                   </details>
 
@@ -1304,6 +1312,10 @@
                       </div>
                       <span class="scenario-field-status" data-refinement-field="feeManualValuesByYear" hidden>待补充</span>
                       <div class="hint" id="fee-manual-status">尚未导入逐年扣费收益配置。</div>
+                      <details class="scenario-optional" id="fee-annual-preview">
+                        <summary id="fee-annual-preview-summary">查看逐年数值</summary>
+                        <div class="table-scroll scenario-table-wrap" id="fee-annual-preview-content"></div>
+                      </details>
                     </div>
                   </details>
 
