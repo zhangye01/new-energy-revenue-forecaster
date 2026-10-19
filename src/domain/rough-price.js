@@ -113,16 +113,111 @@
     return JSON.stringify(value === undefined ? null : value);
   }
 
-  function normalizedConfig(project, config) {
+  // Frozen rough-v1 normalization is read-only compatibility code. Do not replace it
+  // with current input hydration or write its outputs back into historical projects.
+  const legacyScenarioConfig = (() => {
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function isPlainObject(value) {
+      return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+    }
+
+    function projectYearBounds(project) {
+      const startYear = Number.isInteger(project?.startYear) ? project.startYear : null;
+      const forecastYears = Number.isInteger(project?.forecastYears) ? project.forecastYears : null;
+      const hasValidRange = startYear !== null && forecastYears !== null && forecastYears > 0;
+      return {
+        startYear,
+        forecastYears,
+        minYear: hasValidRange ? startYear : null,
+        maxYear: hasValidRange ? startYear + forecastYears - 1 : null,
+        hasValidRange
+      };
+    }
+
+    function isYearInProjectRange(year, project) {
+      const { minYear, maxYear, hasValidRange } = projectYearBounds(project);
+      return !hasValidRange || (year >= minYear && year <= maxYear);
+    }
+
+    function parseBooleanLike(value, fallback = false) {
+      if (typeof value === "boolean") return value;
+      const normalized = String(value ?? "").trim().toLowerCase();
+      if (["yes", "y", "true", "1", "是", "启用"].includes(normalized)) return true;
+      if (["no", "n", "false", "0", "否", "不启用"].includes(normalized)) return false;
+      return fallback;
+    }
+
+    function sanitizeLtManualPricesByYear(rawPrices, project) {
+      const next = {};
+      if (!isPlainObject(rawPrices)) return next;
+      Object.entries(rawPrices).forEach(([yearKey, rawValue]) => {
+        const year = Number(yearKey);
+        const value = Number(rawValue);
+        if (!Number.isInteger(year) || !Number.isFinite(value)) return;
+        if (!isYearInProjectRange(year, project)) return;
+        next[year] = value;
+      });
+      return next;
+    }
+
+    function sanitizeEnvManualValuesByYear(rawValues, project) {
+      const next = {};
+      if (!isPlainObject(rawValues)) return next;
+      Object.entries(rawValues).forEach(([yearKey, rawValue]) => {
+        const year = Number(yearKey);
+        if (!Number.isInteger(year) || !isPlainObject(rawValue)) return;
+        if (!isYearInProjectRange(year, project)) return;
+        const carbonEnabled = project?.siteType === "offshore" && parseBooleanLike(rawValue.carbonEnabled, Boolean(rawValue.carbonEnabled));
+        const entry = {
+          greenCertPrice: Number(rawValue.greenCertPrice) || 0,
+          greenCertRealizeRatio: clamp(Number(rawValue.greenCertRealizeRatio) || 0, 0, 1),
+          greenPremiumPrice: Number(rawValue.greenPremiumPrice) || 0,
+          greenPremiumRealizeRatio: clamp(Number(rawValue.greenPremiumRealizeRatio) || 0, 0, 1),
+          carbonEnabled,
+          carbonPrice: carbonEnabled ? Number(rawValue.carbonPrice) || 0 : 0,
+          carbonRealizeRatio: carbonEnabled ? clamp(Number(rawValue.carbonRealizeRatio) || 0, 0, 1) : 0
+        };
+        if (entry.greenCertRealizeRatio + entry.greenPremiumRealizeRatio + entry.carbonRealizeRatio > 1 + 0.000001) return;
+        next[year] = entry;
+      });
+      return next;
+    }
+
+    function sanitizeFeeManualValuesByYear(rawValues, project) {
+      const next = {};
+      if (!isPlainObject(rawValues)) return next;
+      Object.entries(rawValues).forEach(([yearKey, rawValue]) => {
+        const year = Number(yearKey);
+        if (!Number.isInteger(year) || !isPlainObject(rawValue)) return;
+        if (!isYearInProjectRange(year, project)) return;
+        const entry = {
+          marketOpFee: Number(rawValue.marketOpFee) || 0,
+          gridAssessFee: Number(rawValue.gridAssessFee) || 0,
+          ancillaryFee: Number(rawValue.ancillaryFee) || 0,
+          otherFee: Number(rawValue.otherFee) || 0,
+          otherIncome: Number(rawValue.otherIncome) || 0
+        };
+        if (Object.values(entry).some((value) => value < 0)) return;
+        next[year] = entry;
+      });
+      return next;
+    }
+    return { sanitizeLtManualPricesByYear, sanitizeEnvManualValuesByYear, sanitizeFeeManualValuesByYear };
+  })();
+
+  function normalizedConfig(project, config, normalizers = scenarioConfig) {
     return {
       ...(config || {}),
       mechanismReferenceMode: config?.mechanismReferenceMode === "same_type" ? "same_type" : "project_capture",
       sameTypeSpread: Number(config?.sameTypeSpread) || 0,
-      // Match scenario hydration for yearly maps, including inactive carbon fields.
-      // Calculation validates the raw config before these normalizers can fill defaults.
-      ltManualPricesByYear: scenarioConfig.sanitizeLtManualPricesByYear(config?.ltManualPricesByYear, project),
-      envManualValuesByYear: scenarioConfig.sanitizeEnvManualValuesByYear(config?.envManualValuesByYear, project),
-      feeManualValuesByYear: scenarioConfig.sanitizeFeeManualValuesByYear(config?.feeManualValuesByYear, project)
+      // Build a temporary calculation/compatibility view. Never hydrate raw input
+      // with it; calculation validates required fields before any normalization.
+      ltManualPricesByYear: normalizers.sanitizeLtManualPricesByYear(config?.ltManualPricesByYear, project),
+      envManualValuesByYear: normalizers.sanitizeEnvManualValuesByYear(config?.envManualValuesByYear, project),
+      feeManualValuesByYear: normalizers.sanitizeFeeManualValuesByYear(config?.feeManualValuesByYear, project)
     };
   }
 
@@ -155,7 +250,7 @@
       typicalCurveProfile: curveShapeForFingerprint(energyData.typicalCurveProfile),
       typicalCurveSource: energyData.typicalCurveSource || "",
       scenarioId: scenario?.id || null,
-      config: normalizedConfig(project, scenario?.config)
+      config: normalizedConfig(project, scenario?.config, legacyScenarioConfig)
     });
     let hash = 2166136261;
     let second = 5381;
@@ -166,16 +261,68 @@
     return `rough-v1-${(hash >>> 0).toString(16)}-${(second >>> 0).toString(16)}-${text.length}`;
   }
 
+  function storageContext(project) {
+    const hasStorage = Boolean(project?.hasStorage);
+    return {
+      hasStorage,
+      storagePowerMw: hasStorage ? project?.storagePowerMw ?? null : null,
+      storageDurationH: hasStorage ? project?.storageDurationH ?? null : null
+    };
+  }
+
+  function validStorageContext(context) {
+    if (!isObject(context) || typeof context.hasStorage !== "boolean") return false;
+    if (!context.hasStorage) return context.storagePowerMw === null && context.storageDurationH === null;
+    return [context.storagePowerMw, context.storageDurationH].every((value) =>
+      typeof value === "number" && Number.isFinite(value) && value > 0);
+  }
+
+  function currentContextFingerprint(project, scenario) {
+    const text = stableStringify({
+      legacyContextFingerprint: contextFingerprint(project, scenario),
+      config: scenario?.config || {},
+      storageContext: storageContext(project)
+    });
+    let hash = 2166136261, second = 5381;
+    for (let index = 0; index < text.length; index += 1) {
+      hash = Math.imul(hash ^ text.charCodeAt(index), 16777619);
+      second = Math.imul(second, 33) ^ text.charCodeAt(index);
+    }
+    return `rough-v2-${(hash >>> 0).toString(16)}-${(second >>> 0).toString(16)}-${text.length}`;
+  }
+
+  function inputSourceContext(project, scenario) {
+    return {
+      version: 2, fingerprintVersion: "rough-v2",
+      projectId: project?.id, scenarioId: scenario?.id,
+      contextFingerprint: currentContextFingerprint(project, scenario),
+      storageContext: storageContext(project)
+    };
+  }
+
+  function validCurrentSource(source) {
+    return isObject(source) && source.version === 2 && source.fingerprintVersion === "rough-v2"
+      && typeof source.contextFingerprint === "string" && source.contextFingerprint.startsWith("rough-v2-")
+      && validStorageContext(source.storageContext);
+  }
+
   function snapshotContextMatches(project, scenario, snapshot, config) {
     if (snapshot.scenarioId !== scenario?.id) return false;
+    const source = snapshot.sourceContext;
+    const fingerprint = source ? currentContextFingerprint : contextFingerprint;
+    if (source && (!validCurrentSource(source) || source.scenarioId !== snapshot.scenarioId ||
+      source.contextFingerprint !== snapshot.contextFingerprint ||
+      stableStringify(source.storageContext) !== stableStringify(storageContext(project)))) return false;
+    if (!source && !snapshot.contextFingerprint.startsWith("rough-v1-")) return false;
     const originalScenario = { ...scenario, config };
-    if (snapshot.contextFingerprint === contextFingerprint(project, originalScenario)) return true;
+    const matches = (candidate) => (!source || source.projectId === candidate.id)
+      && snapshot.contextFingerprint === fingerprint(candidate, originalScenario);
+    if (matches(project)) return true;
     const sourceIds = Array.from(new Set([project?.restoredFromProjectId,
       ...(Array.isArray(project?.restoredFromProjectIds) ? project.restoredFromProjectIds : [])]));
-    // A restore may change only the project identity. Recheck the complete original
-    // fingerprint with that recorded identity; never rewrite the immutable snapshot.
+    // Restore changes only the candidate identity; never backfill metadata or rewrite snapshots.
     return sourceIds.some((sourceId) => typeof sourceId === "string" && Boolean(sourceId.trim()) && sourceId !== project.id
-      && snapshot.contextFingerprint === contextFingerprint({ ...project, id: sourceId }, originalScenario));
+      && matches({ ...project, id: sourceId }));
   }
 
   function snapshotState(project, scenario, snapshot) {
@@ -187,14 +334,37 @@
     if (!snapshotContextMatches(project, scenario, snapshot, snapshot.config)) {
       return { comparable: false, refined: false, reason: "stale_snapshot", message: "项目、测算期或电量口径已变化，请更新项目电价粗算后再对照。" };
     }
-    const refined = stableStringify(normalizedConfig(project, snapshot.config)) !==
-      stableStringify(normalizedConfig(project, scenario?.config));
+    if (!snapshot.sourceContext && project?.hasStorage) {
+      return { comparable: false, refined: false, reason: "legacy_storage_context",
+        message: "历史配储边界待核对：原粗算未记录配储功率和时长，保留原快照，暂不能交叉验证。" };
+    }
+    const refined = snapshot.sourceContext
+      ? stableStringify(snapshot.config) !== stableStringify(scenario?.config)
+      : stableStringify(normalizedConfig(project, snapshot.config, legacyScenarioConfig)) !==
+        stableStringify(normalizedConfig(project, scenario?.config, legacyScenarioConfig));
     return { comparable: true, refined, reason: "", message: refined ? "收益参数已细化，保留原粗算与基准结果对照。" : "" };
   }
 
-  function validateConfig(project, config, years) {
+  function validateConfig(project, config, years = yearsForProject(project)) {
     const errors = [];
     if (!isObject(config)) return ["当前方案缺少共用结算参数。"];
+    if (!years.length) errors.push("项目测算起始年份或年限无效，请先核对项目基础信息。");
+    const modes = [["ltPricingMode", ["auto", "manual"], "交易策略配置方式"],
+      ["envValueMode", ["global", "manual"], "环境价值配置方式"],
+      ["feeConfigMode", ["global", "manual"], "费用配置方式"]];
+    modes.forEach(([key, allowed, label]) => {
+      if (Object.hasOwn(config, key) && !allowed.includes(config[key])) errors.push(`${label}无效，请明确选择。`);
+    });
+    if (Object.hasOwn(config, "mechanismEnabled") && typeof config.mechanismEnabled !== "boolean") errors.push("是否启用机制电价需要明确选择。");
+    if (config.mechanismEnabled && Object.hasOwn(config, "mechanismReferenceMode")
+        && !["project_capture", "same_type"].includes(config.mechanismReferenceMode)) errors.push("机制补差参照口径无效，请明确选择。");
+    if (project.siteType === "offshore" && scenarioConfig.getEnvValueMode(config) !== "manual"
+        && Object.hasOwn(config, "carbonEnabled") && typeof config.carbonEnabled !== "boolean") errors.push("是否启用碳收益需要明确选择。");
+    if (scenarioConfig.getLtPricingMode(config) === "auto" && config.ltConvergeSpeedUnit === "legacy_ratio"
+        && Number(config.ltConvergeSpeed) > 1) errors.push("历史收敛比例应在0至1之间。");
+    if (project?.hasStorage && !validStorageContext(storageContext(project))) {
+      errors.push("配储功率和时长须为大于0的有效数字，请先核对项目基础信息。");
+    }
     const validateNumber = (source, key, label, min = -Infinity, max = Infinity) => {
       if (!isNumber(source?.[key])) {
         errors.push(`${label}不能为空且应为有效数字。`);
@@ -213,7 +383,7 @@
         errors.push("请先检查机制执行起止年月。");
       }
     }
-    if (config.mechanismReferenceMode === "same_type" && !isNumber(config.sameTypeSpread)) {
+    if (config.mechanismEnabled && config.mechanismReferenceMode === "same_type" && !isNumber(config.sameTypeSpread)) {
       errors.push("同类型机组价差不能为空且应为有效数字。");
     }
     if (scenarioConfig.getLtPricingMode(config) === "auto") {
@@ -348,8 +518,10 @@
       scenarioName: scenario.name || "当前方案",
       createdAt: options.createdAt || new Date().toISOString(),
       draft: clone(input),
-      config: clone(config),
-      contextFingerprint: contextFingerprint(project, scenario),
+      config: clone(scenario.config),
+      calculationConfig: clone(config),
+      sourceContext: inputSourceContext(project, scenario),
+      contextFingerprint: currentContextFingerprint(project, scenario),
       rows,
       summary: {
         weightedPrice: weightedPrice(rows, "fullRevenuePrice"),
@@ -370,11 +542,8 @@
     return {
       ...result,
       sourceContext: {
-        version: 1,
-        projectId: project.id,
-        scenarioId: scenario.id,
+        ...inputSourceContext(project, scenario),
         runId: run.id,
-        contextFingerprint: contextFingerprint(project, scenario),
         generatedAt: new Date().toISOString()
       }
     };
@@ -384,14 +553,21 @@
     const state = (current, reason, message) => ({ current, reason, message });
     if (!isObject(result)) return state(false, "missing_baseline", "请先发起基准测算。");
     const source = result.sourceContext;
-    if (!isObject(source) || source.version !== 1 || !source.projectId || !source.scenarioId ||
+    if (!isObject(source) || ![1, 2].includes(source.version) || !source.projectId || !source.scenarioId ||
         !source.runId || typeof source.contextFingerprint !== "string" || !source.contextFingerprint ||
-        typeof source.generatedAt !== "string" || !Number.isFinite(Date.parse(source.generatedAt))) {
+        typeof source.generatedAt !== "string" || !Number.isFinite(Date.parse(source.generatedAt)) ||
+        (source.version === 2 && !validCurrentSource(source)) ||
+        (source.version === 1 && !source.contextFingerprint.startsWith("rough-v1-"))) {
       return state(false, "legacy_baseline", "当前展示历史结果，缺少计算口径记录，请重新发起基准测算。");
     }
+    const fingerprint = source.version === 2 ? currentContextFingerprint : contextFingerprint;
     if (source.projectId !== project?.id || source.scenarioId !== scenario?.id ||
-        source.contextFingerprint !== contextFingerprint(project, scenario)) {
+        source.contextFingerprint !== fingerprint(project, scenario) ||
+        (source.version === 2 && stableStringify(source.storageContext) !== stableStringify(storageContext(project)))) {
       return state(false, "stale_context", "项目、电量或收入配置已变化，当前展示历史结果，请重新发起基准测算。");
+    }
+    if (source.version === 1 && project?.hasStorage) {
+      return state(false, "legacy_storage_context", "历史配储边界待核对：原结果未记录配储功率和时长，请核对后重新测算。");
     }
     if (source.runId !== project?.activeRunId) {
       return state(false, "stale_run", "生效现货预测已变化，当前展示旧预测版本的结果，请重新发起基准测算。");
@@ -442,19 +618,14 @@
     if (!roughState.comparable) {
       return unavailable(roughState.reason, roughState.message, roughState.reason === "stale_snapshot");
     }
-    const currentContext = contextFingerprint(project, scenario);
     if (!isObject(result)) {
       return unavailable("missing_baseline", "请先完成基准测算，再与项目电价粗算对照。");
     }
     const source = result.sourceContext;
-    if (!isObject(source) || source.version !== 1 || !source.projectId || !source.scenarioId ||
-        !source.runId || typeof source.contextFingerprint !== "string" || !source.contextFingerprint ||
-        typeof source.generatedAt !== "string" || !Number.isFinite(Date.parse(source.generatedAt))) {
-      return unavailable("legacy_baseline", "该基准结果缺少计算口径记录，请重新发起基准测算后再对照。");
-    }
-    if (source.projectId !== project?.id || source.scenarioId !== scenario?.id ||
-        source.contextFingerprint !== currentContext) {
-      return unavailable("stale_baseline", "基准结果使用的共用参数、项目或电量已变化，请重新发起基准测算后再对照。", true);
+    const baselineState = baselineResultState(project, scenario, result);
+    if (!baselineState.current && baselineState.reason !== "stale_run") {
+      return unavailable(baselineState.reason === "stale_context" ? "stale_baseline" : baselineState.reason,
+        baselineState.message, baselineState.reason === "stale_context");
     }
     const years = yearsForProject(project);
     const rows = result.annualRows;
@@ -481,9 +652,9 @@
       ? null : delta / Math.abs(snapshot.summary.weightedPrice);
     return {
       ok: true, errors: [], stale: false, reason: "",
-      source: { ...source },
+      source: clone(source),
       snapshotState: roughState,
-      baselineState: baselineResultState(project, scenario, result),
+      baselineState,
       rows: comparedRows,
       summary: {
         weightedRough: snapshot.summary.weightedPrice,
@@ -511,6 +682,8 @@
 
   function compareSnapshot(project, scenario, snapshot, run, getHourlyEnergyForCalculation) {
     if (!validSnapshot(snapshot)) return failedComparison(["请选择有效的粗算版本。"]);
+    const roughState = snapshotState(project, scenario, snapshot);
+    if (!roughState.comparable) return failedComparison([roughState.message], roughState.reason === "stale_snapshot");
     if (!snapshotContextMatches(project, scenario, snapshot, scenario?.config)) {
       return failedComparison(["共用参数、项目或电量已变化，请生成新版粗算后再交叉验证。"], true);
     }
@@ -570,5 +743,5 @@
     };
   }
 
-  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, snapshotState, contextFingerprint });
+  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, snapshotState, contextFingerprint, currentContextFingerprint, validateConfig });
 });

@@ -38,7 +38,9 @@ assert.equal(monthTrend.series[0].name, "2026年");
 
 const typicalDay = historyCharts.buildTypicalDayOption(sampleData, light);
 assert.equal(typicalDay.xAxis.data.length, 96);
-assert.equal(typicalDay.xAxis.axisLabel.interval, 7);
+assert.equal(typicalDay.xAxis.axisLabel.interval, 15);
+assert.deepEqual(typicalDay.series[0].data, sampleData.typicalWorkday);
+assert.deepEqual(typicalDay.series[1].data, sampleData.typicalWeekend);
 assert.deepEqual(typicalDay.series.map((item) => item.name), ["工作日", "周末"]);
 assert.equal(typicalDay.series[1].lineStyle.type, "dashed");
 

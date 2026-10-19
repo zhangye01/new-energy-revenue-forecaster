@@ -21,6 +21,7 @@
       scenario = null,
       run = null,
       scenarioConfig = {},
+      validateConfig = null,
       resultCalculation = {},
       prepareEnergy = () => ({ changed: false }),
       calculateScenarioResult = () => null,
@@ -33,7 +34,8 @@
       project,
       scenario,
       run,
-      scenarioConfig
+      scenarioConfig,
+      validateConfig
     }) || { ok: false, message: "测算前置校验不可用。" };
     if (!readiness.ok) {
       setTopMeta(readiness.message);

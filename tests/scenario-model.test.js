@@ -8,6 +8,7 @@ const {
   createBaselineScenario,
   defaultScenarioConfig,
   isConfigConfirmed,
+  invalidateInactiveConfirmations,
   normalizeLtConvergeStep,
   normalizeScenarioMetadata,
   parseBatchValue,
@@ -113,17 +114,19 @@ assert.equal(sanitized.name, "乐观场景");
 assert.equal(sanitized.isBaseline, true);
 assert.equal(sanitized.locked, true);
 assert.equal(sanitized.updatedAt, "2026-06-09T00:00:00.000Z");
-assert.equal(sanitized.config.mechanismRatio, 1);
-assert.equal(sanitized.config.mechanismPrice, 365);
+assert.equal(sanitized.config.mechanismRatio, 1.2, "hydration preserves invalid stored input for customer review");
+assert.equal(sanitized.config.mechanismPrice, "bad");
 assert.equal(sanitized.config.ltPricingMode, "manual");
-assert.deepEqual(sanitized.config.ltManualPricesByYear, { 2026: 8, 2027: 6, 2028: 2 });
-assert.equal(sanitized.config.ltConvergeSpeed, 3);
-assert.equal(sanitized.config.envValueMode, "global");
-assert.equal(sanitized.config.carbonEnabled, false);
-assert.equal(sanitized.config.carbonPrice, 0);
+assert.deepEqual(sanitized.config.ltManualPricesByYear, { 2025: 99, 2026: 8, 2027: 6, 2028: 2 });
+assert.equal(sanitized.config.ltConvergeSpeed, 0.5);
+assert.equal(sanitized.config.ltConvergeSpeedUnit, "legacy_ratio", "compatibility records the interpretation without rewriting the historic value");
+assert.equal(sanitized.config.envValueMode, "bad");
+assert.equal(sanitized.config.carbonEnabled, true);
+assert.equal(sanitized.config.carbonPrice, 4);
+assert.equal(sanitized.config.carbonRealizeRatio, 0.8);
 assert.equal(sanitized.config.feeConfigMode, "manual");
-assert.deepEqual(Object.keys(sanitized.config.feeManualValuesByYear), ["2026", "2028"]);
-assert.equal(sanitized.config.storageArbitragePrice, 0);
+assert.deepEqual(sanitized.config.feeManualValuesByYear, { 2026: { marketOpFee: 1 }, 2027: { marketOpFee: -1 }, 2028: { marketOpFee: 2 } });
+assert.equal(sanitized.config.storageArbitragePrice, 99, "inapplicable storage remains stored, not newly confirmed");
 assert.equal(sanitized.config.mechanismReferenceMode, "project_capture");
 assert.equal(sanitized.config.sameTypeSpread, 0);
 assert.deepEqual(sanitized.confirmedConfig, {}, "legacy saved values must not be mistaken for explicit confirmation");
@@ -160,7 +163,8 @@ assert.equal(applyTarget.updatedAt, "2026-06-10T08:00:00.000Z");
 assert.equal(isConfigConfirmed(applyTarget, "mechanismPrice"), true);
 assert.equal(isConfigConfirmed(applyTarget, "carbonPrice"), false, "applying defaults must not confirm untouched fields");
 
-const noStorageOnshoreTarget = { config: { carbonEnabled: true, carbonPrice: 8 } };
+const noStorageOnshoreTarget = { config: { carbonEnabled: true, carbonPrice: 8, carbonRealizeRatio: 0.25,
+  storageArbitragePrice: 99, storageCapacityCompPrice: 7.123456789012345 } };
 applyProvinceDefaultsToScenario(
   { siteType: "onshore", hasStorage: false },
   noStorageOnshoreTarget,
@@ -169,10 +173,14 @@ applyProvinceDefaultsToScenario(
     nowIso: () => "2026-06-10T09:00:00.000Z"
   }
 );
-assert.equal(noStorageOnshoreTarget.config.carbonEnabled, false);
-assert.equal(noStorageOnshoreTarget.config.carbonPrice, 0);
-assert.equal(noStorageOnshoreTarget.config.storageArbitragePrice, 0);
-assert.equal(noStorageOnshoreTarget.config.storageCapacityCompPrice, 0);
+assert.equal(noStorageOnshoreTarget.config.carbonEnabled, true);
+assert.equal(noStorageOnshoreTarget.config.carbonPrice, 8);
+assert.equal(noStorageOnshoreTarget.config.carbonRealizeRatio, 0.25);
+assert.equal(noStorageOnshoreTarget.config.storageArbitragePrice, 99);
+assert.equal(noStorageOnshoreTarget.config.storageCapacityCompPrice, 7.123456789012345);
+for (const key of ["carbonEnabled", "carbonPrice", "carbonRealizeRatio", "storageArbitragePrice", "storageCapacityCompPrice"]) {
+  assert.equal(isConfigConfirmed(noStorageOnshoreTarget, key), false, `${key} remains inapplicable after province defaults`);
+}
 assert.equal(noStorageOnshoreTarget.updatedAt, "2026-06-10T09:00:00.000Z");
 
 const baselineScenario = createBaselineScenario(offshoreStorageProject, {
@@ -207,8 +215,10 @@ confirmationScenario.config.ltManualPricesByYear[2027] = 9;
 assert.equal(confirmationScenario.confirmedConfig.ltManualPricesByYear[2027], 6, "confirmed values need an independent deep snapshot");
 assert.equal(isConfigConfirmed(confirmationScenario, "ltManualPricesByYear"), false);
 const reloadedConfirmation = sanitizeScenario(offshoreStorageProject, JSON.parse(JSON.stringify(confirmationScenario)));
-assert.equal(isConfigConfirmed(reloadedConfirmation, "mechanismRatio"), true);
-assert.equal(reloadedConfirmation.confirmedConfigSources.mechanismRatio, "explicit");
+assert.equal(isConfigConfirmed(reloadedConfirmation, "mechanismRatio"), false, "disabled mechanism values cannot count as active confirmations");
+assert.equal(reloadedConfirmation.confirmedConfigSources.mechanismRatio, undefined);
+assert.equal(reloadedConfirmation.confirmationEvidence.confirmedConfig.mechanismRatio, 0);
+assert.equal(reloadedConfirmation.confirmationEvidence.confirmedConfigSources.mechanismRatio, "explicit");
 assert.equal(isConfigConfirmed(reloadedConfirmation, "ltManualPricesByYear"), false);
 assert.equal(reloadedConfirmation.confirmedConfigSources.ltManualPricesByYear, undefined,
   "a source must not survive an invalidated value confirmation");
@@ -216,7 +226,9 @@ assert.equal(confirmConfig(confirmationScenario), true);
 assert.equal(isConfigConfirmed(confirmationScenario, "ltManualPricesByYear"), true);
 assert.equal(isConfigConfirmed(confirmationScenario, "mechanismPrice"), true);
 const changedByNormalization = sanitizeScenario({ ...offshoreStorageProject, hasStorage: false }, confirmationScenario);
-assert.equal(isConfigConfirmed(changedByNormalization, "storageArbitragePrice"), false, "normalization must not silently confirm a replacement value");
+assert.equal(isConfigConfirmed(changedByNormalization, "storageArbitragePrice"), false, "inapplicable storage must be excluded from current confirmation");
+assert.equal(changedByNormalization.config.storageArbitragePrice, confirmationScenario.config.storageArbitragePrice);
+assert.deepEqual(changedByNormalization.confirmationEvidence.confirmedConfig, confirmationScenario.confirmedConfig);
 confirmationScenario.locked = true;
 const lockedConfirmationBefore = JSON.stringify(confirmationScenario);
 assert.equal(confirmConfig(confirmationScenario), false);
@@ -232,9 +244,9 @@ manualConfirmation.config.envManualValuesByYear = {
 };
 confirmConfig(manualConfirmation, ["envValueMode", "envManualValuesByYear"]);
 const reloadedManual = sanitizeScenario(manualConfirmationProject, JSON.parse(JSON.stringify(manualConfirmation)));
-assert.equal(reloadedManual.config.envManualValuesByYear[2026].carbonPrice, 0);
+assert.equal(reloadedManual.config.envManualValuesByYear[2026].carbonPrice, 4);
 assert.equal(isConfigConfirmed(reloadedManual, "envManualValuesByYear"), true,
-  "disabled carbon normalization preserves confirmation after reload");
+  "disabled carbon retains its original value and valid explicit table confirmation");
 assert.equal(manualConfirmation.confirmedConfig.envManualValuesByYear[2026].carbonPrice, 4,
   "hydration does not mutate the stored confirmation snapshot");
 manualConfirmation.config.envManualValuesByYear[2026].greenCertPrice = 23;
@@ -526,11 +538,34 @@ const carbonResult = applyBatchParameter(onshoreProject, {
   rawValue: "8",
   nowIso: "fixed-time"
 });
-assert.equal(carbonResult.updated, 1);
-assert.equal(onshoreProject.scenarios[0].config.carbonPrice, 0);
-assert.equal(onshoreProject.scenarios[0].config.carbonEnabled, false);
-assert.equal(onshoreProject.scenarios[0].config.carbonRealizeRatio, 0);
-assert.equal(onshoreProject.scenarios[0].updatedAt, "fixed-time");
+assert.equal(carbonResult.updated, 0);
+assert.equal(carbonResult.skippedInapplicable, 1);
+assert.equal(onshoreProject.scenarios[0].config.carbonPrice, 5);
+assert.equal(onshoreProject.scenarios[0].config.carbonEnabled, true);
+assert.equal(onshoreProject.scenarios[0].config.carbonRealizeRatio, 0.5);
+assert.equal(onshoreProject.scenarios[0].updatedAt, "");
+assert.equal(isConfigConfirmed(onshoreProject.scenarios[0], "carbonPrice"), false);
+assert.match(carbonResult.message, /当前不适用.*原值保留且未确认/);
+
+// The batch control explicitly requests a fixed annual step. Unlike an unchanged
+// historical review, this deliberate edit changes both numeric input and its unit.
+const legacyBatchScenario = createBaselineScenario(offshoreStorageProject);
+legacyBatchScenario.config.ltConvergeSpeed = 0.5;
+legacyBatchScenario.config.ltConvergeSpeedUnit = "legacy_ratio";
+const legacyBatchProject = { ...offshoreStorageProject, scenarios: [legacyBatchScenario], roughPrice: {
+  snapshots: [{ id: "legacy-batch-rough", scenarioId: legacyBatchScenario.id, config: JSON.parse(JSON.stringify(legacyBatchScenario.config)) }]
+} };
+const legacyBatchRoughBefore = JSON.stringify(legacyBatchProject.roughPrice);
+const fixedStepBatch = applyBatchParameter(legacyBatchProject, {
+  key: "ltConvergeSpeed", spec: { type: "number", min: 0, max: 2000 }, rawValue: "4.5", nowIso: "fixed-step-time"
+});
+assert.equal(fixedStepBatch.updated, 1);
+assert.equal(legacyBatchScenario.config.ltConvergeSpeed, 4.5);
+assert.equal(legacyBatchScenario.config.ltConvergeSpeedUnit, "fixed_step");
+assert.equal(isConfigConfirmed(legacyBatchScenario, "ltConvergeSpeed"), true);
+assert.equal(isConfigConfirmed(legacyBatchScenario, "ltConvergeSpeedUnit"), true);
+assert.deepEqual([1, 2, 3].map((yearIndex) => require("../src/domain/revenue-rules").ltPnlPriceForYear(legacyBatchScenario.config, yearIndex)), [8, 3.5, 2]);
+assert.equal(JSON.stringify(legacyBatchProject.roughPrice), legacyBatchRoughBefore);
 
 const badBatch = applyBatchParameter(batchProject, {
   key: "marketOpFee",

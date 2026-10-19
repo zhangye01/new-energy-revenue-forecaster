@@ -2891,7 +2891,7 @@ function energyTemplateFlowContext() {
       markDownstreamStale
     },
     actions: {
-      setEnergyImportMessage,
+      getActiveProject, setEnergyImportMessage,
       downloadCsv,
       readSpreadsheetToCsv,
       importEnergyDataFromText,
@@ -4105,6 +4105,7 @@ function duplicateActiveScenario() {
     name: makeScenarioCopyName(project, source.name),
     isBaseline: false, locked: false,
     config: cloneData(source.config), confirmedConfig: cloneData(source.confirmedConfig || {}),
+    ...(source.confirmationEvidence ? { confirmationEvidence: cloneData(source.confirmationEvidence) } : {}),
     confirmedConfigSources: cloneData(source.confirmedConfigSources || {}), confirmationReviewVersion: source.confirmationReviewVersion,
     updatedAt: new Date().toISOString()
   };
@@ -4282,7 +4283,7 @@ function runCalculation() {
     scenarioConfig,
     resultCalculation,
     prepareEnergy: ensureHourlyEnergyForCalculation,
-    calculateScenarioResult, stampResult: roughPrice.stampBaselineResult,
+    calculateScenarioResult, stampResult: roughPrice.stampBaselineResult, validateConfig: roughPrice.validateConfig,
     countScenariosForCompare,
     setTopMeta,
     renderAll
@@ -4474,6 +4475,7 @@ function manualScenarioFlowContext() {
     project,
     scenario: project ? getActiveScenario(project) : null,
     actions: {
+      getActiveProject, getActiveScenario,
       setTopMeta,
       downloadCsv,
       readSpreadsheetToCsv,

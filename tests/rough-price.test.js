@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, snapshotState, contextFingerprint } = require("../src/domain/rough-price");
+const { defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, snapshotState, contextFingerprint, currentContextFingerprint } = require("../src/domain/rough-price");
 const { calculateScenarioResult } = require("../src/domain/revenue-calculator");
 const { defaultScenarioConfig, sanitizeScenario } = require("../src/domain/scenario-model");
 const { normalizeTypicalCurveProfile } = require("../src/domain/energy-profiles");
@@ -110,8 +110,8 @@ assert.equal(calculateRough(p, scenario(p, { mechanismPrice: 0 }), draft(p)).ok,
 const manualConfig = {
   ltPricingMode: "manual", ltManualPricesByYear: { 2026: -10, 2027: 20 },
   envValueMode: "manual", envManualValuesByYear: {
-    2026: { greenCertPrice: 30, greenCertRealizeRatio: 0.5, greenPremiumPrice: 0, greenPremiumRealizeRatio: 0 },
-    2027: { greenCertPrice: 50, greenCertRealizeRatio: 1, greenPremiumPrice: 0, greenPremiumRealizeRatio: 0 }
+    2026: { greenCertPrice: 30, greenCertRealizeRatio: 0.5, greenPremiumPrice: 0, greenPremiumRealizeRatio: 0, carbonEnabled: false },
+    2027: { greenCertPrice: 50, greenCertRealizeRatio: 1, greenPremiumPrice: 0, greenPremiumRealizeRatio: 0, carbonEnabled: false }
   },
   feeConfigMode: "manual", feeManualValuesByYear: {
     2026: { marketOpFee: 3, gridAssessFee: 4, ancillaryFee: 5, otherFee: 6, otherIncome: 7 },
@@ -173,6 +173,8 @@ for (const [mapKey, field, value] of [
 
 const storageProject = project();
 storageProject.hasStorage = true;
+storageProject.storagePowerMw = 0.2;
+storageProject.storageDurationH = 2;
 const storage = calculate(storageProject, scenario(storageProject, {
   storageArbitragePrice: 1, storageCapacityCompPrice: 2, storageAncillaryRevenuePrice: 3, storageOtherRevenuePrice: 4
 }));
@@ -240,16 +242,18 @@ const manualReloadScenario = scenario(comparisonProject, {
 const rawManualBefore = JSON.stringify(manualReloadScenario.config);
 const manualReloadSnapshot = calculate(comparisonProject, manualReloadScenario);
 assert.equal(JSON.stringify(manualReloadScenario.config), rawManualBefore, "规范化快照不能改写方案原始逐年配置");
-assert.equal(manualReloadSnapshot.config.envManualValuesByYear[2026].carbonPrice, 0,
-  "快照中的停用碳收益字段与场景恢复规则一致");
-assert.equal(manualReloadSnapshot.config.envManualValuesByYear[2026].carbonRealizeRatio, 0);
+assert.equal(manualReloadSnapshot.config.envManualValuesByYear[2026].carbonPrice, 4,
+  "新快照保留原始停用碳价，计算视图另行归零");
+assert.equal(manualReloadSnapshot.config.envManualValuesByYear[2026].carbonRealizeRatio, 0.25);
+assert.equal(manualReloadSnapshot.calculationConfig.envManualValuesByYear[2026].carbonPrice, 0);
+assert.equal(manualReloadSnapshot.calculationConfig.envManualValuesByYear[2026].carbonRealizeRatio, 0);
 assert.equal(manualReloadSnapshot.config.envManualValuesByYear[2027].carbonPrice, 8, "启用碳收益的有效价格完整保留");
 approx(manualReloadSnapshot.rows[1].envValue, 13.5, "有效逐年绿证和碳收益仍按原比例计入");
 assert.deepEqual(manualReloadSnapshot.config.ltManualPricesByYear, manualReloadScenario.config.ltManualPricesByYear);
 assert.deepEqual(manualReloadSnapshot.config.feeManualValuesByYear, manualReloadScenario.config.feeManualValuesByYear);
 const hydratedManualScenario = sanitizeScenario(comparisonProject, JSON.parse(JSON.stringify(manualReloadScenario)), 0);
-assert.equal(contextFingerprint(comparisonProject, hydratedManualScenario), manualReloadSnapshot.contextFingerprint,
-  "真实场景恢复归零停用字段后，粗算指纹不应误过期");
+assert.equal(currentContextFingerprint(comparisonProject, hydratedManualScenario), manualReloadSnapshot.contextFingerprint,
+  "原值保护读取后，新粗算指纹不应误过期");
 const manualReloadComparison = compareSnapshot(comparisonProject, hydratedManualScenario, manualReloadSnapshot, run);
 assert.equal(manualReloadComparison.stale, false);
 assert.equal(manualReloadComparison.ok, true, manualReloadComparison.errors.join("；"));
@@ -289,14 +293,14 @@ for (let index = 0; index < 50; index += 1) {
 }
 assert.ok(normalizedAgain.energyData.typicalCurveProfile.some((value, index) =>
   value !== typicalProject.energyData.typicalCurveProfile[index]), "测试确实引入了重复归一化的浮点尾差");
-assert.equal(contextFingerprint(normalizedAgain, comparisonScenario), typicalSnapshot.contextFingerprint,
+assert.equal(currentContextFingerprint(normalizedAgain, comparisonScenario), typicalSnapshot.contextFingerprint,
   "归一化的微小数值尾差不改变计算上下文签名");
 const normalizedComparison = compareSnapshot(normalizedAgain, comparisonScenario, typicalSnapshot, run);
 assert.equal(normalizedComparison.ok, true, normalizedComparison.errors.join("\n"));
 assert.equal(normalizedComparison.stale, false, "仅刷新归一化不误判粗算过期");
 normalizedAgain.energyData.typicalCurveProfile[0] += 0.00001;
 normalizedAgain.energyData.typicalCurveProfile = normalizeTypicalCurveProfile(normalizedAgain.energyData.typicalCurveProfile);
-assert.notEqual(contextFingerprint(normalizedAgain, comparisonScenario), typicalSnapshot.contextFingerprint,
+assert.notEqual(currentContextFingerprint(normalizedAgain, comparisonScenario), typicalSnapshot.contextFingerprint,
   "实质曲线形状变化必须改变签名");
 assert.equal(compareSnapshot(normalizedAgain, comparisonScenario, typicalSnapshot, run).stale, true);
 assert.equal(compareSnapshot(comparisonProject, comparisonScenario, rough, { pricesByYear: {} }).ok, false);

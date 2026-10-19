@@ -13,6 +13,7 @@
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel) {
   const loadedRatios = new WeakMap();
+  const loadedInputs = new WeakMap();
   const refinementForms = new WeakMap();
   const validationMessages = new WeakMap();
   const REFINEMENT_FIELDS = Object.freeze({
@@ -171,14 +172,14 @@
 
   function setValue(querySelector, selector, value) {
     const field = getField(querySelector, selector);
-    if (field) field.value = value;
+    if (field) field.value = value ?? "";
   }
 
   function setRatioValue(querySelector, selector, value) {
     const field = getField(querySelector, selector);
     if (!field) return;
-    const ratio = Number(value || 0);
-    const display = String(Number((ratio * 100).toPrecision(15)));
+    const ratio = Number(value);
+    const display = value === null || value === undefined || value === "" ? "" : String(Number((ratio * 100).toPrecision(15)));
     field.value = display;
     loadedRatios.set(field, { ratio, display });
   }
@@ -435,24 +436,31 @@
     }
     if (message) validationMessages.delete(message);
     const config = scenario.config;
+    const storedMode = (key, allowed, fallback) => {
+      const value = Object.prototype.hasOwnProperty.call(config, key) ? config[key] : modes[key] || fallback;
+      return allowed.includes(value) ? value : "";
+    };
     setValue(querySelector, "#scenario-name", scenario.name);
-    setValue(querySelector, "#mechanism-enabled", config.mechanismEnabled ? "yes" : "no");
+    setValue(querySelector, "#mechanism-enabled", typeof config.mechanismEnabled === "boolean" ? config.mechanismEnabled ? "yes" : "no" : "");
     setRatioValue(querySelector, "#mechanism-ratio", config.mechanismRatio);
     setValue(querySelector, "#mechanism-price", config.mechanismPrice);
     setValue(querySelector, "#mechanism-start-ym", config.mechanismStartYm);
     setValue(querySelector, "#mechanism-end-ym", config.mechanismEndYm);
-    setValue(querySelector, "#mechanism-reference-mode", config.mechanismReferenceMode || "project_capture");
-    setValue(querySelector, "#same-type-spread", config.sameTypeSpread || 0);
-    if (refs.ltPricingMode) refs.ltPricingMode.value = modes.ltPricingMode || "auto";
+    setValue(querySelector, "#mechanism-reference-mode", ["project_capture", "same_type"].includes(config.mechanismReferenceMode) ? config.mechanismReferenceMode : "");
+    setValue(querySelector, "#same-type-spread", config.sameTypeSpread);
+    if (refs.ltPricingMode) refs.ltPricingMode.value = storedMode("ltPricingMode", ["auto", "manual"], "auto");
     setValue(querySelector, "#lt-year1-pnl", config.ltYear1Pnl);
     setValue(querySelector, "#lt-target-pnl", config.ltTargetPnl);
-    setValue(querySelector, "#lt-converge-speed", Number.isFinite(Number(config.ltConvergeSpeed)) ? String(Number(config.ltConvergeSpeed)) : "0");
+    setValue(querySelector, "#lt-converge-speed", config.ltConvergeSpeed);
+    const stepLabel = getField(querySelector, "#lt-converge-speed-label");
+    if (stepLabel) stepLabel.textContent = config.ltConvergeSpeedUnit === "legacy_ratio"
+      ? "历史收敛比例（小数，保留原值）" : "年收敛步长 元/MWh/年";
     setValue(querySelector, "#green-cert-price", config.greenCertPrice);
     setRatioValue(querySelector, "#green-cert-realize-ratio", config.greenCertRealizeRatio);
     setValue(querySelector, "#green-premium-price", config.greenPremiumPrice);
     setRatioValue(querySelector, "#green-premium-realize-ratio", config.greenPremiumRealizeRatio);
-    if (refs.envValueMode) refs.envValueMode.value = modes.envValueMode || "global";
-    setValue(querySelector, "#carbon-enabled", config.carbonEnabled ? "yes" : "no");
+    if (refs.envValueMode) refs.envValueMode.value = storedMode("envValueMode", ["global", "manual"], "global");
+    setValue(querySelector, "#carbon-enabled", typeof config.carbonEnabled === "boolean" ? config.carbonEnabled ? "yes" : "no" : "");
     setValue(querySelector, "#carbon-price", config.carbonPrice);
     setRatioValue(querySelector, "#carbon-realize-ratio", config.carbonRealizeRatio);
     setValue(querySelector, "#market-op-fee", config.marketOpFee);
@@ -460,11 +468,15 @@
     setValue(querySelector, "#ancillary-fee", config.ancillaryFee);
     setValue(querySelector, "#other-fee", config.otherFee);
     setValue(querySelector, "#other-income", config.otherIncome);
-    if (refs.feeConfigMode) refs.feeConfigMode.value = modes.feeConfigMode || "global";
-    if (refs.storageArbitragePrice) refs.storageArbitragePrice.value = config.storageArbitragePrice || 0;
-    if (refs.storageCapacityCompPrice) refs.storageCapacityCompPrice.value = config.storageCapacityCompPrice || 0;
-    if (refs.storageAncillaryRevenuePrice) refs.storageAncillaryRevenuePrice.value = config.storageAncillaryRevenuePrice || 0;
-    if (refs.storageOtherRevenuePrice) refs.storageOtherRevenuePrice.value = config.storageOtherRevenuePrice || 0;
+    if (refs.feeConfigMode) refs.feeConfigMode.value = storedMode("feeConfigMode", ["global", "manual"], "global");
+    if (refs.storageArbitragePrice) refs.storageArbitragePrice.value = config.storageArbitragePrice ?? "";
+    if (refs.storageCapacityCompPrice) refs.storageCapacityCompPrice.value = config.storageCapacityCompPrice ?? "";
+    if (refs.storageAncillaryRevenuePrice) refs.storageAncillaryRevenuePrice.value = config.storageAncillaryRevenuePrice ?? "";
+    if (refs.storageOtherRevenuePrice) refs.storageOtherRevenuePrice.value = config.storageOtherRevenuePrice ?? "";
+    Object.entries(REFINEMENT_FIELDS).forEach(([key, id]) => {
+      const field = getField(querySelector, `#${id}`) || refs[key];
+      if (field) loadedInputs.set(field, { display: String(field.value), original: config[key] });
+    });
     bindRefinementState(input);
   }
 
@@ -500,9 +512,6 @@
     ].forEach((field) => {
       if (!field) return;
       field.disabled = locked || !canUseStorageRevenue;
-      if (!canUseStorageRevenue) {
-        field.value = "0";
-      }
     });
     if (refs.scenarioLockHint) {
       refs.scenarioLockHint.textContent = locked
@@ -542,13 +551,6 @@
     if (carbonEnabledField) carbonEnabledField.disabled = locked || isManual || !canUseCarbon;
     if (carbonPriceField) carbonPriceField.disabled = locked || isManual || !(canUseCarbon && carbonEnabled);
     if (carbonRatioField) carbonRatioField.disabled = locked || isManual || !(canUseCarbon && carbonEnabled);
-    if (!canUseCarbon) {
-      if (carbonEnabledField) carbonEnabledField.value = "no";
-      if (carbonPriceField) carbonPriceField.value = "0";
-      if (carbonRatioField) carbonRatioField.value = "0";
-    } else if (!carbonEnabled && !isManual && carbonRatioField) {
-      carbonRatioField.value = "0";
-    }
     if (refs.envValueSpaceRatio) refs.envValueSpaceRatio.disabled = true;
     if (refs.envValueUsedRatio) refs.envValueUsedRatio.disabled = true;
     if (refs.exportEnvTemplateButton) refs.exportEnvTemplateButton.disabled = locked || !project;
@@ -668,6 +670,24 @@
     return draft;
   }
 
+  function preserveStoredConfig(input, candidate) {
+    const { scenario = {}, project = {}, querySelector, refs = {}, scenarioConfig = {} } = input;
+    const stored = scenario.config || {};
+    const applicable = new Set(scenarioConfig.applicableConfigKeys?.(project, candidate) || Object.keys(candidate));
+    const config = { ...stored, ...candidate };
+    Object.keys(stored).forEach((key) => {
+      const field = getField(querySelector, `#${REFINEMENT_FIELDS[key]}`) || refs[key];
+      const loaded = field && loadedInputs.get(field);
+      const unchanged = loaded && String(field.value) === loaded.display
+        && JSON.stringify(loaded.original) === JSON.stringify(stored[key]);
+      if (!applicable.has(key) || key.endsWith("ByYear") || unchanged) config[key] = stored[key];
+    });
+    if (stored.ltConvergeSpeedUnit === "legacy_ratio") {
+      config.ltConvergeSpeedUnit = "legacy_ratio";
+    }
+    return config;
+  }
+
   function validateScenarioSaveDraft(input = {}) {
     const {
       project = {},
@@ -691,6 +711,22 @@
       return invalid("场景名称重复，请修改后再保存。");
     }
 
+    const choices = [
+      [selectValue(querySelector, "#mechanism-enabled"), ["yes", "no"], "机制电价是否适用"],
+      [refs.ltPricingMode?.value, ["auto", "manual"], "中长期交易策略模式"],
+      [refs.envValueMode?.value, ["global", "manual"], "环境价值配置模式"],
+      [refs.feeConfigMode?.value, ["global", "manual"], "扣费收益配置模式"]
+    ];
+    if (selectValue(querySelector, "#mechanism-enabled") === "yes") {
+      choices.push([selectValue(querySelector, "#mechanism-reference-mode"), ["project_capture", "same_type"], "机制补差参照口径"]);
+    }
+    if (project.siteType === "offshore" && refs.envValueMode?.value === "global") {
+      choices.push([selectValue(querySelector, "#carbon-enabled"), ["yes", "no"], "碳收益是否适用"]);
+    }
+    for (const [value, allowed, label] of choices) {
+      if (!allowed.includes(value)) return invalid(`${label}无效或未填写，请明确选择后再保存。`);
+    }
+
     const mechanismEnabled = selectValue(querySelector, "#mechanism-enabled") === "yes";
     const mechanismStartYm = selectValue(querySelector, "#mechanism-start-ym");
     const mechanismEndYm = selectValue(querySelector, "#mechanism-end-ym");
@@ -705,9 +741,7 @@
     const ltPricingMode = scenarioConfig.getLtPricingMode
       ? scenarioConfig.getLtPricingMode({ ltPricingMode: refs.ltPricingMode?.value })
       : "auto";
-    const ltManualPricesByYear = scenarioConfig.sanitizeLtManualPricesByYear
-      ? scenarioConfig.sanitizeLtManualPricesByYear(scenario.config?.ltManualPricesByYear || {}, project)
-      : {};
+    const ltManualPricesByYear = scenario.config?.ltManualPricesByYear || {};
     if (ltPricingMode === "manual") {
       const completeness = scenarioConfig.getLtManualCompleteness?.(project, { ltManualPricesByYear }) || { complete: 0, total: 0 };
       if (completeness.complete !== completeness.total) {
@@ -718,9 +752,7 @@
     const envValueMode = scenarioConfig.getEnvValueMode
       ? scenarioConfig.getEnvValueMode({ envValueMode: refs.envValueMode?.value })
       : "global";
-    const envManualValuesByYear = scenarioConfig.sanitizeEnvManualValuesByYear
-      ? scenarioConfig.sanitizeEnvManualValuesByYear(scenario.config?.envManualValuesByYear || {}, project)
-      : {};
+    const envManualValuesByYear = scenario.config?.envManualValuesByYear || {};
     const envAllocationDraft = readEnvValueAllocationDraft(project);
     if (envValueMode === "manual") {
       const completeness = scenarioConfig.getEnvManualCompleteness?.(project, { envManualValuesByYear }) || { complete: 0, total: 0 };
@@ -739,9 +771,7 @@
     const feeConfigMode = scenarioConfig.getFeeConfigMode
       ? scenarioConfig.getFeeConfigMode({ feeConfigMode: refs.feeConfigMode?.value })
       : "global";
-    const feeManualValuesByYear = scenarioConfig.sanitizeFeeManualValuesByYear
-      ? scenarioConfig.sanitizeFeeManualValuesByYear(scenario.config?.feeManualValuesByYear || {}, project)
-      : {};
+    const feeManualValuesByYear = scenario.config?.feeManualValuesByYear || {};
     if (feeConfigMode === "manual") {
       const completeness = scenarioConfig.getFeeManualCompleteness?.(project, { feeManualValuesByYear }) || { complete: 0, total: 0 };
       if (completeness.complete !== completeness.total) {
@@ -751,11 +781,15 @@
 
     const numericError = validateActiveNumericFields({ project, refs, querySelector, ltPricingMode, envValueMode, feeConfigMode });
     if (numericError) return invalid(numericError);
+    if (ltPricingMode !== "manual" && scenario.config?.ltConvergeSpeedUnit === "legacy_ratio"
+        && Number(getField(querySelector, "#lt-converge-speed")?.value) > 1) {
+      return invalid("历史收敛比例应在0至1之间；原值保留，不会自动改为固定步长。");
+    }
 
     return {
       ok: true,
       scenarioName,
-      config: buildScenarioConfigFromForm({
+      config: preserveStoredConfig(input, buildScenarioConfigFromForm({
         project,
         refs,
         querySelector,
@@ -767,7 +801,7 @@
         envAllocationDraft,
         feeConfigMode,
         feeManualValuesByYear
-      })
+      }))
     };
   }
 
@@ -783,6 +817,7 @@
     }
     if (scenario.locked) return invalid("当前场景已锁定，不能保存修改。");
     scenario.name = draft.scenarioName;
+    getScenarioModel().invalidateInactiveConfirmations?.(project, scenario);
     scenario.config = draft.config;
     const config = scenario.config;
     const confirmedKeys = ["mechanismEnabled", "ltPricingMode", "envValueMode", "feeConfigMode"];
@@ -803,7 +838,7 @@
     confirmedKeys.push(...(config.feeConfigMode === "manual" ? ["feeManualValuesByYear"]
       : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]));
     if (project.hasStorage) confirmedKeys.push("storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice");
-    getScenarioModel().confirmConfig(scenario, confirmedKeys);
+    getScenarioModel().confirmConfig(scenario, confirmedKeys, { project });
     scenario.updatedAt = nowIso();
     project.statuses = project.statuses || {};
     project.statuses["scenario-page"] = "completed";

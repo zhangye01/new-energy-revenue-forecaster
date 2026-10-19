@@ -6,8 +6,16 @@ const {
   buildEnergySampleRows,
   downloadEnergySampleFile,
   exportEnergyTemplate,
-  importEnergyFromFile
+  importEnergyFromFile: importEnergyFromFileImpl
 } = require("../src/ui/energy-template-flow");
+
+function importEnergyFromFile(input) {
+  const project = input.project || { id: "import-project" };
+  return importEnergyFromFileImpl({ ...input, project, actions: {
+    getActiveProject: () => project,
+    ...input.actions
+  } });
+}
 
 function createServices(overrides = {}) {
   return {
@@ -155,6 +163,33 @@ assert.equal(sampleCalls[0].filename, "energy-template-示例.csv");
     actions: createActions(missingCalls)
   }), false);
   assert.deepEqual(missingCalls, ["message:error:请先选择CSV或Excel文件。"]);
+
+  for (const mode of ["annual_hours", "typical_curve_8760", "hourly_8760"]) {
+    for (const change of ["switch", "delete", "reload-same-id", "id-change"]) {
+      const originalProject = { id: "original", energyData: { annualInputByYear: { 2026: 2000 } },
+        roughPrice: { snapshots: [{ id: "rough", price: 333.9 }] } };
+      const otherProject = { id: "other", energyData: { annualInputByYear: { 2026: 3000 } } };
+      let activeProject = originalProject, finishRead, writes = 0;
+      const reading = new Promise((resolve) => { finishRead = resolve; });
+      const calls = [], control = { files: [{ name: "energy.csv" }], value: "chosen" };
+      const importing = importEnergyFromFile({ mode, project: originalProject, inputElement: control,
+        actions: createActions(calls, { getActiveProject: () => activeProject, readSpreadsheetToCsv: () => reading,
+          importEnergyDataFromText: () => { writes++; activeProject.energyData = {}; return true; } }) });
+      if (change === "switch") activeProject = otherProject;
+      if (change === "delete") activeProject = null;
+      if (change === "reload-same-id") activeProject = JSON.parse(JSON.stringify(originalProject));
+      if (change === "id-change") originalProject.id = "replaced";
+      const before = JSON.stringify([originalProject, otherProject]);
+      finishRead({ text: "year,annual_hours_h\n2026,2100", source: "text" });
+      assert.equal(await importing, false, `${mode}/${change} must cancel`);
+      assert.equal(writes, 0); assert.equal(control.value, "chosen");
+      assert.equal(JSON.stringify([originalProject, otherProject]), before);
+      assert.match(calls[0], /导入已取消.*项目/);
+    }
+  }
+  assert.equal(await importEnergyFromFileImpl({ project: { id: "p" },
+    inputElement: { files: [{ name: "energy.csv" }] }, actions: createActions([])
+  }), false, "energy imports without a live target getter must fail closed");
 
   const project = {
     forecastYears: 2,

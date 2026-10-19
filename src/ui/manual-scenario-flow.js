@@ -132,14 +132,28 @@
       setManualScenarioStatus({ refs, config, text: "请先选择CSV或Excel文件。" });
       return false;
     }
+    const target = { projectId: project.id, scenarioId: scenario.id };
+    const targetIsCurrent = () => typeof actions.getActiveProject === "function"
+      && typeof actions.getActiveScenario === "function"
+      && actions.getActiveProject() === project && project.id === target.projectId
+      && actions.getActiveScenario(project) === scenario && scenario.id === target.scenarioId;
+    const rejectChangedTarget = () => {
+      const text = `“${file.name || "所选文件"}”导入已取消：项目或方案已切换、删除或重新载入，请在目标方案重新导入。`;
+      setManualScenarioStatus({ refs, config, text });
+      setScenarioImportMessage({ refs, text, tone: "error" });
+      return false;
+    };
+    if (!targetIsCurrent()) return rejectChangedTarget();
     try {
       const { text } = await actions.readSpreadsheetToCsv(file);
+      if (!targetIsCurrent()) return rejectChangedTarget();
       const parsed = config.parse(text, project);
       if (!parsed.ok) {
         setManualScenarioStatus({ refs, config, text: parsed.message });
         setScenarioImportMessage({ refs, text: parsed.message, tone: "error" });
         return false;
       }
+      if (!targetIsCurrent()) return rejectChangedTarget();
       if (scenario.locked) {
         setScenarioImportMessage({ refs, text: config.lockedMessage, tone: "error" });
         return false;
@@ -149,7 +163,7 @@
       }
       scenario.config[config.modeKey] = "manual";
       scenario.config[config.valuesKey] = parsed[config.parsedKey];
-      getScenarioModel().confirmConfig(scenario, [config.modeKey, config.valuesKey]);
+      getScenarioModel().confirmConfig(scenario, [config.modeKey, config.valuesKey], { project });
       scenario.updatedAt = new Date().toISOString();
       if (!project.statuses || typeof project.statuses !== "object") {
         project.statuses = {};

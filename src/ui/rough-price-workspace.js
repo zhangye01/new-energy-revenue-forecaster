@@ -66,7 +66,7 @@
     const control = type === "checkbox"
       ? `<input type="checkbox" ${attributes}${value ? " checked" : ""}${disabled ? " disabled" : ""}>`
       : `<input type="${type}" ${attributes} value="${escapeHtml(display)}"${type === "number" ? ' step="any"' : ""}${min !== undefined ? ` min="${min}"` : ""}${max !== undefined ? ` max="${max}"` : ""}${disabled ? " disabled" : ""}>`;
-    return `<label${type === "checkbox" ? ' class="rough-checkbox"' : ""}>${escapeHtml(label)}${ratio ? "（%）" : type === "number" ? "（元/MWh）" : ""}${control}</label>`;
+    return `<label${type === "checkbox" ? ' class="rough-checkbox"' : ""}>${escapeHtml(label)}${ratio ? "（%）" : type === "number" && options.unit !== "" ? "（元/MWh）" : ""}${control}</label>`;
   }
 
   function selectField(key, label, value, choices, disabled) {
@@ -130,7 +130,11 @@
       inputField("sameTypeSpread", "同类型机组价差", config.sameTypeSpread ?? 0, { disabled: locked });
     const ltFields = config.ltPricingMode === "manual"
       ? `<div class="rough-fields">${yearsFor(project).map((year) => inputField("value", `${year} 年策略损益`, config.ltManualPricesByYear?.[year], { disabled: locked, group: "ltManualPricesByYear", year })).join("")}</div>`
-      : `<div class="rough-fields">${[["ltYear1Pnl", "首年策略损益"], ["ltTargetPnl", "目标策略损益"], ["ltConvergeSpeed", "每年收敛步长"]].map(([key, label]) => inputField(key, label, config[key], { disabled: locked, min: key === "ltConvergeSpeed" ? 0 : undefined })).join("")}</div>`;
+      : `<div class="rough-fields">${[["ltYear1Pnl", "首年策略损益"], ["ltTargetPnl", "目标策略损益"], ["ltConvergeSpeed", "每年收敛步长"]].map(([key, label]) => {
+        const legacy = key === "ltConvergeSpeed" && config.ltConvergeSpeedUnit === "legacy_ratio";
+        return inputField(key, legacy ? "历史收敛比例（小数，保留原值）" : label, config[key],
+          { disabled: locked, min: key === "ltConvergeSpeed" ? 0 : undefined, max: legacy ? 1 : undefined, unit: legacy ? "" : undefined });
+      }).join("")}</div>`;
     return `<section class="rough-shared"><div class="rough-section-head"><h3 id="rough-shared-heading">结算参数</h3>${locked ? '<span class="rough-badge">方案已锁定，只读</span>' : ""}</div>
       <p class="rough-note" data-help="结算参数" data-help-anchor="#rough-shared-heading">已确认参数自动带入，未确认参数保留填写。生成粗算不会批量确认参数；实际调整的单项参数自动带入，未修改的默认值仍待确认。逐年表需明确确认；核对本页适用参数后，可点击“确认并保存本页结算参数”。</p>
       ${groupHtml("mechanism", "机制电价与补差口径", `<div class="rough-fields">${mechanism}</div><p class="rough-note" data-help="机制补差口径">同类型机组均价＝项目捕获电价＋同类型机组价差；年度有效机制占比按执行月份折算。</p>`)}
@@ -287,7 +291,9 @@
       if (key === "ltPricingMode") {
         if ([config.ltYear1Pnl, config.ltTargetPnl, config.ltConvergeSpeed].every(finiteValue)) {
           const first = Number(config.ltYear1Pnl), target = Number(config.ltTargetPnl);
-          const delta = Math.min(Math.abs(target - first), index * Math.max(0, Number(config.ltConvergeSpeed)));
+          const step = config.ltConvergeSpeedUnit === "legacy_ratio"
+            ? Number((Math.abs(target - first) * Number(config.ltConvergeSpeed)).toFixed(4)) : Number(config.ltConvergeSpeed);
+          const delta = Math.min(Math.abs(target - first), index * Math.max(0, step));
           config[group][year] = first + Math.sign(target - first) * delta;
         } else config[group][year] = null;
       } else config[group][year] = Object.fromEntries((key === "envValueMode" ? ENV_FIELDS : FEE_FIELDS).map(([field, , type]) =>
@@ -315,10 +321,11 @@
       // auto-filled years, so new annual assumptions need explicit confirmation.
       const confirmedKeys = confirmAll ? applicableKeys : applicableKeys.filter((key) =>
         !key.endsWith("ByYear") && JSON.stringify(entry.config[key]) !== JSON.stringify(scenario.config[key]));
+      options.inputState?.invalidateInactiveConfirmations?.(project, scenario);
       scenario.config = clone(entry.config);
       scenario.updatedAt = typeof options.nowIso === "function" ? options.nowIso() : options.nowIso || new Date().toISOString();
       entry.source = JSON.stringify(scenario.config); entry.dirty = false;
-      options.inputState?.confirmConfig?.(scenario, confirmedKeys, { source: confirmAll ? "explicit" : "rough_edit" });
+      options.inputState?.confirmConfig?.(scenario, confirmedKeys, { source: confirmAll ? "explicit" : "rough_edit", project });
       entry.groupOpen = {};
       return changed;
     };

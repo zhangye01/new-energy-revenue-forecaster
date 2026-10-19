@@ -65,6 +65,22 @@
     return ENERGY_MODE_META[key] || ENERGY_MODE_META.annual_hours;
   }
 
+  function readStoredTypicalCurveProfile(values) {
+    if (Array.isArray(values) && values.length === 8760) {
+      let total = 0;
+      for (const value of values) {
+        if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+          return energyProfiles.normalizeTypicalCurveProfile(values);
+        }
+        total += value;
+      }
+      // Re-dividing an already normalized profile changes stored floating-point
+      // values on every read. Keep valid numeric weights within summation error.
+      if (Math.abs(total - 1) <= 1e-12) return values;
+    }
+    return energyProfiles.normalizeTypicalCurveProfile(values);
+  }
+
   function ensureProjectEnergyDataState(project) {
     if (!project || !isPlainObject(project)) return projectModel.createEmptyEnergyDataState();
     const raw = isPlainObject(project.energyData) ? project.energyData : {};
@@ -82,7 +98,7 @@
     normalized.typicalCurveSource = ["typical_curve_8760", "province_typical_curve"].includes(raw.typicalCurveSource)
       ? raw.typicalCurveSource
       : (normalized.mode === "typical_curve_8760" || normalized.mode === "province_typical_curve" ? normalized.mode : "");
-    normalized.typicalCurveProfile = energyProfiles.normalizeTypicalCurveProfile(raw.typicalCurveProfile);
+    normalized.typicalCurveProfile = readStoredTypicalCurveProfile(raw.typicalCurveProfile);
     project.energyData = normalized;
     project.energyMode = normalized.mode;
     return normalized;

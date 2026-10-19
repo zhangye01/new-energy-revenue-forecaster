@@ -56,7 +56,7 @@ function documentFixture() {
 
 function projectFixture() {
   const project = { id: "project-1", name: '<风电 "项目">', province: "shandong", assetType: "wind",
-    siteType: "onshore", capacityMw: 100, hasStorage: true, startYear: 2027, forecastYears: 2,
+    siteType: "onshore", capacityMw: 100, hasStorage: true, storagePowerMw: 20, storageDurationH: 2, startYear: 2027, forecastYears: 2,
     activeRunId: "run-1", priceRuns: [{ id: "run-1", status: "publishable", pricesByYear: {
       2027: Array(8760).fill(300), 2028: Array(8760).fill(310)
     } }], energyData: { hourlyByYear: { 2027: Array(8760).fill(0.2), 2028: Array(8760).fill(0.2) },

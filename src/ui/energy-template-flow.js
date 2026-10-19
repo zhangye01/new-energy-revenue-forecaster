@@ -42,6 +42,7 @@
     const {
       mode = "hourly_8760",
       inputElement = null,
+      project = null,
       actions = {}
     } = input;
     const file = inputElement?.files?.[0];
@@ -49,9 +50,17 @@
       actions.setEnergyImportMessage?.("请先选择CSV或Excel文件。", "error");
       return false;
     }
-
+    const projectId = project?.id;
+    const targetIsCurrent = () => project && typeof actions.getActiveProject === "function"
+      && actions.getActiveProject() === project && project.id === projectId;
+    const rejectChangedTarget = () => {
+      actions.setEnergyImportMessage?.(`“${file.name || "所选文件"}”导入已取消：项目已切换、删除或重新载入，请在目标项目重新导入。`, "error");
+      return false;
+    };
+    if (!targetIsCurrent()) return rejectChangedTarget();
     try {
       const output = await actions.readSpreadsheetToCsv?.(file);
+      if (!targetIsCurrent()) return rejectChangedTarget();
       const text = String(output?.text || "").trim();
       if (!text) {
         actions.setEnergyImportMessage?.("文件内容为空，请检查模板后重试。", "error");
@@ -59,6 +68,7 @@
       }
       const source = String(output?.source || "");
       const sourceLabel = source.startsWith("excel:") ? source.slice(6) : file.name;
+      if (!targetIsCurrent()) return rejectChangedTarget();
       const imported = actions.importEnergyDataFromText?.(mode, text, sourceLabel);
       if (imported && inputElement) {
         inputElement.value = "";

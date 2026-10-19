@@ -128,7 +128,7 @@
       },
       grid: { top: 36, left: 50, right: 18, bottom: 54, containLabel: true },
       xAxis: buildCategoryAxis(QUARTER_LABELS, tokens, {
-        axisLabel: { interval: 7 }
+        axisLabel: { interval: 15, hideOverlap: true }
       }),
       yAxis: buildValueAxis(tokens, {
         name: "元/MWh",
@@ -164,7 +164,7 @@
       tooltip: buildTooltip(tokens),
       grid: { top: 30, left: 52, right: 18, bottom: 46, containLabel: true },
       xAxis: buildCategoryAxis(data.histogramLabels, tokens, {
-        axisLabel: { interval: 1 }
+        axisLabel: { interval: "auto", hideOverlap: true }
       }),
       yAxis: buildValueAxis(tokens),
       series: [{
@@ -195,7 +195,7 @@
       },
       grid: { top: 30, left: 48, right: 20, bottom: 52, containLabel: true },
       xAxis: buildCategoryAxis(HEAT_HOUR_LABELS, tokens, {
-        axisLabel: { interval: 1 }
+        axisLabel: { interval: 3, hideOverlap: true }
       }),
       yAxis: buildCategoryAxis(MONTH_LABELS, tokens),
       visualMap: {

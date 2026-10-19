@@ -139,6 +139,7 @@
   }
 
   function cloneConfigValue(value) {
+    if (value === undefined) return undefined;
     return JSON.parse(JSON.stringify(value));
   }
 
@@ -156,15 +157,35 @@
     if (!scenario || scenario.locked || !isPlainObject(scenario.config)) return false;
     if (!isPlainObject(scenario.confirmedConfig)) scenario.confirmedConfig = {};
     if (!isPlainObject(scenario.confirmedConfigSources)) scenario.confirmedConfigSources = {};
+    if (options.project) invalidateInactiveConfirmations(options.project, scenario);
     const source = CONFIRMATION_SOURCES.has(options.source) ? options.source : "explicit";
     const selectedKeys = keys === undefined ? Object.keys(scenario.config) : (Array.isArray(keys) ? keys : [keys]);
+    const applicable = options.project ? new Set(scenarioConfig.applicableConfigKeys(options.project, scenario.config)) : null;
     selectedKeys.forEach((key) => {
-      if (CONFIG_KEYS.has(key) && Object.prototype.hasOwnProperty.call(scenario.config, key) && scenario.config[key] !== undefined) {
+      if ((!applicable || applicable.has(key)) && CONFIG_KEYS.has(key) && Object.prototype.hasOwnProperty.call(scenario.config, key) && scenario.config[key] !== undefined) {
         scenario.confirmedConfig[key] = cloneConfigValue(scenario.config[key]);
         scenario.confirmedConfigSources[key] = source;
       }
     });
     return true;
+  }
+
+  function retainConfirmationEvidence(scenario) {
+    if (scenario.confirmationEvidence || !Object.keys(scenario.confirmedConfig || {}).length) return;
+    scenario.confirmationEvidence = {
+      confirmedConfig: cloneConfigValue(scenario.confirmedConfig),
+      confirmedConfigSources: cloneConfigValue(scenario.confirmedConfigSources || {})
+    };
+  }
+
+  function invalidateInactiveConfirmations(project, scenario) {
+    const applicable = new Set(scenarioConfig.applicableConfigKeys(project, scenario.config));
+    Object.keys(scenario.confirmedConfig || {}).forEach((key) => {
+      if (applicable.has(key)) return;
+      retainConfirmationEvidence(scenario);
+      delete scenario.confirmedConfig[key];
+      if (scenario.confirmedConfigSources) delete scenario.confirmedConfigSources[key];
+    });
   }
 
   function sanitizeScenario(project = {}, rawScenario, index = 0, options = {}) {
@@ -224,16 +245,17 @@
       },
       updatedAt: typeof scenario.updatedAt === "string" && scenario.updatedAt ? scenario.updatedAt : resolveNowIso(options)
     };
-    if (project.siteType !== "offshore") {
-      next.config.carbonEnabled = false;
-      next.config.carbonPrice = 0;
-      next.config.carbonRealizeRatio = 0;
+    // Hydration must not repair stored input. Preserve nulls, inactive values,
+    // partial/extra-year maps and precision; validate a separate calculation view.
+    next.config = { ...next.config, ...cloneConfigValue(srcConfig) };
+    if (srcConfig.ltConvergeSpeedUnit !== "fixed_step" && Number(srcConfig.ltConvergeSpeed) > 0
+        && Number(srcConfig.ltConvergeSpeed) <= 1 && Number(srcConfig.ltYear1Pnl) !== Number(srcConfig.ltTargetPnl)) {
+      next.config.ltConvergeSpeedUnit = "legacy_ratio";
     }
-    if (!project.hasStorage) {
-      next.config.storageArbitragePrice = 0;
-      next.config.storageCapacityCompPrice = 0;
-      next.config.storageAncillaryRevenuePrice = 0;
-      next.config.storageOtherRevenuePrice = 0;
+    if (scenario.confirmationEvidence) next.confirmationEvidence = cloneConfigValue(scenario.confirmationEvidence);
+    else if (Object.keys(scenario.confirmedConfig || {}).length) {
+      next.confirmationEvidence = { confirmedConfig: cloneConfigValue(scenario.confirmedConfig),
+        confirmedConfigSources: cloneConfigValue(scenario.confirmedConfigSources || {}) };
     }
     const annualConfirmations = {
       ltManualPricesByYear: [scenarioConfig.sanitizeLtManualPricesByYear, scenarioConfig.getLtManualCompleteness],
@@ -249,7 +271,7 @@
         // Only normalize a map that still matches what the user confirmed. This
         // preserves disabled carbon fields across reloads without confirming edits.
         if (!isConfigConfirmed(scenario, key)) return;
-        const value = annual[0](scenario.confirmedConfig[key], project);
+        const value = scenario.confirmedConfig[key];
         const coverage = annual[1](project, { [key]: value });
         if (coverage.complete !== coverage.total || !sameConfigValue(value, next.config[key])) return;
       } else if (!isConfigConfirmed(scenario, key, next.config[key])) return;
@@ -261,6 +283,7 @@
       next.confirmedConfig[key] = cloneConfigValue(next.config[key]);
       if (CONFIRMATION_SOURCES.has(source)) next.confirmedConfigSources[key] = source;
     });
+    invalidateInactiveConfirmations(project, next);
     return next;
   }
 
@@ -326,6 +349,8 @@
     if (!scenario.config || !isPlainObject(scenario.config)) {
       scenario.config = {};
     }
+    const previousConfig = cloneConfigValue(scenario.config);
+    invalidateInactiveConfirmations(project, scenario);
     scenario.config.mechanismEnabled = defaults.mechanismEnabled;
     scenario.config.mechanismRatio = defaults.mechanismRatio;
     scenario.config.mechanismPrice = defaults.mechanismPrice;
@@ -346,6 +371,12 @@
       scenario.config.carbonEnabled = false;
       scenario.config.carbonPrice = 0;
     }
+    const applicable = new Set(scenarioConfig.applicableConfigKeys(project, scenario.config));
+    Object.keys(scenario.config).forEach((key) => {
+      if (applicable.has(key)) return;
+      if (Object.prototype.hasOwnProperty.call(previousConfig, key)) scenario.config[key] = previousConfig[key];
+      else delete scenario.config[key];
+    });
     confirmConfig(scenario, [
       "mechanismEnabled", "mechanismRatio", "mechanismPrice",
       "marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee",
@@ -353,7 +384,7 @@
       "carbonRealizeRatio", "storageArbitragePrice", "storageCapacityCompPrice",
       "storageAncillaryRevenuePrice", "storageOtherRevenuePrice",
       ...(project.siteType !== "offshore" ? ["carbonEnabled", "carbonPrice"] : [])
-    ]);
+    ], { project });
     scenario.updatedAt = typeof nowIso === "function" ? nowIso() : resolveNowIso({ nowIso });
     return scenario;
   }
@@ -370,12 +401,14 @@
 
   function buildBatchResultMessage(result) {
     if (!result.updated) {
-      return "没有可更新的场景（可能被锁定或范围过滤）。";
+      return result.skippedInapplicable ? `没有可更新的场景；${result.skippedInapplicable} 个场景当前不适用，原值保留且未确认。`
+        : "没有可更新的场景（可能被锁定或范围过滤）。";
     }
     let message = `批量更新完成：${result.updated} 个场景已更新，跳过基准 ${result.skippedBaseline} 个，跳过锁定 ${result.skippedLocked} 个。`;
     if (result.skippedSpace) {
       message += ` 另有 ${result.skippedSpace} 个场景因环境价值兑现空间超过100%未更新。`;
     }
+    if (result.skippedInapplicable) message += ` 另有 ${result.skippedInapplicable} 个场景因当前不适用而保留原值、未确认。`;
     return message;
   }
 
@@ -405,6 +438,7 @@
       skippedBaseline: 0,
       skippedLocked: 0,
       skippedSpace: 0,
+      skippedInapplicable: 0,
       message: ""
     };
 
@@ -415,6 +449,11 @@
       }
       if (scenario.locked) {
         result.skippedLocked += 1;
+        return;
+      }
+      invalidateInactiveConfirmations(project, scenario);
+      if (!scenarioConfig.applicableConfigKeys(project, scenario.config).includes(key)) {
+        result.skippedInapplicable += 1;
         return;
       }
       if (key === "carbonPrice" && project.siteType !== "offshore") {
@@ -437,8 +476,12 @@
       } else {
         scenario.config[key] = parsed;
       }
+      // The batch control is explicitly labelled 元/MWh/年. Applying it is an
+      // intentional replacement, unlike opening/reviewing a legacy ratio.
+      if (key === "ltConvergeSpeed") scenario.config.ltConvergeSpeedUnit = "fixed_step";
       confirmConfig(scenario, key === "carbonPrice" && project.siteType !== "offshore"
-        ? ["carbonPrice", "carbonEnabled", "carbonRealizeRatio"] : [key]);
+        ? ["carbonPrice", "carbonEnabled", "carbonRealizeRatio"]
+        : key === "ltConvergeSpeed" ? [key, "ltConvergeSpeedUnit"] : [key], { project });
       scenario.updatedAt = typeof nowIso === "function" ? nowIso() : nowIso;
       result.updated += 1;
     });
@@ -454,6 +497,7 @@
     createBaselineScenario,
     defaultScenarioConfig,
     isConfigConfirmed,
+    invalidateInactiveConfirmations,
     normalizeLtConvergeStep,
     normalizeScenarioMetadata,
     parseBatchValue,

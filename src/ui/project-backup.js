@@ -6,6 +6,9 @@
   root.NE_PROJECT_BACKUP = api;
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
   const FORMAT = "new-energy-project-backup";
+  const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+  // A structural guard for recursive downstream readers, not a file-size or array-length limit.
+  const MAX_STRUCTURE_DEPTH = 64;
   const formBaselines = new WeakMap();
   const selectedScenarios = new WeakMap();
   const FORM_SELECTORS = ["#create-project-form", "#scenario-form", "#forecast-run-form", "#scenario-quick-name"];
@@ -60,10 +63,66 @@
       ...(recoveryBranches.length ? { recoveryBranches } : {}) });
   }
 
+  function validateJsonTree(data) {
+    const stack = [{ value: data, path: "$", depth: 0 }];
+    while (stack.length) {
+      const { value, path, depth } = stack.pop();
+      if (typeof value === "number" && !Number.isFinite(value)) {
+        throw new Error(`备份包含非有限数字：${path}，未恢复任何项目。`);
+      }
+      if (!value || typeof value !== "object") continue;
+      if (depth > MAX_STRUCTURE_DEPTH) {
+        throw new Error(`备份嵌套超过${MAX_STRUCTURE_DEPTH}层结构安全上限：${path}，未恢复任何项目。`);
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (UNSAFE_KEYS.has(key)) {
+          throw new Error(`备份包含不安全字段“${key}”：${path}，未恢复任何项目。`);
+        }
+        // IDs become object-map keys in result and workspace modules.
+        if (["id", "projectId", "scenarioId", "runId", "activeScenarioId", "activeRunId"].includes(key)
+            && typeof child === "string" && UNSAFE_KEYS.has(child)) {
+          throw new Error(`备份包含不安全标识：${path}.${key}，未恢复任何项目。`);
+        }
+        stack.push({ value: child, path: Array.isArray(value) ? `${path}[${key}]` : `${path}.${key}`, depth: depth + 1 });
+      }
+    }
+  }
+
+  function isObject(value) { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
+
+  function validateContainer(source, key, array, path) {
+    const value = source?.[key];
+    if (value == null) return;
+    if (!(array ? Array.isArray(value) : isObject(value))) {
+      throw new Error(`备份结构无效：${path}.${key}应为${array ? "数组" : "对象"}，未恢复任何项目。`);
+    }
+  }
+
+  function validateProjectStructure(project, index) {
+    const path = `projects[${index}]`;
+    const draft = project?.workspaceBucket === "new";
+    const validPeriod = (draft && project.startYear == null && project.forecastYears == null) ||
+      (Number.isInteger(project?.startYear) && Number.isInteger(project?.forecastYears) && project.forecastYears >= 1 && project.forecastYears <= 30);
+    const validCapacity = (draft && project.capacityMw == null) || (Number.isFinite(project?.capacityMw) && project.capacityMw > 0);
+    if (!isObject(project) || typeof project.id !== "string" || !project.id || typeof project.name !== "string" ||
+        !validPeriod || !validCapacity || !Array.isArray(project.scenarios) || (!draft && !project.scenarios.length)) {
+      throw new Error(`备份项目结构不完整：${path}，未恢复任何项目。`);
+    }
+    ["energyData", "statuses", "energyTemplateExports", "roughPrice", "resultsByScenario"].forEach((key) => validateContainer(project, key, false, path));
+    ["priceRuns", "activationLogs", "restoredFromProjectIds"].forEach((key) => validateContainer(project, key, true, path));
+    project.scenarios.forEach((scenario, i) => {
+      if (!isObject(scenario)) throw new Error(`备份方案结构无效：${path}.scenarios[${i}]，未恢复任何项目。`);
+      ["config", "confirmedConfig", "confirmedConfigSources"].forEach((key) => validateContainer(scenario, key, false, `${path}.scenarios[${i}]`));
+    });
+    validateContainer(project.roughPrice, "draftsByScenario", false, `${path}.roughPrice`);
+    validateContainer(project.roughPrice, "snapshots", true, `${path}.roughPrice`);
+  }
+
   function prepareRestore(text, existingProjects, account, makeId) {
     if (!account) throw new Error("请先登录后恢复项目。");
     let data;
     try { data = JSON.parse(text); } catch { throw new Error("备份文件不是有效的 JSON。"); }
+    validateJsonTree(data);
     if (data?.format !== FORMAT || data.version !== 1 || !Array.isArray(data.projects)) {
       throw new Error("请选择包含项目的本工具备份文件（版本 1）。");
     }
@@ -73,17 +132,10 @@
     }
     const allProjects = [...data.projects, ...branches.flatMap((branch) => branch.projects)];
     if (!allProjects.length) throw new Error("请选择包含项目的本工具备份文件（版本 1）。");
+    allProjects.forEach(validateProjectStructure);
     const ids = new Set(existingProjects.map((project) => project.id));
     let copies = 0;
     const projects = allProjects.map((project) => {
-      const draft = project?.workspaceBucket === "new";
-      const validPeriod = (draft && project.startYear == null && project.forecastYears == null) ||
-        (Number.isInteger(project?.startYear) && Number.isInteger(project?.forecastYears) && project.forecastYears >= 1 && project.forecastYears <= 30);
-      const validCapacity = (draft && project.capacityMw == null) || (Number.isFinite(project?.capacityMw) && project.capacityMw > 0);
-      if (!project || typeof project.id !== "string" || !project.id || typeof project.name !== "string" ||
-          !validPeriod || !validCapacity || !Array.isArray(project.scenarios) || (!draft && !project.scenarios.length)) {
-        throw new Error("备份项目结构不完整，未恢复任何项目。");
-      }
       const restored = { ...project, ownerAccount: account };
       if (ids.has(restored.id)) {
         restored.restoredFromProjectIds = Array.from(new Set([

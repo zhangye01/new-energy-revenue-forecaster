@@ -169,6 +169,7 @@ function makeFields(initial = {}) {
   return {
     fields,
     querySelector(selector) {
+      if (selector === "#undefined") return null; // Like the real DOM: no input exists for annual maps / metadata.
       if (!fields.has(selector)) fields.set(selector, { value: "" });
       return fields.get(selector);
     }
@@ -272,7 +273,7 @@ applyScenarioFieldLocks({
 assert.equal(lockHarness.fields.get("#mechanism-ratio").disabled, true);
 assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, true);
 assert.equal(lockRefs.storageArbitragePrice.disabled, true);
-assert.equal(lockRefs.storageArbitragePrice.value, "0");
+assert.equal(lockRefs.storageArbitragePrice.value, "18", "hiding storage controls must preserve their loaded values");
 assert.equal(lockRefs.scenarioLockHint.textContent, "当前场景可编辑。");
 
 lockHarness.fields.get("#mechanism-enabled").value = "yes";
@@ -356,9 +357,10 @@ const inlandEnvState = applyEnvValueControlState({
 });
 assert.equal(inlandEnvState.canUseCarbon, false);
 assert.equal(envRefs.envValueMode.disabled, true);
-assert.equal(envHarness.fields.get("#carbon-enabled").value, "no");
-assert.equal(envHarness.fields.get("#carbon-price").value, "0");
-assert.equal(envHarness.fields.get("#carbon-realize-ratio").value, "0");
+assert.equal(envHarness.fields.get("#carbon-enabled").value, "yes");
+assert.equal(envHarness.fields.get("#carbon-price").value, "4");
+assert.equal(envHarness.fields.get("#carbon-realize-ratio").value, "40");
+assert.equal(envHarness.fields.get("#carbon-price").disabled, true, "inapplicable controls are disabled without zeroing stored values");
 assert.equal(envRefs.exportEnvTemplateButton.disabled, true);
 
 assert.equal(loadHarness.fields.get("#mechanism-reference-mode").value, "same_type");
@@ -452,7 +454,8 @@ const saveScenario = {
   config: {
     ltManualPricesByYear: { 2026: 8, 2027: 6 },
     envManualValuesByYear: {},
-    feeManualValuesByYear: { 2026: { marketOpFee: 1 }, 2027: { marketOpFee: 1 } }
+    feeManualValuesByYear: Object.fromEntries([2026, 2027].map((year) => [year,
+      { marketOpFee: 1, gridAssessFee: 0, ancillaryFee: 0, otherFee: 0, otherIncome: 0 }]))
   }
 };
 const saveDraft = buildScenarioSaveDraft({
@@ -472,6 +475,7 @@ const saveDraft = buildScenarioSaveDraft({
     "#mechanism-enabled": "yes",
     "#mechanism-ratio": "36",
     "#mechanism-price": "365",
+    "#mechanism-reference-mode": "project_capture",
     "#mechanism-start-ym": "2026-01",
     "#mechanism-end-ym": "2027-12",
     "#lt-year1-pnl": "8",
@@ -565,7 +569,8 @@ const invalidEnvDraft = buildScenarioSaveDraft({
   },
   querySelector: makeFields({
     "#scenario-name": "基准场景",
-    "#mechanism-enabled": "no"
+    "#mechanism-enabled": "no",
+    "#carbon-enabled": "yes"
   }).querySelector,
   scenarioConfig,
   readEnvValueAllocationDraft: () => ({
@@ -648,8 +653,10 @@ assert.equal(modelForConfirmation.isConfigConfirmed(inactiveScenario, "otherFee"
 assert.equal(modelForConfirmation.isConfigConfirmed(inactiveScenario, "mechanismEnabled"), true);
 const manualOnlyScenario = modelForConfirmation.createBaselineScenario(inactiveProject);
 Object.assign(manualOnlyScenario.config, { ltPricingMode: "manual", ltManualPricesByYear: { 2026: 0, 2027: 1 },
-  envValueMode: "manual", envManualValuesByYear: { 2026: {}, 2027: {} },
-  feeConfigMode: "manual", feeManualValuesByYear: { 2026: {}, 2027: {} } });
+  envValueMode: "manual", envManualValuesByYear: Object.fromEntries([2026, 2027].map((year) => [year,
+    { greenCertPrice: 0, greenCertRealizeRatio: 0, greenPremiumPrice: 0, greenPremiumRealizeRatio: 0 }])),
+  feeConfigMode: "manual", feeManualValuesByYear: Object.fromEntries([2026, 2027].map((year) => [year,
+    { marketOpFee: 0, gridAssessFee: 0, ancillaryFee: 0, otherFee: 0, otherIncome: 0 }])) });
 applyScenarioSaveDraft({ project: inactiveProject, scenario: manualOnlyScenario,
   draft: { ok: true, scenarioName: "逐年方案", config: manualOnlyScenario.config } });
 for (const key of ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]) {

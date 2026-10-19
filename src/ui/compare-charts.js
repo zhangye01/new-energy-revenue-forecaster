@@ -98,7 +98,7 @@
       type: "value",
       name,
       nameTextStyle: { color: tokens.axisText, fontWeight: 700 },
-      axisLabel: { color: tokens.axisText },
+      axisLabel: { color: tokens.axisText, hideOverlap: true },
       axisLine: { lineStyle: { color: tokens.axisLine } },
       splitLine: { lineStyle: { color: tokens.splitLine } }
     };
@@ -132,7 +132,7 @@
     const topFactors = factors.slice(0, displayCount).reverse();
     return {
       animationDuration: 340,
-      grid: { top: 30, left: 132, right: 28, bottom: 34, containLabel: true },
+      grid: { top: 30, left: 132, right: 28, bottom: 52, containLabel: true },
       legend: {
         top: 0,
         textStyle: { color: tokens.legendText, fontWeight: 700 }
@@ -149,7 +149,7 @@
           return lines.join("<br/>");
         }
       }),
-      xAxis: valueAxis("相对基准变化 万元", tokens),
+      xAxis: { ...valueAxis("相对基准变化 万元", tokens), nameLocation: "middle", nameGap: 30 },
       yAxis: categoryAxis(topFactors.map((factor) => factor.name), tokens),
       series: [
         {
@@ -195,7 +195,7 @@
         markLine: {
           symbol: ["none", "none"],
           lineStyle: { type: "dashed", color: tokens.baseline },
-          label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineRevenueWan, 1)} 万元` },
+          label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineRevenueWan, 1)} 万元`, position: "insideEndTop" },
           data: [{ yAxis: baselineRevenueWan }]
         }
       }]
@@ -257,7 +257,7 @@
     const baselineWan = baseline?.result?.totalFullRevenue ? baseline.result.totalFullRevenue / 10000 : 0;
     return {
       animationDuration: 340,
-      grid: { top: 24, left: 120, right: 34, bottom: 34, containLabel: true },
+      grid: { top: 24, left: 120, right: 34, bottom: 52, containLabel: true },
       tooltip: axisTooltip(tokens, {
         formatter: (params) => {
           const item = params?.[0];
@@ -268,7 +268,7 @@
           return `${escapeHtml(scenarioName)}<br/>周期总收益：${asNum(Number(item.value || 0), 1)} 万元<br/>相对基准：${deltaWan >= 0 ? "+" : ""}${asNum(deltaWan, 1)} 万元`;
         }
       }),
-      xAxis: valueAxis("万元", tokens),
+      xAxis: { ...valueAxis("万元", tokens), nameLocation: "middle", nameGap: 30 },
       yAxis: categoryAxis(ranked.map((item) => item.scenario.name), tokens),
       series: [{
         name: "周期总收益",
@@ -284,7 +284,7 @@
           ? {
               symbol: ["none", "none"],
               lineStyle: { type: "dashed", color: tokens.baseline },
-              label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineWan, 1)} 万元` },
+              label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineWan, 1)} 万元`, position: "insideEndTop", rotate: 0, align: "right" },
               data: [{ xAxis: Number(baselineWan.toFixed(2)) }]
             }
           : undefined

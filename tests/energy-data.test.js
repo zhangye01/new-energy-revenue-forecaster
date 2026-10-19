@@ -155,6 +155,61 @@ assert.deepEqual(migratedEnergyData.annualInputByYear, { 2026: 2400, 2027: 2300 
 assert.equal(migratedEnergyData.typicalCurveSource, "typical_curve_8760");
 assert.equal(hasEnergyTypicalCurve(migratedProject), false);
 
+// Stored numeric weights are authoritative once normalized: summation tails must
+// not rewrite any element during repeated reads or JSON backup restoration.
+const { normalizeTypicalCurveProfile } = require("../src/domain/energy-profiles");
+const alreadyNormalizedProfiles = [
+  typicalParsed.typicalCurveProfile.slice(),
+  Array(8760).fill(1 / 8760),
+  [1 + 5e-13, ...Array(8759).fill(0)],
+  [1 - 5e-13, ...Array(8759).fill(0)]
+];
+for (const storedProfile of alreadyNormalizedProfiles) {
+  const profileBefore = JSON.stringify(storedProfile);
+  const storedProject = { ...baseProject, forecastYears: 1, energyMode: "typical_curve_8760", energyData: {
+    mode: "typical_curve_8760", annualInputByYear: { 2026: 2400 },
+    typicalCurveSource: "typical_curve_8760", typicalCurveProfile: storedProfile
+  }, roughPrice: { snapshots: [{ id: "original-rough", summary: { weightedPrice: 333.9 } }] } };
+  const originalRough = JSON.stringify(storedProject.roughPrice);
+  for (let read = 0; read < 10; read += 1) {
+    ensureProjectEnergyDataState(storedProject);
+    assert.equal(JSON.stringify(storedProject.energyData.typicalCurveProfile), profileBefore);
+  }
+  let restoredProject = JSON.parse(JSON.stringify(storedProject));
+  for (let restore = 0; restore < 5; restore += 1) {
+    ensureProjectEnergyDataDerivedState(restoredProject);
+    assert.equal(hasEnergyTypicalCurve(restoredProject), true);
+    assert.deepEqual(getCompleteEnergyYears(restoredProject), [2026]);
+    assert.equal(JSON.stringify(restoredProject.energyData.typicalCurveProfile), profileBefore);
+    assert.deepEqual(restoredProject.energyData.hourlyByYear[2026], storedProfile.map((weight) => weight * 2400));
+    assert.equal(JSON.stringify(restoredProject.roughPrice), originalRough);
+    restoredProject = JSON.parse(JSON.stringify(restoredProject));
+  }
+  assert.equal(JSON.stringify(storedProfile), profileBefore, "the input profile itself is not rewritten");
+}
+
+// Inputs outside normalized numeric storage still use the unchanged normalization
+// algorithm: imported magnitudes and string values normalize; invalid data rejects.
+for (const incomingProfile of [
+  Array(8760).fill(1),
+  Array.from({ length: 8760 }, (_, index) => index % 24 === 0 ? 2 : 1),
+  [1 + 1e-9, ...Array(8759).fill(0)],
+  [1 - 1e-9, ...Array(8759).fill(0)],
+  Array(8760).fill(String(1 / 8760)),
+  Array(8760).fill(0),
+  [-1, ...Array(8759).fill(1)],
+  [NaN, ...Array(8759).fill(1)],
+  [Infinity, ...Array(8759).fill(1)],
+  Array(8759).fill(1)
+]) {
+  const expected = normalizeTypicalCurveProfile(incomingProfile);
+  const original = incomingProfile.slice();
+  const target = { energyData: { typicalCurveProfile: incomingProfile } };
+  assert.deepEqual(ensureProjectEnergyDataState(target).typicalCurveProfile, expected);
+  assert.deepEqual(incomingProfile, original, "normalizing new input does not mutate the caller's array");
+  assert.deepEqual(ensureProjectEnergyDataState(target).typicalCurveProfile, expected, "normalized output is stable on the next read");
+}
+
 assert.equal(
   deriveEnergyModeFromInputs({
     mode: "hourly_8760",

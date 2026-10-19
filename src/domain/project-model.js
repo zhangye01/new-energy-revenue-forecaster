@@ -393,14 +393,27 @@
     // needs review, while retaining its value and unrelated confirmations.
     (project.scenarios || []).forEach((scenario) => {
       if (!isPlainObject(scenario.confirmedConfig)) return;
-      newlyApplicable.forEach((key) => { delete scenario.confirmedConfig[key]; });
+      const invalidate = (key) => {
+        if (!Object.prototype.hasOwnProperty.call(scenario.confirmedConfig, key)) return;
+        if (!scenario.confirmationEvidence) {
+          scenario.confirmationEvidence = JSON.parse(JSON.stringify({
+            confirmedConfig: scenario.confirmedConfig,
+            confirmedConfigSources: scenario.confirmedConfigSources || {}
+          }));
+        }
+        delete scenario.confirmedConfig[key];
+        if (scenario.confirmedConfigSources) delete scenario.confirmedConfigSources[key];
+      };
+      newlyApplicable.forEach(invalidate);
       if ((project.startYear !== input.startYear || project.forecastYears !== input.forecastYears)
           && Number.isInteger(input.startYear) && Number.isInteger(input.forecastYears) && input.forecastYears > 0) {
         ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"].forEach((key) => {
           const values = scenario.config?.[key] || {};
           for (let year = input.startYear; year < input.startYear + input.forecastYears; year += 1) {
-            if (!Object.prototype.hasOwnProperty.call(values, year)) {
-              delete scenario.confirmedConfig[key];
+            const previouslyInRange = Number.isInteger(project.startYear) && Number.isInteger(project.forecastYears)
+              && year >= project.startYear && year < project.startYear + project.forecastYears;
+            if (!previouslyInRange || !Object.prototype.hasOwnProperty.call(values, year)) {
+              invalidate(key);
               break;
             }
           }
@@ -436,15 +449,7 @@
     const inputNumber = (value) => isNewDraft && (value == null || (typeof value === "string" && !value.trim())) ? NaN : Number(value);
     const rawName = typeof rawProject.name === "string" ? rawProject.name.trim() : "";
     const rawCapacity = inputNumber(rawProject.capacityMw);
-    const rawStoragePower = Number(rawProject.storagePowerMw);
-    const rawStorageDuration = Number(rawProject.storageDurationH);
     const hasStorage = Boolean(rawProject.hasStorage);
-    const migratedStoragePower = hasStorage && (!Number.isFinite(rawStoragePower) || rawStoragePower <= 0) && Number.isFinite(rawCapacity) && rawCapacity > 0
-      ? Number((rawCapacity * 0.2).toFixed(1))
-      : null;
-    const migratedStorageDuration = hasStorage && (!Number.isFinite(rawStorageDuration) || rawStorageDuration <= 0)
-      ? 2
-      : null;
     const rawStartYear = inputNumber(rawProject.startYear);
     const rawForecastYears = inputNumber(rawProject.forecastYears);
     const restoredFromProjectIds = Array.from(new Set([
@@ -465,8 +470,8 @@
       assetType: ASSET_TYPE_SET.has(rawProject.assetType) ? rawProject.assetType : (isNewDraft ? "" : "wind"),
       siteType: SITE_TYPE_SET.has(rawProject.siteType) ? rawProject.siteType : (isNewDraft ? "" : "onshore"),
       hasStorage,
-      storagePowerMw: Number.isFinite(rawStoragePower) && rawStoragePower > 0 ? rawStoragePower : migratedStoragePower,
-      storageDurationH: Number.isFinite(rawStorageDuration) && rawStorageDuration > 0 ? rawStorageDuration : migratedStorageDuration,
+      storagePowerMw: Object.prototype.hasOwnProperty.call(rawProject, "storagePowerMw") ? rawProject.storagePowerMw : null,
+      storageDurationH: Object.prototype.hasOwnProperty.call(rawProject, "storageDurationH") ? rawProject.storageDurationH : null,
       storageNote: typeof rawProject.storageNote === "string" ? rawProject.storageNote : "",
       capacityMw: Number.isFinite(rawCapacity) ? rawCapacity : (isNewDraft ? null : 0),
       startYear: Number.isFinite(rawStartYear) ? Math.floor(rawStartYear) : (isNewDraft ? null : currentYear),

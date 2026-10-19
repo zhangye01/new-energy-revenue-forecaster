@@ -49,7 +49,9 @@
   function ltPnlPriceForYear(config, yearIndex) {
     const year1 = Number(config?.ltYear1Pnl) || 0;
     const target = Number(config?.ltTargetPnl) || 0;
-    const step = Math.max(0, Number(config?.ltConvergeSpeed) || 0);
+    const storedStep = Math.max(0, Number(config?.ltConvergeSpeed) || 0);
+    const step = config?.ltConvergeSpeedUnit === "legacy_ratio"
+      ? Number((Math.abs(target - year1) * storedStep).toFixed(4)) : storedStep;
     if (yearIndex <= 1 || step <= 0) return year1;
     const delta = target - year1;
     const distance = Math.abs(delta);

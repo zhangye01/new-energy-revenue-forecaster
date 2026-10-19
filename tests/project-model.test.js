@@ -473,12 +473,43 @@ assert.equal(historyProject.id, "proj-test");
 assert.equal(historyProject.ownerAccount, "legacy");
 assert.equal(historyProject.name, "项目1");
 assert.equal(historyProject.province, "jiangsu");
-assert.equal(historyProject.storagePowerMw, 64);
-assert.equal(historyProject.storageDurationH, 2);
+assert.equal(historyProject.storagePowerMw, "", "legacy blank storage power must not become a guessed capacity ratio");
+assert.equal(historyProject.storageDurationH, "", "legacy blank duration must not become a guessed two-hour value");
 assert.equal(historyProject.startYear, 2026);
 assert.equal(historyProject.forecastYears, 30);
 assert.equal(historyProject.energyMode, "typical_curve_8760");
 assert.equal(historyProject.createdAt, "2026-06-09T00:00:00.000Z");
+
+// Existing storage inputs are evidence, including blanks / invalid values. Hydration
+// preserves them, while the calculation validator requires explicit valid basics.
+const { validateConfig: validateRevenueConfig } = require("../src/domain/rough-price");
+const { defaultScenarioConfig: storageDefaultConfig } = require("../src/domain/scenario-model");
+for (const storedValue of [null, "", "  ", 0, -1, "bad", "64"]) {
+  const raw = { ...historyProject, storagePowerMw: storedValue, storageDurationH: storedValue };
+  const original = JSON.stringify(raw);
+  const restored = sanitizeProjectBase(raw, 0, options);
+  assert.equal(restored.storagePowerMw, storedValue);
+  assert.equal(restored.storageDurationH, storedValue);
+  assert.ok(validateRevenueConfig(restored, storageDefaultConfig(restored)).some((message) => /配储功率和时长/.test(message)),
+    "ambiguous storage basics must request review instead of authenticating inferred inputs");
+  assert.equal(JSON.stringify(raw), original);
+}
+const missingStorage = { ...historyProject };
+delete missingStorage.storagePowerMw;
+delete missingStorage.storageDurationH;
+const missingStorageBefore = JSON.stringify(missingStorage);
+const missingStorageRestored = sanitizeProjectBase(missingStorage, 0, options);
+assert.equal(missingStorageRestored.storagePowerMw, null);
+assert.equal(missingStorageRestored.storageDurationH, null);
+assert.ok(validateRevenueConfig(missingStorageRestored, storageDefaultConfig(missingStorageRestored)).some((message) => /配储功率和时长/.test(message)));
+assert.equal(JSON.stringify(missingStorage), missingStorageBefore);
+const validStorage = sanitizeProjectBase({ ...historyProject, storagePowerMw: 64.1234567890123, storageDurationH: 2.125 }, 0, options);
+assert.equal(validStorage.storagePowerMw, 64.1234567890123);
+assert.equal(validStorage.storageDurationH, 2.125);
+assert.equal(validateRevenueConfig(validStorage, storageDefaultConfig(validStorage)).some((message) => /配储功率和时长/.test(message)), false);
+const inactiveStorage = sanitizeProjectBase({ ...historyProject, hasStorage: false, storagePowerMw: 64.1234567890123, storageDurationH: 2.125 }, 0, options);
+assert.equal(inactiveStorage.storagePowerMw, 64.1234567890123);
+assert.equal(inactiveStorage.storageDurationH, 2.125);
 
 const draftProject = sanitizeProjectBase({
   workspaceBucket: "new",

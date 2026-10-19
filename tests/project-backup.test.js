@@ -108,3 +108,62 @@ assert.deepEqual(restoredBranches.projects.map((p) => p.scenarios[0].config.othe
 assert.deepEqual(restoredBranches.projects[1].roughPrice, otherBranch.roughPrice);
 assert.equal(JSON.stringify(project), originalBytes, 'restoring both branches never changes the existing project');
 assert.equal(JSON.parse(backup.buildBackup(snapshot, 'Demo1')).projects.length, 1, 'backup matches the same normalized account visibility rule as the project list');
+
+// Validate the whole file before creating any restore copies. Never normalize unsafe data.
+const securityBefore = JSON.stringify(project);
+function assertAtomicRejection(data, expected) {
+  let generatedIds = 0;
+  assert.throws(() => backup.prepareRestore(typeof data === 'string' ? data : JSON.stringify(data), [project], 'demo1',
+    () => { generatedIds++; return `copy-${generatedIds}`; }), expected);
+  assert.equal(generatedIds, 0, 'validate all projects/branches before constructing a restore copy');
+  assert.equal(JSON.stringify(project), securityBefore, 'rejected restore cannot change an existing project');
+  assert.equal(Object.prototype.polluted, undefined);
+}
+const envelope = (projects, recoveryBranches) => ({ format: 'new-energy-project-backup', version: 1, projects,
+  ...(recoveryBranches ? { recoveryBranches } : {}) });
+for (const key of ['__proto__', 'constructor', 'prototype']) {
+  const maliciousProject = JSON.parse(JSON.stringify(project));
+  maliciousProject.scenarios[0].config = JSON.parse(`{"otherFee":14.75,"nested":{"${key}":{"polluted":true}}}`);
+  assertAtomicRejection(envelope([project, maliciousProject]), /不安全字段/);
+  assertAtomicRejection(envelope([project], [{ label: '不安全分支', projects: [maliciousProject] }]), /不安全字段/);
+}
+for (const unsafeId of ['__proto__', 'constructor', 'prototype']) {
+  assertAtomicRejection(envelope([project, { ...project, id: unsafeId }]), /不安全标识/);
+}
+let deeplyNested = { ordinary: 1 };
+for (let i = 0; i < 70; i++) deeplyNested = { child: deeplyNested };
+assertAtomicRejection(envelope([project, { ...project, extension: deeplyNested }]), /64层结构安全上限/);
+assertAtomicRejection(JSON.stringify(envelope([project, { ...project, extension: 'FINITE_MARKER' }])).replace('"FINITE_MARKER"', '1e999'), /非有限数字/);
+assertAtomicRejection(envelope([project, { ...project, scenarios: [null] }]), /方案结构/);
+assertAtomicRejection(envelope([project, { ...project, scenarios: [{ id: 's', config: [] }] }]), /config应为对象/);
+assertAtomicRejection(envelope([project, { ...project, roughPrice: { snapshots: {} } }]), /snapshots应为数组/);
+assertAtomicRejection(envelope([project], [{ label: '后一个项目不完整', projects: [{}] }]), /结构不完整/);
+
+const preserved = JSON.parse(JSON.stringify(project));
+preserved.scenarios[0].config = { otherFee: 14.750000000003, missingValue: null,
+  envManualValuesByYear: { 2026: { carbonEnabled: false, carbonPrice: 4, carbonRealizeRatio: 0.25 } } };
+preserved.roughPrice.snapshots[0].original = { negative: -5.123456789, zero: 0, missing: null };
+preserved.note = 'constructor / prototype / __proto__ are ordinary text; <script> is also text';
+preserved.priceRuns[0].prices = Array(35040).fill(-5.123456789);
+const preservedBytes = JSON.stringify(preserved);
+const safeRestore = backup.prepareRestore(JSON.stringify(envelope([preserved])), [], 'demo1', () => 'unused');
+assert.equal(JSON.stringify(safeRestore.projects[0]), preservedBytes, 'safe validation preserves every original value and snapshot without cleaning or truncating arrays');
+console.log('project backup safety and atomicity tests passed');
+
+(async () => {
+  const importHandlers = {}, importMessages = [];
+  const unsafeText = JSON.stringify(envelope([project])).replace('"confirmedFields"', '"__proto__"');
+  const input = { files: [{ text: async () => unsafeText }], value: 'chosen',
+    addEventListener(event, handler) { importHandlers[event] = handler; } };
+  const importDoc = { addEventListener() {}, querySelector: (selector) => selector === '#backup-import-file' ? input : null };
+  let restoreCalls = 0;
+  backup.bind({ documentRef: importDoc, hasUnsubmittedChanges: () => false,
+    getSnapshot: () => ({ payload: { projects: [project] } }), getAccount: () => 'demo1',
+    makeId: () => 'unused', restore: () => { restoreCalls++; }, notify: (message) => importMessages.push(message) });
+  await importHandlers.change();
+  assert.equal(restoreCalls, 0, 'file-import UI must never call restore after preflight rejects a backup');
+  assert.match(importMessages[0], /不安全字段/);
+  assert.equal(input.value, '');
+  assert.equal(JSON.stringify(project), securityBefore);
+  console.log('project backup unsafe file UI rejection passed');
+})().catch((error) => { console.error(error); process.exitCode = 1; });

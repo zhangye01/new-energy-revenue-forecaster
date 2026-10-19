@@ -66,6 +66,8 @@
     if (!run) {
       return { ok: false, message: "请先在电价预测工作台生成并生效一个电价版本。" };
     }
+    const errors = input.validateConfig?.(project, scenario.config) || [];
+    if (errors.length) return { ok: false, message: `请先补充或修正收益参数：${errors.join("；")}` };
     return validateManualCompleteness({
       project,
       config: scenario.config || {},

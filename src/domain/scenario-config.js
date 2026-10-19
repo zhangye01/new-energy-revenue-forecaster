@@ -153,10 +153,10 @@
   }
 
   function getLtManualCompleteness(project, config) {
-    const prices = sanitizeLtManualPricesByYear(config?.ltManualPricesByYear || {}, project);
+    const prices = isPlainObject(config?.ltManualPricesByYear) ? config.ltManualPricesByYear : {};
     return {
       prices,
-      ...summarizeCompleteness(project, prices, (value) => Number.isFinite(Number(value)))
+      ...summarizeCompleteness(project, prices, (value) => !isBlank(value) && Number.isFinite(Number(value)))
     };
   }
 
@@ -168,10 +168,10 @@
   }
 
   function getEnvManualCompleteness(project, config) {
-    const values = sanitizeEnvManualValuesByYear(config?.envManualValuesByYear || {}, project);
+    const values = isPlainObject(config?.envManualValuesByYear) ? config.envManualValuesByYear : {};
     return {
       values,
-      ...summarizeCompleteness(project, values, isPlainObject)
+      ...summarizeCompleteness(project, values, (entry) => validAnnualEntry(entry, project, "environment"))
     };
   }
 
@@ -183,11 +183,47 @@
   }
 
   function getFeeManualCompleteness(project, config) {
-    const values = sanitizeFeeManualValuesByYear(config?.feeManualValuesByYear || {}, project);
+    const values = isPlainObject(config?.feeManualValuesByYear) ? config.feeManualValuesByYear : {};
     return {
       values,
-      ...summarizeCompleteness(project, values, isPlainObject)
+      ...summarizeCompleteness(project, values, (entry) => validAnnualEntry(entry, project, "fees"))
     };
+  }
+
+  function validAnnualEntry(entry, project, kind) {
+    if (!isPlainObject(entry)) return false;
+    const keys = kind === "fees" ? ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]
+      : ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"];
+    if (kind === "environment" && project?.siteType === "offshore") {
+      if (typeof entry.carbonEnabled !== "boolean") return false;
+      if (entry.carbonEnabled) keys.push("carbonPrice", "carbonRealizeRatio");
+    }
+    if (!keys.every((key) => !isBlank(entry[key]) && Number.isFinite(Number(entry[key])) && Number(entry[key]) >= 0
+        && (!key.endsWith("Ratio") || Number(entry[key]) <= 1))) return false;
+    return kind !== "environment" || keys.filter((key) => key.endsWith("Ratio"))
+      .reduce((sum, key) => sum + Number(entry[key]), 0) <= 1 + 0.000001;
+  }
+
+  function applicableConfigKeys(project = {}, config = {}) {
+    const keys = ["mechanismEnabled", "ltPricingMode", "envValueMode", "feeConfigMode"];
+    if (config.mechanismEnabled) {
+      keys.push("mechanismRatio", "mechanismPrice", "mechanismStartYm", "mechanismEndYm", "mechanismReferenceMode");
+      if (config.mechanismReferenceMode === "same_type") keys.push("sameTypeSpread");
+    }
+    keys.push(...(getLtPricingMode(config) === "manual" ? ["ltManualPricesByYear"]
+      : ["ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed", "ltConvergeSpeedUnit"]));
+    if (getEnvValueMode(config) === "manual") keys.push("envManualValuesByYear");
+    else {
+      keys.push("greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio");
+      if (project.siteType === "offshore") {
+        keys.push("carbonEnabled");
+        if (config.carbonEnabled) keys.push("carbonPrice", "carbonRealizeRatio");
+      }
+    }
+    keys.push(...(getFeeConfigMode(config) === "manual" ? ["feeManualValuesByYear"]
+      : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]));
+    if (project.hasStorage) keys.push("storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice");
+    return keys;
   }
 
   function buildLtManualTemplateRows(project) {
@@ -319,19 +355,20 @@
       if (!greenPremiumPrice.ok) return greenPremiumPrice;
       const greenPremiumRatio = parseRatio(row[4], "green_premium_realize_ratio_pct", rowNumber);
       if (!greenPremiumRatio.ok) return greenPremiumRatio;
-      const carbonEnabled = project?.siteType === "offshore" ? parseBooleanLike(row[5], null) : false;
+      const carbonEnabled = parseBooleanLike(row[5], project?.siteType === "offshore" ? null : false);
       if (carbonEnabled === null) {
         return { ok: false, message: `第 ${rowNumber} 行 carbon_enabled 无效，请填写“是”或“否”。` };
       }
-      const carbonPrice = carbonEnabled
+      const activeCarbon = project?.siteType === "offshore" && carbonEnabled;
+      const carbonPrice = activeCarbon || !isBlank(row[6])
         ? parseNonNegativeNumber(row[6], "carbon_price_yuan_per_mwh", rowNumber)
-        : { ok: true, value: Number(row[6]) || 0 };
+        : { ok: true, value: null };
       if (!carbonPrice.ok) return carbonPrice;
-      const carbonRatio = carbonEnabled
+      const carbonRatio = activeCarbon || !isBlank(row[7])
         ? parseRatio(row[7], "carbon_realize_ratio_pct", rowNumber)
-        : { ok: true, value: 0 };
+        : { ok: true, value: null };
       if (!carbonRatio.ok) return carbonRatio;
-      const totalRatio = greenCertRatio.value + greenPremiumRatio.value + carbonRatio.value;
+      const totalRatio = greenCertRatio.value + greenPremiumRatio.value + (activeCarbon ? carbonRatio.value : 0);
       if (totalRatio > 1 + 0.000001) {
         return { ok: false, message: `第 ${rowNumber} 行三条路径兑现空间合计为 ${asPercent(totalRatio)}，不能超过100.0%。` };
       }
@@ -341,11 +378,11 @@
         greenPremiumPrice: greenPremiumPrice.value,
         greenPremiumRealizeRatio: greenPremiumRatio.value,
         carbonEnabled,
-        carbonPrice: carbonEnabled ? carbonPrice.value : 0,
-        carbonRealizeRatio: carbonEnabled ? carbonRatio.value : 0
+        carbonPrice: carbonPrice.value,
+        carbonRealizeRatio: carbonRatio.value
       };
     }
-    const sanitized = sanitizeEnvManualValuesByYear(values, project);
+    const sanitized = Object.fromEntries(Object.entries(values).filter(([year]) => isYearInProjectRange(Number(year), project)));
     const completeness = getEnvManualCompleteness(project, { envManualValuesByYear: sanitized });
     if (completeness.complete !== completeness.total) {
       return {
@@ -433,6 +470,8 @@
   }
 
   return Object.freeze({
+    applicableConfigKeys,
+    validAnnualEntry,
     parseBooleanLike,
     getLtPricingMode,
     getEnvValueMode,

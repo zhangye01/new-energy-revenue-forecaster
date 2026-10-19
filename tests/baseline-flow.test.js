@@ -40,6 +40,8 @@ function createProject() {
     assetType: "wind",
     siteType: "offshore",
     hasStorage: true,
+    storagePowerMw: 2,
+    storageDurationH: 2,
     capacityMw: 10,
     startYear: 2026,
     forecastYears: 2,
