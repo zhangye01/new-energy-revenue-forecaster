@@ -283,6 +283,19 @@
       typicalChart = null,
       tokens = {}
     } = input;
+    const resizeVisibleCharts = () => {
+      [annualChart, typicalChart].forEach((chart) => {
+        if (!chart?.resize || chart.isDisposed?.()) return;
+        const node = chart.getDom?.();
+        if (node && (!node.clientWidth || !node.clientHeight)) return;
+        chart.resize();
+      });
+    };
+    // A retained chart may have been resized while its page was hidden.
+    resizeVisibleCharts();
+    const windowRef = refs.energyAnnualChart?.ownerDocument?.defaultView
+      || refs.energyCurveChart?.ownerDocument?.defaultView;
+    windowRef?.requestAnimationFrame?.(() => windowRef.requestAnimationFrame(resizeVisibleCharts));
     if (chartModel.state === "empty") {
       if (refs.energyCurveNote) refs.energyCurveNote.textContent = chartModel.noteMessage;
       if (refs.energyCurveSubtitle) {

@@ -169,4 +169,44 @@ assert.equal(readyTypicalChart.options[0].option.series.length, 12);
 assert.match(readyRefs.energyCurveNote.textContent, /江苏典型曲线/);
 assert.match(readyRefs.energyCurveSubtitle.textContent, /当前来源：江苏典型曲线/);
 
+// Returning to the energy page must restore a canvas resized while hidden.
+const frames = [];
+const windowRef = { requestAnimationFrame(callback) { frames.push(callback); } };
+const chartNode = { clientWidth: 850, clientHeight: 320, ownerDocument: { defaultView: windowRef } };
+function makeSizedChart() {
+  return {
+    ...makeChart(), width: 0, disposed: false, resizeCount: 0,
+    getDom() { return chartNode; },
+    isDisposed() { return this.disposed; },
+    resize() { this.width = chartNode.clientWidth; this.resizeCount += 1; }
+  };
+}
+const sizedAnnual = makeSizedChart();
+const sizedTypical = makeSizedChart();
+const sizedInput = {
+  refs: { energyAnnualChart: chartNode, energyCurveChart: chartNode },
+  chartModel, annualChart: sizedAnnual, typicalChart: sizedTypical, tokens
+};
+applyEnergyCurveChartRender(sizedInput);
+assert.equal(sizedAnnual.width, 850);
+assert.equal(sizedTypical.width, 850);
+chartNode.clientWidth = 900;
+frames.shift()();
+frames.shift()();
+assert.equal(sizedAnnual.width, 900, "layout changes settle before the final size check");
+assert.equal(sizedTypical.width, 900);
+applyEnergyCurveChartRender(sizedInput);
+chartNode.clientWidth = 0;
+frames.shift()();
+frames.shift()();
+assert.equal(sizedAnnual.width, 900, "leaving the page before the queued resize preserves the last visible size");
+chartNode.clientWidth = 850;
+applyEnergyCurveChartRender(sizedInput);
+const resizeCount = sizedAnnual.resizeCount;
+sizedAnnual.disposed = true;
+frames.shift()();
+frames.shift()();
+assert.equal(sizedAnnual.resizeCount, resizeCount, "queued work ignores charts disposed before the frame runs");
+assert.equal(sizedTypical.width, 850);
+
 console.log("energy charts tests passed");
