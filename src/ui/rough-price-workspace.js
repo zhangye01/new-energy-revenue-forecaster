@@ -45,12 +45,13 @@
   function getEntry(state, project, scenario) {
     const key = `${project.id}:${scenario.id}`;
     const source = JSON.stringify(scenario.config || {});
+    const projectContext = JSON.stringify([project.siteType, Boolean(project.hasStorage), project.startYear, project.forecastYears]);
     const locked = Boolean(scenario.locked);
     let entry = state.entries.get(key);
-    if (!entry || entry.source !== source || entry.locked !== locked) {
+    if (!entry || entry.source !== source || entry.locked !== locked || entry.projectContext !== projectContext) {
       const lockMessage = locked && entry?.dirty
         ? "方案已锁定，未保存的共用参数调整已撤销，当前显示已保存值。" : "";
-      entry = { config: clone(scenario.config || {}), source, locked, dirty: false,
+      entry = { config: clone(scenario.config || {}), source, projectContext, locked, dirty: false,
         snapshotId: entry?.snapshotId || "",
         threshold: entry?.threshold ?? 10, message: lockMessage, tone: "info", groupOpen: {} };
       state.entries.set(key, entry);
@@ -74,9 +75,10 @@
   }
 
   function fieldsHtml(fields, config, project, disabled, group = "", year = "") {
-    return fields.map(([key, label, type]) => inputField(key, label, config?.[key], {
+    return fields.filter(([key]) => project.siteType === "offshore" || !key.startsWith("carbon"))
+      .map(([key, label, type]) => inputField(key, label, config?.[key], {
       type: type === "boolean" ? "checkbox" : "number", ratio: type === "ratio", group, year,
-      disabled: disabled || (key.startsWith("carbon") && project.siteType !== "offshore"),
+      disabled,
       min: 0, max: type === "ratio" ? 100 : undefined
     })).join("");
   }
@@ -87,9 +89,12 @@
   }
 
   function sharedGroups(project, config) {
-    const mechanism = ["mechanismEnabled", "mechanismPrice", "mechanismRatio", "mechanismStartYm", "mechanismEndYm", "mechanismReferenceMode", "sameTypeSpread"];
+    const mechanism = ["mechanismEnabled", ...(config.mechanismEnabled
+      ? ["mechanismPrice", "mechanismRatio", "mechanismStartYm", "mechanismEndYm", "mechanismReferenceMode",
+        ...(config.mechanismReferenceMode === "same_type" ? ["sameTypeSpread"] : [])] : [])];
     const strategy = config.ltPricingMode === "manual" ? ["ltPricingMode", "ltManualPricesByYear"] : ["ltPricingMode", "ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed"];
-    const environment = config.envValueMode === "manual" ? ["envValueMode", "envManualValuesByYear"] : ["envValueMode", ...ENV_FIELDS.filter(([key]) => project.siteType === "offshore" || !key.startsWith("carbon")).map(([key]) => key)];
+    const environment = config.envValueMode === "manual" ? ["envValueMode", "envManualValuesByYear"] : ["envValueMode", ...ENV_FIELDS.filter(([key]) =>
+      !key.startsWith("carbon") || (project.siteType === "offshore" && (key === "carbonEnabled" || config.carbonEnabled))).map(([key]) => key)];
     const fees = config.feeConfigMode === "manual" ? ["feeConfigMode", "feeManualValuesByYear"] : ["feeConfigMode", ...FEE_FIELDS.map(([key]) => key)];
     return { mechanism, strategy, environment, fees, ...(project.hasStorage ? { storage: STORAGE_FIELDS.map(([key]) => key) } : {}) };
   }
@@ -208,7 +213,7 @@
     const summary = comparison.summary;
     const delta = summary.delta ?? (summary.weightedFine - summary.weightedRough);
     const relative = summary.relativeDelta ?? summary.weightedRelativeDelta ?? null;
-    return `${head}<div class="rough-baseline-source"><span>${escapeHtml(scenario?.name || snapshot.scenarioName || "当前方案")} · 基准结果 ${escapeHtml(timestamp(comparison.source?.generatedAt))}</span><button type="button" class="text-button" data-jump="results-page">查看基准结果</button></div>
+    return `${head}${comparison.baselineState && !comparison.baselineState.current ? `<p class="rough-alert" role="status">${escapeHtml(comparison.baselineState.message)}本次仍与总览中的同一份已保存结果对照。</p>` : ""}<div class="rough-baseline-source"><span>${escapeHtml(scenario?.name || snapshot.scenarioName || "当前方案")} · 基准结果 ${escapeHtml(timestamp(comparison.source?.generatedAt))}</span><button type="button" class="text-button" data-jump="results-page">查看基准结果</button></div>
       <div class="rough-metrics"><div><span>粗算电量加权均价</span><strong>${number(summary.weightedRough)}<small> 元/MWh</small></strong></div><div><span>基准电量加权均价</span><strong>${number(summary.weightedFine)}<small> 元/MWh</small></strong></div><div><span>整体差额 / 差异率</span><strong>${signed(delta)}<small> 元/MWh</small></strong><small>${relative === null ? "粗算接近零，参考绝对差额" : `${signed(relative * 100)}%`}</small></div></div>
       <div class="rough-comparison-summary" data-rough-comparison-summary role="status">${comparisonSummaryHtml(comparison, entry.threshold)}</div>
       ${trendSvg(comparison.rows, [{ key: "roughSettlement", label: "粗算综合价" }, { key: "fineSettlement", label: "基准综合价" }], "综合结算电价对照趋势（元/MWh）")}
@@ -233,6 +238,7 @@
   function buildComparisonCsv(snapshot, source, comparison) {
     return csvText([["粗算版本", snapshot.id], ["基准结果方案", source.scenarioId || snapshot.scenarioId],
       ["基准结果生成时间", source.generatedAt || ""], ["基准预测曲线版本", source.runId || ""],
+      ["基准结果状态", comparison.baselineState?.message || "与保存结果对照"],
       ["粗算电量加权均价", comparison.summary?.weightedRough], ["基准电量加权均价", comparison.summary?.weightedFine],
       ["年份", "粗算现货均价", "基准现货均价", "粗算捕获价", "基准捕获价", "粗算综合结算价", "基准综合结算价", "综合价差额(基准-粗算)", "综合价差异率", "基准捕获率(%)"],
       ...comparison.rows.map((row) => [row.year, row.roughSpot, row.fineSpot, row.roughCapture,
@@ -274,14 +280,17 @@
     if (config[key] !== "manual") return;
     const group = key === "ltPricingMode" ? "ltManualPricesByYear" : key === "envValueMode" ? "envManualValuesByYear" : "feeManualValuesByYear";
     config[group] = config[group] || {};
+    const finiteValue = (value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
     yearsFor(project).forEach((year, index) => {
       if (Object.hasOwn(config[group], year)) return;
       if (key === "ltPricingMode") {
-        const first = Number(config.ltYear1Pnl) || 0, target = Number(config.ltTargetPnl) || 0;
-        const delta = Math.min(Math.abs(target - first), index * Math.max(0, Number(config.ltConvergeSpeed) || 0));
-        config[group][year] = first + Math.sign(target - first) * delta;
+        if ([config.ltYear1Pnl, config.ltTargetPnl, config.ltConvergeSpeed].every(finiteValue)) {
+          const first = Number(config.ltYear1Pnl), target = Number(config.ltTargetPnl);
+          const delta = Math.min(Math.abs(target - first), index * Math.max(0, Number(config.ltConvergeSpeed)));
+          config[group][year] = first + Math.sign(target - first) * delta;
+        } else config[group][year] = null;
       } else config[group][year] = Object.fromEntries((key === "envValueMode" ? ENV_FIELDS : FEE_FIELDS).map(([field, , type]) =>
-        [field, type === "boolean" ? Boolean(config[field]) : Number(config[field]) || 0]));
+        [field, type === "boolean" ? Boolean(config[field]) : finiteValue(config[field]) ? Number(config[field]) : null]));
     });
   }
 

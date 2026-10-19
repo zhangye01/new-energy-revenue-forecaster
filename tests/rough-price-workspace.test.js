@@ -115,6 +115,11 @@ assert.notEqual(navigationButtons[0], previousNavigationButton);
 navigationButtons[0].onclick();
 assert.deepEqual(navigationCalls, ["rough-page", "scenario-page", "results-page", "results-page"],
   "replacement controls retain navigation without accumulating callbacks");
+navigationData.project.activeRunId = "new-active-run";
+workspace.renderWorkspace(navigationOptions);
+assert.match(navigationFixture.compare.innerHTML, /生效现货预测已变化/);
+assert.match(navigationFixture.compare.innerHTML, /同一份已保存结果对照/);
+assert.match(navigationFixture.compare.innerHTML, /年度综合结算电价/, "预测切换仅提示旧结果，不暗中重算对照");
 
 const fixture = documentFixture();
 const { project, scenario } = projectFixture();
@@ -140,6 +145,9 @@ assert.match(fixture.rough.innerHTML, /data-shared-key="mechanismPrice"[^>]* min
 assert.match(fixture.rough.innerHTML, /未确认参数保留填写/);
 assert.match(fixture.rough.innerHTML, /data-rough-group="mechanism" open/);
 assert.match(fixture.rough.innerHTML, /data-rough-group="environment" open/);
+assert.doesNotMatch(fixture.rough.innerHTML, /data-shared-key="carbon(?:Enabled|Price|RealizeRatio)"/,
+  "onshore projects do not show inapplicable carbon fields as pending input");
+assert.match(fixture.rough.innerHTML, /data-rough-group="storage" open/);
 assert.doesNotMatch(fixture.rough.innerHTML, /is-confirmed/);
 assert.equal(comparisons, 0);
 assert.equal(project.roughPrice.draftsByScenario[scenario.id].spotNodes[0].value, null);
@@ -185,6 +193,13 @@ assert.match(fixture.rough.innerHTML, /导出粗算 CSV/);
 assert.ok(inputState.isConfigConfirmed(scenario, "mechanismPrice"));
 assert.doesNotMatch(fixture.rough.innerHTML, /data-rough-group="mechanism" open/,
   "confirmed parameter groups collapse after saving");
+assert.doesNotMatch(fixture.rough.innerHTML, /data-rough-group="environment" open/,
+  "inapplicable onshore carbon fields cannot leave environmental value pending");
+assert.doesNotMatch(fixture.rough.innerHTML, /data-rough-group="storage" open/,
+  "confirmed storage assumptions are carried forward without repeated input");
+for (const key of ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"]) {
+  assert.ok(inputState.isConfigConfirmed(scenario, key), `${key} is confirmed when generating rough results`);
+}
 
 const rawResult = calculateScenarioResult(project, scenario, project.priceRuns[0]);
 project.resultsByScenario = { [scenario.id]: domain.stampBaselineResult(project, scenario, project.priceRuns[0], rawResult) };
@@ -315,16 +330,99 @@ workspace.renderWorkspace({ documentRef: manualFixture.documentRef, ...manualDat
 assert.match(manualFixture.rough.innerHTML, /data-shared-group="envManualValuesByYear"/);
 assert.match(manualFixture.rough.innerHTML, /data-shared-key="greenCertRealizeRatio"[^>]*value="60"/);
 assert.match(manualFixture.rough.innerHTML, /data-shared-group="feeManualValuesByYear"/);
+assert.doesNotMatch(manualFixture.rough.innerHTML, /data-shared-key="carbon(?:Enabled|Price|RealizeRatio)"/,
+  "manual onshore years also omit inapplicable carbon fields");
 assert.equal(JSON.stringify(manualData.scenario.config), manualBefore, "rendering preserves independent manual components");
 assert.deepEqual(workspace.validateShared(manualData.project, manualData.scenario, manualData.scenario.config, domain), []);
 manualData.scenario.config.envManualValuesByYear[2027].greenPremiumRealizeRatio = 0.8;
 assert.match(workspace.validateShared(manualData.project, manualData.scenario, manualData.scenario.config, domain).join(" "), /比例合计不能超过100%|配置不完整/);
+
+for (const mode of ["global", "manual"]) {
+  const offshoreFixture = documentFixture();
+  const offshoreData = projectFixture();
+  offshoreData.project.siteType = "offshore";
+  offshoreData.scenario.config.envValueMode = mode;
+  workspace.renderWorkspace({ documentRef: offshoreFixture.documentRef, ...offshoreData, domain });
+  for (const key of ["carbonEnabled", "carbonPrice", "carbonRealizeRatio"]) {
+    assert.match(offshoreFixture.rough.innerHTML, new RegExp(`data-shared-key="${key}"`),
+      `offshore ${mode} mode retains applicable ${key} input`);
+  }
+}
+
+// Switching presentation modes must not silently turn a missing assumption into a zero.
+for (const [modeKey, missingKey, manualField] of [
+  ["envValueMode", "greenCertPrice", "greenCertPrice"],
+  ["feeConfigMode", "otherFee", "otherFee"],
+  ["ltPricingMode", "ltYear1Pnl", "value"]
+]) {
+  const missingFixture = documentFixture();
+  const missingData = projectFixture();
+  missingData.scenario.config[missingKey] = null;
+  const modeControl = new Element({ sharedKey: modeKey });
+  modeControl.type = "select-one";
+  missingFixture.rough.groups["[data-shared-key]"].push(modeControl);
+  workspace.renderWorkspace({ documentRef: missingFixture.documentRef, ...missingData, domain, inputState });
+  modeControl.value = "manual";
+  modeControl.onchange();
+  assert.match(missingFixture.rough.innerHTML,
+    new RegExp(`data-shared-key="${manualField}"[^>]*data-shared-year="2027"[^>]*value=""`),
+    `${modeKey} keeps an unfilled field visible rather than replacing it with zero`);
+  missingFixture.controls.node.value = "300";
+  missingFixture.controls.node.oninput();
+  missingFixture.controls.form.onsubmit({ preventDefault() {} });
+  assert.equal(missingData.project.roughPrice.snapshots.length, 0, "incomplete assumptions prevent generation");
+  assert.equal(inputState.isConfigConfirmed(missingData.scenario, missingKey), false,
+    "failed generation does not confirm incomplete assumptions");
+}
+
+for (const storageKey of ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"]) {
+  const storageData = projectFixture();
+  storageData.scenario.config[storageKey] = null;
+  assert.ok(workspace.validateShared(storageData.project, storageData.scenario, storageData.scenario.config, domain).length,
+    `${storageKey} cannot be omitted for a storage project`);
+  storageData.project.hasStorage = false;
+  assert.deepEqual(workspace.validateShared(storageData.project, storageData.scenario, storageData.scenario.config, domain), [],
+    "a project without storage does not require storage assumptions");
+}
 
 const csv = workspace.buildRoughCsv(snapshot);
 assert.match(csv, /^\ufeff/);
 assert.match(csv, /"历史参考, ""来源"" <script>alert\(1\)<\/script>"/);
 assert.match(csv, /策略贡献/);
 // Export helper accepts already computed data and performs proper CSV quoting.
+const conditionalFixture = documentFixture();
+const conditionalData = projectFixture();
+conditionalData.project.siteType = "offshore";
+conditionalData.project.hasStorage = false;
+conditionalData.scenario.config.mechanismEnabled = false;
+conditionalData.scenario.config.carbonEnabled = false;
+inputState.confirmConfig(conditionalData.scenario, ["mechanismEnabled", "envValueMode", "greenCertPrice",
+  "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio", "carbonEnabled"]);
+const conditionalOptions = { documentRef: conditionalFixture.documentRef, ...conditionalData, domain, inputState };
+workspace.renderWorkspace(conditionalOptions);
+assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-group="mechanism" open/,
+  "disabled mechanism parameters do not force duplicate confirmation");
+assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-group="environment" open/,
+  "disabled carbon values do not force duplicate confirmation");
+assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-group="storage"/);
+conditionalData.project.hasStorage = true;
+workspace.renderWorkspace(conditionalOptions);
+assert.match(conditionalFixture.rough.innerHTML, /data-rough-group="storage" open/,
+  "newly applicable storage parameters remain visible until explicitly confirmed");
+conditionalData.scenario.config.ltPricingMode = "manual";
+conditionalData.scenario.config.ltManualPricesByYear = { 2027: 8, 2028: 6 };
+inputState.confirmConfig(conditionalData.scenario, ["ltPricingMode", "ltManualPricesByYear"]);
+const manualGroup = new Element({ roughGroup: "strategy" });
+manualGroup.open = false;
+conditionalFixture.rough.groups["[data-rough-group]"] = [manualGroup];
+workspace.renderWorkspace(conditionalOptions);
+manualGroup.ontoggle();
+require("../src/domain/project-model").applyCreateProjectInput(conditionalData.project, { ...conditionalData.project, forecastYears: 3 });
+workspace.renderWorkspace(conditionalOptions);
+assert.match(conditionalFixture.rough.innerHTML, /data-rough-group="strategy" open/,
+  "expanding the period reveals missing annual inputs even if the group was previously collapsed");
+assert.match(conditionalFixture.rough.innerHTML, /data-shared-year="2029"[^>]*value=""/);
+
 const compareCsv = workspace.buildComparisonCsv(snapshot, { runId: 'run,"quoted"', generatedAt: "2026-10-19T03:00:00Z" }, {
   rows: [{ year: 2027, roughSpot: 300, fineSpot: 301, roughCapture: 270, fineCapture: 271,
     roughSettlement: 350, fineSettlement: 351, delta: 1, relativeDelta: 1 / 350, fineCaptureRate: 90 }]

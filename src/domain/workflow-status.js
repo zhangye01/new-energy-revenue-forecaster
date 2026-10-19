@@ -36,8 +36,11 @@
     const fingerprint = scenario && snapshots.length ? roughPrice.contextFingerprint?.(project, scenario) : "";
     const roughSnapshot = snapshots.find((item) => item.contextFingerprint === fingerprint);
     const result = project.resultsByScenario?.[scenario?.id];
+    const baselineState = result && roughPrice.baselineResultState?.(project, scenario, result);
     return {
       ...input,
+      resultsCompleted: baselineState ? baselineState.current : input.resultsCompleted,
+      resultsStale: Boolean(baselineState && !baselineState.current),
       energyCompleted: Boolean(energyState.ready),
       completeEnergyYears: energyState.completeYears || 0,
       historyReady: Boolean(input.createCompleted && project.province),
@@ -48,7 +51,8 @@
       roughStarted: Boolean(snapshots.length || project.roughPrice?.draftsByScenario?.[scenario?.id]?.spotNodes?.some((node) => node.value !== null && node.value !== "" && node.value !== undefined)),
       roughCompleted: Boolean(roughSnapshot),
       validationReady: Boolean(snapshots.length || result),
-      validationCompleted: Boolean(roughSnapshot && result && roughPrice.compareBaselineResult?.(project, scenario, roughSnapshot, result)?.ok)
+      validationCompleted: Boolean(roughSnapshot && result && (!baselineState || baselineState.current) && roughPrice.compareBaselineResult?.(project, scenario, roughSnapshot, result)?.ok),
+      validationStale: Boolean(result && baselineState && !baselineState.current)
     };
   }
 
@@ -108,6 +112,10 @@
     const { inProgressMap, completedMap } = buildStatusMaps(snapshot, statuses, options);
     for (const pageId of workflowPages) {
       const current = statuses[pageId] || "not_started";
+      if ((pageId === "results-page" && snapshot.resultsStale) || (pageId === "validation-page" && snapshot.validationStale)) {
+        statuses[pageId] = "stale";
+        continue;
+      }
       if (completedMap[pageId]) {
         statuses[pageId] = "completed";
         continue;

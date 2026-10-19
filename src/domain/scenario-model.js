@@ -337,6 +337,7 @@
   }
 
   function parseBatchValue(spec, rawText) {
+    if (rawText === null || rawText === undefined || String(rawText).trim() === "") return null;
     const num = Number(rawText);
     if (!Number.isFinite(num)) return null;
     if (spec?.type === "percent") {

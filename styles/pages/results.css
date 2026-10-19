@@ -53,6 +53,11 @@
   align-items: center;
 }
 
+.result-stale-notice {
+  color: var(--orange);
+  line-height: 1.6;
+}
+
 .result-actionbar p {
   margin: 4px 0 0;
   color: var(--muted);

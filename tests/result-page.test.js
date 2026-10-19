@@ -9,6 +9,7 @@ const {
   buildResultMetaHtml,
   buildResultPageRenderState,
   buildResultPageViewModel,
+  savedResultPeriod,
   resetResultDom
 } = require("../src/ui/result-page");
 
@@ -293,5 +294,32 @@ const emptyRows = buildResultPageViewModel({
 });
 assert.equal(emptyRows.state, "empty_result");
 assert.equal(emptyRows.chartPlaceholder, "暂无年度测算结果");
+
+const staleResultMessage = "项目、电量或收入配置已变化，当前展示历史结果，请重新发起基准测算。";
+const staleView = buildResultPageViewModel({
+  project, scenario: { ...scenario, config: { mechanismEnabled: true, mechanismPrice: 999 } }, result, summaryData,
+  labels: { projectName: project.name, scenarioName: scenario.name, periodText: "2030-2050", assetTypeLabel: "新的项目类型" },
+  resultState: { current: false, reason: "stale_context", message: staleResultMessage }
+});
+assert.equal(staleView.isHistorical, true);
+assert.match(staleView.metaHtml, /请重新发起基准测算/);
+assert.match(staleView.metaHtml, /周期：2026-2026/);
+assert.doesNotMatch(staleView.metaHtml, /2030-2050|新的项目类型/);
+assert.match(staleView.metricHtml, /350.00 元\/MWh/, "旧数值仍可查看");
+assert.match(staleView.assumptionHtml, /历史计算口径/);
+assert.doesNotMatch(staleView.assumptionHtml, /999|机制电价/);
+assert.match(staleView.executiveSummary, /已保存结果中/);
+assert.match(staleView.executiveSummary, /2026-2026/);
+const staleRenderState = buildResultPageRenderState({
+  project: { ...project, resultsByScenario: { scenario1: result } },
+  getActiveScenario: () => ({ ...scenario, id: "scenario1" }),
+  buildResultSummaryData: () => summaryData,
+  getBaselineResultState: () => ({ current: false, reason: "stale_run", message: "生效现货预测已变化，请重新测算。" })
+});
+assert.equal(staleRenderState.result, result);
+assert.equal(staleRenderState.view.isHistorical, true);
+assert.match(staleRenderState.view.metaHtml, /生效现货预测已变化/);
+assert.equal(savedResultPeriod(result), "2026-2026");
+assert.equal(savedResultPeriod(null), "");
 
 console.log("result page tests passed");

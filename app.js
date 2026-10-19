@@ -1717,7 +1717,7 @@ function updatePrintReportHeader(project, scenario) {
   if (!refs.printProjectName || !refs.printScenarioName || !refs.printPeriodRange || !refs.printGeneratedTime) {
     return;
   }
-  const period = getForecastPeriodDisplayRange(project);
+  const period = resultPage.savedResultPeriod(project?.resultsByScenario?.[scenario?.id]) || getForecastPeriodDisplayRange(project);
   refs.printProjectName.textContent = project?.name || "-";
   refs.printScenarioName.textContent = scenario?.name || "-";
   refs.printPeriodRange.textContent = period;
@@ -4438,6 +4438,7 @@ function renderResults() {
   const state = resultPage.buildResultPageRenderState({
     project: getActiveProject(),
     getActiveScenario,
+    getBaselineResultState: roughPrice.baselineResultState,
     buildResultSummaryData: resultReport.buildResultSummaryData,
     getForecastPeriodDisplayRange,
     getAssetTypeLabel,
@@ -4454,7 +4455,7 @@ function renderResults() {
     renderResultChartsPlaceholder(view.chartPlaceholder);
     return;
   }
-  renderResultCharts(project, scenario, result);
+  renderResultCharts(project, view.isHistorical ? null : scenario, result);
 }
 
 function createCompareRenderers() {

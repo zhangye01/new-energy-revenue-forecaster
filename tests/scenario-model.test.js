@@ -261,6 +261,10 @@ assert.deepEqual(
 assert.equal(parseBatchValue({ type: "percent", min: 0, max: 100 }, "36"), 0.36);
 assert.equal(parseBatchValue({ type: "number", min: 0, max: 100 }, "120"), 100);
 assert.equal(parseBatchValue({ type: "number", min: 0, max: 100 }, "bad"), null);
+for (const blank of ["", "  ", null, undefined]) {
+  assert.equal(parseBatchValue({ type: "number", min: 0, max: 100 }, blank), null, "blank batch values are not zero");
+}
+assert.equal(parseBatchValue({ type: "number", min: 0, max: 100 }, "0"), 0);
 
 const renameProject = {
   scenarios: [

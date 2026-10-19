@@ -102,6 +102,21 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
   assert.equal(parseFailRefs.ltManualStatus.textContent, "模板字段缺失");
   assert.equal(parseFailRefs.scenarioMessage.textContent, "模板字段缺失");
 
+  const realScenarioConfig = require("../src/domain/scenario-config");
+  const realConfigs = createManualScenarioImportConfigs({ scenarioConfig: realScenarioConfig });
+  for (const [kind, buildRows] of [["lt", realScenarioConfig.buildLtManualTemplateRows],
+    ["env", realScenarioConfig.buildEnvManualTemplateRows], ["fee", realScenarioConfig.buildFeeManualTemplateRows]]) {
+    const blankProject = { id: "blank-project", startYear: 2026, forecastYears: 2, siteType: "offshore", statuses: {} };
+    const blankScenario = { id: "blank-scenario", config: { mechanismPrice: 365 }, confirmedConfig: { mechanismPrice: 365 } };
+    const original = JSON.stringify(blankScenario);
+    const blankText = buildRows(blankProject).map((row) => row.join(",")).join("\n");
+    assert.equal(await importManualScenarioTemplate({
+      kind, configs: realConfigs, refs: createRefs({ name: "blank.csv" }), project: blankProject, scenario: blankScenario,
+      actions: { readSpreadsheetToCsv: async () => ({ text: blankText }) }
+    }), false, `${kind} must reject an unfilled exported template`);
+    assert.equal(JSON.stringify(blankScenario), original, "failed imports preserve saved parameters and confirmation state");
+  }
+
   const project = { id: "p1", statuses: {} };
   const scenario = { id: "s1", name: "基准场景", config: { mechanismPrice: 365 } };
   const successRefs = createRefs({ name: "ok.csv" });

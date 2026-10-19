@@ -33,6 +33,10 @@
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
   }
 
+  function isBlank(value) {
+    return value === null || value === undefined || String(value).trim() === "";
+  }
+
   function projectYearBounds(project) {
     const startYear = Number.isInteger(project?.startYear) ? project.startYear : null;
     const forecastYears = Number.isInteger(project?.forecastYears) ? project.forecastYears : null;
@@ -218,7 +222,7 @@
       if (!Number.isInteger(year)) {
         return { ok: false, message: `第 ${i + 1} 行 year 无效：${row[0] || "(空)"}` };
       }
-      if (!Number.isFinite(price)) {
+      if (isBlank(row[1]) || !Number.isFinite(price)) {
         return { ok: false, message: `第 ${i + 1} 行 trade_strategy_pnl_yuan_per_mwh 无效：${row[1] || "(空)"}` };
       }
       prices[year] = price;
@@ -255,7 +259,7 @@
 
   function parseNonNegativeNumber(rawValue, label, rowNumber) {
     const value = Number(rawValue);
-    if (!Number.isFinite(value) || value < 0) {
+    if (isBlank(rawValue) || !Number.isFinite(value) || value < 0) {
       return { ok: false, message: `第 ${rowNumber} 行 ${label} 无效：${rawValue || "(空)"}` };
     }
     return { ok: true, value };
@@ -305,7 +309,10 @@
       if (!greenPremiumPrice.ok) return greenPremiumPrice;
       const greenPremiumRatio = parseRatio(row[4], "green_premium_realize_ratio_pct", rowNumber);
       if (!greenPremiumRatio.ok) return greenPremiumRatio;
-      const carbonEnabled = project?.siteType === "offshore" ? parseBooleanLike(row[5], false) : false;
+      const carbonEnabled = project?.siteType === "offshore" ? parseBooleanLike(row[5], null) : false;
+      if (carbonEnabled === null) {
+        return { ok: false, message: `第 ${rowNumber} 行 carbon_enabled 无效，请填写“是”或“否”。` };
+      }
       const carbonPrice = carbonEnabled
         ? parseNonNegativeNumber(row[6], "carbon_price_yuan_per_mwh", rowNumber)
         : { ok: true, value: Number(row[6]) || 0 };

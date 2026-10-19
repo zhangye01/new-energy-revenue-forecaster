@@ -12,6 +12,8 @@
     root.window.NE_SCENARIO_FORM = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel) {
+  const loadedRatios = new WeakMap();
+
   function getField(querySelector, selector) {
     return typeof querySelector === "function" ? querySelector(selector) : null;
   }
@@ -19,6 +21,22 @@
   function setValue(querySelector, selector, value) {
     const field = getField(querySelector, selector);
     if (field) field.value = value;
+  }
+
+  function setRatioValue(querySelector, selector, value) {
+    const field = getField(querySelector, selector);
+    if (!field) return;
+    const ratio = Number(value || 0);
+    const display = String(Number((ratio * 100).toPrecision(15)));
+    field.value = display;
+    loadedRatios.set(field, { ratio, display });
+  }
+
+  function readRatioValue(querySelector, selector, fallback) {
+    const field = getField(querySelector, selector);
+    const loaded = field && loadedRatios.get(field);
+    // A display-to-percentage round trip must not alter an unchanged saved input.
+    return loaded && String(field.value) === loaded.display ? loaded.ratio : fallback;
   }
 
   function numberValue(querySelector, selector) {
@@ -261,7 +279,7 @@
     const config = scenario.config;
     setValue(querySelector, "#scenario-name", scenario.name);
     setValue(querySelector, "#mechanism-enabled", config.mechanismEnabled ? "yes" : "no");
-    setValue(querySelector, "#mechanism-ratio", (config.mechanismRatio * 100).toFixed(1));
+    setRatioValue(querySelector, "#mechanism-ratio", config.mechanismRatio);
     setValue(querySelector, "#mechanism-price", config.mechanismPrice);
     setValue(querySelector, "#mechanism-start-ym", config.mechanismStartYm);
     setValue(querySelector, "#mechanism-end-ym", config.mechanismEndYm);
@@ -272,13 +290,13 @@
     setValue(querySelector, "#lt-target-pnl", config.ltTargetPnl);
     setValue(querySelector, "#lt-converge-speed", Number.isFinite(Number(config.ltConvergeSpeed)) ? String(Number(config.ltConvergeSpeed)) : "0");
     setValue(querySelector, "#green-cert-price", config.greenCertPrice);
-    setValue(querySelector, "#green-cert-realize-ratio", asNum(Number(config.greenCertRealizeRatio || 0) * 100, 1));
+    setRatioValue(querySelector, "#green-cert-realize-ratio", config.greenCertRealizeRatio);
     setValue(querySelector, "#green-premium-price", config.greenPremiumPrice);
-    setValue(querySelector, "#green-premium-realize-ratio", asNum(Number(config.greenPremiumRealizeRatio || 0) * 100, 1));
+    setRatioValue(querySelector, "#green-premium-realize-ratio", config.greenPremiumRealizeRatio);
     if (refs.envValueMode) refs.envValueMode.value = modes.envValueMode || "global";
     setValue(querySelector, "#carbon-enabled", config.carbonEnabled ? "yes" : "no");
     setValue(querySelector, "#carbon-price", config.carbonPrice);
-    setValue(querySelector, "#carbon-realize-ratio", asNum(Number(config.carbonRealizeRatio || 0) * 100, 1));
+    setRatioValue(querySelector, "#carbon-realize-ratio", config.carbonRealizeRatio);
     setValue(querySelector, "#market-op-fee", config.marketOpFee);
     setValue(querySelector, "#grid-assess-fee", config.gridAssessFee);
     setValue(querySelector, "#ancillary-fee", config.ancillaryFee);
@@ -405,7 +423,7 @@
     const carbonEnabled = offshore && selectValue(querySelector, "#carbon-enabled") === "yes";
     return {
       mechanismEnabled: selectValue(querySelector, "#mechanism-enabled") === "yes",
-      mechanismRatio: clamp(numberValue(querySelector, "#mechanism-ratio") / 100, 0, 1),
+      mechanismRatio: readRatioValue(querySelector, "#mechanism-ratio", clamp(numberValue(querySelector, "#mechanism-ratio") / 100, 0, 1)),
       mechanismPrice: numberValue(querySelector, "#mechanism-price"),
       mechanismStartYm: selectValue(querySelector, "#mechanism-start-ym"),
       mechanismEndYm: selectValue(querySelector, "#mechanism-end-ym"),
@@ -420,12 +438,12 @@
       envValueMode,
       envManualValuesByYear,
       greenCertPrice: numberValue(querySelector, "#green-cert-price"),
-      greenCertRealizeRatio: ratioValue(clamp, envAllocationDraft.greenCertRatio),
+      greenCertRealizeRatio: readRatioValue(querySelector, "#green-cert-realize-ratio", ratioValue(clamp, envAllocationDraft.greenCertRatio)),
       greenPremiumPrice: numberValue(querySelector, "#green-premium-price"),
-      greenPremiumRealizeRatio: ratioValue(clamp, envAllocationDraft.greenPremiumRatio),
+      greenPremiumRealizeRatio: readRatioValue(querySelector, "#green-premium-realize-ratio", ratioValue(clamp, envAllocationDraft.greenPremiumRatio)),
       carbonEnabled,
       carbonPrice: offshore ? numberValue(querySelector, "#carbon-price") : 0,
-      carbonRealizeRatio: carbonEnabled ? ratioValue(clamp, envAllocationDraft.carbonRatio) : 0,
+      carbonRealizeRatio: carbonEnabled ? readRatioValue(querySelector, "#carbon-realize-ratio", ratioValue(clamp, envAllocationDraft.carbonRatio)) : 0,
       feeConfigMode,
       feeManualValuesByYear,
       marketOpFee: numberValue(querySelector, "#market-op-fee"),
@@ -438,6 +456,47 @@
       storageAncillaryRevenuePrice: project.hasStorage ? Number(refs.storageAncillaryRevenuePrice?.value || 0) : 0,
       storageOtherRevenuePrice: project.hasStorage ? Number(refs.storageOtherRevenuePrice?.value || 0) : 0
     };
+  }
+
+  function validateActiveNumericFields({ project, refs, querySelector, ltPricingMode, envValueMode, feeConfigMode }) {
+    const fields = [];
+    const add = (selector, label, min = 0, max = Infinity) => fields.push([getField(querySelector, selector)?.value, label, min, max]);
+    if (selectValue(querySelector, "#mechanism-enabled") === "yes") {
+      add("#mechanism-price", "机制电价");
+      add("#mechanism-ratio", "机制电量占比", 0, 100);
+      if (selectValue(querySelector, "#mechanism-reference-mode") === "same_type") add("#same-type-spread", "同类型机组价差", -Infinity);
+    }
+    if (ltPricingMode !== "manual") {
+      add("#lt-year1-pnl", "首年策略损益", -Infinity);
+      add("#lt-target-pnl", "目标策略损益", -Infinity);
+      add("#lt-converge-speed", "每年收敛步长", 0, 2000);
+    }
+    if (envValueMode !== "manual") {
+      add("#green-cert-price", "绿证价格");
+      add("#green-cert-realize-ratio", "绿证兑现比例", 0, 100);
+      add("#green-premium-price", "绿电溢价");
+      add("#green-premium-realize-ratio", "绿电兑现比例", 0, 100);
+      if (project.siteType === "offshore" && selectValue(querySelector, "#carbon-enabled") === "yes") {
+        add("#carbon-price", "碳收益");
+        add("#carbon-realize-ratio", "碳收益兑现比例", 0, 100);
+      }
+    }
+    if (feeConfigMode !== "manual") {
+      [["#market-op-fee", "市场运营费"], ["#grid-assess-fee", "电网考核费"], ["#ancillary-fee", "辅助服务费"],
+        ["#other-fee", "其他费用"], ["#other-income", "其他收入"]].forEach(([selector, label]) => add(selector, label));
+    }
+    if (project.hasStorage) {
+      [["storageArbitragePrice", "配储套利收益"], ["storageCapacityCompPrice", "配储容量补偿"],
+        ["storageAncillaryRevenuePrice", "配储辅助服务收益"], ["storageOtherRevenuePrice", "配储其他收益"]]
+        .forEach(([key, label]) => fields.push([refs[key]?.value, label, 0, Infinity]));
+    }
+    for (const [value, label, min, max] of fields) {
+      if (value === null || value === undefined || String(value).trim() === "" || !Number.isFinite(Number(value))) {
+        return `${label}不能为空，请填写有效数字；无该项时请明确填写 0。`;
+      }
+      if (Number(value) < min || Number(value) > max) return `${label}超出允许范围，请检查填写值。`;
+    }
+    return "";
   }
 
   function buildScenarioSaveDraft(input = {}) {
@@ -521,6 +580,9 @@
       }
     }
 
+    const numericError = validateActiveNumericFields({ project, refs, querySelector, ltPricingMode, envValueMode, feeConfigMode });
+    if (numericError) return invalid(numericError);
+
     return {
       ok: true,
       scenarioName,
@@ -553,7 +615,26 @@
     if (scenario.locked) return invalid("当前场景已锁定，不能保存修改。");
     scenario.name = draft.scenarioName;
     scenario.config = draft.config;
-    getScenarioModel().confirmConfig(scenario);
+    const config = scenario.config;
+    const confirmedKeys = ["mechanismEnabled", "ltPricingMode", "envValueMode", "feeConfigMode"];
+    if (config.mechanismEnabled) {
+      confirmedKeys.push("mechanismPrice", "mechanismRatio", "mechanismStartYm", "mechanismEndYm", "mechanismReferenceMode");
+      if (config.mechanismReferenceMode === "same_type") confirmedKeys.push("sameTypeSpread");
+    }
+    confirmedKeys.push(...(config.ltPricingMode === "manual" ? ["ltManualPricesByYear"]
+      : ["ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed", "ltConvergeSpeedUnit"]));
+    if (config.envValueMode === "manual") confirmedKeys.push("envManualValuesByYear");
+    else {
+      confirmedKeys.push("greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio");
+      if (project.siteType === "offshore") {
+        confirmedKeys.push("carbonEnabled");
+        if (config.carbonEnabled) confirmedKeys.push("carbonPrice", "carbonRealizeRatio");
+      }
+    }
+    confirmedKeys.push(...(config.feeConfigMode === "manual" ? ["feeManualValuesByYear"]
+      : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]));
+    if (project.hasStorage) confirmedKeys.push("storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice");
+    getScenarioModel().confirmConfig(scenario, confirmedKeys);
     scenario.updatedAt = nowIso();
     project.statuses = project.statuses || {};
     project.statuses["scenario-page"] = "completed";

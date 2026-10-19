@@ -143,6 +143,11 @@
     `;
   }
 
+  function savedResultPeriod(result) {
+    const years = (result?.annualRows || []).map((row) => Number(row.year)).filter(Number.isInteger);
+    return years.length ? `${Math.min(...years)}-${Math.max(...years)}` : "";
+  }
+
   function buildMetricCards(metricItems) {
     return metricItems.map((item) => `
     <article class="metric-card">
@@ -205,6 +210,7 @@
       labels,
       envValueMode,
       feeConfigMode,
+      resultState,
       previewLimit
     } = input;
     const { rows, first, maxRevenueRow, minRevenueRow, unitLift, liftText, leadingPositive, leadingNegative } = summaryData;
@@ -241,7 +247,10 @@
       }
     ];
     const cfg = scenario?.config || {};
-    const assumptionItems = [
+    const assumptionItems = resultState && !resultState.current ? [{
+      title: "历史计算口径",
+      body: "本页保留已保存的测算数值。请重新测算后查看当前配置的口径说明。"
+    }] : [
       {
         title: "差价机制口径",
         body: cfg.mechanismEnabled
@@ -269,7 +278,8 @@
 
     return {
       state: "ready",
-      executiveSummary: `基准场景下，${project.name}测算周期为${labels.periodText}，周期全口径收入合计${asCompactMoney(result.totalFullRevenue)}，平均度电净价${asNum(result.avgFullRevenuePrice, 2)}元/MWh。首年度电净价较捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，${positiveText}，${negativeText}。`,
+      isHistorical: Boolean(resultState && !resultState.current),
+      executiveSummary: `${resultState && !resultState.current ? "已保存结果中" : "基准场景下"}，${project.name}测算周期为${labels.periodText}，周期全口径收入合计${asCompactMoney(result.totalFullRevenue)}，平均度电净价${asNum(result.avgFullRevenuePrice, 2)}元/MWh。首年度电净价较捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，${positiveText}，${negativeText}。`,
       metricHtml: buildMetricCards(metricItems),
       insightHtml: buildTextItems(insightItems, "result-insight-item"),
       assumptionHtml: buildTextItems(assumptionItems, "result-assumption-item"),
@@ -288,6 +298,7 @@
       labels = {},
       envValueMode = "global",
       feeConfigMode = "global",
+      resultState = null,
       previewLimit = 240
     } = input;
 
@@ -300,7 +311,7 @@
       };
     }
 
-    const metaHtml = buildResultMetaHtml(labels);
+    let metaHtml = buildResultMetaHtml(labels);
     if (!result) {
       return {
         state: "no_result",
@@ -311,6 +322,12 @@
       };
     }
 
+    const historical = resultState && !resultState.current;
+    const resultLabels = historical ? { ...labels, periodText: savedResultPeriod(result) || "-" } : labels;
+    if (historical) {
+      metaHtml = `<span>项目：${escapeHtml(labels.projectName || "-")}</span><span>方案：${escapeHtml(labels.scenarioName || "-")}</span><span>周期：${escapeHtml(resultLabels.periodText)}</span><span class="result-stale-notice" role="status">${escapeHtml(resultState.message)}</span>`;
+    }
+
     return {
       metaHtml,
       ...buildReadyResultView({
@@ -318,9 +335,10 @@
         scenario,
         result,
         summaryData,
-        labels,
+        labels: resultLabels,
         envValueMode,
         feeConfigMode,
+        resultState,
         previewLimit
       })
     };
@@ -336,7 +354,8 @@
       getSiteTypeLabel = () => "-",
       getStorageConfigText = () => "-",
       getEnvValueMode = () => "global",
-      getFeeConfigMode = () => "global"
+      getFeeConfigMode = () => "global",
+      getBaselineResultState = () => null
     } = input;
     const scenario = project ? getActiveScenario(project) : null;
     const result = project ? project.resultsByScenario?.[scenario?.id || ""] : null;
@@ -345,6 +364,7 @@
       project,
       scenario,
       result,
+      resultState: result ? getBaselineResultState(project, scenario, result) : null,
       summaryData: result ? buildResultSummaryData(result) : null,
       labels: {
         projectName: project?.name || "-",
@@ -366,6 +386,7 @@
     bindResultActionEvents,
     buildEmptyMetricCards,
     buildResultMetaHtml,
+    savedResultPeriod,
     buildResultPageRenderState,
     buildResultPageViewModel,
     resetResultDom

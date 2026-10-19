@@ -261,6 +261,39 @@ applyCreateProjectInput(projectForInputUpdate, {
 assert.equal(projectForInputUpdate.energyMode, "annual_hours");
 assert.equal(projectForInputUpdate.note, "");
 
+const applicableConfirmations = {
+  otherFee: 3, mechanismPrice: 365,
+  storageArbitragePrice: 0, storageCapacityCompPrice: 0, storageAncillaryRevenuePrice: 0, storageOtherRevenuePrice: 0,
+  carbonEnabled: false, carbonPrice: 0, carbonRealizeRatio: 0, envManualValuesByYear: { 2026: { carbonEnabled: false } }
+};
+const applicabilityProject = { siteType: "onshore", hasStorage: false, scenarios: [
+  { config: structuredClone(applicableConfirmations), confirmedConfig: structuredClone(applicableConfirmations) },
+  { locked: true, config: structuredClone(applicableConfirmations), confirmedConfig: structuredClone(applicableConfirmations) }
+] };
+applyCreateProjectInput(applicabilityProject, { ...applicabilityProject, siteType: "offshore", hasStorage: true });
+for (const scenario of applicabilityProject.scenarios) {
+  assert.deepEqual(scenario.confirmedConfig, { otherFee: 3, mechanismPrice: 365 },
+    "newly enabled storage and carbon inputs require review, including legacy confirmations");
+  assert.deepEqual(scenario.config, applicableConfirmations, "re-review never discards saved values");
+  scenario.confirmedConfig = structuredClone(applicableConfirmations);
+}
+applyCreateProjectInput(applicabilityProject, { ...applicabilityProject, name: "仅改项目名称" });
+for (const scenario of applicabilityProject.scenarios) {
+  assert.deepEqual(scenario.confirmedConfig, applicableConfirmations, "unchanged applicability preserves confirmed inputs");
+}
+const annualScope = { ltManualPricesByYear: { 2026: 1, 2027: 2 },
+  envManualValuesByYear: { 2026: {}, 2027: {} }, feeManualValuesByYear: { 2026: {}, 2027: {} } };
+const periodProject = { startYear: 2026, forecastYears: 2, scenarios: [
+  { config: structuredClone(annualScope), confirmedConfig: { otherFee: 3, ...structuredClone(annualScope) } }
+] };
+applyCreateProjectInput(periodProject, { ...periodProject, forecastYears: 1 });
+assert.deepEqual(periodProject.scenarios[0].confirmedConfig, { otherFee: 3, ...annualScope },
+  "shortening the period does not require re-entering covered annual values");
+applyCreateProjectInput(periodProject, { ...periodProject, forecastYears: 3 });
+assert.deepEqual(periodProject.scenarios[0].confirmedConfig, { otherFee: 3 },
+  "new missing annual entries cannot remain marked confirmed until a reload");
+assert.deepEqual(periodProject.scenarios[0].config, annualScope, "existing years are preserved for completion");
+
 const createdRecord = createProjectRecord(createInput, {
   id: "proj-created",
   ownerAccount: " demo ",

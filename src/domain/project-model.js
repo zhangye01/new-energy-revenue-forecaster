@@ -382,6 +382,31 @@
 
   function applyCreateProjectInput(project, input = {}) {
     if (!isPlainObject(project)) return project;
+    const newlyApplicable = [];
+    if (!project.hasStorage && input.hasStorage) newlyApplicable.push(
+      "storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"
+    );
+    if (project.siteType !== "offshore" && input.siteType === "offshore") newlyApplicable.push(
+      "carbonEnabled", "carbonPrice", "carbonRealizeRatio", "envManualValuesByYear"
+    );
+    // Older saves confirmed hidden defaults. A newly applicable revenue item
+    // needs review, while retaining its value and unrelated confirmations.
+    (project.scenarios || []).forEach((scenario) => {
+      if (!isPlainObject(scenario.confirmedConfig)) return;
+      newlyApplicable.forEach((key) => { delete scenario.confirmedConfig[key]; });
+      if ((project.startYear !== input.startYear || project.forecastYears !== input.forecastYears)
+          && Number.isInteger(input.startYear) && Number.isInteger(input.forecastYears) && input.forecastYears > 0) {
+        ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"].forEach((key) => {
+          const values = scenario.config?.[key] || {};
+          for (let year = input.startYear; year < input.startYear + input.forecastYears; year += 1) {
+            if (!Object.prototype.hasOwnProperty.call(values, year)) {
+              delete scenario.confirmedConfig[key];
+              break;
+            }
+          }
+        });
+      }
+    });
     project.name = input.name;
     project.province = input.province;
     project.assetType = input.assetType;

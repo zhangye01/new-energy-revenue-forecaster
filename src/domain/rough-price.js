@@ -354,6 +354,25 @@
     };
   }
 
+  function baselineResultState(project, scenario, result) {
+    const state = (current, reason, message) => ({ current, reason, message });
+    if (!isObject(result)) return state(false, "missing_baseline", "请先发起基准测算。");
+    const source = result.sourceContext;
+    if (!isObject(source) || source.version !== 1 || !source.projectId || !source.scenarioId ||
+        !source.runId || typeof source.contextFingerprint !== "string" || !source.contextFingerprint ||
+        typeof source.generatedAt !== "string" || !Number.isFinite(Date.parse(source.generatedAt))) {
+      return state(false, "legacy_baseline", "当前展示历史结果，缺少计算口径记录，请重新发起基准测算。");
+    }
+    if (source.projectId !== project?.id || source.scenarioId !== scenario?.id ||
+        source.contextFingerprint !== contextFingerprint(project, scenario)) {
+      return state(false, "stale_context", "项目、电量或收入配置已变化，当前展示历史结果，请重新发起基准测算。");
+    }
+    if (source.runId !== project?.activeRunId) {
+      return state(false, "stale_run", "生效现货预测已变化，当前展示旧预测版本的结果，请重新发起基准测算。");
+    }
+    return state(true, "", "");
+  }
+
   function comparisonRows(snapshot, fine) {
     return snapshot.rows.map((rough) => {
       const fineRow = fine.annualRows.find((item) => item.year === rough.year);
@@ -439,6 +458,7 @@
     return {
       ok: true, errors: [], stale: false, reason: "",
       source: { ...source },
+      baselineState: baselineResultState(project, scenario, result),
       rows: comparedRows,
       summary: {
         weightedRough: snapshot.summary.weightedPrice,
@@ -525,5 +545,5 @@
     };
   }
 
-  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, contextFingerprint });
+  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, contextFingerprint });
 });

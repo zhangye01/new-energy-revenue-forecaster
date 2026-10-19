@@ -183,4 +183,39 @@ const invalidFee = parseFeeManualValuesCsv([
 assert.equal(invalidFee.ok, false);
 assert.match(invalidFee.message, /market_op_fee_yuan_per_mwh 无效/);
 
+const singleYearProject = { ...offshoreProject, forecastYears: 1 };
+for (const [build, parse] of [
+  [buildLtManualTemplateRows, parseLtManualPricesCsv],
+  [buildEnvManualTemplateRows, parseEnvManualValuesCsv],
+  [buildFeeManualTemplateRows, parseFeeManualValuesCsv]
+]) {
+  const rows = build(singleYearProject);
+  assert.equal(parse(rows.map((row) => row.join(",")).join("\n"), singleYearProject).ok, false,
+    "an unfilled exported annual template must not import as confirmed zero values");
+  rows[1] = rows[1].map((value, index) => index ? "0" : value);
+  assert.equal(parse(rows.map((row) => row.join(",")).join("\n"), singleYearProject).ok, true,
+    "explicit zero values remain valid");
+  for (let column = 1; column < rows[1].length; column += 1) {
+    // Carbon price and ratio are inactive when carbon_enabled is 0.
+    if (parse === parseEnvManualValuesCsv && column > 5) continue;
+    for (const blank of ["", "   "]) {
+      const incomplete = rows.map((row) => row.slice());
+      incomplete[1][column] = blank;
+      assert.equal(parse(incomplete.map((row) => row.join(",")).join("\n"), singleYearProject).ok, false,
+        `missing column ${column} cannot silently become zero`);
+    }
+  }
+}
+const offshoreCarbonRows = buildEnvManualTemplateRows(singleYearProject);
+offshoreCarbonRows[1] = [2026, 0, 0, 0, 0, "yes", 0, 0];
+for (const column of [6, 7]) {
+  const missing = offshoreCarbonRows.map((row) => row.slice());
+  missing[1][column] = "";
+  assert.equal(parseEnvManualValuesCsv(missing.map((row) => row.join(",")).join("\n"), singleYearProject).ok, false);
+}
+offshoreCarbonRows[1] = [2026, 0, 0, 0, 0, "", "", ""];
+assert.equal(parseEnvManualValuesCsv(offshoreCarbonRows.map((row) => row.join(",")).join("\n"), {
+  ...singleYearProject, siteType: "onshore"
+}).ok, true, "onshore projects do not require inactive carbon inputs");
+
 console.log("scenario config tests passed");
