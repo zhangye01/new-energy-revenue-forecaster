@@ -188,6 +188,8 @@ assert.equal(baselineScenario.locked, false);
 assert.equal(baselineScenario.config.carbonEnabled, true);
 assert.equal(baselineScenario.updatedAt, "2026-06-10T00:00:00.000Z");
 assert.deepEqual(baselineScenario.confirmedConfig, {});
+assert.deepEqual(baselineScenario.confirmedConfigSources, {});
+assert.equal(baselineScenario.confirmationReviewVersion, 1);
 assert.equal(isConfigConfirmed(baselineScenario, "mechanismPrice"), false, "a populated system default is still unconfirmed");
 
 const confirmationScenario = createBaselineScenario(offshoreStorageProject);
@@ -199,13 +201,17 @@ assert.equal(isConfigConfirmed(confirmationScenario, "mechanismEnabled"), true, 
 assert.equal(isConfigConfirmed(confirmationScenario, "mechanismRatio"), true, "zero is a valid confirmed value");
 assert.equal(isConfigConfirmed(confirmationScenario, "mechanismPrice"), false);
 assert.equal(isConfigConfirmed(confirmationScenario, "unknown"), false);
+assert.equal(confirmationScenario.confirmedConfigSources.mechanismRatio, "explicit");
 assert.equal(isConfigConfirmed(confirmationScenario, "ltManualPricesByYear", { 2027: 6, 2026: 0 }), true);
 confirmationScenario.config.ltManualPricesByYear[2027] = 9;
 assert.equal(confirmationScenario.confirmedConfig.ltManualPricesByYear[2027], 6, "confirmed values need an independent deep snapshot");
 assert.equal(isConfigConfirmed(confirmationScenario, "ltManualPricesByYear"), false);
 const reloadedConfirmation = sanitizeScenario(offshoreStorageProject, JSON.parse(JSON.stringify(confirmationScenario)));
 assert.equal(isConfigConfirmed(reloadedConfirmation, "mechanismRatio"), true);
+assert.equal(reloadedConfirmation.confirmedConfigSources.mechanismRatio, "explicit");
 assert.equal(isConfigConfirmed(reloadedConfirmation, "ltManualPricesByYear"), false);
+assert.equal(reloadedConfirmation.confirmedConfigSources.ltManualPricesByYear, undefined,
+  "a source must not survive an invalidated value confirmation");
 assert.equal(confirmConfig(confirmationScenario), true);
 assert.equal(isConfigConfirmed(confirmationScenario, "ltManualPricesByYear"), true);
 assert.equal(isConfigConfirmed(confirmationScenario, "mechanismPrice"), true);
@@ -237,6 +243,105 @@ assert.equal(isConfigConfirmed(sanitizeScenario(manualConfirmationProject, manua
 manualConfirmation.config.envManualValuesByYear[2026].greenCertPrice = 22;
 assert.equal(isConfigConfirmed(sanitizeScenario({ ...manualConfirmationProject, forecastYears: 2 }, manualConfirmation), "envManualValuesByYear"), false,
   "a newly added project year remains unconfirmed and visible for completion");
+
+const legacyDefaultScenario = createBaselineScenario(offshoreStorageProject, { provinceDefaults });
+legacyDefaultScenario.config.mechanismPrice = 381.25;
+legacyDefaultScenario.config.ltPricingMode = "manual";
+legacyDefaultScenario.config.ltManualPricesByYear = { 2026: 11, 2027: 8, 2028: 5 };
+confirmConfig(legacyDefaultScenario);
+delete legacyDefaultScenario.confirmationReviewVersion;
+delete legacyDefaultScenario.confirmedConfigSources;
+const legacySnapshot = { id: "rough-old", scenarioId: legacyDefaultScenario.id,
+  config: JSON.parse(JSON.stringify(legacyDefaultScenario.config)), summary: { weightedPrice: 376.5 } };
+const legacyProject = { ...offshoreStorageProject, roughPrice: { snapshots: [legacySnapshot] },
+  resultsByScenario: { [legacyDefaultScenario.id]: { avgFullRevenuePrice: 392.5 } } };
+const originalLegacyData = JSON.stringify({ project: legacyProject, scenario: legacyDefaultScenario });
+const reviewedLegacy = sanitizeScenario(legacyProject, legacyDefaultScenario, 0, { provinceDefaults });
+assert.equal(isConfigConfirmed(reviewedLegacy, "mechanismRatio"), false,
+  "an old rough-generated default without confirmation origin must return to pending");
+assert.equal(isConfigConfirmed(reviewedLegacy, "storageOtherRevenuePrice"), false,
+  "legacy review uses the project's province defaults");
+assert.equal(isConfigConfirmed(reviewedLegacy, "mechanismPrice"), true,
+  "legacy non-default assumptions retain their confirmation");
+assert.equal(isConfigConfirmed(reviewedLegacy, "ltManualPricesByYear"), true,
+  "legacy annual assumptions are not discarded merely because rough results exist");
+assert.deepEqual(reviewedLegacy.config, legacyDefaultScenario.config);
+assert.equal(reviewedLegacy.confirmationReviewVersion, 1);
+assert.equal(JSON.stringify({ project: legacyProject, scenario: legacyDefaultScenario }), originalLegacyData,
+  "legacy confirmation review cannot change stored input, rough snapshots, or baseline results");
+confirmConfig(reviewedLegacy, ["mechanismRatio"], { source: "explicit" });
+const reviewedAgain = sanitizeScenario(legacyProject, JSON.parse(JSON.stringify(reviewedLegacy)), 0, { provinceDefaults });
+assert.equal(isConfigConfirmed(reviewedAgain, "mechanismRatio"), true,
+  "explicitly accepting a default persists after the one-time legacy review");
+assert.equal(reviewedAgain.confirmedConfigSources.mechanismRatio, "explicit");
+
+const sourcedLegacy = JSON.parse(JSON.stringify(legacyDefaultScenario));
+confirmConfig(sourcedLegacy, ["mechanismRatio"], { source: "rough_edit" });
+confirmConfig(sourcedLegacy, ["greenCertPrice"]);
+const sourcedReload = sanitizeScenario(offshoreStorageProject, sourcedLegacy, 0, {
+  provinceDefaults, roughSnapshots: [legacySnapshot]
+});
+assert.equal(isConfigConfirmed(sourcedReload, "mechanismRatio"), true);
+assert.equal(sourcedReload.confirmedConfigSources.mechanismRatio, "rough_edit");
+assert.equal(isConfigConfirmed(sourcedReload, "greenCertPrice"), true,
+  "new explicit origins survive legacy review even when their values equal defaults");
+assert.equal(isConfigConfirmed(sourcedReload, "otherFee"), false,
+  "a new source on one field must not authenticate unrelated old confirmations");
+const noRoughLegacy = sanitizeScenario(offshoreStorageProject, legacyDefaultScenario, 0, { provinceDefaults });
+assert.equal(isConfigConfirmed(noRoughLegacy, "mechanismRatio"), true,
+  "legacy projects without rough snapshots are outside this targeted repair");
+const otherScenarioOnly = sanitizeScenario(offshoreStorageProject, legacyDefaultScenario, 0, {
+  provinceDefaults, roughSnapshots: [{ ...legacySnapshot, scenarioId: "another-scenario" }]
+});
+assert.equal(isConfigConfirmed(otherScenarioOnly, "mechanismRatio"), true,
+  "another scenario's rough snapshot cannot invalidate this scenario's confirmations");
+const staleSource = JSON.parse(JSON.stringify(sourcedLegacy));
+staleSource.config.mechanismRatio = 0.28;
+const staleSourceReload = sanitizeScenario(offshoreStorageProject, staleSource, 0, { provinceDefaults });
+assert.equal(isConfigConfirmed(staleSourceReload, "mechanismRatio"), false);
+assert.equal(staleSourceReload.confirmedConfigSources.mechanismRatio, undefined,
+  "confirmation origins stay paired with their exact confirmed values");
+
+const legacyAnnualDefaults = JSON.parse(JSON.stringify(legacyDefaultScenario));
+legacyAnnualDefaults.config.ltManualPricesByYear = { 2026: 8, 2027: 6, 2028: 4 };
+legacyAnnualDefaults.config.envValueMode = "manual";
+legacyAnnualDefaults.config.feeConfigMode = "manual";
+legacyAnnualDefaults.config.envManualValuesByYear = Object.fromEntries([2026, 2027, 2028].map((year) => [year, {
+  greenCertPrice: 22, greenCertRealizeRatio: 1, greenPremiumPrice: 12, greenPremiumRealizeRatio: 0,
+  carbonEnabled: true, carbonPrice: 4, carbonRealizeRatio: 0
+}]));
+legacyAnnualDefaults.config.feeManualValuesByYear = Object.fromEntries([2026, 2027, 2028].map((year) => [year, {
+  marketOpFee: 6, gridAssessFee: 7, ancillaryFee: 14, otherFee: 3, otherIncome: 2
+}]));
+legacyAnnualDefaults.confirmedConfig = JSON.parse(JSON.stringify(legacyAnnualDefaults.config));
+const annualReviewOptions = { provinceDefaults, roughSnapshots: [legacySnapshot] };
+const reviewedAnnualDefaults = sanitizeScenario(offshoreStorageProject, legacyAnnualDefaults, 0, annualReviewOptions);
+for (const key of ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]) {
+  assert.equal(isConfigConfirmed(reviewedAnnualDefaults, key), false,
+    `a source-unknown ${key} equal to the automatically generated default table needs review`);
+  assert.deepEqual(reviewedAnnualDefaults.config[key], legacyAnnualDefaults.config[key]);
+}
+for (const key of ["ltPricingMode", "envValueMode", "feeConfigMode"]) {
+  assert.equal(isConfigConfirmed(reviewedAnnualDefaults, key), true,
+    "selecting annual mode remains confirmed independently of the auto-filled values");
+}
+const sourcedAnnualDefaults = JSON.parse(JSON.stringify(legacyAnnualDefaults));
+confirmConfig(sourcedAnnualDefaults, ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]);
+const sourcedAnnualReload = sanitizeScenario(offshoreStorageProject, sourcedAnnualDefaults, 0, annualReviewOptions);
+for (const key of ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]) {
+  assert.equal(isConfigConfirmed(sourcedAnnualReload, key), true,
+    "explicit confirmation of a default annual table must be retained");
+}
+const modifiedAnnualDefaults = JSON.parse(JSON.stringify(legacyAnnualDefaults));
+modifiedAnnualDefaults.config.ltManualPricesByYear[2027] = 9;
+modifiedAnnualDefaults.config.envManualValuesByYear[2027].greenCertPrice = 25;
+modifiedAnnualDefaults.config.feeManualValuesByYear[2027].otherFee = 4;
+modifiedAnnualDefaults.confirmedConfig = JSON.parse(JSON.stringify(modifiedAnnualDefaults.config));
+const modifiedAnnualReload = sanitizeScenario(offshoreStorageProject, modifiedAnnualDefaults, 0, annualReviewOptions);
+for (const key of ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]) {
+  assert.equal(isConfigConfirmed(modifiedAnnualReload, key), true,
+    "partly modified legacy annual tables are retained because row-level origins are unavailable");
+}
 
 const metadataProject = {
   activeScenarioId: "missing",

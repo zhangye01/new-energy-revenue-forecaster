@@ -191,15 +191,21 @@ assert.equal(comparisons, 0, "rough calculations do not run full precision compa
 assert.match(fixture.rough.innerHTML, /年度粗算结果/);
 assert.match(fixture.rough.innerHTML, /导出粗算 CSV/);
 assert.ok(inputState.isConfigConfirmed(scenario, "mechanismPrice"));
-assert.doesNotMatch(fixture.rough.innerHTML, /data-rough-group="mechanism" open/,
-  "confirmed parameter groups collapse after saving");
-assert.doesNotMatch(fixture.rough.innerHTML, /data-rough-group="environment" open/,
-  "inapplicable onshore carbon fields cannot leave environmental value pending");
-assert.doesNotMatch(fixture.rough.innerHTML, /data-rough-group="storage" open/,
-  "confirmed storage assumptions are carried forward without repeated input");
+assert.match(fixture.rough.innerHTML, /data-rough-group="mechanism" open/,
+  "only the edited mechanism price is confirmed; unchanged defaults remain visible");
+assert.match(fixture.rough.innerHTML, /data-rough-group="environment" open/,
+  "generating rough results does not confirm untouched environmental defaults");
+assert.match(fixture.rough.innerHTML, /data-rough-group="storage" open/,
+  "storage defaults remain pending until explicitly confirmed");
 for (const key of ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"]) {
-  assert.ok(inputState.isConfigConfirmed(scenario, key), `${key} is confirmed when generating rough results`);
+  assert.equal(inputState.isConfigConfirmed(scenario, key), false, `${key} is not confirmed merely by generating rough results`);
 }
+
+const refinementState = require("../src/ui/scenario-form").buildRefinementState({ project, scenario });
+assert.equal(refinementState.fields.mechanismPrice, "confirmed");
+assert.equal(refinementState.fields.mechanismRatio, "pending");
+assert.equal(refinementState.fields.otherFee, "pending");
+assert.equal(refinementState.confirmed, 1, "the refinement page confirms only the single actual rough edit");
 
 const rawResult = calculateScenarioResult(project, scenario, project.priceRuns[0]);
 project.resultsByScenario = { [scenario.id]: domain.stampBaselineResult(project, scenario, project.priceRuns[0], rawResult) };
@@ -238,6 +244,44 @@ assert.match(fixture.compare.innerHTML, /原粗算预期 × 细化后基准/);
 assert.match(fixture.compare.innerHTML, /年度综合结算电价/);
 assert.equal(JSON.stringify(snapshot), originalSnapshot, "refinement does not replace or rewrite the rough snapshot");
 assert.equal(project.roughPrice.snapshots[0].config.mechanismPrice, 400, "historic snapshots remain immutable");
+
+// Price assumptions alone must not approve shared defaults, including after another generation.
+const defaultsFixture = documentFixture();
+const defaultsData = projectFixture();
+const defaultsOptions = { documentRef: defaultsFixture.documentRef, ...defaultsData, domain, inputState };
+workspace.renderWorkspace(defaultsOptions);
+defaultsFixture.controls.node.value = "320";
+defaultsFixture.controls.node.oninput();
+defaultsFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.deepEqual(defaultsData.scenario.confirmedConfig, {});
+workspace.renderWorkspace(defaultsOptions);
+defaultsFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.equal(require("../src/ui/scenario-form").buildRefinementState(defaultsData).confirmed, 0);
+const snapshotBeforeConfirmation = JSON.stringify(defaultsData.project.roughPrice.snapshots);
+defaultsFixture.controls.save.onclick();
+assert.ok(inputState.isConfigConfirmed(defaultsData.scenario, "otherFee"), "explicit whole-page confirmation accepts even unchanged defaults");
+assert.equal(JSON.stringify(defaultsData.project.roughPrice.snapshots), snapshotBeforeConfirmation, "confirmation never rewrites existing rough snapshots");
+const restoredDefaults = inputState.sanitizeScenario(defaultsData.project, defaultsData.scenario);
+assert.ok(inputState.isConfigConfirmed(restoredDefaults, "otherFee"), "explicit default confirmation survives hydration");
+workspace.renderWorkspace(defaultsOptions);
+defaultsFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.ok(inputState.isConfigConfirmed(defaultsData.scenario, "otherFee"), "subsequent generation preserves prior confirmation");
+
+// Switching to yearly inputs auto-fills suggested values; one annual edit cannot approve all years.
+const annualFixture = documentFixture();
+const annualData = projectFixture();
+const annualMode = new Element({ sharedKey: "ltPricingMode" }); annualMode.type = "select-one";
+const annualValue = new Element({ sharedKey: "value", sharedGroup: "ltManualPricesByYear", sharedYear: "2027" });
+annualFixture.rough.groups["[data-shared-key]"].push(annualMode, annualValue);
+const annualOptions = { documentRef: annualFixture.documentRef, ...annualData, domain, inputState };
+workspace.renderWorkspace(annualOptions);
+annualMode.value = "manual"; annualMode.onchange();
+annualFixture.controls.node.value = "320"; annualFixture.controls.node.oninput();
+annualValue.value = "12"; annualValue.oninput();
+annualFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.ok(inputState.isConfigConfirmed(annualData.scenario, "ltPricingMode"));
+assert.equal(inputState.isConfigConfirmed(annualData.scenario, "ltManualPricesByYear"), false);
+assert.equal(require("../src/ui/scenario-form").buildRefinementState(annualData).fields.ltManualPricesByYear, "pending");
 
 const thresholdFixture = documentFixture();
 const thresholdData = projectFixture();

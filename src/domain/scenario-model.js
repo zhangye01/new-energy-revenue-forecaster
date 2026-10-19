@@ -125,6 +125,8 @@
   }
 
   const CONFIG_KEYS = new Set(Object.keys(defaultScenarioConfig()));
+  const CONFIRMATION_REVIEW_VERSION = 1;
+  const CONFIRMATION_SOURCES = new Set(["explicit", "rough_edit"]);
 
   function sameConfigValue(left, right) {
     if (left === right) return true;
@@ -139,6 +141,29 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function matchesLegacyDefault(key, value, defaults, project) {
+    if (sameConfigValue(value, defaults[key])) return true;
+    const years = Number(project.forecastYears), startYear = Number(project.startYear);
+    if (!Number.isInteger(years) || years <= 0 || years > 100 || !Number.isInteger(startYear)) return false;
+    const annualFields = {
+      envManualValuesByYear: ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio",
+        "carbonEnabled", "carbonPrice", "carbonRealizeRatio"],
+      feeManualValuesByYear: ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]
+    };
+    if (key !== "ltManualPricesByYear" && !annualFields[key]) return false;
+    const expected = Object.fromEntries(Array.from({ length: years }, (_, index) => {
+      if (key !== "ltManualPricesByYear") {
+        return [startYear + index, Object.fromEntries(annualFields[key].map((field) => [field, defaults[field]]))];
+      }
+      const distance = defaults.ltTargetPnl - defaults.ltYear1Pnl;
+      return [startYear + index, defaults.ltYear1Pnl + Math.sign(distance)
+        * Math.min(Math.abs(distance), index * defaults.ltConvergeSpeed)];
+    }));
+    const normalize = key === "envManualValuesByYear" ? scenarioConfig.sanitizeEnvManualValuesByYear
+      : key === "feeManualValuesByYear" ? scenarioConfig.sanitizeFeeManualValuesByYear : scenarioConfig.sanitizeLtManualPricesByYear;
+    return sameConfigValue(value, normalize(expected, project));
+  }
+
   function isConfigConfirmed(scenario, key, value = scenario?.config?.[key]) {
     return CONFIG_KEYS.has(key)
       && isPlainObject(scenario?.confirmedConfig)
@@ -146,13 +171,16 @@
       && sameConfigValue(scenario.confirmedConfig[key], value);
   }
 
-  function confirmConfig(scenario, keys) {
+  function confirmConfig(scenario, keys, options = {}) {
     if (!scenario || scenario.locked || !isPlainObject(scenario.config)) return false;
     if (!isPlainObject(scenario.confirmedConfig)) scenario.confirmedConfig = {};
+    if (!isPlainObject(scenario.confirmedConfigSources)) scenario.confirmedConfigSources = {};
+    const source = CONFIRMATION_SOURCES.has(options.source) ? options.source : "explicit";
     const selectedKeys = keys === undefined ? Object.keys(scenario.config) : (Array.isArray(keys) ? keys : [keys]);
     selectedKeys.forEach((key) => {
       if (CONFIG_KEYS.has(key) && Object.prototype.hasOwnProperty.call(scenario.config, key) && scenario.config[key] !== undefined) {
         scenario.confirmedConfig[key] = cloneConfigValue(scenario.config[key]);
+        scenario.confirmedConfigSources[key] = source;
       }
     });
     return true;
@@ -170,6 +198,8 @@
       isBaseline: Boolean(scenario.isBaseline),
       locked: Boolean(scenario.locked),
       confirmedConfig: {},
+      confirmedConfigSources: {},
+      confirmationReviewVersion: CONFIRMATION_REVIEW_VERSION,
       config: {
         mechanismEnabled: Boolean(merged.mechanismEnabled),
         mechanismRatio: clamp(Number(merged.mechanismRatio) || 0, 0, 1),
@@ -229,6 +259,9 @@
       envManualValuesByYear: [scenarioConfig.sanitizeEnvManualValuesByYear, scenarioConfig.getEnvManualCompleteness],
       feeManualValuesByYear: [scenarioConfig.sanitizeFeeManualValuesByYear, scenarioConfig.getFeeManualCompleteness]
     };
+    const roughSnapshots = Array.isArray(options.roughSnapshots) ? options.roughSnapshots : project.roughPrice?.snapshots;
+    const reviewLegacyDefaults = !(Number(scenario.confirmationReviewVersion) >= CONFIRMATION_REVIEW_VERSION)
+      && Array.isArray(roughSnapshots) && roughSnapshots.some((snapshot) => snapshot?.scenarioId === scenario.id);
     Object.keys(next.config).forEach((key) => {
       const annual = annualConfirmations[key];
       if (annual) {
@@ -239,7 +272,14 @@
         const coverage = annual[1](project, { [key]: value });
         if (coverage.complete !== coverage.total || !sameConfigValue(value, next.config[key])) return;
       } else if (!isConfigConfirmed(scenario, key, next.config[key])) return;
+      const source = scenario.confirmedConfigSources?.[key];
+      // Older rough generation confirmed every visible default without recording
+      // its origin. Reopen only ambiguous default confirmations, once, while
+      // retaining all input values and confirmed non-default assumptions.
+      if (reviewLegacyDefaults && !CONFIRMATION_SOURCES.has(source)
+          && matchesLegacyDefault(key, next.config[key], baseConfig, project)) return;
       next.confirmedConfig[key] = cloneConfigValue(next.config[key]);
+      if (CONFIRMATION_SOURCES.has(source)) next.confirmedConfigSources[key] = source;
     });
     return next;
   }
@@ -252,6 +292,8 @@
       isBaseline: true,
       locked: false,
       confirmedConfig: {},
+      confirmedConfigSources: {},
+      confirmationReviewVersion: CONFIRMATION_REVIEW_VERSION,
       config: defaultScenarioConfig(project, options),
       updatedAt: resolveNowIso(options)
     };

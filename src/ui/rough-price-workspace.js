@@ -132,13 +132,13 @@
       ? `<div class="rough-fields">${yearsFor(project).map((year) => inputField("value", `${year} 年策略损益`, config.ltManualPricesByYear?.[year], { disabled: locked, group: "ltManualPricesByYear", year })).join("")}</div>`
       : `<div class="rough-fields">${[["ltYear1Pnl", "首年策略损益"], ["ltTargetPnl", "目标策略损益"], ["ltConvergeSpeed", "每年收敛步长"]].map(([key, label]) => inputField(key, label, config[key], { disabled: locked, min: key === "ltConvergeSpeed" ? 0 : undefined })).join("")}</div>`;
     return `<section class="rough-shared"><div class="rough-section-head"><h3 id="rough-shared-heading">结算参数</h3>${locked ? '<span class="rough-badge">方案已锁定，只读</span>' : ""}</div>
-      <p class="rough-note" data-help="结算参数" data-help-anchor="#rough-shared-heading">已确认参数自动带入，未确认参数保留填写。系统建议值需要结合项目确认；保存或生成粗算即确认本页参数，并同步到收益参数补充与细化。</p>
+      <p class="rough-note" data-help="结算参数" data-help-anchor="#rough-shared-heading">已确认参数自动带入，未确认参数保留填写。生成粗算不会批量确认参数；实际调整的单项参数自动带入，未修改的默认值仍待确认。逐年表需明确确认；核对本页适用参数后，可点击“确认并保存本页结算参数”。</p>
       ${groupHtml("mechanism", "机制电价与补差口径", `<div class="rough-fields">${mechanism}</div><p class="rough-note" data-help="机制补差口径">同类型机组均价＝项目捕获电价＋同类型机组价差；年度有效机制占比按执行月份折算。</p>`)}
       ${groupHtml("strategy", "交易策略损益", selectField("ltPricingMode", "配置方式", config.ltPricingMode || "auto", [["auto", "按首年与目标逐年收敛"], ["manual", "保留 / 设置逐年值"]], locked) + ltFields)}
       ${groupHtml("environment", "环境价值", selectField("envValueMode", "配置方式", config.envValueMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + '<p class="rough-note" data-help="环境价值">价格与兑现比例按绿证、绿电、碳收益分别配置；兑现比例合计不得超过 100%。</p>' + (config.envValueMode === "manual" ? manualFieldsHtml("envManualValuesByYear", ENV_FIELDS, config, project, locked, confirmed("envManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(ENV_FIELDS, config, project, locked)}</div>`))}
       ${groupHtml("fees", "费用与其他收入", selectField("feeConfigMode", "配置方式", config.feeConfigMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + (config.feeConfigMode === "manual" ? manualFieldsHtml("feeManualValuesByYear", FEE_FIELDS, config, project, locked, confirmed("feeManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(FEE_FIELDS, config, project, locked)}</div>`))}
       ${project.hasStorage ? groupHtml("storage", "配储补充收益", `<div class="rough-fields">${fieldsHtml(STORAGE_FIELDS, config, project, locked)}</div>`) : ""}
-      <div class="rough-actions"><button type="button" class="ghost-button" data-rough-save-shared${locked ? " disabled" : ""}>确认并保存结算参数</button><span data-rough-dirty>${entry.dirty ? "有未保存调整，生成粗算时一并保存。" : ""}</span></div>
+      <div class="rough-actions"><button type="button" class="ghost-button" data-rough-save-shared${locked ? " disabled" : ""}>确认并保存本页结算参数</button><span data-rough-dirty>${entry.dirty ? "有未保存调整，生成粗算时一并保存。" : ""}</span></div>
     </section>`;
   }
 
@@ -307,13 +307,18 @@
       if (target) { target.textContent = text; target.classList?.toggle("rough-alert", tone === "error"); }
       onMessage(text, tone);
     };
-    const commitShared = () => {
+    const commitShared = (confirmAll = false) => {
       if (scenario.locked) return false;
       const changed = entry.dirty;
+      const applicableKeys = Object.values(sharedGroups(project, entry.config)).flat();
+      // A rough snapshot does not approve suggested values. Annual maps can contain
+      // auto-filled years, so new annual assumptions need explicit confirmation.
+      const confirmedKeys = confirmAll ? applicableKeys : applicableKeys.filter((key) =>
+        !key.endsWith("ByYear") && JSON.stringify(entry.config[key]) !== JSON.stringify(scenario.config[key]));
       scenario.config = clone(entry.config);
       scenario.updatedAt = typeof options.nowIso === "function" ? options.nowIso() : options.nowIso || new Date().toISOString();
       entry.source = JSON.stringify(scenario.config); entry.dirty = false;
-      options.inputState?.confirmConfig?.(scenario, Object.values(sharedGroups(project, scenario.config)).flat());
+      options.inputState?.confirmConfig?.(scenario, confirmedKeys, { source: confirmAll ? "explicit" : "rough_edit" });
       entry.groupOpen = {};
       return changed;
     };
@@ -368,7 +373,7 @@
       if (scenario.locked) return message("当前方案已锁定。", "error");
       const errors = validateShared(project, scenario, entry.config, domain);
       if (errors.length) return message(errors.join(" "), "error");
-      const changed = commitShared();
+      const changed = commitShared(true);
       message(changed ? "结算参数已保存，原粗算快照保留。更新基准结果后即可交叉验证。" : "结算参数已确认，后续自动带入。", "success");
       onChange({ sharedChanged: changed });
     };
@@ -385,7 +390,7 @@
       if (!result.ok) return message(result.errors.join(" "), "error");
       const changed = commitShared();
       project.roughPrice.snapshots.unshift(result.snapshot); entry.snapshotId = result.snapshot.id;
-      message("粗算版本已保存。完成现货预测与收益参数细化后，可在交叉验证中对照基准结果。", "success");
+      message("粗算版本已保存。未确认参数请在收益参数补充与细化中复核，再对照基准结果。", "success");
       onChange({ sharedChanged: changed });
     };
     [refs.rough, refs.compare].forEach((container) => container.querySelectorAll("[data-rough-snapshot]").forEach((select) => {

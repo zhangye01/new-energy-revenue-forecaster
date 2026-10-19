@@ -1114,9 +1114,9 @@ function normalizeLtConvergeStep(rawValue, rawYear1, rawTarget, fallback = 2, is
   return scenarioModel.normalizeLtConvergeStep(rawValue, rawYear1, rawTarget, fallback, isFixedStep);
 }
 
-function sanitizeScenario(project, rawScenario, index) {
+function sanitizeScenario(project, rawScenario, index, roughSnapshots) {
   return scenarioModel.sanitizeScenario(project, rawScenario, index, {
-    provinceDefaults: getProvinceDefaults(project?.province),
+    provinceDefaults: getProvinceDefaults(project?.province), roughSnapshots,
     currentYear: new Date().getFullYear(),
     nowIso: () => new Date().toISOString(),
     makeId
@@ -1148,7 +1148,7 @@ function sanitizeProjectForecastState(project, rawProject) {
 
 function sanitizeProjectScenarioState(project, rawProject) {
   const rawScenarios = Array.isArray(rawProject.scenarios) ? rawProject.scenarios : [];
-  project.scenarios = rawScenarios.map((scenario, i) => sanitizeScenario(project, scenario, i));
+  project.scenarios = rawScenarios.map((scenario, i) => sanitizeScenario(project, scenario, i, rawProject.roughPrice?.snapshots));
   if (!project.scenarios.length) {
     project.scenarios = [createBaselineScenario(project)];
   }
@@ -1464,7 +1464,7 @@ function syncProjectProvinceDefaultsToBaseline(project, options = {}) {
     return false;
   }
   baseline.config = defaultScenarioConfig(project);
-  baseline.confirmedConfig = {};
+  baseline.confirmedConfig = {}; baseline.confirmedConfigSources = {};
   baseline.updatedAt = new Date().toISOString();
   project.activeScenarioId = baseline.id;
   return true;
@@ -4166,6 +4166,7 @@ function duplicateActiveScenario() {
     name: makeScenarioCopyName(project, source.name),
     isBaseline: false, locked: false,
     config: cloneData(source.config), confirmedConfig: cloneData(source.confirmedConfig || {}),
+    confirmedConfigSources: cloneData(source.confirmedConfigSources || {}), confirmationReviewVersion: source.confirmationReviewVersion,
     updatedAt: new Date().toISOString()
   };
   const roughDraft = project.roughPrice?.draftsByScenario?.[source.id];
