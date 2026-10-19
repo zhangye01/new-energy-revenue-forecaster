@@ -10,10 +10,12 @@ const REQUIRED_PAGE_IDS = [
   "projects-page",
   "create-page",
   "energy-page",
+  "rough-page",
   "history-page",
   "forecast-page",
   "scenario-page",
   "results-page",
+  "validation-page",
   "compare-page",
   "help-page",
   "settings-page"
@@ -21,10 +23,12 @@ const REQUIRED_PAGE_IDS = [
 const REQUIRED_STATUS_DOT_IDS = [
   "status-create-page",
   "status-energy-page",
+  "status-rough-page",
   "status-history-page",
   "status-forecast-page",
   "status-scenario-page",
   "status-results-page",
+  "status-validation-page",
   "status-compare-page"
 ];
 const CRITICAL_IDS = [

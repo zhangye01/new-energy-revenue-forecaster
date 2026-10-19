@@ -577,6 +577,7 @@ body[data-theme="eye"] .page-help-card p {
 
 .global-toast {
   position: fixed;
+  pointer-events: none;
   left: var(--toast-left);
   right: auto;
   bottom: 14px;

@@ -4,8 +4,10 @@ const assert = require("node:assert/strict");
 const {
   applyBatchParameter,
   applyProvinceDefaultsToScenario,
+  confirmConfig,
   createBaselineScenario,
   defaultScenarioConfig,
+  isConfigConfirmed,
   normalizeLtConvergeStep,
   normalizeScenarioMetadata,
   parseBatchValue,
@@ -124,6 +126,7 @@ assert.deepEqual(Object.keys(sanitized.config.feeManualValuesByYear), ["2026", "
 assert.equal(sanitized.config.storageArbitragePrice, 0);
 assert.equal(sanitized.config.mechanismReferenceMode, "project_capture");
 assert.equal(sanitized.config.sameTypeSpread, 0);
+assert.deepEqual(sanitized.confirmedConfig, {}, "legacy saved values must not be mistaken for explicit confirmation");
 const sameTypeScenario = sanitizeScenario(offshoreStorageProject, {
   config: { mechanismReferenceMode: "same_type", sameTypeSpread: -15 }
 });
@@ -154,6 +157,8 @@ assert.equal(applyTarget.config.greenPremiumRealizeRatio, 0);
 assert.equal(applyTarget.config.carbonRealizeRatio, 0);
 assert.equal(applyTarget.config.storageArbitragePrice, provinceDefaults.storageArbitragePrice);
 assert.equal(applyTarget.updatedAt, "2026-06-10T08:00:00.000Z");
+assert.equal(isConfigConfirmed(applyTarget, "mechanismPrice"), true);
+assert.equal(isConfigConfirmed(applyTarget, "carbonPrice"), false, "applying defaults must not confirm untouched fields");
 
 const noStorageOnshoreTarget = { config: { carbonEnabled: true, carbonPrice: 8 } };
 applyProvinceDefaultsToScenario(
@@ -182,6 +187,56 @@ assert.equal(baselineScenario.isBaseline, true);
 assert.equal(baselineScenario.locked, false);
 assert.equal(baselineScenario.config.carbonEnabled, true);
 assert.equal(baselineScenario.updatedAt, "2026-06-10T00:00:00.000Z");
+assert.deepEqual(baselineScenario.confirmedConfig, {});
+assert.equal(isConfigConfirmed(baselineScenario, "mechanismPrice"), false, "a populated system default is still unconfirmed");
+
+const confirmationScenario = createBaselineScenario(offshoreStorageProject);
+confirmationScenario.config.mechanismEnabled = false;
+confirmationScenario.config.mechanismRatio = 0;
+confirmationScenario.config.ltManualPricesByYear = { 2026: 0, 2027: 6 };
+assert.equal(confirmConfig(confirmationScenario, ["mechanismEnabled", "mechanismRatio", "ltManualPricesByYear", "unknown"]), true);
+assert.equal(isConfigConfirmed(confirmationScenario, "mechanismEnabled"), true, "false is a valid confirmed value");
+assert.equal(isConfigConfirmed(confirmationScenario, "mechanismRatio"), true, "zero is a valid confirmed value");
+assert.equal(isConfigConfirmed(confirmationScenario, "mechanismPrice"), false);
+assert.equal(isConfigConfirmed(confirmationScenario, "unknown"), false);
+assert.equal(isConfigConfirmed(confirmationScenario, "ltManualPricesByYear", { 2027: 6, 2026: 0 }), true);
+confirmationScenario.config.ltManualPricesByYear[2027] = 9;
+assert.equal(confirmationScenario.confirmedConfig.ltManualPricesByYear[2027], 6, "confirmed values need an independent deep snapshot");
+assert.equal(isConfigConfirmed(confirmationScenario, "ltManualPricesByYear"), false);
+const reloadedConfirmation = sanitizeScenario(offshoreStorageProject, JSON.parse(JSON.stringify(confirmationScenario)));
+assert.equal(isConfigConfirmed(reloadedConfirmation, "mechanismRatio"), true);
+assert.equal(isConfigConfirmed(reloadedConfirmation, "ltManualPricesByYear"), false);
+assert.equal(confirmConfig(confirmationScenario), true);
+assert.equal(isConfigConfirmed(confirmationScenario, "ltManualPricesByYear"), true);
+assert.equal(isConfigConfirmed(confirmationScenario, "mechanismPrice"), true);
+const changedByNormalization = sanitizeScenario({ ...offshoreStorageProject, hasStorage: false }, confirmationScenario);
+assert.equal(isConfigConfirmed(changedByNormalization, "storageArbitragePrice"), false, "normalization must not silently confirm a replacement value");
+confirmationScenario.locked = true;
+const lockedConfirmationBefore = JSON.stringify(confirmationScenario);
+assert.equal(confirmConfig(confirmationScenario), false);
+applyProvinceDefaultsToScenario(offshoreStorageProject, confirmationScenario);
+assert.equal(JSON.stringify(confirmationScenario), lockedConfirmationBefore, "locked scenario and confirmation records are immutable");
+
+const manualConfirmationProject = { ...offshoreStorageProject, forecastYears: 1 };
+const manualConfirmation = createBaselineScenario(manualConfirmationProject);
+manualConfirmation.config.envValueMode = "manual";
+manualConfirmation.config.envManualValuesByYear = {
+  2026: { greenCertPrice: 22, greenCertRealizeRatio: 1, greenPremiumPrice: 12,
+    greenPremiumRealizeRatio: 0, carbonEnabled: false, carbonPrice: 4, carbonRealizeRatio: 0 }
+};
+confirmConfig(manualConfirmation, ["envValueMode", "envManualValuesByYear"]);
+const reloadedManual = sanitizeScenario(manualConfirmationProject, JSON.parse(JSON.stringify(manualConfirmation)));
+assert.equal(reloadedManual.config.envManualValuesByYear[2026].carbonPrice, 0);
+assert.equal(isConfigConfirmed(reloadedManual, "envManualValuesByYear"), true,
+  "disabled carbon normalization preserves confirmation after reload");
+assert.equal(manualConfirmation.confirmedConfig.envManualValuesByYear[2026].carbonPrice, 4,
+  "hydration does not mutate the stored confirmation snapshot");
+manualConfirmation.config.envManualValuesByYear[2026].greenCertPrice = 23;
+assert.equal(isConfigConfirmed(sanitizeScenario(manualConfirmationProject, manualConfirmation), "envManualValuesByYear"), false,
+  "normalizing annual maps must not confirm a genuinely changed input");
+manualConfirmation.config.envManualValuesByYear[2026].greenCertPrice = 22;
+assert.equal(isConfigConfirmed(sanitizeScenario({ ...manualConfirmationProject, forecastYears: 2 }, manualConfirmation), "envManualValuesByYear"), false,
+  "a newly added project year remains unconfirmed and visible for completion");
 
 const metadataProject = {
   activeScenarioId: "missing",
@@ -294,6 +349,9 @@ assert.equal(batchResult.skippedLocked, 1);
 assert.equal(batchProject.scenarios[0].config.greenCertRealizeRatio, 0.4);
 assert.equal(batchProject.scenarios[2].config.greenCertRealizeRatio, 0.4);
 assert.equal(batchProject.scenarios[2].updatedAt, "2026-06-10T00:00:00.000Z");
+assert.deepEqual(batchProject.scenarios[2].confirmedConfig, { greenCertRealizeRatio: 0.4 });
+assert.equal(batchProject.scenarios[0].confirmedConfig, undefined);
+assert.equal(batchProject.scenarios[1].confirmedConfig, undefined);
 assert.match(batchResult.message, /批量更新完成：1 个场景已更新/);
 
 const skipSpaceResult = applyBatchParameter(batchProject, {

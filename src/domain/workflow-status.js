@@ -13,19 +13,44 @@
   const DEFAULT_WORKFLOW_PAGES = Object.freeze([
     "create-page",
     "energy-page",
+    "rough-page",
     "history-page",
     "forecast-page",
     "scenario-page",
     "results-page",
+    "validation-page",
     "compare-page"
   ]);
   const STATUS_SET = new Set(["not_started", "in_progress", "completed", "stale"]);
   const DOWNSTREAM_STALE_CHAIN = Object.freeze({
-    "energy-page": Object.freeze(["forecast-page", "scenario-page", "results-page", "compare-page"]),
-    "history-page": Object.freeze(["forecast-page", "scenario-page", "results-page", "compare-page"]),
-    "forecast-page": Object.freeze(["scenario-page", "results-page", "compare-page"]),
-    "scenario-page": Object.freeze(["results-page", "compare-page"])
+    "energy-page": Object.freeze(["rough-page", "forecast-page", "scenario-page", "results-page", "validation-page", "compare-page"]),
+    "rough-page": Object.freeze(["validation-page"]),
+    "history-page": Object.freeze(["forecast-page", "scenario-page", "results-page", "validation-page", "compare-page"]),
+    "forecast-page": Object.freeze(["scenario-page", "results-page", "validation-page", "compare-page"]),
+    "scenario-page": Object.freeze(["rough-page", "results-page", "validation-page", "compare-page"])
   });
+
+  function buildCompletionSnapshot(input = {}) {
+    const { project = {}, scenario = null, energyState = {}, roughPrice = {} } = input;
+    const snapshots = (project.roughPrice?.snapshots || []).filter((item) => item.scenarioId === scenario?.id);
+    const fingerprint = scenario && snapshots.length ? roughPrice.contextFingerprint?.(project, scenario) : "";
+    const roughSnapshot = snapshots.find((item) => item.contextFingerprint === fingerprint);
+    const result = project.resultsByScenario?.[scenario?.id];
+    return {
+      ...input,
+      energyCompleted: Boolean(energyState.ready),
+      completeEnergyYears: energyState.completeYears || 0,
+      historyReady: Boolean(input.createCompleted && project.province),
+      historyCompleted: Boolean(input.createCompleted && project.province && project.statuses?.["history-page"] === "completed"),
+      hasPriceRuns: Boolean(project.priceRuns?.length),
+      scenarioCompleted: project.statuses?.["scenario-page"] === "completed",
+      compareCompleted: input.compareReadyCount >= 2,
+      roughStarted: Boolean(snapshots.length || project.roughPrice?.draftsByScenario?.[scenario?.id]?.spotNodes?.some((node) => node.value !== null && node.value !== "" && node.value !== undefined)),
+      roughCompleted: Boolean(roughSnapshot),
+      validationReady: Boolean(snapshots.length || result),
+      validationCompleted: Boolean(roughSnapshot && result && roughPrice.compareBaselineResult?.(project, scenario, roughSnapshot, result)?.ok)
+    };
+  }
 
   function normalizeWorkflowPages(workflowPages) {
     return Array.isArray(workflowPages) && workflowPages.length
@@ -55,19 +80,23 @@
       inProgressMap: {
         "create-page": !snapshot.createCompleted && hasProjectName,
         "energy-page": Boolean(snapshot.createCompleted),
+        "rough-page": Boolean(snapshot.energyCompleted || snapshot.roughStarted),
         "history-page": Boolean(snapshot.historyReady),
         "forecast-page": Boolean(snapshot.historyCompleted || snapshot.hasPriceRuns),
         "scenario-page": Boolean(snapshot.forecastCompleted || currentStatuses["scenario-page"] === "in_progress"),
         "results-page": Boolean(snapshot.scenarioCompleted && snapshot.forecastCompleted),
+        "validation-page": Boolean(snapshot.validationReady),
         "compare-page": Boolean(snapshot.resultsCompleted && snapshot.compareReadyCount >= 1)
       },
       completedMap: {
         "create-page": Boolean(snapshot.createCompleted),
         "energy-page": Boolean(snapshot.energyCompleted),
+        "rough-page": Boolean(snapshot.roughCompleted),
         "history-page": Boolean(snapshot.historyCompleted),
         "forecast-page": Boolean(snapshot.forecastCompleted),
         "scenario-page": Boolean(snapshot.scenarioCompleted),
         "results-page": Boolean(snapshot.resultsCompleted),
+        "validation-page": Boolean(snapshot.validationCompleted),
         "compare-page": Boolean(snapshot.compareCompleted)
       }
     };
@@ -110,6 +139,7 @@
   }
 
   return Object.freeze({
+    buildCompletionSnapshot,
     DEFAULT_WORKFLOW_PAGES,
     statusMapTemplate,
     sanitizeStatuses,

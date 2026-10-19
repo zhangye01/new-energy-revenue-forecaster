@@ -522,6 +522,7 @@ assert.deepEqual(applySaveResult, {
 });
 assert.equal(applySaveScenario.name, "新场景");
 assert.deepEqual(applySaveScenario.config, { mechanismPrice: 365 });
+assert.deepEqual(applySaveScenario.confirmedConfig, { mechanismPrice: 365 });
 assert.equal(applySaveScenario.updatedAt, "2026-06-30T00:00:00.000Z");
 assert.equal(applySaveProject.statuses["scenario-page"], "completed");
 assert.deepEqual(applyScenarioSaveDraft({
@@ -532,6 +533,14 @@ assert.deepEqual(applyScenarioSaveDraft({
   ok: false,
   message: "不能保存"
 });
+const lockedSaveScenario = { ...applySaveScenario, locked: true };
+assert.deepEqual(applyScenarioSaveDraft({
+  project: applySaveProject,
+  scenario: lockedSaveScenario,
+  draft: { ok: true, scenarioName: "不应修改", config: { mechanismPrice: 999 } }
+}), { ok: false, message: "当前场景已锁定，不能保存修改。" });
+assert.equal(lockedSaveScenario.name, "新场景");
+assert.deepEqual(lockedSaveScenario.confirmedConfig, { mechanismPrice: 365 });
 
 const duplicateDraft = buildScenarioSaveDraft({
   project: saveProject,

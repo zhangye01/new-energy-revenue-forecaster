@@ -307,10 +307,12 @@ const DEMO_AUTH_USERS = [
 const PAGE_COMPLETION_STANDARD_MAP = {
   "create-page": "项目基础信息填写完整并成功创建。",
   "energy-page": "逐年总量覆盖全部测算年度，并完成典型年曲线来源二选一。",
+  "rough-page": "已保存与当前项目、电量和结算参数一致的粗算版本。",
   "history-page": "已按项目省份自动展示历史现货图表。",
   "forecast-page": "存在已生效且可发布的电价预测版本。",
   "scenario-page": "当前全口径收入配置已保存。",
   "results-page": "当前场景已成功生成一版基准结果。",
+  "validation-page": "已有同口径的粗算与基准结果，可查看偏差。",
   "compare-page": "至少两个场景存在可对比结果。"
 };
 const PAGE_VIEW_ALIAS = {
@@ -1446,6 +1448,7 @@ function shouldAutoSyncProvinceDefaults(project) {
   ensureScenarioMetadata(project);
   const baseline = getBaselineScenario(project);
   if (!baseline || baseline.locked) return false;
+  if (Object.keys(baseline.confirmedConfig || {}).length || project.roughPrice?.snapshots?.length) return false;
   if (project.scenarios.length !== 1) return false;
   if (project.statuses["scenario-page"] === "completed") return false;
   if (Object.keys(project.resultsByScenario || {}).length) return false;
@@ -1461,6 +1464,7 @@ function syncProjectProvinceDefaultsToBaseline(project, options = {}) {
     return false;
   }
   baseline.config = defaultScenarioConfig(project);
+  baseline.confirmedConfig = {};
   baseline.updatedAt = new Date().toISOString();
   project.activeScenarioId = baseline.id;
   return true;
@@ -1590,29 +1594,14 @@ function hasActiveScenarioResult(project) {
 }
 
 function buildWorkflowCompletionSnapshot(project) {
-  const energyState = getEnergyCompletionState(project);
-  const completeEnergyYears = energyState.completeYears;
-  const energyCompleted = energyState.ready;
-  const historyReady = isProjectCreateCompleted(project) && Boolean(project.province);
-  const historyCompleted = historyReady && project.statuses["history-page"] === "completed";
-  const forecastCompleted = hasActiveActivatableRun(project);
-  const scenarioCompleted = project.statuses["scenario-page"] === "completed";
-  const resultsCompleted = hasActiveScenarioResult(project);
-  const compareReadyCount = countScenariosForCompare(project);
-  const compareCompleted = compareReadyCount >= 2;
-  return {
+  return workflowStatus.buildCompletionSnapshot({
+    project, scenario: getActiveScenario(project), roughPrice,
+    energyState: getEnergyCompletionState(project),
     createCompleted: isProjectCreateCompleted(project),
-    energyCompleted,
-    historyReady,
-    historyCompleted,
-    forecastCompleted,
-    scenarioCompleted,
-    resultsCompleted,
-    compareCompleted,
-    hasPriceRuns: (project.priceRuns?.length || 0) > 0,
-    completeEnergyYears,
-    compareReadyCount
-  };
+    forecastCompleted: hasActiveActivatableRun(project),
+    resultsCompleted: hasActiveScenarioResult(project),
+    compareReadyCount: countScenariosForCompare(project)
+  });
 }
 
 function reconcileProjectStatuses(project) {
@@ -3230,11 +3219,12 @@ function renderForecastRuns() {
     documentRef: typeof document !== "undefined" ? document : null,
     handlers: { setActiveRun, forceActivateRun }
   });
-  roughPriceWorkspace.renderWorkspace({
+  if (["rough-page", "validation-page"].includes(appState.activePage)) roughPriceWorkspace.renderWorkspace({
     documentRef: typeof document !== "undefined" ? document : null,
-    project, scenario: project ? getActiveScenario(project) : null, domain: roughPrice, getProvinceName, isActive: appState.activePage === "forecast-page",
+    project, scenario: project ? getActiveScenario(project) : null, domain: roughPrice, inputState: scenarioModel, getProvinceName,
+    mode: appState.activePage === "validation-page" ? "compare" : "rough",
     getHourlyEnergyForCalculation, makeId, nowIso: () => new Date().toISOString(),
-    onMessage: setTopMeta, onPersist: schedulePersistAppData,
+    onMessage: setTopMeta, onPersist: schedulePersistAppData, onNavigate: setActivePage,
     onChange: (change = {}) => { if (change.sharedChanged) markDownstreamStale(project, "scenario-page"); renderAll(); }
   });
 }
@@ -4175,7 +4165,7 @@ function duplicateActiveScenario() {
     id: makeId("scn"),
     name: makeScenarioCopyName(project, source.name),
     isBaseline: false, locked: false,
-    config: cloneData(source.config),
+    config: cloneData(source.config), confirmedConfig: cloneData(source.confirmedConfig || {}),
     updatedAt: new Date().toISOString()
   };
   const roughDraft = project.roughPrice?.draftsByScenario?.[source.id];
@@ -4352,7 +4342,7 @@ function runCalculation() {
     scenarioConfig,
     resultCalculation,
     prepareEnergy: ensureHourlyEnergyForCalculation,
-    calculateScenarioResult,
+    calculateScenarioResult, stampResult: roughPrice.stampBaselineResult,
     countScenariosForCompare,
     setTopMeta,
     renderAll

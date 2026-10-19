@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, contextFingerprint } = require("../src/domain/rough-price");
+const { defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, contextFingerprint } = require("../src/domain/rough-price");
 const { calculateScenarioResult } = require("../src/domain/revenue-calculator");
 const { defaultScenarioConfig, sanitizeScenario } = require("../src/domain/scenario-model");
 const { normalizeTypicalCurveProfile } = require("../src/domain/energy-profiles");
@@ -366,5 +366,86 @@ assert.match(differentWeights.errors.join(""), /电量口径差异.*2026/);
 assert.deepEqual(differentWeights.rows, []);
 const roundedWeights = compareSnapshot(summaryProject, summaryScenario, summaryRough, run, (_copy, year) => hours((year === 2026 ? 1 : 2) + 1e-12));
 assert.equal(roundedWeights.ok, true, "容许小时求和浮点误差");
+
+// Comparison reads the exact stored overview result, including its saved aggregate.
+const unstampedBaseline = calculateScenarioResult(comparisonProject, comparisonScenario, run);
+const originalBaseline = JSON.stringify(unstampedBaseline);
+const savedBaseline = stampBaselineResult(comparisonProject, comparisonScenario, run, unstampedBaseline);
+assert.notEqual(savedBaseline, unstampedBaseline, "来源记录不改写原计算对象");
+assert.equal(JSON.stringify(unstampedBaseline), originalBaseline);
+assert.equal(savedBaseline.sourceContext.projectId, comparisonProject.id);
+assert.equal(savedBaseline.sourceContext.scenarioId, comparisonScenario.id);
+assert.equal(savedBaseline.sourceContext.runId, "run-a");
+assert.equal(savedBaseline.sourceContext.contextFingerprint, rough.contextFingerprint);
+assert.ok(Number.isFinite(Date.parse(savedBaseline.sourceContext.generatedAt)));
+const storedProject = { ...comparisonProject, resultsByScenario: { [comparisonScenario.id]: savedBaseline } };
+// Deliberately distinct values prove the comparison never chooses/recalculates a price run,
+// nor substitutes its own weighted average for the overview's already saved aggregate.
+savedBaseline.annualRows[0].spotAvgPrice = 123;
+savedBaseline.annualRows[0].capturePrice = 98;
+savedBaseline.annualRows[0].fullRevenuePrice = 101;
+savedBaseline.avgFullRevenuePrice = 104.123456789;
+Object.defineProperty(storedProject, "priceRuns", { get() { throw new Error("不得读取预测版本重算"); } });
+storedProject.activePriceRunId = "a-different-current-run";
+const baselineBefore = JSON.stringify(savedBaseline);
+const baselineComparison = compareBaselineResult(storedProject, comparisonScenario, rough, storedProject.resultsByScenario[comparisonScenario.id]);
+assert.equal(baselineComparison.ok, true, baselineComparison.errors.join("；"));
+assert.equal(baselineComparison.rows[0].fineSpot, 123);
+assert.equal(baselineComparison.rows[0].fineCapture, 98);
+assert.equal(baselineComparison.rows[0].fineSettlement, 101);
+assert.equal(baselineComparison.summary.weightedFine, 104.123456789, "必须与基准结果总览使用同一保存值");
+approx(baselineComparison.summary.delta, 104.123456789 - rough.summary.weightedPrice, "全周期差额");
+approx(baselineComparison.summary.relativeDelta, baselineComparison.summary.delta / Math.abs(rough.summary.weightedPrice), "全周期偏差率");
+assert.equal(baselineComparison.summary.weightedDelta, baselineComparison.summary.delta);
+assert.equal(baselineComparison.source.runId, "run-a", "来源是生成基准结果时的版本，不随当前生效版本改变");
+assert.equal(JSON.stringify(savedBaseline), baselineBefore, "对照不改写已保存结果");
+baselineComparison.source.runId = "changed";
+assert.equal(savedBaseline.sourceContext.runId, "run-a", "展示来源与保存对象隔离");
+assert.equal(compareBaselineResult(storedProject, comparisonScenario, null, savedBaseline).reason, "missing_snapshot");
+assert.equal(compareBaselineResult(storedProject, comparisonScenario, rough, null).reason, "missing_baseline");
+assert.equal(compareBaselineResult(storedProject, comparisonScenario, rough, unstampedBaseline).reason, "legacy_baseline");
+assert.equal(compareBaselineResult(storedProject, comparisonScenario, rough, {
+  ...savedBaseline, sourceContext: { ...savedBaseline.sourceContext, generatedAt: "invalid-date" }
+}).reason, "legacy_baseline");
+const newScenario = { ...comparisonScenario, config: { ...comparisonScenario.config, otherFee: 8 } };
+assert.equal(compareBaselineResult(storedProject, newScenario, rough, savedBaseline).reason, "stale_snapshot");
+const refreshedRough = calculate(storedProject, newScenario);
+assert.equal(compareBaselineResult(storedProject, newScenario, refreshedRough, savedBaseline).reason, "stale_baseline",
+  "更新粗算不能把旧收入结果冒充成新口径");
+const changedBaselineEnergy = JSON.parse(JSON.stringify(comparisonProject));
+changedBaselineEnergy.energyData.hourlyByYear[2026][0] += 1;
+const energyRefreshedRough = calculate(changedBaselineEnergy, comparisonScenario);
+assert.equal(compareBaselineResult(changedBaselineEnergy, comparisonScenario, energyRefreshedRough, savedBaseline).reason, "stale_baseline");
+for (const badResult of [
+  { ...savedBaseline, annualRows: savedBaseline.annualRows.slice(0, 1) },
+  { ...savedBaseline, annualRows: [savedBaseline.annualRows[0], savedBaseline.annualRows[0]] },
+  { ...savedBaseline, missingYears: [2027] },
+  { ...savedBaseline, avgFullRevenuePrice: NaN },
+  { ...savedBaseline, avgFullRevenuePrice: null },
+  { ...savedBaseline, annualRows: savedBaseline.annualRows.map((row) => ({ ...row, fullRevenuePrice: Infinity })) }
+]) {
+  assert.equal(compareBaselineResult(storedProject, comparisonScenario, rough, badResult).reason, "invalid_baseline");
+}
+for (const energyMwh of [0, null, -1, 8761]) {
+  const badEnergy = { ...savedBaseline, annualRows: savedBaseline.annualRows.map((row, index) => index ? row : { ...row, energyMwh }) };
+  assert.equal(compareBaselineResult(storedProject, comparisonScenario, rough, badEnergy).reason, "energy_mismatch");
+}
+const zeroBaseline = stampBaselineResult(zeroProject, zeroScenario, { id: "zero-run" },
+  calculateScenarioResult(zeroProject, zeroScenario, { pricesByYear: { 2026: hours(0) } }));
+const storedZero = compareBaselineResult(zeroProject, zeroScenario, zero, zeroBaseline);
+assert.equal(storedZero.ok, true);
+assert.equal(storedZero.summary.weightedFine, 0);
+assert.equal(storedZero.summary.relativeDelta, null, "零粗算不产生无穷大偏差率");
+assert.equal(storedZero.rows[0].relativeDelta, null);
+assert.equal(storedZero.rows[0].fineCaptureRate, null);
+const negativeRough = calculate(zeroProject, zeroScenario, draft(zeroProject, -100));
+const negativeBaseline = stampBaselineResult(zeroProject, zeroScenario, { id: "negative-run" },
+  calculateScenarioResult(zeroProject, zeroScenario, { pricesByYear: { 2026: hours(-80) } }));
+const storedNegative = compareBaselineResult(zeroProject, zeroScenario, negativeRough, negativeBaseline);
+assert.equal(storedNegative.ok, true);
+assert.equal(storedNegative.summary.weightedFine, -80);
+assert.equal(storedNegative.summary.delta, 20);
+assert.equal(storedNegative.summary.relativeDelta, 0.2, "负价偏差率以粗算绝对值为分母，保留高低方向");
+assert.equal(storedNegative.rows[0].relativeDelta, 0.2);
 
 console.log("rough price tests passed");

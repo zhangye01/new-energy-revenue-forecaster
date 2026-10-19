@@ -3,7 +3,9 @@
 const assert = require("node:assert/strict");
 const workspace = require("../src/ui/rough-price-workspace");
 const domain = require("../src/domain/rough-price");
-const { defaultScenarioConfig } = require("../src/domain/scenario-model");
+const inputState = require("../src/domain/scenario-model");
+const { defaultScenarioConfig } = inputState;
+const { calculateScenarioResult } = require("../src/domain/revenue-calculator");
 
 class Element {
   constructor(dataset = {}) {
@@ -38,7 +40,7 @@ function documentFixture() {
     capture: new Element(), source: new Element(), node: new Element({ roughNode: "0", nodeField: "value" }),
     sharedPrice: new Element({ sharedKey: "mechanismPrice" }), form: new Element(),
     save: new Element(), message: new Element(), dirty: new Element(), add: new Element(),
-    threshold: new Element(), run: new Element()
+    threshold: new Element(), comparisonSummary: new Element(), snapshot: new Element()
   };
   rough.selectors = {
     "[data-rough-capture]": controls.capture, "[data-rough-source]": controls.source,
@@ -47,7 +49,8 @@ function documentFixture() {
     "[data-rough-add]": controls.add
   };
   rough.groups = { "[data-rough-node]": [controls.node], "[data-shared-key]": [controls.sharedPrice] };
-  compare.selectors = { "[data-rough-threshold]": controls.threshold, "[data-rough-run]": controls.run };
+  compare.selectors = { "[data-rough-threshold]": controls.threshold, "[data-rough-comparison-summary]": controls.comparisonSummary };
+  compare.groups = { "[data-rough-snapshot]": [controls.snapshot] };
   return { documentRef, rough, compare, ids, buttons, controls };
 }
 
@@ -67,24 +70,62 @@ function projectFixture() {
 const empty = documentFixture();
 workspace.renderWorkspace({ documentRef: empty.documentRef });
 assert.match(empty.rough.innerHTML, /请先创建或选择项目/);
-assert.equal(empty.ids["forecast-rough-panel"].hidden, false);
-assert.equal(empty.ids["forecast-fine-panel"].hidden, true);
-assert.equal(empty.buttons[0].attributes["aria-selected"], "true");
-empty.buttons[1].onclick();
-assert.equal(empty.ids["forecast-fine-panel"].hidden, false);
-assert.equal(empty.ids["forecast-rough-panel"].hidden, true);
-empty.buttons[1].onkeydown({ key: "Home", preventDefault() {} });
-assert.equal(empty.ids["forecast-rough-panel"].hidden, false);
-assert.equal(empty.buttons[0].focused, true);
+assert.equal(empty.compare.innerHTML, "", "rough page does not render the result-stage page");
+assert.equal(empty.buttons[0].onclick, undefined, "legacy fine/rough tabs have no behavior");
+workspace.renderWorkspace({ documentRef: empty.documentRef, mode: "compare" });
+assert.match(empty.compare.innerHTML, /请先创建或选择项目/);
+
+// Navigation controls are created after shell startup and replaced on every render.
+// Derive this fixture's buttons from the rendered markup so missing or wrong targets fail.
+const navigationFixture = documentFixture();
+const navigationData = projectFixture();
+const navigationCalls = [];
+let navigationButtons = [];
+const queryNavigationGroups = navigationFixture.compare.querySelectorAll.bind(navigationFixture.compare);
+navigationFixture.compare.querySelectorAll = (selector) => {
+  if (selector !== "[data-jump]") return queryNavigationGroups(selector);
+  navigationButtons = Array.from(navigationFixture.compare.innerHTML.matchAll(/<button\b[^>]*data-jump="([^"]+)"/g),
+    (match) => new Element({ jump: match[1] }));
+  return navigationButtons;
+};
+const navigationOptions = { documentRef: navigationFixture.documentRef, ...navigationData, domain, mode: "compare",
+  onNavigate(page) { navigationCalls.push(page); } };
+workspace.renderWorkspace(navigationOptions);
+assert.deepEqual(navigationButtons.map((button) => button.dataset.jump), ["rough-page"]);
+navigationButtons[0].onclick();
+assert.deepEqual(navigationCalls, ["rough-page"], "missing rough result links to the independent rough page");
+const navigationSnapshot = domain.calculateRough(navigationData.project, navigationData.scenario, {
+  spotNodes: [{ year: 2027, value: 300 }], captureRate: 95, sourceNote: "导航回归"
+}).snapshot;
+navigationData.project.roughPrice.snapshots.push(navigationSnapshot);
+workspace.renderWorkspace(navigationOptions);
+assert.deepEqual(navigationButtons.map((button) => button.dataset.jump), ["scenario-page"]);
+navigationButtons[0].onclick();
+assert.equal(navigationCalls.at(-1), "scenario-page", "missing baseline links to the income configuration");
+navigationData.project.resultsByScenario = { [navigationData.scenario.id]: domain.stampBaselineResult(
+  navigationData.project, navigationData.scenario, navigationData.project.priceRuns[0],
+  calculateScenarioResult(navigationData.project, navigationData.scenario, navigationData.project.priceRuns[0])) };
+workspace.renderWorkspace(navigationOptions);
+assert.deepEqual(navigationButtons.map((button) => button.dataset.jump), ["results-page"]);
+navigationButtons[0].onclick();
+assert.equal(navigationCalls.at(-1), "results-page", "saved result links to the same baseline overview");
+const previousNavigationButton = navigationButtons[0];
+workspace.renderWorkspace(navigationOptions);
+assert.notEqual(navigationButtons[0], previousNavigationButton);
+navigationButtons[0].onclick();
+assert.deepEqual(navigationCalls, ["rough-page", "scenario-page", "results-page", "results-page"],
+  "replacement controls retain navigation without accumulating callbacks");
 
 const fixture = documentFixture();
 const { project, scenario } = projectFixture();
 let changes = 0, persistence = 0, comparisons = 0;
 const changesMetadata = [];
 const options = {
-  documentRef: fixture.documentRef, project, scenario,
+  documentRef: fixture.documentRef, project, scenario, inputState, mode: "rough",
   getProvinceName: (key) => key === "shandong" ? "山东" : key,
-  domain: { ...domain, compareSnapshot(...args) { comparisons += 1; return domain.compareSnapshot(...args); } },
+  domain: { ...domain,
+    compareSnapshot() { throw new Error("must never recompute a run for comparison"); },
+    compareBaselineResult(...args) { comparisons += 1; return domain.compareBaselineResult(...args); } },
   makeId: () => `rough-${changes + 1}`, nowIso: () => "2026-10-19T03:00:00.000Z",
   onPersist() { persistence += 1; },
   onChange(metadata) { changes += 1; changesMetadata.push(metadata); workspace.renderWorkspace(options); }
@@ -96,7 +137,10 @@ assert.match(fixture.rough.innerHTML, /山东 · 风电/);
 assert.doesNotMatch(fixture.rough.innerHTML, /shandong/);
 assert.match(fixture.rough.innerHTML, /机制电价/);
 assert.match(fixture.rough.innerHTML, /data-shared-key="mechanismPrice"[^>]* min="0"/);
-assert.match(fixture.rough.innerHTML, /沿用已有配置/);
+assert.match(fixture.rough.innerHTML, /未确认参数保留填写/);
+assert.match(fixture.rough.innerHTML, /data-rough-group="mechanism" open/);
+assert.match(fixture.rough.innerHTML, /data-rough-group="environment" open/);
+assert.doesNotMatch(fixture.rough.innerHTML, /is-confirmed/);
 assert.equal(comparisons, 0);
 assert.equal(project.roughPrice.draftsByScenario[scenario.id].spotNodes[0].value, null);
 
@@ -121,9 +165,9 @@ workspace.renderWorkspace(options);
 assert.match(fixture.rough.innerHTML, /data-shared-key="mechanismPrice"[^>]*value="400"/,
   "uncommitted shared edits survive rerenders");
 assert.match(fixture.rough.innerHTML, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
-fixture.buttons[1].onclick();
-assert.equal(fixture.ids["forecast-fine-panel"].hidden, false);
-fixture.buttons[0].onclick();
+workspace.renderWorkspace({ ...options, mode: "compare" });
+assert.match(fixture.compare.innerHTML, /请先保存项目电价粗算/);
+workspace.renderWorkspace(options);
 assert.equal(project.roughPrice.draftsByScenario[scenario.id].spotNodes[0].value, 300);
 
 fixture.controls.form.onsubmit({ preventDefault() {} });
@@ -138,26 +182,35 @@ assert.equal(snapshot.rows[0].capturePrice, 270);
 assert.equal(comparisons, 0, "rough calculations do not run full precision comparisons");
 assert.match(fixture.rough.innerHTML, /年度粗算结果/);
 assert.match(fixture.rough.innerHTML, /导出粗算 CSV/);
+assert.ok(inputState.isConfigConfirmed(scenario, "mechanismPrice"));
+assert.doesNotMatch(fixture.rough.innerHTML, /data-rough-group="mechanism" open/,
+  "confirmed parameter groups collapse after saving");
+
+const rawResult = calculateScenarioResult(project, scenario, project.priceRuns[0]);
+project.resultsByScenario = { [scenario.id]: domain.stampBaselineResult(project, scenario, project.priceRuns[0], rawResult) };
 
 const activeBefore = project.activeRunId;
 const scenarioBefore = JSON.stringify(scenario);
-fixture.buttons[2].onclick();
+options.mode = "compare";
+workspace.renderWorkspace(options);
 assert.equal(comparisons, 1);
 assert.equal(project.activeRunId, activeBefore);
 assert.equal(JSON.stringify(scenario), scenarioBefore);
-assert.match(fixture.compare.innerHTML, /① 年度现货均价/);
-assert.match(fixture.compare.innerHTML, /② 项目捕获电价/);
-assert.match(fixture.compare.innerHTML, /③ 综合结算电价/);
+assert.match(fixture.compare.innerHTML, /年度现货均价/);
+assert.match(fixture.compare.innerHTML, /项目捕获电价/);
+assert.match(fixture.compare.innerHTML, /年度综合结算电价/);
+assert.match(fixture.compare.innerHTML, /<details class="rough-breakdown"><summary>查看现货均价与捕获电价/);
+assert.doesNotMatch(fixture.compare.innerHTML, /模型精算版本|data-rough-run|逐年差额与结算分项/);
 assert.match(fixture.compare.innerHTML, /导出对照 CSV/);
-assert.match(fixture.compare.innerHTML, /建议复核|阈值以内/);
+assert.match(fixture.compare.innerHTML, /明显偏差|与预期接近/);
 workspace.renderWorkspace(options);
-assert.equal(comparisons, 1, "unchanged comparisons are cached");
+assert.equal(comparisons, 2, "the stored annual result is read without hourly recalculation");
 workspace.renderWorkspace({ ...options, isActive: false });
-assert.equal(comparisons, 1, "other workspaces never run comparisons");
+assert.equal(comparisons, 2, "other workspaces never run comparisons");
 
 scenario.config.mechanismPrice += 1;
 workspace.renderWorkspace(options);
-assert.match(fixture.compare.innerHTML, /生成新版粗算/);
+assert.match(fixture.compare.innerHTML, /更新项目电价粗算/);
 assert.equal(project.roughPrice.snapshots[0].config.mechanismPrice, 400, "historic snapshots remain immutable");
 
 const thresholdFixture = documentFixture();
@@ -172,26 +225,29 @@ const thresholdSnapshot = domain.calculateRough(thresholdData.project, threshold
   spotNodes: [{ year: 2027, value: 270 }], captureRate: 100, sourceNote: "阈值回归"
 }).snapshot;
 thresholdData.project.roughPrice = { draftsByScenario: {}, snapshots: [thresholdSnapshot] };
-thresholdData.project.priceRuns.push({ ...thresholdData.project.priceRuns[0], id: "run-2", status: "validated" });
-const thresholdOptions = { documentRef: thresholdFixture.documentRef, ...thresholdData, domain };
+const thresholdResult = domain.stampBaselineResult(thresholdData.project, thresholdData.scenario, thresholdData.project.priceRuns[0],
+  calculateScenarioResult(thresholdData.project, thresholdData.scenario, thresholdData.project.priceRuns[0]));
+thresholdData.project.resultsByScenario = { [thresholdData.scenario.id]: thresholdResult };
+const thresholdOptions = { documentRef: thresholdFixture.documentRef, ...thresholdData, domain, mode: "compare" };
 workspace.renderWorkspace(thresholdOptions);
-thresholdFixture.buttons[2].onclick();
 assert.match(thresholdFixture.compare.innerHTML, /class="rough-review"/);
-const thresholdComparison = domain.compareSnapshot(thresholdData.project, thresholdData.scenario,
-  thresholdSnapshot, thresholdData.project.priceRuns[0]);
+const thresholdComparison = domain.compareBaselineResult(thresholdData.project, thresholdData.scenario,
+  thresholdSnapshot, thresholdResult);
 const reviewCells = thresholdComparison.rows.map((row) => new Element({ roughReviewDelta: String(row.relativeDelta) }));
 const zeroBasisCell = new Element({ roughReviewDelta: "" });
 thresholdFixture.compare.groups["[data-rough-review-delta]"] = [...reviewCells, zeroBasisCell];
 thresholdFixture.controls.threshold.value = "20";
 thresholdFixture.controls.threshold.oninput();
-assert.ok(reviewCells.every((cell) => cell.innerHTML === "阈值以内"), "input immediately updates 11%-15% review labels at a 20% threshold");
+assert.ok(reviewCells.every((cell) => cell.innerHTML === "与预期接近"), "input immediately updates 11%-15% review labels at a 20% threshold");
 assert.equal(zeroBasisCell.innerHTML, "参考绝对差额", "a zero comparison basis never gets a relative threshold verdict");
-thresholdFixture.controls.run.value = "run-2";
-thresholdFixture.controls.run.onchange();
+assert.match(thresholdFixture.controls.comparisonSummary.innerHTML, /整体与粗算预期接近/);
+assert.doesNotMatch(thresholdFixture.controls.comparisonSummary.innerHTML, /存在明显偏差/);
+thresholdFixture.controls.snapshot.value = thresholdSnapshot.id;
+thresholdFixture.controls.snapshot.onchange();
 assert.match(thresholdFixture.compare.innerHTML, /data-rough-threshold[^>]*value="20"/,
-  "switching precision versions preserves an input-only threshold edit");
+  "switching rough versions preserves an input-only threshold edit");
 assert.doesNotMatch(thresholdFixture.compare.innerHTML, /class="rough-review"/);
-assert.equal(thresholdData.project.activeRunId, "run-1", "reviewing an unactivated version remains read-only");
+assert.equal(thresholdData.project.activeRunId, "run-1", "comparison is read-only");
 for (const invalid of ["", "0", "1001", "bad"]) {
   thresholdFixture.controls.threshold.value = invalid;
   thresholdFixture.controls.threshold.oninput();
@@ -200,7 +256,8 @@ for (const invalid of ["", "0", "1001", "bad"]) {
 }
 thresholdFixture.controls.threshold.value = "10";
 thresholdFixture.controls.threshold.oninput();
-assert.ok(reviewCells.every((cell) => cell.innerHTML.includes("建议复核")), "lowering the threshold refreshes all annual review labels");
+assert.ok(reviewCells.every((cell) => cell.innerHTML.includes("明显偏差")), "lowering the threshold refreshes all annual review labels");
+assert.match(thresholdFixture.controls.comparisonSummary.innerHTML, /整体存在明显偏差/);
 
 const lockedFixture = documentFixture();
 const lockedData = projectFixture();
@@ -267,14 +324,12 @@ const csv = workspace.buildRoughCsv(snapshot);
 assert.match(csv, /^\ufeff/);
 assert.match(csv, /"历史参考, ""来源"" <script>alert\(1\)<\/script>"/);
 assert.match(csv, /策略贡献/);
-const result = domain.compareSnapshot(projectFixture().project, { ...scenario, config: snapshot.config }, snapshot,
-  project.priceRuns[0]);
 // Export helper accepts already computed data and performs proper CSV quoting.
-const compareCsv = workspace.buildComparisonCsv(snapshot, { id: 'run,"quoted"', status: "draft" }, {
+const compareCsv = workspace.buildComparisonCsv(snapshot, { runId: 'run,"quoted"', generatedAt: "2026-10-19T03:00:00Z" }, {
   rows: [{ year: 2027, roughSpot: 300, fineSpot: 301, roughCapture: 270, fineCapture: 271,
     roughSettlement: 350, fineSettlement: 351, delta: 1, relativeDelta: 1 / 350, fineCaptureRate: 90 }]
 });
 assert.match(compareCsv, /"run,""quoted"""/);
 assert.match(compareCsv, /综合价差异率/);
-assert.ok(result && typeof result.ok === "boolean");
+assert.match(compareCsv, /基准结果生成时间/);
 console.log("rough price workspace tests passed");

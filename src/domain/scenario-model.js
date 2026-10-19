@@ -124,6 +124,40 @@
     };
   }
 
+  const CONFIG_KEYS = new Set(Object.keys(defaultScenarioConfig()));
+
+  function sameConfigValue(left, right) {
+    if (left === right) return true;
+    if (!isPlainObject(left) || !isPlainObject(right)) return false;
+    const keys = Object.keys(left);
+    return keys.length === Object.keys(right).length && keys.every((key) => (
+      Object.prototype.hasOwnProperty.call(right, key) && sameConfigValue(left[key], right[key])
+    ));
+  }
+
+  function cloneConfigValue(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function isConfigConfirmed(scenario, key, value = scenario?.config?.[key]) {
+    return CONFIG_KEYS.has(key)
+      && isPlainObject(scenario?.confirmedConfig)
+      && Object.prototype.hasOwnProperty.call(scenario.confirmedConfig, key)
+      && sameConfigValue(scenario.confirmedConfig[key], value);
+  }
+
+  function confirmConfig(scenario, keys) {
+    if (!scenario || scenario.locked || !isPlainObject(scenario.config)) return false;
+    if (!isPlainObject(scenario.confirmedConfig)) scenario.confirmedConfig = {};
+    const selectedKeys = keys === undefined ? Object.keys(scenario.config) : (Array.isArray(keys) ? keys : [keys]);
+    selectedKeys.forEach((key) => {
+      if (CONFIG_KEYS.has(key) && Object.prototype.hasOwnProperty.call(scenario.config, key) && scenario.config[key] !== undefined) {
+        scenario.confirmedConfig[key] = cloneConfigValue(scenario.config[key]);
+      }
+    });
+    return true;
+  }
+
   function sanitizeScenario(project = {}, rawScenario, index = 0, options = {}) {
     const scenario = isPlainObject(rawScenario) ? rawScenario : {};
     const baseConfig = defaultScenarioConfig(project, options);
@@ -135,6 +169,7 @@
       name: typeof scenario.name === "string" && scenario.name.trim() ? scenario.name.trim() : `场景${index + 1}`,
       isBaseline: Boolean(scenario.isBaseline),
       locked: Boolean(scenario.locked),
+      confirmedConfig: {},
       config: {
         mechanismEnabled: Boolean(merged.mechanismEnabled),
         mechanismRatio: clamp(Number(merged.mechanismRatio) || 0, 0, 1),
@@ -189,6 +224,23 @@
       next.config.storageAncillaryRevenuePrice = 0;
       next.config.storageOtherRevenuePrice = 0;
     }
+    const annualConfirmations = {
+      ltManualPricesByYear: [scenarioConfig.sanitizeLtManualPricesByYear, scenarioConfig.getLtManualCompleteness],
+      envManualValuesByYear: [scenarioConfig.sanitizeEnvManualValuesByYear, scenarioConfig.getEnvManualCompleteness],
+      feeManualValuesByYear: [scenarioConfig.sanitizeFeeManualValuesByYear, scenarioConfig.getFeeManualCompleteness]
+    };
+    Object.keys(next.config).forEach((key) => {
+      const annual = annualConfirmations[key];
+      if (annual) {
+        // Only normalize a map that still matches what the user confirmed. This
+        // preserves disabled carbon fields across reloads without confirming edits.
+        if (!isConfigConfirmed(scenario, key)) return;
+        const value = annual[0](scenario.confirmedConfig[key], project);
+        const coverage = annual[1](project, { [key]: value });
+        if (coverage.complete !== coverage.total || !sameConfigValue(value, next.config[key])) return;
+      } else if (!isConfigConfirmed(scenario, key, next.config[key])) return;
+      next.confirmedConfig[key] = cloneConfigValue(next.config[key]);
+    });
     return next;
   }
 
@@ -199,6 +251,7 @@
       name: "基准场景",
       isBaseline: true,
       locked: false,
+      confirmedConfig: {},
       config: defaultScenarioConfig(project, options),
       updatedAt: resolveNowIso(options)
     };
@@ -245,6 +298,7 @@
   }
 
   function applyProvinceDefaultsToScenario(project = {}, scenario = {}, input = {}) {
+    if (scenario.locked) return scenario;
     const defaults = resolveProvinceDefaults({ provinceDefaults: input.provinceDefaults });
     const nowIso = input.nowIso;
     if (!scenario.config || !isPlainObject(scenario.config)) {
@@ -270,6 +324,14 @@
       scenario.config.carbonEnabled = false;
       scenario.config.carbonPrice = 0;
     }
+    confirmConfig(scenario, [
+      "mechanismEnabled", "mechanismRatio", "mechanismPrice",
+      "marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee",
+      "greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio",
+      "carbonRealizeRatio", "storageArbitragePrice", "storageCapacityCompPrice",
+      "storageAncillaryRevenuePrice", "storageOtherRevenuePrice",
+      ...(project.siteType !== "offshore" ? ["carbonEnabled", "carbonPrice"] : [])
+    ]);
     scenario.updatedAt = typeof nowIso === "function" ? nowIso() : resolveNowIso({ nowIso });
     return scenario;
   }
@@ -352,6 +414,8 @@
       } else {
         scenario.config[key] = parsed;
       }
+      confirmConfig(scenario, key === "carbonPrice" && project.siteType !== "offshore"
+        ? ["carbonPrice", "carbonEnabled", "carbonRealizeRatio"] : [key]);
       scenario.updatedAt = typeof nowIso === "function" ? nowIso() : nowIso;
       result.updated += 1;
     });
@@ -363,8 +427,10 @@
   return Object.freeze({
     applyBatchParameter,
     applyProvinceDefaultsToScenario,
+    confirmConfig,
     createBaselineScenario,
     defaultScenarioConfig,
+    isConfigConfirmed,
     normalizeLtConvergeStep,
     normalizeScenarioMetadata,
     parseBatchValue,

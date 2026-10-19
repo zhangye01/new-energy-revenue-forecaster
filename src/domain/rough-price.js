@@ -339,6 +339,117 @@
     return { ok: false, errors, rows: [], summary: {}, stale };
   }
 
+  function stampBaselineResult(project, scenario, run, result) {
+    if (!isObject(result) || !project?.id || !scenario?.id || !run?.id) return result;
+    return {
+      ...result,
+      sourceContext: {
+        version: 1,
+        projectId: project.id,
+        scenarioId: scenario.id,
+        runId: run.id,
+        contextFingerprint: contextFingerprint(project, scenario),
+        generatedAt: new Date().toISOString()
+      }
+    };
+  }
+
+  function comparisonRows(snapshot, fine) {
+    return snapshot.rows.map((rough) => {
+      const fineRow = fine.annualRows.find((item) => item.year === rough.year);
+      const perMwh = (amount) => Number.isFinite(amount) ? amount / fineRow.energyMwh : null;
+      const delta = fineRow.fullRevenuePrice - rough.fullRevenuePrice;
+      return {
+        year: rough.year,
+        roughSpot: rough.spotAvgPrice,
+        fineSpot: fineRow.spotAvgPrice,
+        roughCapture: rough.capturePrice,
+        fineCapture: fineRow.capturePrice,
+        roughSettlement: rough.fullRevenuePrice,
+        fineSettlement: fineRow.fullRevenuePrice,
+        delta,
+        relativeDelta: Math.abs(rough.fullRevenuePrice) < 0.000001 ? null : delta / Math.abs(rough.fullRevenuePrice),
+        fineCaptureRate: Math.abs(fineRow.spotAvgPrice) < 0.000001 ? null : fineRow.capturePrice / fineRow.spotAvgPrice * 100,
+        roughBreakdown: clone(rough),
+        fineBreakdown: {
+          year: rough.year,
+          spotAvgPrice: fineRow.spotAvgPrice,
+          capturePrice: fineRow.capturePrice,
+          mechanismRatio: Number.isFinite(fineRow.mechanismRatio) ? fineRow.mechanismRatio : null,
+          mechanismAdjustment: perMwh(fineRow.mechanismRevenue),
+          ltPnlPrice: Number.isFinite(fineRow.ltPnlPrice) ? fineRow.ltPnlPrice : null,
+          envValue: perMwh(fineRow.envRevenue),
+          fee: perMwh(fineRow.comprehensiveFee),
+          otherIncome: perMwh(fineRow.otherIncome),
+          storageSupplement: perMwh(fineRow.storageSupplementRevenue),
+          fullRevenuePrice: fineRow.fullRevenuePrice,
+          energyMwh: fineRow.energyMwh
+        }
+      };
+    });
+  }
+
+  function compareBaselineResult(project, scenario, snapshot, result) {
+    const unavailable = (reason, message, stale = false) => ({
+      ...failedComparison([message], stale), reason
+    });
+    if (!validSnapshot(snapshot)) {
+      return unavailable("missing_snapshot", "请先保存项目电价粗算，再进行交叉验证。");
+    }
+    const currentContext = contextFingerprint(project, scenario);
+    if (snapshot.scenarioId !== scenario?.id || snapshot.contextFingerprint !== currentContext) {
+      return unavailable("stale_snapshot", "共用参数、项目或电量已变化，请更新项目电价粗算后再对照。", true);
+    }
+    if (!isObject(result)) {
+      return unavailable("missing_baseline", "请先完成基准测算，再与项目电价粗算对照。");
+    }
+    const source = result.sourceContext;
+    if (!isObject(source) || source.version !== 1 || !source.projectId || !source.scenarioId ||
+        !source.runId || typeof source.contextFingerprint !== "string" || !source.contextFingerprint ||
+        typeof source.generatedAt !== "string" || !Number.isFinite(Date.parse(source.generatedAt))) {
+      return unavailable("legacy_baseline", "该基准结果缺少计算口径记录，请重新发起基准测算后再对照。");
+    }
+    if (source.projectId !== project?.id || source.scenarioId !== scenario?.id ||
+        source.contextFingerprint !== currentContext) {
+      return unavailable("stale_baseline", "基准结果使用的共用参数、项目或电量已变化，请重新发起基准测算后再对照。", true);
+    }
+    const years = yearsForProject(project);
+    const rows = result.annualRows;
+    if (!years.length || !Array.isArray(rows) || rows.length !== years.length ||
+        snapshot.rows.length !== years.length || !years.every((year) => snapshot.rows.some((row) => row.year === year)) ||
+        new Set(rows.map((row) => row?.year)).size !== years.length ||
+        !years.every((year) => rows.some((row) => row?.year === year)) ||
+        result.missingYears?.length || !Number.isFinite(result.avgFullRevenuePrice) ||
+        !rows.every((row) => [row.spotAvgPrice, row.capturePrice, row.fullRevenuePrice].every(Number.isFinite))) {
+      return unavailable("invalid_baseline", "基准结果年度价格不完整或无效，请重新发起基准测算后再对照。");
+    }
+    const energyMismatch = snapshot.rows.filter((rough) => {
+      const fineRow = rows.find((row) => row.year === rough.year);
+      return !(Number.isFinite(rough.energyMwh) && rough.energyMwh > 0) ||
+        !(Number.isFinite(fineRow.energyMwh) && fineRow.energyMwh > 0) ||
+        Math.abs(fineRow.energyMwh - rough.energyMwh) > Math.max(0.000001, Math.abs(rough.energyMwh) * 0.00000001);
+    });
+    if (energyMismatch.length || !Number.isFinite(snapshot.summary.weightedPrice)) {
+      return unavailable("energy_mismatch", `粗算与基准结果年度电量不完整或不一致，请核对电量并更新两侧结果：${energyMismatch.map((row) => row.year).join("、")}。`);
+    }
+    const comparedRows = comparisonRows(snapshot, result);
+    const delta = result.avgFullRevenuePrice - snapshot.summary.weightedPrice;
+    const relativeDelta = Math.abs(snapshot.summary.weightedPrice) < 0.000001
+      ? null : delta / Math.abs(snapshot.summary.weightedPrice);
+    return {
+      ok: true, errors: [], stale: false, reason: "",
+      source: { ...source },
+      rows: comparedRows,
+      summary: {
+        weightedRough: snapshot.summary.weightedPrice,
+        // The overview's saved value is authoritative; never rerun or reconstruct it here.
+        weightedFine: result.avgFullRevenuePrice,
+        maxAbsDelta: Math.max(...comparedRows.map((row) => Math.abs(row.delta))),
+        delta, relativeDelta, weightedDelta: delta, weightedRelativeDelta: relativeDelta
+      }
+    };
+  }
+
   function calculationProjectCopy(project) {
     const excluded = new Set([
       "priceRuns", "quarterPrices", "pricesByYear", "results", "resultsByScenario", "roughPrice", "energyData"
@@ -400,38 +511,7 @@
     if (energyMismatch.length) {
       return failedComparison([`粗算与精算存在电量口径差异，请核对年度电量及曲线后重新生成粗算：${energyMismatch.map((row) => row.year).join("、")}。`]);
     }
-    const rows = snapshot.rows.map((rough) => {
-      const fineRow = fine.annualRows.find((item) => item.year === rough.year);
-      const perMwh = (amount) => amount / fineRow.energyMwh;
-      const delta = fineRow.fullRevenuePrice - rough.fullRevenuePrice;
-      return {
-        year: rough.year,
-        roughSpot: rough.spotAvgPrice,
-        fineSpot: fineRow.spotAvgPrice,
-        roughCapture: rough.capturePrice,
-        fineCapture: fineRow.capturePrice,
-        roughSettlement: rough.fullRevenuePrice,
-        fineSettlement: fineRow.fullRevenuePrice,
-        delta,
-        relativeDelta: Math.abs(rough.fullRevenuePrice) < 0.000001 ? null : delta / Math.abs(rough.fullRevenuePrice),
-        fineCaptureRate: Math.abs(fineRow.spotAvgPrice) < 0.000001 ? null : fineRow.capturePrice / fineRow.spotAvgPrice * 100,
-        roughBreakdown: clone(rough),
-        fineBreakdown: {
-          year: rough.year,
-          spotAvgPrice: fineRow.spotAvgPrice,
-          capturePrice: fineRow.capturePrice,
-          mechanismRatio: fineRow.mechanismRatio,
-          mechanismAdjustment: perMwh(fineRow.mechanismRevenue),
-          ltPnlPrice: fineRow.ltPnlPrice,
-          envValue: perMwh(fineRow.envRevenue),
-          fee: perMwh(fineRow.comprehensiveFee),
-          otherIncome: perMwh(fineRow.otherIncome),
-          storageSupplement: perMwh(fineRow.storageSupplementRevenue),
-          fullRevenuePrice: fineRow.fullRevenuePrice,
-          energyMwh: fineRow.energyMwh
-        }
-      };
-    });
+    const rows = comparisonRows(snapshot, fine);
     return {
       ok: true,
       errors: [],
@@ -445,5 +525,5 @@
     };
   }
 
-  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, contextFingerprint });
+  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, contextFingerprint });
 });

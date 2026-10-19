@@ -1,7 +1,9 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const getScenarioModel = () => typeof module !== "undefined" && module.exports
+    ? require("../domain/scenario-model") : root.NE_SCENARIO_MODEL;
+  const api = factory(getScenarioModel);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -9,7 +11,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_SCENARIO_FORM = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel) {
   function getField(querySelector, selector) {
     return typeof querySelector === "function" ? querySelector(selector) : null;
   }
@@ -548,8 +550,10 @@
     if (!project || !scenario || !draft?.ok) {
       return invalid(draft?.message || "场景保存失败。");
     }
+    if (scenario.locked) return invalid("当前场景已锁定，不能保存修改。");
     scenario.name = draft.scenarioName;
     scenario.config = draft.config;
+    getScenarioModel().confirmConfig(scenario);
     scenario.updatedAt = nowIso();
     project.statuses = project.statuses || {};
     project.statuses["scenario-page"] = "completed";

@@ -1,7 +1,9 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const getScenarioModel = () => typeof module !== "undefined" && module.exports
+    ? require("../domain/scenario-model") : root.NE_SCENARIO_MODEL;
+  const api = factory(getScenarioModel);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -9,7 +11,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_MANUAL_SCENARIO_FLOW = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel) {
   function createManualScenarioImportConfigs(input = {}) {
     const {
       exportBuilders = {},
@@ -138,11 +140,16 @@
         setScenarioImportMessage({ refs, text: parsed.message, tone: "error" });
         return false;
       }
+      if (scenario.locked) {
+        setScenarioImportMessage({ refs, text: config.lockedMessage, tone: "error" });
+        return false;
+      }
       if (!scenario.config || typeof scenario.config !== "object") {
         scenario.config = {};
       }
       scenario.config[config.modeKey] = "manual";
       scenario.config[config.valuesKey] = parsed[config.parsedKey];
+      getScenarioModel().confirmConfig(scenario, [config.modeKey, config.valuesKey]);
       scenario.updatedAt = new Date().toISOString();
       if (!project.statuses || typeof project.statuses !== "object") {
         project.statuses = {};

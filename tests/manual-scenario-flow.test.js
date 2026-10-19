@@ -103,7 +103,7 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
   assert.equal(parseFailRefs.scenarioMessage.textContent, "模板字段缺失");
 
   const project = { id: "p1", statuses: {} };
-  const scenario = { id: "s1", name: "基准场景", config: {} };
+  const scenario = { id: "s1", name: "基准场景", config: { mechanismPrice: 365 } };
   const successRefs = createRefs({ name: "ok.csv" });
   const successCalls = [];
   assert.equal(await importManualScenarioTemplate({
@@ -121,11 +121,46 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
   }), true);
   assert.equal(scenario.config.ltPricingMode, "manual");
   assert.deepEqual(scenario.config.ltManualPricesByYear, { 2026: 8, 2027: 6.8 });
+  assert.deepEqual(scenario.confirmedConfig, {
+    ltPricingMode: "manual",
+    ltManualPricesByYear: { 2026: 8, 2027: 6.8 }
+  }, "manual import must confirm only the imported group, not unrelated defaults");
   assert.equal(project.statuses["scenario-page"], "in_progress");
   assert.ok(successCalls.includes("stale:p1:scenario-page"));
   assert.ok(successCalls.includes("render"));
   assert.ok(successCalls.includes("persist"));
   assert.equal(successRefs.scenarioMessage.textContent, "已导入“基准场景”的逐年交易策略损益值，请确认后保存当前配置。");
+
+  for (const [kind, modeKey, valuesKey] of [
+    ["env", "envValueMode", "envManualValuesByYear"],
+    ["fee", "feeConfigMode", "feeManualValuesByYear"]
+  ]) {
+    const importScenario = { config: { mechanismPrice: 365 } };
+    const values = { 2026: { value: 3 } };
+    assert.equal(await importManualScenarioTemplate({
+      kind,
+      configs: createConfigs({ ok: true, values }),
+      refs: createRefs({ name: "ok.csv" }),
+      project: { statuses: {} },
+      scenario: importScenario,
+      actions: { readSpreadsheetToCsv: async () => ({ text: "ok" }) }
+    }), true);
+    assert.deepEqual(importScenario.confirmedConfig, { [modeKey]: "manual", [valuesKey]: values });
+    values[2026].value = 99;
+    assert.equal(importScenario.confirmedConfig[valuesKey][2026].value, 3);
+  }
+
+  const lockedDuringRead = { config: { mechanismPrice: 365 }, locked: false };
+  assert.equal(await importManualScenarioTemplate({
+    kind: "lt",
+    configs: createConfigs(),
+    refs: createRefs({ name: "ok.csv" }),
+    project: { statuses: {} },
+    scenario: lockedDuringRead,
+    actions: { readSpreadsheetToCsv: async () => { lockedDuringRead.locked = true; return { text: "ok" }; } }
+  }), false);
+  assert.deepEqual(lockedDuringRead.config, { mechanismPrice: 365 });
+  assert.equal(lockedDuringRead.confirmedConfig, undefined);
 
   console.log("manual scenario flow tests passed");
 })().catch((error) => {

@@ -6,7 +6,7 @@
     <title>新能源全口径收入预测工作台</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="./styles/theme.css?v=20260714d">
-    <link rel="stylesheet" href="./styles/base.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/base.css?v=20261019l">
     <link rel="stylesheet" href="./styles/components/data-display.css?v=20260714d">
     <link rel="stylesheet" href="./styles/components/forms.css?v=20260714d">
     <link rel="stylesheet" href="./styles/components/buttons.css?v=20260714d">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261019f">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20260714d">
-    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261019h">
+    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261019l">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261019e">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
@@ -87,7 +87,7 @@
     </script>
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
-    <script src="./config.js?v=20261019a" defer></script>
+    <script src="./config.js?v=20261019l" defer></script>
     <script src="./runtime.js?v=20260515t" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20260609a" defer></script>
@@ -104,7 +104,7 @@
     <script src="./src/domain/result-report.js?v=20260609a" defer></script>
     <script src="./src/ui/policy-panel.js?v=20261019e" defer></script>
     <script src="./src/ui/province-defaults.js?v=20261019e" defer></script>
-    <script src="./src/ui/energy-workspace.js?v=20261019f" defer></script>
+    <script src="./src/ui/energy-workspace.js?v=20261019l" defer></script>
     <script src="./src/ui/create-project-flow.js?v=20260611a" defer></script>
     <script src="./src/ui/energy-template-flow.js?v=20261019f" defer></script>
     <script src="./src/ui/chart-lifecycle.js?v=20260611a" defer></script>
@@ -113,13 +113,13 @@
     <script src="./src/ui/forecast-run-flow.js?v=20260611a" defer></script>
     <script src="./src/ui/project-list.js?v=20260609a" defer></script>
     <script src="./src/ui/result-page.js?v=20261019g" defer></script>
-    <script src="./src/ui/result-runner.js?v=20260624a" defer></script>
+    <script src="./src/ui/result-runner.js?v=20261019l" defer></script>
     <script src="./src/ui/result-print.js?v=20260609a" defer></script>
     <script src="./src/ui/result-charts.js?v=20260609a" defer></script>
     <script src="./src/ui/scenario-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20261019e" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261019l" defer></script>
     <script src="./src/ui/scenario-visual-data.js?v=20260609a" defer></script>
-    <script src="./src/ui/manual-scenario-flow.js?v=20260611a" defer></script>
+    <script src="./src/ui/manual-scenario-flow.js?v=20261019l" defer></script>
     <script src="./src/ui/compare-charts.js?v=20260609a" defer></script>
     <script src="./src/ui/compare-page.js?v=20261019e" defer></script>
     <script src="./src/domain/compare-analysis.js?v=20260609a" defer></script>
@@ -130,11 +130,11 @@
     <script src="./src/ui/theme-controller.js?v=20260611a" defer></script>
     <script src="./src/ui/shell-events.js?v=20260609a" defer></script>
     <script src="./src/ui/app-event-bindings.js?v=20260611a" defer></script>
-    <script src="./src/domain/workflow-status.js?v=20260609a" defer></script>
+    <script src="./src/domain/workflow-status.js?v=20261019l" defer></script>
     <script src="./src/domain/scenario-config.js?v=20260609a" defer></script>
-    <script src="./src/domain/rough-price.js?v=20261019c" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261019g" defer></script>
-    <script src="./src/domain/scenario-model.js?v=20261019a" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261019l" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261019l" defer></script>
+    <script src="./src/domain/scenario-model.js?v=20261019l" defer></script>
     <script src="./src/domain/project-settings.js?v=20260609a" defer></script>
     <script src="./src/domain/project-model.js?v=20260609a" defer></script>
     <script src="./src/domain/project-display.js?v=20260611a" defer></script>
@@ -142,7 +142,7 @@
     <script src="./src/domain/energy-import-flow.js?v=20260609a" defer></script>
     <script src="./src/domain/app-storage.js?v=20260609a" defer></script>
     <script src="./src/ui/app-persistence.js?v=20260625a" defer></script>
-    <script src="./app.js?v=20261019f" defer></script>
+    <script src="./app.js?v=20261019l" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -190,6 +190,10 @@
                 <span class="nav-main"><span class="nav-icon">▥</span><span class="nav-text">结算电量配置</span></span>
                 <span class="status-dot" id="status-energy-page"></span>
               </button>
+              <button class="nav-item" data-page="rough-page">
+                <span class="nav-main"><span class="nav-icon">≈</span><span class="nav-text">项目电价粗算</span></span>
+                <span class="status-dot" id="status-rough-page"></span>
+              </button>
               <button class="nav-item" data-page="history-page">
                 <span class="nav-main"><span class="nav-icon">◴</span><span class="nav-text">历史电价分析</span></span>
                 <span class="status-dot" id="status-history-page"></span>
@@ -214,6 +218,10 @@
               <button class="nav-item" data-page="results-page">
                 <span class="nav-main"><span class="nav-icon">▣</span><span class="nav-text">基准结果总览</span></span>
                 <span class="status-dot" id="status-results-page"></span>
+              </button>
+              <button class="nav-item" data-page="validation-page">
+                <span class="nav-main"><span class="nav-icon">⇄</span><span class="nav-text">交叉验证</span></span>
+                <span class="status-dot" id="status-validation-page"></span>
               </button>
               <button class="nav-item" data-page="compare-page">
                 <span class="nav-main"><span class="nav-icon">◬</span><span class="nav-text">多方案对比分析</span></span>
@@ -801,14 +809,22 @@
               </section>
 
               <div class="energy-next-step-row">
-                <div class="hint" data-help="下一步">全部预测年份完成后，再进入历史电价分析。</div>
-                <button type="button" class="primary-button next-step-button" id="energy-to-history-button" disabled>进入历史电价分析</button>
+                <div class="hint" data-help="下一步">全部预测年份完成后，进入项目电价粗算，保存初步价格预期。</div>
+                <button type="button" class="primary-button next-step-button" id="energy-to-history-button" disabled>进入项目电价粗算</button>
               </div>
             </div>
           </section>
         </section>
 
         <section class="page" id="energy-page"></section>
+
+        <section class="page" id="rough-page">
+          <section class="panel"><div id="rough-price-root"></div></section>
+          <div class="history-next-step-row">
+            <button type="button" class="ghost-button" data-jump="energy-page">返回结算电量配置</button>
+            <button type="button" class="primary-button next-step-button" data-jump="history-page">进入历史电价分析</button>
+          </div>
+        </section>
 
         <section class="page" id="history-page">
           <section class="panel history-analysis-panel">
@@ -906,16 +922,8 @@
         </section>
 
         <section class="page" id="forecast-page">
-          <div class="forecast-tabs" role="tablist" aria-label="电价预测工作台">
-            <button type="button" id="forecast-tab-rough" role="tab" data-forecast-tab="rough" aria-selected="true" aria-controls="forecast-rough-panel">关键参数粗算</button>
-            <button type="button" id="forecast-tab-fine" role="tab" data-forecast-tab="fine" aria-selected="false" aria-controls="forecast-fine-panel">模型精算</button>
-            <button type="button" id="forecast-tab-compare" role="tab" data-forecast-tab="compare" aria-selected="false" aria-controls="forecast-compare-panel">交叉验证</button>
-          </div>
-          <section class="panel" id="forecast-rough-panel" role="tabpanel" aria-labelledby="forecast-tab-rough">
-            <div id="rough-price-root"></div>
-          </section>
-          <section class="panel" id="forecast-fine-panel" role="tabpanel" aria-labelledby="forecast-tab-fine" hidden>
-            <div class="panel-head"><strong id="forecast-model-scope">模拟曲线</strong><span data-help="模型精算口径" data-help-anchor="#forecast-model-scope">当前曲线含模拟逻辑，用于流程与口径演示。精算版本可与独立保存的粗算基准交叉对照。</span></div>
+          <section class="panel">
+            <div class="panel-head"><strong id="forecast-model-scope">模拟曲线</strong><span data-help="电价预测口径" data-help-anchor="#forecast-model-scope">当前曲线含模拟逻辑，用于流程与口径演示。现货电价预测与全口径收入配置共同形成基准结果，可在结果输出阶段与粗算预期对照。</span></div>
             <form id="forecast-run-form" class="form-grid">
               <label>算法类型
                 <select id="algo-family">
@@ -949,7 +957,7 @@
             </form>
             <div class="info-box forecast-quality">
               <span id="forecast-quality-heading">质量状态</span>
-              <span data-help="精算质量门槛" data-help-anchor="#forecast-quality-heading" data-forecast-gate-help>质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。</span>
+              <span data-help="预测质量门槛" data-help-anchor="#forecast-quality-heading" data-forecast-gate-help>质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。</span>
               <span id="forecast-gate-message">尚未生成预测版本</span>
             </div>
             <div class="table-scroll">
@@ -987,9 +995,9 @@
               </table>
             </div>
           </section>
-          <section class="panel" id="forecast-compare-panel" role="tabpanel" aria-labelledby="forecast-tab-compare" hidden>
-            <div id="rough-compare-root"></div>
-          </section>
+          <div class="history-next-step-row">
+            <button type="button" class="primary-button next-step-button" data-jump="scenario-page">进入全口径收入配置</button>
+          </div>
         </section>
 
 
@@ -1393,7 +1401,7 @@
                 <button type="button" class="ghost-button" id="export-annual-button">导出年度CSV</button>
                 <button type="button" class="ghost-button" id="export-hourly-button">导出8760CSV</button>
                 <button type="button" class="ghost-button" id="print-report-button">打印报告</button>
-                <button type="button" class="primary-button" data-jump="compare-page">进入多方案对比</button>
+                <button type="button" class="primary-button" data-jump="validation-page">进入交叉验证</button>
               </div>
             </div>
 
@@ -1519,6 +1527,14 @@
             </section>
             <div class="hint" id="hourly-preview-hint">等待测算</div>
           </section>
+        </section>
+
+        <section class="page" id="validation-page">
+          <section class="panel"><div id="rough-compare-root"></div></section>
+          <div class="history-next-step-row">
+            <button type="button" class="ghost-button" data-jump="results-page">返回基准结果总览</button>
+            <button type="button" class="primary-button next-step-button" data-jump="compare-page">进入多方案对比</button>
+          </div>
         </section>
 
         <section class="page" id="compare-page">
@@ -1738,8 +1754,8 @@
                 <p>当前版本适用于产品原型演示、业务流程确认与数据准备校验。</p>
                 <p><strong>适用对象：</strong>新能源项目收益测算、方案比选、规则口径复核和演示汇报。</p>
                 <p><strong>适用项目：</strong>以风电、光伏为主，并区分陆上/海上、是否配建储能等基本属性。</p>
-                <p><strong>当前特点：</strong>支持账号隔离、项目持久化、结算电量配置、历史15分钟现货分析、关键参数粗算、模型精算、交叉验证、全口径收入配置与结果对比。</p>
-                <p><strong>推荐顺序：</strong>首页查看政策与基线 → 我的项目 → 项目创建 → 结算电量配置 → 历史电价分析 → 电价预测工作台 → 全口径收入配置 → 基准结果总览 / 多方案对比分析。</p>
+                <p><strong>当前特点：</strong>支持账号隔离、项目持久化、结算电量配置、历史15分钟现货分析、项目电价粗算、现货电价预测、全口径收入配置、交叉验证与结果对比。</p>
+                <p><strong>推荐顺序：</strong>首页查看政策与基线 → 我的项目 → 项目创建 → 结算电量配置 → 项目电价粗算 → 历史电价分析 → 电价预测工作台 → 全口径收入配置 → 基准结果总览 → 交叉验证 / 多方案对比分析。</p>
               </div>
               <div class="button-inline">
                 <button class="ghost-button" type="button" data-jump="home-page">查看首页</button>
@@ -1805,22 +1821,29 @@
                 <article class="help-step-card">
                   <div class="help-step-index">5</div>
                   <div class="help-step-body">
-                    <strong>历史电价分析</strong>
-                    <p>系统按项目省份自动关联15分钟历史现货样本，无需另行导入；可筛选日期，查看月均价、典型日、热力图、箱线图等统计特征。</p>
+                    <strong>项目电价粗算</strong>
+                    <p>沿用已填信息，补充未确认参数与价格预期，保存独立粗算版本。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
                   <div class="help-step-index">6</div>
                   <div class="help-step-body">
-                    <strong>电价预测工作台</strong>
-                    <p>在“关键参数粗算”中沿用已有参数并补充价格假设，保存独立粗算版本；再生成“模型精算”版本，检查质量指标，并在“交叉验证”中对照两者。结果测算使用已生效的精算曲线。</p>
+                    <strong>历史电价分析</strong>
+                    <p>系统按项目省份自动关联15分钟历史现货样本，无需另行导入；可筛选日期，查看月均价、典型日、热力图、箱线图等统计特征。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
                   <div class="help-step-index">7</div>
                   <div class="help-step-body">
+                    <strong>电价预测工作台</strong>
+                    <p>生成预测曲线、检查质量指标并选择生效版本，再进入全口径收入配置，共同完成详细测算。</p>
+                  </div>
+                </article>
+                <article class="help-step-card">
+                  <div class="help-step-index">8</div>
+                  <div class="help-step-body">
                     <strong>全口径收入配置与结果输出</strong>
-                    <p>带入省份默认参数后再做项目级调整，最后进入基准结果总览和多方案对比分析页面。</p>
+                    <p>沿用粗算已确认参数，按需要调整并保存配置；在基准结果总览完成测算，再进入交叉验证或多方案对比。</p>
                   </div>
                 </article>
               </div>
@@ -1846,16 +1869,24 @@
                   <p>第一步导入覆盖全部预测年份的逐年总量模板；第二步在“上传典型年8760小时模板”和“调用所选省份典型曲线”中二选一。完成后查看导入反馈、年度小时数和典型年月度曲线。</p>
                 </article>
                 <article class="help-card">
+                  <strong>项目电价粗算</strong>
+                  <p>自动带入项目、电量和已确认参数，补充未填写参数与价格预期后保存粗算版本，供后续交叉验证。</p>
+                </article>
+                <article class="help-card">
                   <strong>历史电价分析</strong>
                   <p>按当前项目省份自动关联15分钟历史现货样本，无需手动导入；可按日期筛选，辅助判断训练窗口、波动区间和典型日特征。模拟样本以页面来源标识为准。</p>
                 </article>
                 <article class="help-card">
                   <strong>电价预测工作台</strong>
-                  <p>关键参数粗算自动带入已有项目、电量与结算参数，补充独立价格假设后保存版本；模型精算管理算法、训练窗口、质量指标和生效曲线；交叉验证按现货均价、捕获电价、综合结算电价逐年对照。对照版本的选择不改变生效曲线，结果测算仍使用已生效的精算版本。</p>
+                  <p>用于管理现货电价预测的算法、训练窗口、质量指标和生效曲线。与全口径收入配置共同构成精算，最终结果在基准结果总览展示。</p>
                 </article>
                 <article class="help-card">
                   <strong>全口径收入配置</strong>
                   <p>用于录入机制电价、交易策略损益、环境价值、综合费用、其他收入等参数。省份默认参数库已合并到本页。</p>
+                </article>
+                <article class="help-card">
+                  <strong>交叉验证</strong>
+                  <p>直接对照已保存的粗算与基准结果总览当前方案结果，查看整体及年度价差，提示明显偏差。偏差表示与预期的一致程度。</p>
                 </article>
                 <article class="help-card">
                   <strong>基准结果总览 / 多方案对比分析</strong>
@@ -1960,7 +1991,7 @@
                     <li>项目创建：基础信息已保存。</li>
                     <li>结算电量配置：逐年总量覆盖全部预测年份，且已选择典型曲线来源并生成年度电量。</li>
                     <li>历史电价分析：已按项目省份成功关联历史现货数据库并生成图表。</li>
-                    <li>电价预测工作台：存在通过质量门槛并已生效的精算版本；粗算与交叉验证用于独立复核，不替代精算生效步骤。</li>
+                    <li>电价预测工作台：存在通过质量门槛并已生效的电价预测版本。</li>
                     <li>全口径收入配置：当前配置已保存。</li>
                     <li>基准结果总览 / 多方案对比分析：已完成测算并生成结果。</li>
                   </ul>
@@ -1973,7 +2004,7 @@
               <div class="help-faq">
                 <details class="help-faq-item"><summary>1. 为什么导不出8760模板？</summary><p>请先进入一个项目，并完成“项目创建”页面的基础信息保存。未保存前，系统会阻止模板导出。</p></details>
                 <details class="help-faq-item"><summary>2. 为什么导入后侧边栏状态没有变绿？</summary><p>状态点按完成标准判断，不是点一下页面就完成。比如结算电量配置只有在满足页面要求后才会变为已完成。</p></details>
-                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>通常是上游环节尚未满足条件，例如逐年总量或典型曲线未完成、历史现货尚未自动关联、精算电价版本未生效，或场景还未保存。粗算版本用于交叉验证，不能替代生效的精算曲线。</p></details>
+                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>通常是上游环节尚未满足条件，例如逐年总量或典型曲线未完成、历史现货尚未自动关联、电价预测版本未生效，或场景还未保存。粗算版本用于交叉验证，不能替代生效的预测曲线。</p></details>
                 <details class="help-faq-item"><summary>4. 为什么页面刷新后输入还在？</summary><p>当前原型默认开启输入持久化，已保存的项目数据会在页面切换和刷新后自动恢复。</p></details>
                 <details class="help-faq-item"><summary>5. 省份参数库去哪了？</summary><p>省份参数库已合并进“全口径收入配置”页面，现在以“省份默认参数带入”的方式提供默认值，再在同页内完成微调。</p></details>
               </div>

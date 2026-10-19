@@ -24,6 +24,7 @@
       resultCalculation = {},
       prepareEnergy = () => ({ changed: false }),
       calculateScenarioResult = () => null,
+      stampResult = (_project, _scenario, _run, result) => result,
       countScenariosForCompare = () => 0,
       setTopMeta = () => {},
       renderAll = () => {}
@@ -40,7 +41,7 @@
     }
 
     const energyPrepared = prepareEnergy(project) || { changed: false };
-    const result = calculateScenarioResult(project, scenario, run);
+    let result = calculateScenarioResult(project, scenario, run);
     if (result?.missingYears?.length) {
       const message = resultCalculation.buildMissingCurveMessage?.(result) || "";
       setTopMeta(message);
@@ -48,6 +49,7 @@
       return { status: "missing_curves", message, result, energyPrepared };
     }
 
+    result = stampResult(project, scenario, run, result);
     project.resultsByScenario[scenario.id] = result;
     project.statuses["results-page"] = "completed";
     project.statuses["compare-page"] = countScenariosForCompare(project) >= 2 ? "completed" : "in_progress";

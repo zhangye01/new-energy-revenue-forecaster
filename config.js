@@ -6,10 +6,12 @@ const PAGE_TITLES = {
   "projects-page": "我的项目",
   "create-page": "项目创建",
   "energy-page": "结算电量配置",
+  "rough-page": "项目电价粗算",
   "history-page": "历史电价分析",
   "forecast-page": "电价预测工作台",
   "scenario-page": "全口径收入配置",
   "results-page": "基准结果总览",
+  "validation-page": "交叉验证",
   "compare-page": "多方案对比分析",
   "help-page": "帮助文档",
   "settings-page": "系统设置"
@@ -20,10 +22,12 @@ const PAGE_GROUPS = {
   "projects-page": "平台概览",
   "create-page": "分析流程",
   "energy-page": "分析流程",
+  "rough-page": "分析流程",
   "history-page": "分析流程",
   "forecast-page": "分析流程",
   "scenario-page": "分析流程",
   "results-page": "结果输出",
+  "validation-page": "结果输出",
   "compare-page": "结果输出",
   "help-page": "支持中心",
   "settings-page": "支持中心"
@@ -48,7 +52,12 @@ const PAGE_HELP_TEXTS = {
   "energy-page": {
     purpose: "用于完成项目结算电量配置。",
     meaning: "先确定各年度总小时数，再确定典型曲线来源，系统据此生成测算周期内各年结算电量。",
-    guide: "先导入逐年总量，再在“典型年8760模板”和“省份典型曲线”中二选一，完成后进入历史电价分析。"
+    guide: "先导入逐年总量，再在“典型年8760模板”和“省份典型曲线”中二选一，完成后进入项目电价粗算。"
+  },
+  "rough-page": {
+    purpose: "用于保存项目电价的初步预期。",
+    meaning: "自动沿用前面已录入的项目与电量信息；已确认结算参数直接带入，未确认参数在本页补充。",
+    guide: "填写年度现货均价预期、捕获率及待确认参数，保存粗算版本，再继续历史电价分析与电价预测。"
   },
   "history-page": {
     purpose: "用于查看当前项目省份的历史现货电价展示与筛选结果。",
@@ -56,19 +65,24 @@ const PAGE_HELP_TEXTS = {
     guide: "本页会按项目省份自动展示15分钟历史现货样本，可通过“筛选日期”按日调整开始日期和结束日期。"
   },
   "forecast-page": {
-    purpose: "用于关键参数粗算、模型精算与同口径交叉验证。",
-    meaning: "已有项目与结算参数自动沿用，粗算保留独立假设；三层对照帮助定位价格差异。",
-    guide: "先补充现货价格节点和捕获率保存粗算，再生成精算版本，在交叉验证中对照。正式收入测算仍使用生效版本。"
+    purpose: "用于生成与管理现货电价预测曲线。",
+    meaning: "现货电价预测与全口径收入配置共同构成精算，最终结果在基准结果总览中展示。",
+    guide: "生成预测版本、检查质量指标并选择生效曲线，再进入全口径收入配置。"
   },
   "scenario-page": {
     purpose: "用于配置全口径收入参数，并带入省份默认口径。",
     meaning: "同一项目可创建多套收入配置，用于敏感性和策略对比；省份参数库在本页内完成带入和微调。",
-    guide: "先带入目标省份默认参数，再保存基准配置，最后复制配置做差异参数调整。"
+    guide: "沿用粗算阶段已确认的结算参数，按需要调整并保存配置，再进入基准结果总览。"
   },
   "results-page": {
     purpose: "用于输出全口径收入测算结果。",
     meaning: "统一查看分项收入、年度结果和首年小时明细。",
     guide: "确保已导入电量且有生效电价版本，再点击“发起测算”。"
+  },
+  "validation-page": {
+    purpose: "用于比较先前的粗算预期与基准结果。",
+    meaning: "查看整体及逐年的电价偏差，识别明显差异；偏差提示表示与预期的一致程度。",
+    guide: "选择已保存的粗算版本，直接对照基准结果总览当前方案的已保存结果；共用口径变化时先更新对应结果。"
   },
   "compare-page": {
     purpose: "用于多场景结果横向对比。",
@@ -90,19 +104,23 @@ const PAGE_HELP_TEXTS = {
 const WORKFLOW_PAGES = [
   "create-page",
   "energy-page",
+  "rough-page",
   "history-page",
   "forecast-page",
   "scenario-page",
   "results-page",
+  "validation-page",
   "compare-page"
 ];
 
 const REQUIRES_PROJECT = new Set([
   "energy-page",
+  "rough-page",
   "history-page",
   "forecast-page",
   "scenario-page",
   "results-page",
+  "validation-page",
   "compare-page"
 ]);
 
@@ -110,10 +128,12 @@ const REQUIRES_LOGIN = new Set([
   "projects-page",
   "create-page",
   "energy-page",
+  "rough-page",
   "history-page",
   "forecast-page",
   "scenario-page",
   "results-page",
+  "validation-page",
   "compare-page"
 ]);
 

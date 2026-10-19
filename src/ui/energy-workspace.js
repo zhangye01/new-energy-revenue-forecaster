@@ -115,10 +115,10 @@
       enterHistoryPage: () => {
         const project = getActiveProject();
         if (!project || !hasHistoryReadiness(project)) {
-          setEnergyImportMessage("请先完成全部预测年份的结算电量配置，再进入历史电价分析。", "warn");
+          setEnergyImportMessage("请先完成全部预测年份的结算电量配置，再进入项目电价粗算。", "warn");
           return;
         }
-        setActivePage("history-page");
+        setActivePage("rough-page");
       },
       exportEnergyTemplate,
       importEnergyFromFile,
@@ -447,7 +447,7 @@
       },
       historyButton: {
         enabled: ready,
-        title: ready ? "进入下一步，查看历史现货电价分析。" : "请先完成全部预测年份的结算电量配置。"
+        title: ready ? "进入下一步，保存项目电价粗算预期。" : "请先完成全部预测年份的结算电量配置。"
       }
     };
 
@@ -497,7 +497,7 @@
         };
       } else if (ready) {
         message = {
-          text: `已生成 ${completeYears}/${totalYears} 年上网电量，可进入历史电价分析。`,
+          text: `已生成 ${completeYears}/${totalYears} 年上网电量，可进入项目电价粗算。`,
           tone: "success"
         };
       } else {
