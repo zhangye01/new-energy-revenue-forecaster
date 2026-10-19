@@ -89,7 +89,7 @@
 .rough-assumptions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .rough-assumptions > span { padding: 4px 8px; border-radius: 4px; background: var(--panel-soft); color: var(--muted); font-size: 0.75rem; }
 .rough-table-wrap { min-width: 0; max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
-.rough-table { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 0.76rem; font-variant-numeric: tabular-nums; }
+.rough-table { width: 100%; min-width: 0; border-collapse: collapse; white-space: nowrap; font-size: 0.76rem; font-variant-numeric: tabular-nums; }
 .rough-table caption { padding: 8px 10px; text-align: left; color: var(--muted); font-size: 0.73rem; }
 .rough-table th, .rough-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; }
 .rough-table th:first-child { text-align: left; }
