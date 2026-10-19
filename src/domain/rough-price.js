@@ -166,6 +166,21 @@
     return `rough-v1-${(hash >>> 0).toString(16)}-${(second >>> 0).toString(16)}-${text.length}`;
   }
 
+  function snapshotState(project, scenario, snapshot) {
+    if (!validSnapshot(snapshot)) {
+      return { comparable: false, refined: false, reason: "missing_snapshot", message: "请先保存项目电价粗算，再进行交叉验证。" };
+    }
+    // Keep the original config in the signature so existing snapshots remain usable after
+    // revenue assumptions are refined, without changing their immutable prices or inputs.
+    const originalContext = contextFingerprint(project, { ...scenario, config: snapshot.config });
+    if (snapshot.scenarioId !== scenario?.id || snapshot.contextFingerprint !== originalContext) {
+      return { comparable: false, refined: false, reason: "stale_snapshot", message: "项目、测算期或电量口径已变化，请更新项目电价粗算后再对照。" };
+    }
+    const refined = stableStringify(normalizedConfig(project, snapshot.config)) !==
+      stableStringify(normalizedConfig(project, scenario?.config));
+    return { comparable: true, refined, reason: "", message: refined ? "收益参数已细化，保留原粗算与基准结果对照。" : "" };
+  }
+
   function validateConfig(project, config, years) {
     const errors = [];
     if (!isObject(config)) return ["当前方案缺少共用结算参数。"];
@@ -409,16 +424,14 @@
   }
 
   function compareBaselineResult(project, scenario, snapshot, result) {
+    const roughState = snapshotState(project, scenario, snapshot);
     const unavailable = (reason, message, stale = false) => ({
-      ...failedComparison([message], stale), reason
+      ...failedComparison([message], stale), reason, snapshotState: roughState
     });
-    if (!validSnapshot(snapshot)) {
-      return unavailable("missing_snapshot", "请先保存项目电价粗算，再进行交叉验证。");
+    if (!roughState.comparable) {
+      return unavailable(roughState.reason, roughState.message, roughState.reason === "stale_snapshot");
     }
     const currentContext = contextFingerprint(project, scenario);
-    if (snapshot.scenarioId !== scenario?.id || snapshot.contextFingerprint !== currentContext) {
-      return unavailable("stale_snapshot", "共用参数、项目或电量已变化，请更新项目电价粗算后再对照。", true);
-    }
     if (!isObject(result)) {
       return unavailable("missing_baseline", "请先完成基准测算，再与项目电价粗算对照。");
     }
@@ -458,6 +471,7 @@
     return {
       ok: true, errors: [], stale: false, reason: "",
       source: { ...source },
+      snapshotState: roughState,
       baselineState: baselineResultState(project, scenario, result),
       rows: comparedRows,
       summary: {
@@ -545,5 +559,5 @@
     };
   }
 
-  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, contextFingerprint });
+  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, snapshotState, contextFingerprint });
 });

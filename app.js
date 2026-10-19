@@ -307,10 +307,10 @@ const DEMO_AUTH_USERS = [
 const PAGE_COMPLETION_STANDARD_MAP = {
   "create-page": "项目基础信息填写完整并成功创建。",
   "energy-page": "逐年总量覆盖全部测算年度，并完成典型年曲线来源二选一。",
-  "rough-page": "已保存与当前项目、电量和结算参数一致的粗算版本。",
+  "rough-page": "已保存与当前项目、测算期和电量口径一致的粗算版本。",
   "history-page": "已按项目省份自动展示历史现货图表。",
   "forecast-page": "存在已生效且可发布的电价预测版本。",
-  "scenario-page": "当前全口径收入配置已保存。",
+  "scenario-page": "当前收益参数补充与细化已保存。",
   "results-page": "当前场景已成功生成一版基准结果。",
   "validation-page": "已有同口径的粗算与基准结果，可查看偏差。",
   "compare-page": "至少两个场景存在可对比结果。"
@@ -3840,7 +3840,7 @@ function renderProvinceLibrary() {
 
 function loadScenarioToForm(project, scenario) {
   scenarioForm.loadScenarioToForm({
-    scenario,
+    project, scenario,
     refs,
     querySelector: (selector) => document.querySelector(selector),
     asNum,

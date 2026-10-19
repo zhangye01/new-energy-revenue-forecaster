@@ -26,7 +26,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   validateCalculationReadiness({ project: {} }),
-  { ok: false, message: "请先在全口径收入配置页保存至少一个配置方案。" }
+  { ok: false, message: "请先在收益参数补充与细化页保存至少一个配置方案。" }
 );
 assert.deepEqual(
   validateCalculationReadiness({ project: {}, scenario: { config: {} } }),

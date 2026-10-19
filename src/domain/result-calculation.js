@@ -61,7 +61,7 @@
       return { ok: false, message: "请先选择项目后再发起测算。" };
     }
     if (!scenario) {
-      return { ok: false, message: "请先在全口径收入配置页保存至少一个配置方案。" };
+      return { ok: false, message: "请先在收益参数补充与细化页保存至少一个配置方案。" };
     }
     if (!run) {
       return { ok: false, message: "请先在电价预测工作台生成并生效一个电价版本。" };

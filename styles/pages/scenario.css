@@ -265,6 +265,92 @@ body[data-theme="eye"] .scenario-batch-details summary::after {
   gap: 8px;
 }
 
+.scenario-refinement-progress {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+details.scenario-refinement-group,
+details.scenario-optional {
+  display: block;
+}
+
+.scenario-refinement-group > summary,
+.scenario-optional > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.scenario-refinement-group > summary::-webkit-details-marker,
+.scenario-optional > summary::-webkit-details-marker {
+  display: none;
+}
+
+.scenario-refinement-group > summary::before,
+.scenario-optional > summary::before {
+  content: "▸";
+  color: var(--muted);
+  margin-right: 6px;
+}
+
+.scenario-refinement-group[open] > summary::before,
+.scenario-optional[open] > summary::before {
+  content: "▾";
+}
+
+.scenario-refinement-group > .scenario-form-section-title {
+  align-items: center;
+  justify-content: flex-start;
+  border: 0;
+  padding: 0;
+}
+
+.scenario-refinement-group[open] > .scenario-form-section-title {
+  padding-bottom: 10px;
+}
+
+.scenario-form-section-title .scenario-refinement-status {
+  margin-left: auto;
+  font-size: 0.75rem;
+}
+
+.scenario-refinement-group[data-refinement-state="pending"] > summary .scenario-refinement-status,
+.scenario-field-status[data-state="pending"] {
+  color: var(--brand);
+}
+
+.scenario-refinement-group[data-refinement-state="missing"] > summary .scenario-refinement-status,
+.scenario-field-status[data-state="missing"] {
+  color: #b46515;
+}
+
+.scenario-form .scenario-field-status {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.scenario-field-status[data-state="confirmed"] {
+  color: var(--muted);
+}
+
+.scenario-form [hidden] {
+  display: none !important;
+}
+
+.scenario-optional > summary {
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.scenario-optional-body {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
+
 .scenario-form-section {
   display: grid;
   gap: 8px;

@@ -12,6 +12,8 @@ const {
   buildScenarioManagerView,
   buildScenarioSaveDraft,
   buildScenarioConfigFromForm,
+  buildRefinementState,
+  refreshRefinementState,
   loadScenarioToForm
 } = require("../src/ui/scenario-form");
 
@@ -786,5 +788,101 @@ assert.equal(preciseHarness.querySelector("#green-premium-realize-ratio").value,
 assert.equal(Number(preciseHarness.querySelector("#green-cert-realize-ratio").value) + Number(preciseHarness.querySelector("#green-premium-realize-ratio").value), 100, "自动带入不得把100%兑现空间四舍五入成100.1%");
 const preciseFullAllocation = readPreciseConfig();
 assert.equal(preciseFullAllocation.greenCertRealizeRatio + preciseFullAllocation.greenPremiumRealizeRatio, 1);
+
+// The refinement page must distinguish an available default from an explicitly
+// confirmed input, and only consider inputs used by the active configuration.
+const refinementProject = { startYear: 2026, forecastYears: 2, siteType: "onshore", hasStorage: false };
+const refinementScenario = modelForConfirmation.createBaselineScenario(refinementProject);
+const initialRefinement = buildRefinementState({ project: refinementProject, scenario: refinementScenario });
+assert.equal(initialRefinement.confirmed, 0, "prepopulated defaults still require confirmation");
+assert.equal(initialRefinement.fields.carbonPrice, undefined);
+assert.equal(initialRefinement.fields.storageArbitragePrice, undefined);
+modelForConfirmation.confirmConfig(refinementScenario);
+const confirmedRefinement = buildRefinementState({ project: refinementProject, scenario: refinementScenario });
+assert.equal(confirmedRefinement.confirmed, confirmedRefinement.total);
+assert.equal(confirmedRefinement.groups.every((group) => group.complete), true);
+const refinedConfig = { ...refinementScenario.config, otherFee: 7.125, ancillaryFee: "" };
+const editingRefinement = buildRefinementState({ project: refinementProject, scenario: refinementScenario, config: refinedConfig });
+assert.equal(editingRefinement.fields.otherFee, "pending");
+assert.equal(editingRefinement.fields.ancillaryFee, "missing");
+assert.equal(editingRefinement.fields.marketOpFee, "confirmed", "unchanged values stay carried forward");
+const addedCapabilities = buildRefinementState({ project: { ...refinementProject, hasStorage: true, siteType: "offshore" }, scenario: inactiveScenario });
+assert.equal(addedCapabilities.fields.storageArbitragePrice, "pending", "new storage default must be confirmed");
+assert.equal(addedCapabilities.fields.carbonEnabled, "pending", "new offshore carbon option must be confirmed");
+assert.equal(addedCapabilities.fields.mechanismPrice, undefined, "disabled mechanism values do not require repeat input");
+const newlyEnabled = buildRefinementState({ project: { ...refinementProject, siteType: "offshore" }, scenario: inactiveScenario,
+  config: { ...inactiveScenario.config, mechanismEnabled: true, mechanismReferenceMode: "same_type", carbonEnabled: true } });
+assert.equal(newlyEnabled.fields.mechanismPrice, "pending");
+assert.equal(newlyEnabled.fields.sameTypeSpread, "pending");
+assert.equal(newlyEnabled.fields.carbonPrice, "pending");
+
+const annualScenario = modelForConfirmation.createBaselineScenario(refinementProject);
+const annualEnv = { greenCertPrice: 0, greenCertRealizeRatio: 0, greenPremiumPrice: 0, greenPremiumRealizeRatio: 0 };
+const annualFee = { marketOpFee: 0, gridAssessFee: 0, ancillaryFee: 0, otherFee: 0, otherIncome: 0 };
+Object.assign(annualScenario.config, { ltPricingMode: "manual", ltManualPricesByYear: { 2026: 0, 2027: 1 },
+  envValueMode: "manual", envManualValuesByYear: { 2026: annualEnv, 2027: annualEnv },
+  feeConfigMode: "manual", feeManualValuesByYear: { 2026: annualFee, 2027: annualFee } });
+modelForConfirmation.confirmConfig(annualScenario);
+const completeAnnual = buildRefinementState({ project: refinementProject, scenario: annualScenario });
+assert.equal(completeAnnual.fields.ltManualPricesByYear, "confirmed", "an explicit zero is a valid yearly input");
+assert.equal(completeAnnual.fields.envManualValuesByYear, "confirmed");
+assert.equal(completeAnnual.fields.feeManualValuesByYear, "confirmed");
+assert.equal(completeAnnual.fields.otherFee, undefined, "inactive global fees do not compete with yearly inputs");
+const expandedAnnual = buildRefinementState({ project: { ...refinementProject, forecastYears: 3 }, scenario: annualScenario });
+for (const key of ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]) {
+  assert.equal(expandedAnnual.fields[key], "missing", `${key} must reopen for missing years even with prior confirmation`);
+}
+const blankAnnual = buildRefinementState({ project: refinementProject, scenario: annualScenario,
+  config: { ...annualScenario.config, ltManualPricesByYear: { 2026: "", 2027: 1 }, feeManualValuesByYear: { 2026: {}, 2027: annualFee } } });
+assert.equal(blankAnnual.fields.ltManualPricesByYear, "missing");
+assert.equal(blankAnnual.fields.feeManualValuesByYear, "missing", "empty imported rows must not appear confirmed");
+const switchedGlobal = buildRefinementState({ project: refinementProject, scenario: manualOnlyScenario,
+  config: { ...manualOnlyScenario.config, ltPricingMode: "auto", envValueMode: "global", feeConfigMode: "global" } });
+assert.equal(switchedGlobal.fields.ltYear1Pnl, "pending");
+assert.equal(switchedGlobal.fields.greenCertPrice, "pending");
+assert.equal(switchedGlobal.fields.otherFee, "pending");
+
+// Native details are collapsed only for confirmed groups; edits and missing
+// annual data reopen the relevant group without losing saved input precision.
+const refinementNodes = new Map();
+for (const id of ["mechanism", "trade", "environment", "fees", "storage"]) {
+  refinementNodes.set(`[data-refinement-group="${id}"]`, { dataset: {}, open: true, hidden: false });
+  refinementNodes.set(`[data-refinement-status="${id}"]`, { textContent: "" });
+}
+refinementNodes.set("#scenario-refinement-progress", { textContent: "" });
+const feeLabel = { hidden: false };
+refinementNodes.set("#other-fee", { value: String(refinementScenario.config.otherFee), closest: () => feeLabel });
+refinementNodes.set('[data-refinement-field="otherFee"]', { dataset: {}, textContent: "", hidden: false });
+const refinementUi = { project: refinementProject, scenario: refinementScenario, querySelector: (selector) => refinementNodes.get(selector) || null };
+refreshRefinementState({ ...refinementUi, resetOpen: true });
+assert.equal(refinementNodes.get('[data-refinement-group="fees"]').open, false);
+assert.equal(refinementNodes.get('[data-refinement-status="fees"]').textContent, "已确认，可展开细化");
+assert.equal(refinementNodes.get('[data-refinement-group="storage"]').hidden, true);
+refinementNodes.get("#other-fee").value = "";
+refreshRefinementState(refinementUi);
+assert.equal(refinementNodes.get('[data-refinement-group="fees"]').open, true);
+assert.equal(refinementNodes.get('[data-refinement-field="otherFee"]').textContent, "待补充");
+refinementNodes.set("#fee-config-mode", { value: "manual" });
+refreshRefinementState(refinementUi);
+assert.equal(feeLabel.hidden, true, "manual mode hides inactive global inputs");
+assert.match(refinementNodes.get('[data-refinement-status="fees"]').textContent, /待补充/);
+refinementNodes.get("#fee-config-mode").value = "global";
+refreshRefinementState(refinementUi);
+assert.equal(feeLabel.hidden, false, "switching back exposes the unfilled global value");
+
+// Loading saved parameters invalidates errors about the discarded form draft,
+// while keeping success messages generated by a newer save/import action.
+const reloadMessage = { textContent: "", style: { borderColor: "#d39191", background: "#fff2f2" } };
+const invalidReload = buildScenarioSaveDraft({ scenario: { locked: true }, refs: { scenarioMessage: reloadMessage } });
+reloadMessage.textContent = invalidReload.message;
+loadScenarioToForm({ scenario: refinementScenario, refs: { scenarioMessage: reloadMessage }, querySelector: () => null });
+assert.equal(reloadMessage.textContent, "已带入当前方案参数。");
+assert.equal(reloadMessage.style.borderColor, "");
+assert.equal(reloadMessage.style.background, "");
+const previousReloadError = buildScenarioSaveDraft({ scenario: { locked: true }, refs: { scenarioMessage: reloadMessage } });
+reloadMessage.textContent = previousReloadError.message;
+reloadMessage.textContent = "场景已保存。";
+loadScenarioToForm({ scenario: refinementScenario, refs: { scenarioMessage: reloadMessage }, querySelector: () => null });
+assert.equal(reloadMessage.textContent, "场景已保存。", "a newer success notice must survive a saved-value reload");
 
 console.log("scenario form tests passed");

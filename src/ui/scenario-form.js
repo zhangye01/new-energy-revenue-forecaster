@@ -13,6 +13,121 @@
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel) {
   const loadedRatios = new WeakMap();
+  const refinementForms = new WeakMap();
+  const validationMessages = new WeakMap();
+  const REFINEMENT_FIELDS = Object.freeze({
+    mechanismEnabled: "mechanism-enabled", mechanismRatio: "mechanism-ratio", mechanismPrice: "mechanism-price",
+    mechanismStartYm: "mechanism-start-ym", mechanismEndYm: "mechanism-end-ym",
+    mechanismReferenceMode: "mechanism-reference-mode", sameTypeSpread: "same-type-spread",
+    ltPricingMode: "lt-pricing-mode", ltYear1Pnl: "lt-year1-pnl", ltTargetPnl: "lt-target-pnl", ltConvergeSpeed: "lt-converge-speed",
+    envValueMode: "env-value-mode", greenCertPrice: "green-cert-price", greenCertRealizeRatio: "green-cert-realize-ratio",
+    greenPremiumPrice: "green-premium-price", greenPremiumRealizeRatio: "green-premium-realize-ratio",
+    carbonEnabled: "carbon-enabled", carbonPrice: "carbon-price", carbonRealizeRatio: "carbon-realize-ratio",
+    feeConfigMode: "fee-config-mode", marketOpFee: "market-op-fee", gridAssessFee: "grid-assess-fee",
+    ancillaryFee: "ancillary-fee", otherFee: "other-fee", otherIncome: "other-income",
+    storageArbitragePrice: "storage-arbitrage-price", storageCapacityCompPrice: "storage-capacity-comp-price",
+    storageAncillaryRevenuePrice: "storage-ancillary-revenue-price", storageOtherRevenuePrice: "storage-other-revenue-price"
+  });
+
+  function buildRefinementState({ project = {}, scenario = {}, config = scenario.config || {} } = {}) {
+    const groups = {
+      mechanism: ["mechanismEnabled"],
+      trade: ["ltPricingMode"],
+      environment: ["envValueMode"],
+      fees: ["feeConfigMode"],
+      storage: project.hasStorage ? ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"] : []
+    };
+    if (config.mechanismEnabled) {
+      groups.mechanism.push("mechanismRatio", "mechanismPrice", "mechanismStartYm", "mechanismEndYm", "mechanismReferenceMode");
+      if (config.mechanismReferenceMode === "same_type") groups.mechanism.push("sameTypeSpread");
+    }
+    groups.trade.push(...(config.ltPricingMode === "manual" ? ["ltManualPricesByYear"] : ["ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed"]));
+    groups.environment.push(...(config.envValueMode === "manual" ? ["envManualValuesByYear"] : ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"]));
+    if (config.envValueMode !== "manual" && project.siteType === "offshore") {
+      groups.environment.push("carbonEnabled");
+      if (config.carbonEnabled) groups.environment.push("carbonPrice", "carbonRealizeRatio");
+    }
+    groups.fees.push(...(config.feeConfigMode === "manual" ? ["feeManualValuesByYear"] : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]));
+    const empty = (value) => value === undefined || value === null || (typeof value === "string" && !value.trim());
+    const numeric = (value) => !empty(value) && Number.isFinite(Number(value));
+    const annualComplete = (key) => {
+      const startYear = Number(project.startYear), years = Number(project.forecastYears);
+      if (!Number.isInteger(startYear) || !Number.isInteger(years) || years <= 0) return false;
+      return Array.from({ length: years }, (_, i) => config[key]?.[startYear + i]).every((entry) => {
+        if (key === "ltManualPricesByYear") return numeric(entry);
+        const keys = key === "feeManualValuesByYear" ? ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]
+          : ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"];
+        if (key === "envManualValuesByYear" && project.siteType === "offshore") {
+          if (typeof entry?.carbonEnabled !== "boolean") return false;
+          if (entry.carbonEnabled) keys.push("carbonPrice", "carbonRealizeRatio");
+        }
+        return keys.every((name) => numeric(entry?.[name]));
+      });
+    };
+    const fields = {};
+    const states = Object.entries(groups).map(([id, keys]) => {
+      keys.forEach((key) => {
+        const missing = key.endsWith("ByYear") ? !annualComplete(key) : empty(config[key]);
+        fields[key] = missing ? "missing" : getScenarioModel().isConfigConfirmed(scenario, key, config[key]) ? "confirmed" : "pending";
+      });
+      const missing = keys.filter((key) => fields[key] === "missing").length;
+      const pending = keys.filter((key) => fields[key] === "pending").length;
+      return { id, keys, missing, pending, confirmed: keys.length - missing - pending, complete: missing + pending === 0 };
+    });
+    return { groups: states, fields, total: Object.keys(fields).length, confirmed: Object.values(fields).filter((state) => state === "confirmed").length };
+  }
+
+  function refreshRefinementState(input = {}) {
+    const { querySelector = () => null, scenario = {}, project = {}, resetOpen = false } = input;
+    const config = { ...scenario.config };
+    Object.entries(REFINEMENT_FIELDS).forEach(([key, id]) => {
+      const field = getField(querySelector, `#${id}`);
+      if (!field || field.value === undefined) return;
+      const raw = field.value;
+      config[key] = raw === "" ? "" : key.endsWith("Enabled") ? raw === "yes"
+        : key.endsWith("Mode") || key.endsWith("Ym") ? raw
+          : key.endsWith("Ratio") ? readRatioValue(querySelector, `#${id}`, Number(raw) / 100) : Number(raw);
+    });
+    const state = buildRefinementState({ project, scenario, config });
+    state.groups.forEach((group) => {
+      const section = getField(querySelector, `[data-refinement-group="${group.id}"]`);
+      const status = getField(querySelector, `[data-refinement-status="${group.id}"]`);
+      if (section) {
+        section.hidden = !group.keys.length;
+        const previous = section.dataset?.refinementState;
+        const next = group.complete ? "confirmed" : group.missing ? "missing" : "pending";
+        if (resetOpen || (previous !== next && next !== "confirmed")) section.open = !group.complete;
+        if (section.dataset) section.dataset.refinementState = next;
+      }
+      if (status) status.textContent = group.complete ? "已确认，可展开细化"
+        : [group.missing ? `待补充 ${group.missing} 项` : "", group.pending ? `待确认 ${group.pending} 项` : ""].filter(Boolean).join(" · ");
+    });
+    [...Object.keys(REFINEMENT_FIELDS), "ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"].forEach((key) => {
+      const badge = getField(querySelector, `[data-refinement-field="${key}"]`);
+      if (!badge) return;
+      const status = state.fields[key];
+      badge.hidden = !status;
+      badge.textContent = status === "confirmed" ? "已确认" : status === "missing" ? "待补充" : status ? "待确认" : "";
+      if (badge.dataset) badge.dataset.state = status || "inactive";
+      const label = REFINEMENT_FIELDS[key] && getField(querySelector, `#${REFINEMENT_FIELDS[key]}`)?.closest?.("label");
+      if (label) label.hidden = !status;
+    });
+    const progress = getField(querySelector, "#scenario-refinement-progress");
+    if (progress) progress.textContent = `已确认 ${state.confirmed} / ${state.total} 项`;
+    return state;
+  }
+
+  function bindRefinementState(input) {
+    const form = getField(input.querySelector, "#scenario-form");
+    if (!form?.addEventListener) return;
+    if (!refinementForms.has(form)) {
+      const refresh = () => refreshRefinementState(refinementForms.get(form));
+      form.addEventListener("input", refresh);
+      form.addEventListener("change", refresh);
+    }
+    refinementForms.set(form, input);
+    refreshRefinementState({ ...input, resetOpen: true });
+  }
 
   function getField(querySelector, selector) {
     return typeof querySelector === "function" ? querySelector(selector) : null;
@@ -276,6 +391,13 @@
       modes = {}
     } = input;
     if (!scenario?.config) return;
+    const message = refs.scenarioMessage;
+    const staleError = message && validationMessages.get(message);
+    if (staleError && message.textContent === staleError) {
+      message.textContent = "已带入当前方案参数。";
+      if (message.style) { message.style.borderColor = ""; message.style.background = ""; }
+    }
+    if (message) validationMessages.delete(message);
     const config = scenario.config;
     setValue(querySelector, "#scenario-name", scenario.name);
     setValue(querySelector, "#mechanism-enabled", config.mechanismEnabled ? "yes" : "no");
@@ -307,6 +429,7 @@
     if (refs.storageCapacityCompPrice) refs.storageCapacityCompPrice.value = config.storageCapacityCompPrice || 0;
     if (refs.storageAncillaryRevenuePrice) refs.storageAncillaryRevenuePrice.value = config.storageAncillaryRevenuePrice || 0;
     if (refs.storageOtherRevenuePrice) refs.storageOtherRevenuePrice.value = config.storageOtherRevenuePrice || 0;
+    bindRefinementState(input);
   }
 
   function applyScenarioFieldLocks(input = {}) {
@@ -500,6 +623,16 @@
   }
 
   function buildScenarioSaveDraft(input = {}) {
+    const draft = validateScenarioSaveDraft(input);
+    const message = input.refs?.scenarioMessage;
+    if (message) {
+      if (draft.ok) validationMessages.delete(message);
+      else validationMessages.set(message, draft.message);
+    }
+    return draft;
+  }
+
+  function validateScenarioSaveDraft(input = {}) {
     const {
       project = {},
       scenario = {},
@@ -654,6 +787,8 @@
     buildScenarioManagerView,
     buildScenarioSaveDraft,
     buildScenarioConfigFromForm,
+    buildRefinementState,
+    refreshRefinementState,
     loadScenarioToForm
   });
 });

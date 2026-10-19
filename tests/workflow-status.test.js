@@ -85,6 +85,18 @@ assert.equal(downstream["scenario-page"], "stale");
 assert.equal(downstream["results-page"], "stale");
 assert.equal(downstream["compare-page"], "not_started");
 
+const refined = markDownstreamStale({
+  ...template,
+  "rough-page": "completed",
+  "results-page": "completed",
+  "validation-page": "completed"
+}, "scenario-page");
+assert.equal(refined["rough-page"], "completed", "补充收益参数不撤销原粗算");
+assert.equal(refined["results-page"], "stale", "收益细化后基准需要重新测算");
+assert.equal(refined["validation-page"], "stale", "收益细化后对照等待新的基准");
+assert.equal(markDownstreamStale(refined, "energy-page")["rough-page"], "stale",
+  "电量口径变化仍需更新粗算");
+
 assert.equal(statusText("completed"), "已完成");
 assert.equal(statusText("in_progress"), "进行中");
 assert.equal(statusText("stale"), "需复核");

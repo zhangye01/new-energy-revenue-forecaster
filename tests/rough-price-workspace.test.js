@@ -225,7 +225,18 @@ assert.equal(comparisons, 2, "other workspaces never run comparisons");
 
 scenario.config.mechanismPrice += 1;
 workspace.renderWorkspace(options);
-assert.match(fixture.compare.innerHTML, /更新项目电价粗算/);
+assert.match(fixture.compare.innerHTML, /重新发起基准测算/);
+assert.doesNotMatch(fixture.compare.innerHTML, /请更新项目电价粗算/);
+assert.match(fixture.compare.innerHTML, /data-jump="results-page">更新基准结果/);
+workspace.renderWorkspace({ ...options, mode: "rough" });
+assert.match(fixture.rough.innerHTML, /已保留原粗算 · 收益参数已细化/);
+const originalSnapshot = JSON.stringify(snapshot);
+project.resultsByScenario[scenario.id] = domain.stampBaselineResult(project, scenario, project.priceRuns[0],
+  calculateScenarioResult(project, scenario, project.priceRuns[0]));
+workspace.renderWorkspace(options);
+assert.match(fixture.compare.innerHTML, /原粗算预期 × 细化后基准/);
+assert.match(fixture.compare.innerHTML, /年度综合结算电价/);
+assert.equal(JSON.stringify(snapshot), originalSnapshot, "refinement does not replace or rewrite the rough snapshot");
 assert.equal(project.roughPrice.snapshots[0].config.mechanismPrice, 400, "historic snapshots remain immutable");
 
 const thresholdFixture = documentFixture();

@@ -27,14 +27,13 @@
     "rough-page": Object.freeze(["validation-page"]),
     "history-page": Object.freeze(["forecast-page", "scenario-page", "results-page", "validation-page", "compare-page"]),
     "forecast-page": Object.freeze(["scenario-page", "results-page", "validation-page", "compare-page"]),
-    "scenario-page": Object.freeze(["rough-page", "results-page", "validation-page", "compare-page"])
+    "scenario-page": Object.freeze(["results-page", "validation-page", "compare-page"])
   });
 
   function buildCompletionSnapshot(input = {}) {
     const { project = {}, scenario = null, energyState = {}, roughPrice = {} } = input;
     const snapshots = (project.roughPrice?.snapshots || []).filter((item) => item.scenarioId === scenario?.id);
-    const fingerprint = scenario && snapshots.length ? roughPrice.contextFingerprint?.(project, scenario) : "";
-    const roughSnapshot = snapshots.find((item) => item.contextFingerprint === fingerprint);
+    const roughSnapshot = snapshots.find((item) => roughPrice.snapshotState?.(project, scenario, item)?.comparable);
     const result = project.resultsByScenario?.[scenario?.id];
     const baselineState = result && roughPrice.baselineResultState?.(project, scenario, result);
     return {

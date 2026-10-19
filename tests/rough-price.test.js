@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, contextFingerprint } = require("../src/domain/rough-price");
+const { defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, snapshotState, contextFingerprint } = require("../src/domain/rough-price");
 const { calculateScenarioResult } = require("../src/domain/revenue-calculator");
 const { defaultScenarioConfig, sanitizeScenario } = require("../src/domain/scenario-model");
 const { normalizeTypicalCurveProfile } = require("../src/domain/energy-profiles");
@@ -408,10 +408,57 @@ assert.equal(compareBaselineResult(storedProject, comparisonScenario, rough, {
   ...savedBaseline, sourceContext: { ...savedBaseline.sourceContext, generatedAt: "invalid-date" }
 }).reason, "legacy_baseline");
 const newScenario = { ...comparisonScenario, config: { ...comparisonScenario.config, otherFee: 8 } };
-assert.equal(compareBaselineResult(storedProject, newScenario, rough, savedBaseline).reason, "stale_snapshot");
+assert.equal(compareBaselineResult(storedProject, newScenario, rough, savedBaseline).reason, "stale_baseline",
+  "收益参数细化只使旧基准结果过期，不能要求重做原粗算");
 const refreshedRough = calculate(storedProject, newScenario);
 assert.equal(compareBaselineResult(storedProject, newScenario, refreshedRough, savedBaseline).reason, "stale_baseline",
   "更新粗算不能把旧收入结果冒充成新口径");
+const originalRoughBefore = JSON.stringify(rough);
+assert.deepEqual(snapshotState(storedProject, comparisonScenario, rough), {
+  comparable: true, refined: false, reason: "", message: ""
+});
+assert.equal(snapshotState(storedProject, newScenario, rough).comparable, true);
+assert.equal(snapshotState(storedProject, newScenario, rough).refined, true);
+assert.equal(snapshotState(storedProject, newScenario, null).reason, "missing_snapshot");
+const refinedBaseline = stampBaselineResult(storedProject, newScenario, run,
+  calculateScenarioResult(storedProject, newScenario, run));
+const refinedComparison = compareBaselineResult(storedProject, newScenario, rough, refinedBaseline);
+assert.equal(refinedComparison.ok, true, refinedComparison.errors.join("；"));
+assert.equal(refinedComparison.snapshotState.refined, true);
+assert.equal(refinedComparison.summary.weightedRough, rough.summary.weightedPrice,
+  "细化后对照保留最初的粗算均价");
+assert.equal(refinedComparison.summary.weightedFine, refinedBaseline.avgFullRevenuePrice);
+assert.equal(JSON.stringify(rough), originalRoughBefore, "细化收益与对照不能修改原粗算快照");
+const yearlyRefinement = { ...comparisonScenario, config: { ...comparisonScenario.config,
+  feeConfigMode: "manual", feeManualValuesByYear: {
+    2026: { marketOpFee: 3, gridAssessFee: 2, ancillaryFee: 3, otherFee: 8, otherIncome: 2 },
+    2027: { marketOpFee: 4, gridAssessFee: 2, ancillaryFee: 3, otherFee: 10, otherIncome: 2 }
+  }
+} };
+const yearlyRefinedBaseline = stampBaselineResult(storedProject, yearlyRefinement, run,
+  calculateScenarioResult(storedProject, yearlyRefinement, run));
+assert.equal(compareBaselineResult(storedProject, yearlyRefinement, rough, yearlyRefinedBaseline).ok, true,
+  "统一估值细化为逐年收入配置后仍可与最初粗算比较");
+const legacyRough = sanitizeWorkspace({ snapshots: [JSON.parse(originalRoughBefore)] }, storedProject).snapshots[0];
+assert.equal(compareBaselineResult(storedProject, yearlyRefinement, legacyRough, yearlyRefinedBaseline).ok, true,
+  "既有粗算无需新增元数据或重算即可参与细化后对照");
+const reshapedEnergy = JSON.parse(JSON.stringify(comparisonProject));
+reshapedEnergy.energyData.hourlyByYear[2026][0] -= 0.5;
+reshapedEnergy.energyData.hourlyByYear[2026][1] += 0.5;
+for (const incompatibleProject of [
+  { ...storedProject, id: "another-project" },
+  { ...storedProject, startYear: storedProject.startYear + 1 },
+  { ...storedProject, forecastYears: storedProject.forecastYears + 1 },
+  { ...storedProject, capacityMw: storedProject.capacityMw + 1 },
+  { ...storedProject, hasStorage: !storedProject.hasStorage },
+  changedEnergy,
+  reshapedEnergy
+]) {
+  assert.equal(snapshotState(incompatibleProject, newScenario, rough).comparable, false,
+    "项目、测算期或电量变化时不得沿用原粗算口径");
+  assert.equal(compareBaselineResult(incompatibleProject, newScenario, rough, refinedBaseline).reason, "stale_snapshot");
+}
+assert.equal(snapshotState(storedProject, { ...newScenario, id: "another-scenario" }, rough).comparable, false);
 const changedBaselineEnergy = JSON.parse(JSON.stringify(comparisonProject));
 changedBaselineEnergy.energyData.hourlyByYear[2026][0] += 1;
 const energyRefreshedRough = calculate(changedBaselineEnergy, comparisonScenario);

@@ -18,7 +18,7 @@
     <link rel="stylesheet" href="./styles/pages/create.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/help.css?v=20261019f">
     <link rel="stylesheet" href="./styles/pages/energy.css?v=20260714d">
-    <link rel="stylesheet" href="./styles/pages/scenario.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/scenario.css?v=20261019o">
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261019n">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20260714d">
@@ -87,7 +87,7 @@
     </script>
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
-    <script src="./config.js?v=20261019l" defer></script>
+    <script src="./config.js?v=20261019o" defer></script>
     <script src="./runtime.js?v=20260515t" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20260609a" defer></script>
@@ -100,12 +100,12 @@
     <script src="./src/domain/price-forecast.js?v=20260609a" defer></script>
     <script src="./src/domain/revenue-rules.js?v=20261019a" defer></script>
     <script src="./src/domain/revenue-calculator.js?v=20261019a" defer></script>
-    <script src="./src/domain/result-calculation.js?v=20260609a" defer></script>
+    <script src="./src/domain/result-calculation.js?v=20261019o" defer></script>
     <script src="./src/domain/result-report.js?v=20260609a" defer></script>
     <script src="./src/ui/policy-panel.js?v=20261019e" defer></script>
     <script src="./src/ui/province-defaults.js?v=20261019e" defer></script>
     <script src="./src/ui/energy-workspace.js?v=20261019l" defer></script>
-    <script src="./src/ui/create-project-flow.js?v=20260611a" defer></script>
+    <script src="./src/ui/create-project-flow.js?v=20261019o" defer></script>
     <script src="./src/ui/energy-template-flow.js?v=20261019f" defer></script>
     <script src="./src/ui/chart-lifecycle.js?v=20260611a" defer></script>
     <script src="./src/ui/energy-charts.js?v=20261019i" defer></script>
@@ -117,7 +117,7 @@
     <script src="./src/ui/result-print.js?v=20260609a" defer></script>
     <script src="./src/ui/result-charts.js?v=20260609a" defer></script>
     <script src="./src/ui/scenario-charts.js?v=20260609a" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20261019n" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261019o" defer></script>
     <script src="./src/ui/scenario-visual-data.js?v=20260609a" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20261019l" defer></script>
     <script src="./src/ui/compare-charts.js?v=20260609a" defer></script>
@@ -130,10 +130,10 @@
     <script src="./src/ui/theme-controller.js?v=20260611a" defer></script>
     <script src="./src/ui/shell-events.js?v=20260609a" defer></script>
     <script src="./src/ui/app-event-bindings.js?v=20260611a" defer></script>
-    <script src="./src/domain/workflow-status.js?v=20261019n" defer></script>
-    <script src="./src/domain/scenario-config.js?v=20261019n" defer></script>
-    <script src="./src/domain/rough-price.js?v=20261019n" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261019n" defer></script>
+    <script src="./src/domain/workflow-status.js?v=20261019o" defer></script>
+    <script src="./src/domain/scenario-config.js?v=20261019o" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261019o" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261019o" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261019n" defer></script>
     <script src="./src/domain/project-settings.js?v=20260609a" defer></script>
     <script src="./src/domain/project-model.js?v=20261019n" defer></script>
@@ -142,7 +142,7 @@
     <script src="./src/domain/energy-import-flow.js?v=20260609a" defer></script>
     <script src="./src/domain/app-storage.js?v=20260609a" defer></script>
     <script src="./src/ui/app-persistence.js?v=20260625a" defer></script>
-    <script src="./app.js?v=20261019n" defer></script>
+    <script src="./app.js?v=20261019o" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -203,7 +203,7 @@
                 <span class="status-dot" id="status-forecast-page"></span>
               </button>
               <button class="nav-item" data-page="scenario-page">
-                <span class="nav-main"><span class="nav-icon">⚙</span><span class="nav-text">全口径收入配置</span></span>
+                <span class="nav-main"><span class="nav-icon">⚙</span><span class="nav-text">收益参数补充与细化</span></span>
                 <span class="status-dot" id="status-scenario-page"></span>
               </button>
               </div>
@@ -923,7 +923,7 @@
 
         <section class="page" id="forecast-page">
           <section class="panel">
-            <div class="panel-head"><strong id="forecast-model-scope">模拟曲线</strong><span data-help="电价预测口径" data-help-anchor="#forecast-model-scope">当前曲线含模拟逻辑，用于流程与口径演示。现货电价预测与全口径收入配置共同形成基准结果，可在结果输出阶段与粗算预期对照。</span></div>
+            <div class="panel-head"><strong id="forecast-model-scope">模拟曲线</strong><span data-help="电价预测口径" data-help-anchor="#forecast-model-scope">当前曲线含模拟逻辑，用于流程与口径演示。现货电价预测与收益参数补充与细化共同形成基准结果，可在结果输出阶段与粗算预期对照。</span></div>
             <form id="forecast-run-form" class="form-grid">
               <label>算法类型
                 <select id="algo-family">
@@ -996,14 +996,14 @@
             </div>
           </section>
           <div class="history-next-step-row">
-            <button type="button" class="primary-button next-step-button" data-jump="scenario-page">进入全口径收入配置</button>
+            <button type="button" class="primary-button next-step-button" data-jump="scenario-page">进入收益参数补充与细化</button>
           </div>
         </section>
 
 
         <section class="page" id="scenario-page">
           <section class="panel">
-            <div class="scenario-page-summary" aria-label="当前全口径收入配置摘要">
+            <div class="scenario-page-summary" aria-label="当前收益参数补充与细化摘要">
               <div class="scenario-summary-card scenario-summary-card-primary">
                 <span>当前项目</span>
                 <strong id="scenario-summary-project">请选择项目</strong>
@@ -1032,6 +1032,9 @@
                 <label class="block-label">当前方案
                   <select id="scenario-selector"></select>
                 </label>
+                <details class="scenario-optional">
+                  <summary>方案管理</summary>
+                  <div class="scenario-optional-body">
                 <div class="scenario-name-edit-row">
                   <label>当前方案名称
                     <input id="scenario-quick-name" type="text" placeholder="请输入方案名称">
@@ -1084,13 +1087,264 @@
                     <tbody id="scenario-list-body"></tbody>
                   </table>
                 </div>
+                  </div>
+                </details>
               </section>
 
-              <section class="scenario-workspace">
+              <section class="scenario-workspace scenario-workspace-editor">
                 <div class="scenario-workspace-head">
                   <div>
-                    <h3>默认参数展示</h3>
-                    <p data-help="省份默认参数">按当前项目所属省份展示默认机制、绿色价值、配储补充收益和综合费用口径，可一键带入当前方案。</p>
+                    <h3 id="scenario-refinement-title">收益参数补充与细化</h3>
+                    <p data-help="补充与细化" data-help-anchor="#scenario-refinement-title">已确认参数自动沿用，可展开细化；默认值和未填项请补充确认。保存只更新当前方案，并保留原粗算快照。</p>
+                  </div>
+                </div>
+                <p class="scenario-refinement-progress" id="scenario-refinement-progress" aria-live="polite"></p>
+                <form id="scenario-form" class="scenario-form">
+                  <details class="scenario-form-section scenario-refinement-group" data-refinement-group="mechanism" open>
+                    <summary class="scenario-form-section-title">
+                      <strong id="scenario-mechanism-title">方案与差价机制</strong>
+                      <span data-help="差价机制口径" data-help-anchor="#scenario-mechanism-title">按年结算，机制电量占比只作用于纳入机制部分。</span>
+                      <span class="scenario-refinement-status" data-refinement-status="mechanism">待确认</span>
+                    </summary>
+                    <div class="scenario-form-grid">
+                      <label>方案名称
+                        <input id="scenario-name" type="text" value="基准场景">
+                      </label>
+                      <label>是否纳入机制
+                        <select id="mechanism-enabled">
+                          <option value="no">否</option>
+                          <option value="yes">是</option>
+                        </select>
+                      <span class="scenario-field-status" data-refinement-field="mechanismEnabled">待确认</span>
+                      </label>
+                      <label>机制电量占比 %
+                        <input id="mechanism-ratio" type="number" min="0" max="100" value="35" step="any">
+                      <span class="scenario-field-status" data-refinement-field="mechanismRatio">待确认</span>
+                      </label>
+                      <label>机制电价 元/MWh
+                        <input id="mechanism-price" type="number" min="0" value="340" step="any">
+                      <span class="scenario-field-status" data-refinement-field="mechanismPrice">待确认</span>
+                      </label>
+                      <label>机制执行起始年月
+                        <input id="mechanism-start-ym" type="month" value="2027-01">
+                      <span class="scenario-field-status" data-refinement-field="mechanismStartYm">待确认</span>
+                      </label>
+                      <label>机制执行结束年月
+                        <input id="mechanism-end-ym" type="month" value="2030-12">
+                      <span class="scenario-field-status" data-refinement-field="mechanismEndYm">待确认</span>
+                      </label>
+                      <label>机制补差参照
+                        <select id="mechanism-reference-mode">
+                          <option value="project_capture">项目捕获电价（原有口径）</option>
+                          <option value="same_type">同类型机组均价</option>
+                        </select>
+                      <span class="scenario-field-status" data-refinement-field="mechanismReferenceMode">待确认</span>
+                      </label>
+                      <label id="same-type-spread-field"><span id="same-type-spread-heading">同类型机组价差 元/MWh</span>
+                        <input id="same-type-spread" type="number" value="0" step="any">
+                        <span class="hint" data-help="同类型机组价差" data-help-anchor="#same-type-spread-heading">同类型机组均价＝项目捕获电价＋价差；后续细化只更新当前方案，保留原粗算快照。</span>
+                      <span class="scenario-field-status" data-refinement-field="sameTypeSpread">待确认</span>
+                      </label>
+                    </div>
+                  </details>
+
+                  <details class="scenario-form-section scenario-refinement-group" data-refinement-group="trade" open>
+                    <summary class="scenario-form-section-title">
+                      <strong id="scenario-trade-title">交易策略损益</strong>
+                      <span data-help="交易策略损益口径" data-help-anchor="#scenario-trade-title">以市场化交易电量为基数，按度电损益向目标值收敛。逐年导入模板字段为 year、trade_strategy_pnl_yuan_per_mwh。</span>
+                      <span class="scenario-refinement-status" data-refinement-status="trade">待确认</span>
+                    </summary>
+                    <div class="scenario-form-grid scenario-form-grid-compact scenario-trade-grid">
+                      <label class="scenario-trade-field-wide">市场化交易电量比例
+                        <input id="market-trade-energy-ratio" type="text" value="-" disabled aria-readonly="true">
+                      </label>
+                      <label class="scenario-trade-field-wide">配置方式
+                        <select id="lt-pricing-mode">
+                          <option value="auto">自动生成逐年损益</option>
+                          <option value="manual">导入逐年损益值</option>
+                        </select>
+                      <span class="scenario-field-status" data-refinement-field="ltPricingMode">待确认</span>
+                      </label>
+                      <label class="scenario-trade-field-third">交易策略首年度电损益 元/MWh
+                        <input id="lt-year1-pnl" type="number" value="8" step="any">
+                      <span class="scenario-field-status" data-refinement-field="ltYear1Pnl">待确认</span>
+                      </label>
+                      <label class="scenario-trade-field-third">收敛目标 元/MWh
+                        <input id="lt-target-pnl" type="number" value="2" step="any">
+                      <span class="scenario-field-status" data-refinement-field="ltTargetPnl">待确认</span>
+                      </label>
+                      <label class="scenario-trade-field-third">年收敛步长 元/MWh/年
+                        <input id="lt-converge-speed" type="number" min="0" value="2" step="any">
+                      <span class="scenario-field-status" data-refinement-field="ltConvergeSpeed">待确认</span>
+                      </label>
+                    </div>
+                    <div class="scenario-trade-manual-panel" id="lt-manual-panel" hidden>
+                      <div class="scenario-trade-manual-actions">
+                        <button type="button" class="ghost-button" id="export-lt-template-button">导出逐年损益模板</button>
+                        <label class="energy-file-input-label">
+                          <span>上传文件</span>
+                          <input id="lt-manual-file-input" type="file" accept=".csv,.txt,.xlsx,.xls">
+                        </label>
+                        <button type="button" class="ghost-button" id="import-lt-template-button">读取文件并导入</button>
+                      </div>
+                      <span class="scenario-field-status" data-refinement-field="ltManualPricesByYear" hidden>待补充</span>
+                      <div class="hint" id="lt-manual-status">尚未导入逐年损益值。</div>
+                    </div>
+                  </details>
+
+                  <details class="scenario-form-section scenario-refinement-group" data-refinement-group="environment" open>
+                    <summary class="scenario-form-section-title">
+                      <strong id="scenario-environment-title">环境价值兑现</strong>
+                      <span data-help="环境价值兑现口径" data-help-anchor="#scenario-environment-title">以市场化交易电量为最大空间，三条路径兑现空间合计不超过100%。逐年导入模板包含年份、绿证/绿电/碳收益价格和兑现空间占比。</span>
+                      <span class="scenario-refinement-status" data-refinement-status="environment">待确认</span>
+                    </summary>
+                    <div class="scenario-form-grid scenario-env-grid">
+                      <label class="scenario-env-field-third">最大可兑现空间（总电量）
+                        <input id="env-value-space-ratio" type="text" value="-" disabled aria-readonly="true">
+                      </label>
+                      <label class="scenario-env-field-third">已分配兑现空间（空间内）
+                        <input id="env-value-used-ratio" type="text" value="-" disabled aria-readonly="true">
+                      </label>
+                      <label class="scenario-env-field-third">配置方式
+                        <select id="env-value-mode">
+                          <option value="global">全周期统一配置</option>
+                          <option value="manual">导入逐年兑现配置</option>
+                        </select>
+                      <span class="scenario-field-status" data-refinement-field="envValueMode">待确认</span>
+                      </label>
+                      <label class="scenario-env-field-half">绿证价格 元/MWh
+                        <input id="green-cert-price" type="number" min="0" value="18" step="any">
+                      <span class="scenario-field-status" data-refinement-field="greenCertPrice">待确认</span>
+                      </label>
+                      <label class="scenario-env-field-half">绿证兑现空间占比 %
+                        <input id="green-cert-realize-ratio" type="number" min="0" max="100" value="100" step="any">
+                      <span class="scenario-field-status" data-refinement-field="greenCertRealizeRatio">待确认</span>
+                      </label>
+                      <label class="scenario-env-field-half">绿电溢价 元/MWh
+                        <input id="green-premium-price" type="number" min="0" value="10" step="any">
+                      <span class="scenario-field-status" data-refinement-field="greenPremiumPrice">待确认</span>
+                      </label>
+                      <label class="scenario-env-field-half">绿电溢价兑现空间占比 %
+                        <input id="green-premium-realize-ratio" type="number" min="0" max="100" value="0" step="any">
+                      <span class="scenario-field-status" data-refinement-field="greenPremiumRealizeRatio">待确认</span>
+                      </label>
+                      <label class="scenario-env-field-third">是否启用碳收益
+                        <select id="carbon-enabled">
+                          <option value="no">否</option>
+                          <option value="yes">是</option>
+                        </select>
+                      <span class="scenario-field-status" data-refinement-field="carbonEnabled">待确认</span>
+                      </label>
+                      <label class="scenario-env-field-third">碳收益 元/MWh（海上可用）
+                        <input id="carbon-price" type="number" min="0" value="4" step="any">
+                      <span class="scenario-field-status" data-refinement-field="carbonPrice">待确认</span>
+                      </label>
+                      <label class="scenario-env-field-third">碳收益兑现空间占比 %
+                        <input id="carbon-realize-ratio" type="number" min="0" max="100" value="0" step="any">
+                      <span class="scenario-field-status" data-refinement-field="carbonRealizeRatio">待确认</span>
+                      </label>
+                    </div>
+                    <div class="scenario-trade-manual-panel" id="env-manual-panel" hidden>
+                      <div class="scenario-trade-manual-actions">
+                        <button type="button" class="ghost-button" id="export-env-template-button">导出逐年兑现模板</button>
+                        <label class="energy-file-input-label">
+                          <span>上传文件</span>
+                          <input id="env-manual-file-input" type="file" accept=".csv,.txt,.xlsx,.xls">
+                        </label>
+                        <button type="button" class="ghost-button" id="import-env-template-button">读取文件并导入</button>
+                      </div>
+                      <span class="scenario-field-status" data-refinement-field="envManualValuesByYear" hidden>待补充</span>
+                      <div class="hint" id="env-manual-status">尚未导入逐年环境价值兑现配置。</div>
+                    </div>
+                  </details>
+
+                  <details class="scenario-form-section scenario-refinement-group" data-refinement-group="fees" open>
+                    <summary class="scenario-form-section-title">
+                      <strong id="scenario-fee-title">综合扣费与其他收益</strong>
+                      <span data-help="扣费与收益口径" data-help-anchor="#scenario-fee-title">默认按全周期统一口径执行，也可导入逐年扣费与收益配置。导入模板包含年份、四类扣费和其他收入。</span>
+                      <span class="scenario-refinement-status" data-refinement-status="fees">待确认</span>
+                    </summary>
+                    <div class="scenario-form-grid">
+                      <label>配置方式
+                        <select id="fee-config-mode">
+                          <option value="global">全周期统一配置</option>
+                          <option value="manual">导入逐年扣费收益</option>
+                        </select>
+                      <span class="scenario-field-status" data-refinement-field="feeConfigMode">待确认</span>
+                      </label>
+                      <label>市场运营费用 元/MWh
+                        <input id="market-op-fee" type="number" min="0" value="6" step="any">
+                      <span class="scenario-field-status" data-refinement-field="marketOpFee">待确认</span>
+                      </label>
+                      <label>并网考核费用 元/MWh
+                        <input id="grid-assess-fee" type="number" min="0" value="8" step="any">
+                      <span class="scenario-field-status" data-refinement-field="gridAssessFee">待确认</span>
+                      </label>
+                      <label>辅助服务费用 元/MWh
+                        <input id="ancillary-fee" type="number" min="0" value="7" step="any">
+                      <span class="scenario-field-status" data-refinement-field="ancillaryFee">待确认</span>
+                      </label>
+                      <label>其他费用 元/MWh
+                        <input id="other-fee" type="number" min="0" value="3" step="any">
+                      <span class="scenario-field-status" data-refinement-field="otherFee">待确认</span>
+                      </label>
+                      <label>其他收入 元/MWh
+                        <input id="other-income" type="number" min="0" value="2" step="any">
+                      <span class="scenario-field-status" data-refinement-field="otherIncome">待确认</span>
+                      </label>
+                    </div>
+                    <div class="scenario-trade-manual-panel" id="fee-manual-panel" hidden>
+                      <div class="scenario-trade-manual-actions">
+                        <button type="button" class="ghost-button" id="export-fee-template-button">导出逐年扣费收益模板</button>
+                        <label class="energy-file-input-label">
+                          <span>上传文件</span>
+                          <input id="fee-manual-file-input" type="file" accept=".csv,.txt,.xlsx,.xls">
+                        </label>
+                        <button type="button" class="ghost-button" id="import-fee-template-button">读取文件并导入</button>
+                      </div>
+                      <span class="scenario-field-status" data-refinement-field="feeManualValuesByYear" hidden>待补充</span>
+                      <div class="hint" id="fee-manual-status">尚未导入逐年扣费收益配置。</div>
+                    </div>
+                  </details>
+
+                  <details class="scenario-storage-revenue-section scenario-refinement-group" id="scenario-storage-revenue-section" data-refinement-group="storage" hidden open>
+                    <summary class="scenario-form-section-title">
+                      <strong id="scenario-storage-title">配储补充收益配置</strong>
+                      <span class="section-note" data-help="配储补充收益口径" data-help-anchor="#scenario-storage-title">仅配储项目显示；用于录入储能带来的现货套利、容量补偿、辅助服务和其他补充收益口径。</span>
+                      <span class="scenario-refinement-status" data-refinement-status="storage">待确认</span>
+                    </summary>
+                    <div class="scenario-storage-revenue-grid">
+                      <label>现货价差套利 元/MWh
+                        <input id="storage-arbitrage-price" type="number" min="0" value="0" step="any">
+                      <span class="scenario-field-status" data-refinement-field="storageArbitragePrice">待确认</span>
+                      </label>
+                      <label>容量补偿收益 元/MWh
+                        <input id="storage-capacity-comp-price" type="number" min="0" value="0" step="any">
+                      <span class="scenario-field-status" data-refinement-field="storageCapacityCompPrice">待确认</span>
+                      </label>
+                      <label>配储辅助服务收益 元/MWh
+                        <input id="storage-ancillary-revenue-price" type="number" min="0" value="0" step="any">
+                      <span class="scenario-field-status" data-refinement-field="storageAncillaryRevenuePrice">待确认</span>
+                      </label>
+                      <label>其他配储收益 元/MWh
+                        <input id="storage-other-revenue-price" type="number" min="0" value="0" step="any">
+                      <span class="scenario-field-status" data-refinement-field="storageOtherRevenuePrice">待确认</span>
+                      </label>
+                    </div>
+                  </details>
+                  <div class="actions-row">
+                    <button type="submit" class="primary-button">确认并保存细化参数</button>
+                  </div>
+                </form>
+                <div class="info-box" id="scenario-message">等待配置保存</div>
+              </section>
+
+              <details class="scenario-workspace scenario-optional">
+                <summary><span id="scenario-defaults-title">省份默认参数</span></summary>
+                <div class="scenario-optional-body">
+                <div class="scenario-workspace-head">
+                  <div>
+                    <p data-help="省份默认参数" data-help-anchor="#scenario-defaults-title">按省份查看默认参数。套用即确认这些默认参数，仍可展开细化。</p>
                   </div>
                   <div class="scenario-workspace-tools">
                     <select
@@ -1104,223 +1358,15 @@
                 <div class="province-default-list-wrap">
                   <div class="province-default-list" id="province-param-body"></div>
                 </div>
-              </section>
-
-              <section class="scenario-workspace scenario-workspace-editor">
-                <div class="scenario-workspace-head">
-                  <div>
-                    <h3>填写 / 调整参数</h3>
-                    <p data-help="保存当前配置">在当前方案内录入口径参数，保存后只更新当前方案。</p>
-                  </div>
                 </div>
-                <form id="scenario-form" class="scenario-form">
-                  <section class="scenario-form-section">
-                    <div class="scenario-form-section-title">
-                      <strong id="scenario-mechanism-title">方案与差价机制</strong>
-                      <span data-help="差价机制口径" data-help-anchor="#scenario-mechanism-title">按年结算，机制电量占比只作用于纳入机制部分。</span>
-                    </div>
-                    <div class="scenario-form-grid">
-                      <label>方案名称
-                        <input id="scenario-name" type="text" value="基准场景">
-                      </label>
-                      <label>是否纳入机制
-                        <select id="mechanism-enabled">
-                          <option value="no">否</option>
-                          <option value="yes">是</option>
-                        </select>
-                      </label>
-                      <label>机制电量占比 %
-                        <input id="mechanism-ratio" type="number" min="0" max="100" value="35" step="any">
-                      </label>
-                      <label>机制电价 元/MWh
-                        <input id="mechanism-price" type="number" min="0" value="340" step="any">
-                      </label>
-                      <label>机制执行起始年月
-                        <input id="mechanism-start-ym" type="month" value="2027-01">
-                      </label>
-                      <label>机制执行结束年月
-                        <input id="mechanism-end-ym" type="month" value="2030-12">
-                      </label>
-                      <label>机制补差参照
-                        <select id="mechanism-reference-mode">
-                          <option value="project_capture">项目捕获电价（原有口径）</option>
-                          <option value="same_type">同类型机组均价</option>
-                        </select>
-                      </label>
-                      <label id="same-type-spread-field"><span id="same-type-spread-heading">同类型机组价差 元/MWh</span>
-                        <input id="same-type-spread" type="number" value="0" step="any">
-                        <span class="hint" data-help="同类型机组价差" data-help-anchor="#same-type-spread-heading">同类型机组均价＝项目捕获电价＋价差；粗算与精算共用。</span>
-                      </label>
-                    </div>
-                  </section>
+              </details>
 
-                  <section class="scenario-form-section">
-                    <div class="scenario-form-section-title">
-                      <strong id="scenario-trade-title">交易策略损益</strong>
-                      <span data-help="交易策略损益口径" data-help-anchor="#scenario-trade-title">以市场化交易电量为基数，按度电损益向目标值收敛。逐年导入模板字段为 year、trade_strategy_pnl_yuan_per_mwh。</span>
-                    </div>
-                    <div class="scenario-form-grid scenario-form-grid-compact scenario-trade-grid">
-                      <label class="scenario-trade-field-wide">市场化交易电量比例
-                        <input id="market-trade-energy-ratio" type="text" value="-" disabled aria-readonly="true">
-                      </label>
-                      <label class="scenario-trade-field-wide">配置方式
-                        <select id="lt-pricing-mode">
-                          <option value="auto">自动生成逐年损益</option>
-                          <option value="manual">导入逐年损益值</option>
-                        </select>
-                      </label>
-                      <label class="scenario-trade-field-third">交易策略首年度电损益 元/MWh
-                        <input id="lt-year1-pnl" type="number" value="8" step="any">
-                      </label>
-                      <label class="scenario-trade-field-third">收敛目标 元/MWh
-                        <input id="lt-target-pnl" type="number" value="2" step="any">
-                      </label>
-                      <label class="scenario-trade-field-third">年收敛步长 元/MWh/年
-                        <input id="lt-converge-speed" type="number" min="0" value="2" step="any">
-                      </label>
-                    </div>
-                    <div class="scenario-trade-manual-panel" id="lt-manual-panel" hidden>
-                      <div class="scenario-trade-manual-actions">
-                        <button type="button" class="ghost-button" id="export-lt-template-button">导出逐年损益模板</button>
-                        <label class="energy-file-input-label">
-                          <span>上传文件</span>
-                          <input id="lt-manual-file-input" type="file" accept=".csv,.txt,.xlsx,.xls">
-                        </label>
-                        <button type="button" class="ghost-button" id="import-lt-template-button">读取文件并导入</button>
-                      </div>
-                      <div class="hint" id="lt-manual-status">尚未导入逐年损益值。</div>
-                    </div>
-                  </section>
-
-                  <section class="scenario-form-section">
-                    <div class="scenario-form-section-title">
-                      <strong id="scenario-environment-title">环境价值兑现</strong>
-                      <span data-help="环境价值兑现口径" data-help-anchor="#scenario-environment-title">以市场化交易电量为最大空间，三条路径兑现空间合计不超过100%。逐年导入模板包含年份、绿证/绿电/碳收益价格和兑现空间占比。</span>
-                    </div>
-                    <div class="scenario-form-grid scenario-env-grid">
-                      <label class="scenario-env-field-third">最大可兑现空间（总电量）
-                        <input id="env-value-space-ratio" type="text" value="-" disabled aria-readonly="true">
-                      </label>
-                      <label class="scenario-env-field-third">已分配兑现空间（空间内）
-                        <input id="env-value-used-ratio" type="text" value="-" disabled aria-readonly="true">
-                      </label>
-                      <label class="scenario-env-field-third">配置方式
-                        <select id="env-value-mode">
-                          <option value="global">全周期统一配置</option>
-                          <option value="manual">导入逐年兑现配置</option>
-                        </select>
-                      </label>
-                      <label class="scenario-env-field-half">绿证价格 元/MWh
-                        <input id="green-cert-price" type="number" min="0" value="18" step="any">
-                      </label>
-                      <label class="scenario-env-field-half">绿证兑现空间占比 %
-                        <input id="green-cert-realize-ratio" type="number" min="0" max="100" value="100" step="any">
-                      </label>
-                      <label class="scenario-env-field-half">绿电溢价 元/MWh
-                        <input id="green-premium-price" type="number" min="0" value="10" step="any">
-                      </label>
-                      <label class="scenario-env-field-half">绿电溢价兑现空间占比 %
-                        <input id="green-premium-realize-ratio" type="number" min="0" max="100" value="0" step="any">
-                      </label>
-                      <label class="scenario-env-field-third">是否启用碳收益
-                        <select id="carbon-enabled">
-                          <option value="no">否</option>
-                          <option value="yes">是</option>
-                        </select>
-                      </label>
-                      <label class="scenario-env-field-third">碳收益 元/MWh（海上可用）
-                        <input id="carbon-price" type="number" min="0" value="4" step="any">
-                      </label>
-                      <label class="scenario-env-field-third">碳收益兑现空间占比 %
-                        <input id="carbon-realize-ratio" type="number" min="0" max="100" value="0" step="any">
-                      </label>
-                    </div>
-                    <div class="scenario-trade-manual-panel" id="env-manual-panel" hidden>
-                      <div class="scenario-trade-manual-actions">
-                        <button type="button" class="ghost-button" id="export-env-template-button">导出逐年兑现模板</button>
-                        <label class="energy-file-input-label">
-                          <span>上传文件</span>
-                          <input id="env-manual-file-input" type="file" accept=".csv,.txt,.xlsx,.xls">
-                        </label>
-                        <button type="button" class="ghost-button" id="import-env-template-button">读取文件并导入</button>
-                      </div>
-                      <div class="hint" id="env-manual-status">尚未导入逐年环境价值兑现配置。</div>
-                    </div>
-                  </section>
-
-                  <section class="scenario-form-section">
-                    <div class="scenario-form-section-title">
-                      <strong id="scenario-fee-title">综合扣费与其他收益</strong>
-                      <span data-help="扣费与收益口径" data-help-anchor="#scenario-fee-title">默认按全周期统一口径执行，也可导入逐年扣费与收益配置。导入模板包含年份、四类扣费和其他收入。</span>
-                    </div>
-                    <div class="scenario-form-grid">
-                      <label>配置方式
-                        <select id="fee-config-mode">
-                          <option value="global">全周期统一配置</option>
-                          <option value="manual">导入逐年扣费收益</option>
-                        </select>
-                      </label>
-                      <label>市场运营费用 元/MWh
-                        <input id="market-op-fee" type="number" min="0" value="6" step="any">
-                      </label>
-                      <label>并网考核费用 元/MWh
-                        <input id="grid-assess-fee" type="number" min="0" value="8" step="any">
-                      </label>
-                      <label>辅助服务费用 元/MWh
-                        <input id="ancillary-fee" type="number" min="0" value="7" step="any">
-                      </label>
-                      <label>其他费用 元/MWh
-                        <input id="other-fee" type="number" min="0" value="3" step="any">
-                      </label>
-                      <label>其他收入 元/MWh
-                        <input id="other-income" type="number" min="0" value="2" step="any">
-                      </label>
-                    </div>
-                    <div class="scenario-trade-manual-panel" id="fee-manual-panel" hidden>
-                      <div class="scenario-trade-manual-actions">
-                        <button type="button" class="ghost-button" id="export-fee-template-button">导出逐年扣费收益模板</button>
-                        <label class="energy-file-input-label">
-                          <span>上传文件</span>
-                          <input id="fee-manual-file-input" type="file" accept=".csv,.txt,.xlsx,.xls">
-                        </label>
-                        <button type="button" class="ghost-button" id="import-fee-template-button">读取文件并导入</button>
-                      </div>
-                      <div class="hint" id="fee-manual-status">尚未导入逐年扣费收益配置。</div>
-                    </div>
-                  </section>
-
-                  <section class="scenario-storage-revenue-section" id="scenario-storage-revenue-section" hidden>
-                    <div class="form-section-header">
-                      <strong id="scenario-storage-title">配储补充收益配置</strong>
-                      <span class="section-note" data-help="配储补充收益口径" data-help-anchor="#scenario-storage-title">仅配储项目显示；用于录入储能带来的现货套利、容量补偿、辅助服务和其他补充收益口径。</span>
-                    </div>
-                    <div class="scenario-storage-revenue-grid">
-                      <label>现货价差套利 元/MWh
-                        <input id="storage-arbitrage-price" type="number" min="0" value="0" step="any">
-                      </label>
-                      <label>容量补偿收益 元/MWh
-                        <input id="storage-capacity-comp-price" type="number" min="0" value="0" step="any">
-                      </label>
-                      <label>配储辅助服务收益 元/MWh
-                        <input id="storage-ancillary-revenue-price" type="number" min="0" value="0" step="any">
-                      </label>
-                      <label>其他配储收益 元/MWh
-                        <input id="storage-other-revenue-price" type="number" min="0" value="0" step="any">
-                      </label>
-                    </div>
-                  </section>
-                  <div class="actions-row">
-                    <button type="submit" class="primary-button">保存当前配置</button>
-                  </div>
-                </form>
-                <div class="info-box" id="scenario-message">等待配置保存</div>
-              </section>
-
-              <section class="scenario-workspace scenario-workspace-visual">
+              <details class="scenario-workspace scenario-optional scenario-workspace-visual">
+                <summary><span id="scenario-visual-title">参数结构与年度影响</span></summary>
+                <div class="scenario-optional-body">
                 <div class="scenario-workspace-head">
                   <div>
-                    <h3>参数可视化展示</h3>
-                    <p data-help="参数可视化">按测算周期查看电量口径、度电参数和年度收益影响，辅助校核当前方案是否合理。</p>
+                    <p data-help="参数可视化" data-help-anchor="#scenario-visual-title">按测算周期查看电量口径、度电参数和年度收益影响，辅助校核当前方案是否合理。</p>
                   </div>
                 </div>
                 <div class="info-box" id="scenario-visual-message">请选择项目并保存方案后查看参数结构。</div>
@@ -1347,7 +1393,8 @@
                     <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-unit-chart" aria-label="年度补充收益净影响构成图"></div>
                   </article>
                 </div>
-              </section>
+                </div>
+              </details>
               <div class="scenario-next-step-row">
                 <button type="button" class="primary-button next-step-button" data-jump="results-page">进入基准结果总览</button>
               </div>
@@ -1754,8 +1801,8 @@
                 <p>当前版本适用于产品原型演示、业务流程确认与数据准备校验。</p>
                 <p><strong>适用对象：</strong>新能源项目收益测算、方案比选、规则口径复核和演示汇报。</p>
                 <p><strong>适用项目：</strong>以风电、光伏为主，并区分陆上/海上、是否配建储能等基本属性。</p>
-                <p><strong>当前特点：</strong>支持账号隔离、项目持久化、结算电量配置、历史15分钟现货分析、项目电价粗算、现货电价预测、全口径收入配置、交叉验证与结果对比。</p>
-                <p><strong>推荐顺序：</strong>首页查看政策与基线 → 我的项目 → 项目创建 → 结算电量配置 → 项目电价粗算 → 历史电价分析 → 电价预测工作台 → 全口径收入配置 → 基准结果总览 → 交叉验证 / 多方案对比分析。</p>
+                <p><strong>当前特点：</strong>支持账号隔离、项目持久化、结算电量配置、历史15分钟现货分析、项目电价粗算、现货电价预测、收益参数补充与细化、交叉验证与结果对比。</p>
+                <p><strong>推荐顺序：</strong>首页查看政策与基线 → 我的项目 → 项目创建 → 结算电量配置 → 项目电价粗算 → 历史电价分析 → 电价预测工作台 → 收益参数补充与细化 → 基准结果总览 → 交叉验证 / 多方案对比分析。</p>
               </div>
               <div class="button-inline">
                 <button class="ghost-button" type="button" data-jump="home-page">查看首页</button>
@@ -1836,14 +1883,14 @@
                   <div class="help-step-index">7</div>
                   <div class="help-step-body">
                     <strong>电价预测工作台</strong>
-                    <p>生成预测曲线、检查质量指标并选择生效版本，再进入全口径收入配置，共同完成详细测算。</p>
+                    <p>生成预测曲线、检查质量指标并选择生效版本，再进入收益参数补充与细化，共同完成详细测算。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
                   <div class="help-step-index">8</div>
                   <div class="help-step-body">
-                    <strong>全口径收入配置与结果输出</strong>
-                    <p>沿用粗算已确认参数，按需要调整并保存配置；在基准结果总览完成测算，再进入交叉验证或多方案对比。</p>
+                    <strong>收益参数补充与细化与结果输出</strong>
+                    <p>自动沿用粗算已确认参数，补充默认值和未填项，必要时展开细化；保存后重算基准，再与原粗算交叉验证。</p>
                   </div>
                 </article>
               </div>
@@ -1878,10 +1925,10 @@
                 </article>
                 <article class="help-card">
                   <strong>电价预测工作台</strong>
-                  <p>用于管理现货电价预测的算法、训练窗口、质量指标和生效曲线。与全口径收入配置共同构成精算，最终结果在基准结果总览展示。</p>
+                  <p>用于管理现货电价预测的算法、训练窗口、质量指标和生效曲线。与收益参数补充与细化共同构成精算，最终结果在基准结果总览展示。</p>
                 </article>
                 <article class="help-card">
-                  <strong>全口径收入配置</strong>
+                  <strong>收益参数补充与细化</strong>
                   <p>用于录入机制电价、交易策略损益、环境价值、综合费用、其他收入等参数。省份默认参数库已合并到本页。</p>
                 </article>
                 <article class="help-card">
@@ -1992,7 +2039,7 @@
                     <li>结算电量配置：逐年总量覆盖全部预测年份，且已选择典型曲线来源并生成年度电量。</li>
                     <li>历史电价分析：已按项目省份成功关联历史现货数据库并生成图表。</li>
                     <li>电价预测工作台：存在通过质量门槛并已生效的电价预测版本。</li>
-                    <li>全口径收入配置：当前配置已保存。</li>
+                    <li>收益参数补充与细化：当前配置已保存。</li>
                     <li>基准结果总览 / 多方案对比分析：已完成测算并生成结果。</li>
                   </ul>
                 </article>
@@ -2006,7 +2053,7 @@
                 <details class="help-faq-item"><summary>2. 为什么导入后侧边栏状态没有变绿？</summary><p>状态点按完成标准判断，不是点一下页面就完成。比如结算电量配置只有在满足页面要求后才会变为已完成。</p></details>
                 <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>通常是上游环节尚未满足条件，例如逐年总量或典型曲线未完成、历史现货尚未自动关联、电价预测版本未生效，或场景还未保存。粗算版本用于交叉验证，不能替代生效的预测曲线。</p></details>
                 <details class="help-faq-item"><summary>4. 为什么页面刷新后输入还在？</summary><p>当前原型默认开启输入持久化，已保存的项目数据会在页面切换和刷新后自动恢复。</p></details>
-                <details class="help-faq-item"><summary>5. 省份参数库去哪了？</summary><p>省份参数库已合并进“全口径收入配置”页面，现在以“省份默认参数带入”的方式提供默认值，再在同页内完成微调。</p></details>
+                <details class="help-faq-item"><summary>5. 省份参数库去哪了？</summary><p>省份参数库已合并进“收益参数补充与细化”页面，现在以“省份默认参数带入”的方式提供默认值，再在同页内完成微调。</p></details>
               </div>
             </details>
           </section>
