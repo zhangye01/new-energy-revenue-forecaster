@@ -275,7 +275,7 @@
       assumptionHtml: buildTextItems(assumptionItems, "result-assumption-item"),
       annualRowsHtml: buildAnnualRowsHtml(rows),
       hourlyRowsHtml: buildHourlyRowsHtml(previewRows),
-      hourlyPreviewHint: `首年小时明细附件：展开后预览前 ${previewRows.length} 条，共 ${(result.hourlyPreview || []).length} 条；导出为完整8760。`
+      hourlyPreviewHint: `测算完成 · 首年小时明细 ${(result.hourlyPreview || []).length} 条`
     };
   }
 

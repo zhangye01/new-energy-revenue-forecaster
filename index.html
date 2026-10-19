@@ -112,7 +112,7 @@
     <script src="./src/ui/forecast-page.js?v=20261019f" defer></script>
     <script src="./src/ui/forecast-run-flow.js?v=20260611a" defer></script>
     <script src="./src/ui/project-list.js?v=20260609a" defer></script>
-    <script src="./src/ui/result-page.js?v=20260609a" defer></script>
+    <script src="./src/ui/result-page.js?v=20261019g" defer></script>
     <script src="./src/ui/result-runner.js?v=20260624a" defer></script>
     <script src="./src/ui/result-print.js?v=20260609a" defer></script>
     <script src="./src/ui/result-charts.js?v=20260609a" defer></script>
@@ -133,7 +133,7 @@
     <script src="./src/domain/workflow-status.js?v=20260609a" defer></script>
     <script src="./src/domain/scenario-config.js?v=20260609a" defer></script>
     <script src="./src/domain/rough-price.js?v=20261019c" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261019e" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261019g" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261019a" defer></script>
     <script src="./src/domain/project-settings.js?v=20260609a" defer></script>
     <script src="./src/domain/project-model.js?v=20260609a" defer></script>
@@ -1731,25 +1731,15 @@
           <section class="panel help-doc">
             <section class="subsection">
               <div class="panel-head">
-                <h3>帮助文档总览</h3>
-                <span class="hint">当前版本适用于产品原型演示、业务流程确认与数据准备校验。</span>
+                <h3 id="help-overview-heading">帮助文档总览</h3>
+                <span class="hint">产品原型</span>
               </div>
-              <div class="help-grid-3">
-                <article class="help-card">
-                  <strong>适用对象</strong>
-                  <p>适用于新能源项目收益测算、方案比选、规则口径复核和演示汇报场景。</p>
-                </article>
-                <article class="help-card">
-                  <strong>适用项目</strong>
-                  <p>当前以风电、光伏为主，并区分陆上/海上、是否配建储能等基本属性。</p>
-                </article>
-                <article class="help-card">
-                  <strong>当前特点</strong>
-                  <p>支持账号隔离、项目持久化、结算电量配置、历史15分钟现货分析、电价预测、全口径收入配置与结果对比。</p>
-                </article>
-              </div>
-              <div class="info-box">
-                建议按“首页查看政策与基线 → 我的项目 → 项目创建 → 结算电量配置 → 历史电价分析 → 电价预测工作台 → 全口径收入配置 → 基准结果总览 / 多方案对比分析”的顺序使用。
+              <div data-help="帮助文档总览" data-help-anchor="#help-overview-heading">
+                <p>当前版本适用于产品原型演示、业务流程确认与数据准备校验。</p>
+                <p><strong>适用对象：</strong>新能源项目收益测算、方案比选、规则口径复核和演示汇报。</p>
+                <p><strong>适用项目：</strong>以风电、光伏为主，并区分陆上/海上、是否配建储能等基本属性。</p>
+                <p><strong>当前特点：</strong>支持账号隔离、项目持久化、结算电量配置、历史15分钟现货分析、关键参数粗算、模型精算、交叉验证、全口径收入配置与结果对比。</p>
+                <p><strong>推荐顺序：</strong>首页查看政策与基线 → 我的项目 → 项目创建 → 结算电量配置 → 历史电价分析 → 电价预测工作台 → 全口径收入配置 → 基准结果总览 / 多方案对比分析。</p>
               </div>
               <div class="button-inline">
                 <button class="ghost-button" type="button" data-jump="home-page">查看首页</button>
@@ -1809,21 +1799,21 @@
                   <div class="help-step-index">4</div>
                   <div class="help-step-body">
                     <strong>结算电量配置</strong>
-                    <p>先导出模板，再导入8760小时数或逐年小时数；导入成功后，可查看8760曲线展示。</p>
+                    <p>先导出并填入逐年总量模板，覆盖全部预测年份；再选择上传典型年8760小时模板或调用所选省份典型曲线，生成各年度上网电量。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
                   <div class="help-step-index">5</div>
                   <div class="help-step-body">
                     <strong>历史电价分析</strong>
-                    <p>系统按项目省份自动关联15分钟历史现货数据库，查看月均价、典型日、热力图、箱线图等统计特征。</p>
+                    <p>系统按项目省份自动关联15分钟历史现货样本，无需另行导入；可筛选日期，查看月均价、典型日、热力图、箱线图等统计特征。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
                   <div class="help-step-index">6</div>
                   <div class="help-step-body">
                     <strong>电价预测工作台</strong>
-                    <p>生成算法版本、检查误差指标、确认生效曲线；只有生效版本才能进入结果测算。</p>
+                    <p>在“关键参数粗算”中沿用已有参数并补充价格假设，保存独立粗算版本；再生成“模型精算”版本，检查质量指标，并在“交叉验证”中对照两者。结果测算使用已生效的精算曲线。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
@@ -1849,19 +1839,19 @@
                 </article>
                 <article class="help-card">
                   <strong>项目创建</strong>
-                  <p>用于定义项目基本边界。当前不在此页选择导入模式，模式在结算电量配置页自动识别。</p>
+                  <p>用于定义项目基本边界并保存基础信息；电量模板和典型曲线来源在结算电量配置页选择。</p>
                 </article>
                 <article class="help-card">
                   <strong>结算电量配置</strong>
-                  <p>用于导出模板、导入电量、查看导入反馈和8760月度曲线。支持识别两种模板：8760小时模板、逐年小时模板。</p>
+                  <p>第一步导入覆盖全部预测年份的逐年总量模板；第二步在“上传典型年8760小时模板”和“调用所选省份典型曲线”中二选一。完成后查看导入反馈、年度小时数和典型年月度曲线。</p>
                 </article>
                 <article class="help-card">
                   <strong>历史电价分析</strong>
-                  <p>用于按当前项目省份自动调取15分钟历史现货价格数据库，辅助判断训练窗口、波动区间和典型日特征。</p>
+                  <p>按当前项目省份自动关联15分钟历史现货样本，无需手动导入；可按日期筛选，辅助判断训练窗口、波动区间和典型日特征。模拟样本以页面来源标识为准。</p>
                 </article>
                 <article class="help-card">
                   <strong>电价预测工作台</strong>
-                  <p>用于管理算法版本、训练窗口、误差指标和生效曲线。结果测算只使用生效版本。</p>
+                  <p>关键参数粗算自动带入已有项目、电量与结算参数，补充独立价格假设后保存版本；模型精算管理算法、训练窗口、质量指标和生效曲线；交叉验证按现货均价、捕获电价、综合结算电价逐年对照。对照版本的选择不改变生效曲线，结果测算仍使用已生效的精算版本。</p>
                 </article>
                 <article class="help-card">
                   <strong>全口径收入配置</strong>
@@ -1888,16 +1878,16 @@
                   </thead>
                   <tbody>
                     <tr>
-                      <td>8760小时模板</td>
-                      <td><code>year, hour_index, equivalent_hours_h</code></td>
-                      <td>每个年份必须完整8760行；<code>hour_index</code> 范围 1-8760；<code>equivalent_hours_h</code> 必须为大于等于0的数值。</td>
-                      <td>适合直接导入完整小时曲线。</td>
+                      <td>逐年总量模板（第一步，必做）</td>
+                      <td><code>year, annual_hours_h</code></td>
+                      <td>覆盖全部预测年份，每个年份只能出现1次；<code>annual_hours_h</code> 必须大于0。</td>
+                      <td>确定各年度总小时数；完成后再选择典型曲线来源。</td>
                     </tr>
                     <tr>
-                      <td>逐年小时模板</td>
-                      <td><code>year, annual_hours_h</code></td>
-                      <td>每个年份只能出现1次；<code>annual_hours_h</code> 必须大于0。</td>
-                      <td>系统会按典型权重自动拆解到8760小时。</td>
+                      <td>典型年8760小时模板（第二步，二选一）</td>
+                      <td><code>hour_index, equivalent_hours_h</code></td>
+                      <td>一套完整8760行；<code>hour_index</code> 为不重复的1-8760；<code>equivalent_hours_h</code> 非负且总量大于0。</td>
+                      <td>上传典型年分布，按其权重拆分逐年总量；也可调用所选省份典型曲线，无需上传此模板。</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1908,7 +1898,7 @@
                   <ul class="help-list">
                     <li>CSV / TXT</li>
                     <li>XLSX / XLS（自动读取第一张工作表）</li>
-                    <li>当前页面统一通过上传文件方式导入</li>
+                    <li>逐年总量通过文件导入；典型曲线可上传文件或调用省份样本。</li>
                   </ul>
                 </article>
                 <article class="help-card">
@@ -1916,7 +1906,7 @@
                   <ul class="help-list">
                     <li>先保存项目基础信息，再导出模板。</li>
                     <li>先导出模板，再填数，不建议手写表头。</li>
-                    <li>若使用逐年模板，导入成功后仍会生成8760小时曲线展示。</li>
+                    <li>先完成逐年总量，再选择一种典型曲线来源；两步完成后生成各年度8760小时电量曲线。</li>
                   </ul>
                 </article>
               </div>
@@ -1968,9 +1958,9 @@
                   <strong>典型完成标准</strong>
                   <ul class="help-list">
                     <li>项目创建：基础信息已保存。</li>
-                    <li>结算电量配置：预测周期内年份电量已按要求导入。</li>
+                    <li>结算电量配置：逐年总量覆盖全部预测年份，且已选择典型曲线来源并生成年度电量。</li>
                     <li>历史电价分析：已按项目省份成功关联历史现货数据库并生成图表。</li>
-                    <li>电价预测工作台：存在可发布并已生效的预测版本。</li>
+                    <li>电价预测工作台：存在通过质量门槛并已生效的精算版本；粗算与交叉验证用于独立复核，不替代精算生效步骤。</li>
                     <li>全口径收入配置：当前配置已保存。</li>
                     <li>基准结果总览 / 多方案对比分析：已完成测算并生成结果。</li>
                   </ul>
@@ -1983,7 +1973,7 @@
               <div class="help-faq">
                 <details class="help-faq-item"><summary>1. 为什么导不出8760模板？</summary><p>请先进入一个项目，并完成“项目创建”页面的基础信息保存。未保存前，系统会阻止模板导出。</p></details>
                 <details class="help-faq-item"><summary>2. 为什么导入后侧边栏状态没有变绿？</summary><p>状态点按完成标准判断，不是点一下页面就完成。比如结算电量配置只有在满足页面要求后才会变为已完成。</p></details>
-                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>通常是上游环节尚未满足条件，例如8760未补齐、历史现货未导入、电价版本未生效，或场景还未保存。</p></details>
+                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>通常是上游环节尚未满足条件，例如逐年总量或典型曲线未完成、历史现货尚未自动关联、精算电价版本未生效，或场景还未保存。粗算版本用于交叉验证，不能替代生效的精算曲线。</p></details>
                 <details class="help-faq-item"><summary>4. 为什么页面刷新后输入还在？</summary><p>当前原型默认开启输入持久化，已保存的项目数据会在页面切换和刷新后自动恢复。</p></details>
                 <details class="help-faq-item"><summary>5. 省份参数库去哪了？</summary><p>省份参数库已合并进“全口径收入配置”页面，现在以“省份默认参数带入”的方式提供默认值，再在同页内完成微调。</p></details>
               </div>

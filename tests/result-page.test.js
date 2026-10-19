@@ -253,7 +253,7 @@ assert.match(ready.assumptionHtml, /环境价值采用逐年导入配置/);
 assert.match(ready.assumptionHtml, /综合费用与其他收入采用逐年导入配置/);
 assert.match(ready.annualRowsHtml, /¥3,500,000/);
 assert.match(ready.hourlyRowsHtml, /2026-01-01 00:00/);
-assert.match(ready.hourlyPreviewHint, /预览前 1 条，共 1 条/);
+assert.equal(ready.hourlyPreviewHint, "测算完成 · 首年小时明细 1 条");
 
 const renderState = buildResultPageRenderState({
   project: {

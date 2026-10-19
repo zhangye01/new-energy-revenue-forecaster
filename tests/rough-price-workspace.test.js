@@ -37,7 +37,8 @@ function documentFixture() {
   const controls = {
     capture: new Element(), source: new Element(), node: new Element({ roughNode: "0", nodeField: "value" }),
     sharedPrice: new Element({ sharedKey: "mechanismPrice" }), form: new Element(),
-    save: new Element(), message: new Element(), dirty: new Element(), add: new Element()
+    save: new Element(), message: new Element(), dirty: new Element(), add: new Element(),
+    threshold: new Element(), run: new Element()
   };
   rough.selectors = {
     "[data-rough-capture]": controls.capture, "[data-rough-source]": controls.source,
@@ -46,6 +47,7 @@ function documentFixture() {
     "[data-rough-add]": controls.add
   };
   rough.groups = { "[data-rough-node]": [controls.node], "[data-shared-key]": [controls.sharedPrice] };
+  compare.selectors = { "[data-rough-threshold]": controls.threshold, "[data-rough-run]": controls.run };
   return { documentRef, rough, compare, ids, buttons, controls };
 }
 
@@ -157,6 +159,48 @@ scenario.config.mechanismPrice += 1;
 workspace.renderWorkspace(options);
 assert.match(fixture.compare.innerHTML, /生成新版粗算/);
 assert.equal(project.roughPrice.snapshots[0].config.mechanismPrice, 400, "historic snapshots remain immutable");
+
+const thresholdFixture = documentFixture();
+const thresholdData = projectFixture();
+thresholdData.project.hasStorage = false;
+Object.assign(thresholdData.scenario.config, {
+  mechanismEnabled: false, ltYear1Pnl: 0, ltTargetPnl: 0,
+  greenCertPrice: 0, greenPremiumPrice: 0,
+  marketOpFee: 0, gridAssessFee: 0, ancillaryFee: 0, otherFee: 0, otherIncome: 0
+});
+const thresholdSnapshot = domain.calculateRough(thresholdData.project, thresholdData.scenario, {
+  spotNodes: [{ year: 2027, value: 270 }], captureRate: 100, sourceNote: "阈值回归"
+}).snapshot;
+thresholdData.project.roughPrice = { draftsByScenario: {}, snapshots: [thresholdSnapshot] };
+thresholdData.project.priceRuns.push({ ...thresholdData.project.priceRuns[0], id: "run-2", status: "validated" });
+const thresholdOptions = { documentRef: thresholdFixture.documentRef, ...thresholdData, domain };
+workspace.renderWorkspace(thresholdOptions);
+thresholdFixture.buttons[2].onclick();
+assert.match(thresholdFixture.compare.innerHTML, /class="rough-review"/);
+const thresholdComparison = domain.compareSnapshot(thresholdData.project, thresholdData.scenario,
+  thresholdSnapshot, thresholdData.project.priceRuns[0]);
+const reviewCells = thresholdComparison.rows.map((row) => new Element({ roughReviewDelta: String(row.relativeDelta) }));
+const zeroBasisCell = new Element({ roughReviewDelta: "" });
+thresholdFixture.compare.groups["[data-rough-review-delta]"] = [...reviewCells, zeroBasisCell];
+thresholdFixture.controls.threshold.value = "20";
+thresholdFixture.controls.threshold.oninput();
+assert.ok(reviewCells.every((cell) => cell.innerHTML === "阈值以内"), "input immediately updates 11%-15% review labels at a 20% threshold");
+assert.equal(zeroBasisCell.innerHTML, "参考绝对差额", "a zero comparison basis never gets a relative threshold verdict");
+thresholdFixture.controls.run.value = "run-2";
+thresholdFixture.controls.run.onchange();
+assert.match(thresholdFixture.compare.innerHTML, /data-rough-threshold[^>]*value="20"/,
+  "switching precision versions preserves an input-only threshold edit");
+assert.doesNotMatch(thresholdFixture.compare.innerHTML, /class="rough-review"/);
+assert.equal(thresholdData.project.activeRunId, "run-1", "reviewing an unactivated version remains read-only");
+for (const invalid of ["", "0", "1001", "bad"]) {
+  thresholdFixture.controls.threshold.value = invalid;
+  thresholdFixture.controls.threshold.oninput();
+  thresholdFixture.controls.threshold.onchange();
+  assert.equal(String(thresholdFixture.controls.threshold.value), "20", "invalid edits restore the last valid threshold");
+}
+thresholdFixture.controls.threshold.value = "10";
+thresholdFixture.controls.threshold.oninput();
+assert.ok(reviewCells.every((cell) => cell.innerHTML.includes("建议复核")), "lowering the threshold refreshes all annual review labels");
 
 const lockedFixture = documentFixture();
 const lockedData = projectFixture();

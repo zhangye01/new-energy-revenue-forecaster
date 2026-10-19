@@ -156,8 +156,13 @@
       ${sharedConfigHtml(project, scenario, entry)}<div class="rough-actions"><button type="submit" class="primary-button">生成并保存粗算版本</button></div><div data-rough-message role="status" class="rough-message ${entry.tone === "error" ? "rough-alert" : ""}">${escapeHtml(entry.message)}</div></form>${roughResultsHtml(snapshot, snapshots, entry, stale)}`;
   }
 
+  function comparisonReviewHtml(relativeDelta, threshold) {
+    return relativeDelta === null ? "参考绝对差额" : Math.abs(relativeDelta * 100) >= threshold
+      ? '<span class="rough-review">建议复核</span>' : "阈值以内";
+  }
+
   function comparisonTable(rows, roughKey, fineKey, title, threshold, settlement = false) {
-    return `<section class="rough-comparison-layer"><h4>${title}</h4><div class="rough-table-wrap"><table class="rough-table" aria-label="${escapeHtml(title)}"><caption>元/MWh</caption><thead><tr><th scope="col">年份</th><th scope="col">粗算</th><th scope="col">精算</th><th scope="col">差额</th>${settlement ? '<th scope="col">差异率</th><th scope="col">复核提示</th>' : ""}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${row.year}</th><td>${number(row[roughKey])}</td><td>${number(row[fineKey])}</td><td>${signed(row[fineKey] - row[roughKey])}</td>${settlement ? `<td>${row.relativeDelta === null ? "基准接近零" : `${signed(row.relativeDelta * 100)}%`}</td><td>${row.relativeDelta === null ? "参考绝对差额" : Math.abs(row.relativeDelta * 100) >= threshold ? '<span class="rough-review">建议复核</span>' : "阈值以内"}</td>` : ""}</tr>`).join("")}</tbody></table></div></section>`;
+    return `<section class="rough-comparison-layer"><h4>${title}</h4><div class="rough-table-wrap"><table class="rough-table" aria-label="${escapeHtml(title)}"><caption>元/MWh</caption><thead><tr><th scope="col">年份</th><th scope="col">粗算</th><th scope="col">精算</th><th scope="col">差额</th>${settlement ? '<th scope="col">差异率</th><th scope="col">复核提示</th>' : ""}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${row.year}</th><td>${number(row[roughKey])}</td><td>${number(row[fineKey])}</td><td>${signed(row[fineKey] - row[roughKey])}</td>${settlement ? `<td>${row.relativeDelta === null ? "基准接近零" : `${signed(row.relativeDelta * 100)}%`}</td><td data-rough-review-delta="${row.relativeDelta ?? ""}">${comparisonReviewHtml(row.relativeDelta, threshold)}</td>` : ""}</tr>`).join("")}</tbody></table></div></section>`;
   }
 
   function comparisonBreakdownHtml(rows, captureRate) {
@@ -174,7 +179,7 @@
     const head = `<section class="rough-card"><div class="rough-section-head"><div><h3>粗算与精算交叉验证</h3><p data-help="交叉验证口径">共用项目、电量与结算规则，对照独立粗算假设和模型价格曲线。选择版本仅用于查看，未通过模型质量门槛的版本也可只读对照；不会更改精算生效版本或收入测算结果。当前模型含模拟逻辑，差异提示用于复核假设，预测有效性仍需真实数据检验。</p></div><div class="rough-actions"><span class="rough-badge">含模拟逻辑</span>${comparison?.ok ? '<button type="button" class="ghost-button" data-compare-export>导出对照 CSV</button>' : ""}</div></div><div class="rough-compare-controls">${snapshots.length ? snapshotSelectorHtml(snapshots, snapshot?.id, "compare") : ""}<label>模型精算版本<select data-rough-run${runs.length ? "" : " disabled"}>${runs.length ? runs.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === entry.runId ? " selected" : ""}>${escapeHtml(runLabel(item))}</option>`).join("") : '<option value="">待生成模型精算版本</option>'}</select></label><label><span id="rough-threshold-heading">价差提示阈值（%）</span><input type="number" data-rough-threshold min="0.1" max="1000" step="0.1" value="${escapeHtml(entry.threshold)}"></label></div><p data-help="价差与复核阈值" data-help-anchor="#rough-threshold-heading">差额＝精算－粗算；综合价差异率＝（精算－粗算）÷粗算绝对值。达到提示阈值的年份建议复核；阈值以内仍需结合依据判断。</p>${entry.dirty ? '<p class="rough-alert">共用参数有未保存调整，当前对照仍沿用已保存的方案参数。保存调整并生成新版粗算后，可对照更新后的结算口径。</p>' : ""}`;
     if (!snapshot) return `${head}<p class="rough-empty">请先在「关键参数粗算」生成一个版本，再与模型精算结果对照。</p></section>`;
     if (!runs.length) return `${head}<p class="rough-empty">粗算已保存。前往「模型精算」生成价格预测版本后，即可交叉验证。</p></section>`;
-    if (!comparison?.ok) return `${head}<p class="rough-alert">${escapeHtml((comparison?.errors || ["当前版本暂不能对照。"]).join(" "))}</p><p class="rough-note">历史粗算快照保留原始结果；共用参数、电量或项目配置变化后，应生成新版粗算。</p></section>`;
+    if (!comparison?.ok) return `${head}<p class="rough-alert">${escapeHtml((comparison?.errors || ["当前版本暂不能对照。"]).join(" "))}</p><p class="rough-note" data-help="历史粗算快照">历史粗算快照保留原始结果；共用参数、电量或项目配置变化后，应生成新版粗算。</p></section>`;
     return `${head}
       <div class="rough-metrics"><div><span>粗算全周期电量加权均价</span><strong>${number(comparison.summary.weightedRough)}<small> 元/MWh</small></strong></div><div><span>精算全周期电量加权均价</span><strong>${number(comparison.summary.weightedFine)}<small> 元/MWh</small></strong></div><div><span>最大年度综合价绝对差额</span><strong>${number(comparison.summary.maxAbsDelta)}<small> 元/MWh</small></strong></div></div>
       ${trendSvg(comparison.rows, [{ key: "roughSettlement", label: "粗算综合价" }, { key: "fineSettlement", label: "精算综合价" }], "综合结算电价对照趋势（元/MWh）")}
@@ -377,11 +382,20 @@
     const runSelect = refs.compare.querySelector("[data-rough-run]");
     if (runSelect) runSelect.onchange = () => { entry.runId = runSelect.value; redraw(); };
     const threshold = refs.compare.querySelector("[data-rough-threshold]");
-    if (threshold) threshold.onchange = () => {
-      const numeric = Number(threshold.value);
-      if (!Number.isFinite(numeric) || numeric < 0.1 || numeric > 1000) { threshold.value = entry.threshold; return; }
-      entry.threshold = numeric; redraw();
-    };
+    if (threshold) {
+      const updateThreshold = () => {
+        const numeric = Number(threshold.value);
+        if (!Number.isFinite(numeric) || numeric < 0.1 || numeric > 1000) return false;
+        entry.threshold = numeric;
+        refs.compare.querySelectorAll("[data-rough-review-delta]").forEach((cell) => {
+          const relativeDelta = cell.dataset.roughReviewDelta === "" ? null : Number(cell.dataset.roughReviewDelta);
+          cell.innerHTML = comparisonReviewHtml(relativeDelta, numeric);
+        });
+        return true;
+      };
+      threshold.oninput = updateThreshold;
+      threshold.onchange = () => { if (!updateThreshold()) threshold.value = entry.threshold; };
+    }
     const exportRough = refs.rough.querySelector("[data-rough-export]");
     if (exportRough && snapshot) exportRough.onclick = () => downloadCsv(documentRef, `${project.name || "项目"}-粗算-${snapshot.id}.csv`, buildRoughCsv(snapshot));
     const exportComparison = refs.compare.querySelector("[data-compare-export]");
