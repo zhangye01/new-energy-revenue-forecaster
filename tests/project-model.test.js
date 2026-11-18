@@ -563,8 +563,19 @@ assert.equal(runs[0].id, "run-test");
 assert.deepEqual(runs[0].pricesByYear, { 2026: [1, 2] });
 assert.equal(runs[1].id, "run-keep");
 assert.deepEqual(runs[1].pricesByYear, {});
-assert.equal(resolveActiveRunId(runs, "run-keep"), "run-keep");
+assert.equal(resolveActiveRunId(runs, "run-keep"), null, "restoring an incomplete version cannot reactivate it");
 assert.equal(resolveActiveRunId(runs, "missing"), null);
+const restoredRun = { id: "restored", status: "publishable_forced", qualityGatePassed: true, missingPoints: 0,
+  pricesByYear: { 2026: Array(8760).fill(0) } };
+restoredRun.pricesByYear[2026][10] = -50;
+const restoredRuns = sanitizePriceRuns([restoredRun], options);
+assert.equal(restoredRuns[0].pricesByYear, restoredRun.pricesByYear, "hydration does not rewrite saved price arrays");
+assert.equal(resolveActiveRunId(restoredRuns, "restored", { startYear: 2026, forecastYears: 1 }), "restored");
+assert.equal(resolveActiveRunId(restoredRuns, "restored", { startYear: 2026, forecastYears: 2 }), null);
+restoredRun.pricesByYear[2026][11] = null;
+const corruptedBefore = structuredClone(restoredRun);
+assert.equal(resolveActiveRunId(sanitizePriceRuns([restoredRun], options), "restored", { startYear: 2026, forecastYears: 1 }), null);
+assert.deepEqual(restoredRun, corruptedBefore, "invalid historical run records remain available unchanged");
 
 const logs = sanitizeActivationLogs([
   {},

@@ -184,10 +184,13 @@
       (!options.includeHourly || hourlyRowsAreComplete(project, scenario, result));
   }
 
-  function buildAvailableScenarioResults(project = {}) {
-    const validity = getResultValidity();
+  function buildAvailableScenarioResults(project = {}, getBaselineResultState) {
+    const stateFor = getBaselineResultState || ((project, scenario, result) => {
+      const state = getResultValidity()?.baselineResultState(project, scenario, result);
+      return state?.current && isResultComplete(project, scenario, result) ? state : null;
+    });
     const current = (Array.isArray(project.scenarios) ? project.scenarios : []).map((scenario) => ({ scenario, result: project.resultsByScenario?.[scenario.id] }))
-      .filter(({ scenario, result }) => isResultComplete(project, scenario, result) && validity?.baselineResultState(project, scenario, result).current);
+      .filter(({ scenario, result }) => stateFor(project, scenario, result)?.current);
     const baseline = current.find((item) => item.scenario.isBaseline);
     if (!baseline) return [];
     return current.filter((item) => item.result.annualRows.every((row, index) => {
@@ -300,9 +303,10 @@
       comparePeriod = "-",
       activeCompareScenarioId = "",
       activeSensitivityFactorKey = "",
-      sensitivitySettings = {}
+      sensitivitySettings = {},
+      getBaselineResultState
     } = input;
-    const available = project ? buildAvailableScenarioResults(project) : [];
+    const available = project ? buildAvailableScenarioResults(project, getBaselineResultState) : [];
     const compareState = available.length
       ? buildCompareRenderState({
         project,

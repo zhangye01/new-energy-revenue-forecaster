@@ -18,6 +18,13 @@
   const validationMessages = new WeakMap();
   const messageContexts = new WeakMap();
   const actionMessages = new WeakMap();
+  const manualImports = new WeakMap();
+  const manualImportEpochs = new WeakMap();
+  const MANUAL_GROUPS = Object.freeze({
+    lt: ["ltPricingMode", "ltManualPricesByYear", "交易策略损益"],
+    env: ["envValueMode", "envManualValuesByYear", "环境价值"],
+    fee: ["feeConfigMode", "feeManualValuesByYear", "费用与其他收益"]
+  });
   let storageState = "saved";
   const REFINEMENT_FIELDS = Object.freeze({
     mechanismEnabled: "mechanism-enabled", mechanismRatio: "mechanism-ratio", mechanismPrice: "mechanism-price",
@@ -32,6 +39,80 @@
     storageRoundTripEfficiency: "storage-round-trip-efficiency", storageCapacityCompPrice: "storage-capacity-comp-price",
     storageAncillaryRevenuePrice: "storage-ancillary-revenue-price", storageOtherRevenuePrice: "storage-other-revenue-price"
   });
+
+  function manualSource(project, scenario) {
+    return JSON.stringify([project.id, scenario.id, project.startYear, project.forecastYears,
+      project.siteType, project.hasStorage, scenario.config]);
+  }
+
+  function pendingImports(project, scenario) {
+    const pending = scenario && manualImports.get(scenario);
+    return pending?.project === project ? pending : null;
+  }
+
+  function sameValue(a, b) {
+    if (a === b) return true;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && sameValue(a[key], b[key]));
+  }
+
+  function getScenarioConfigForForm(project, scenario) {
+    const config = { ...scenario?.config };
+    Object.entries(pendingImports(project, scenario)?.groups || {}).forEach(([kind, item]) => {
+      const [modeKey, valuesKey] = MANUAL_GROUPS[kind];
+      config[modeKey] = "manual";
+      config[valuesKey] = item.values;
+    });
+    return config;
+  }
+
+  function hasPendingManualImports(projects = []) {
+    return projects.some((project) => (project.scenarios || []).some((scenario) => Boolean(pendingImports(project, scenario))));
+  }
+
+  function getManualImportEpoch(scenario) {
+    return manualImportEpochs.get(scenario) || 0;
+  }
+
+  function clearManualImports(scenario) {
+    manualImports.delete(scenario);
+    manualImportEpochs.set(scenario, getManualImportEpoch(scenario) + 1);
+  }
+
+  function discardPendingManualImports(projects = []) {
+    let count = 0;
+    projects.forEach((project) => (project.scenarios || []).forEach((scenario) => {
+      if (pendingImports(project, scenario)) { clearManualImports(scenario); count += 1; }
+    }));
+    return count;
+  }
+
+  function renderManualImportStatus({ project, scenario, kind, node } = {}) {
+    const item = pendingImports(project, scenario)?.groups[kind];
+    if (!item) return false;
+    if (node) node.textContent = `待确认保存：${Object.keys(item.values).length} 年 · ${item.changedYears} 年数值变化。`;
+    return true;
+  }
+
+  function stageManualImport({ project, scenario, kind, values, refs = {}, querySelector } = {}) {
+    if (!project || !scenario || scenario.locked || !MANUAL_GROUPS[kind]) return invalid("当前方案不可接收导入草稿。");
+    const source = manualSource(project, scenario);
+    let pending = pendingImports(project, scenario);
+    if (pending && pending.source !== source) return invalid("已保存参数或项目边界发生变化，请先放弃本次导入，再重新核对文件。");
+    if (!pending) pending = { project, source, groups: {}, revision: 0 };
+    const [modeKey, valuesKey] = MANUAL_GROUPS[kind];
+    const field = getField(querySelector, `#${REFINEMENT_FIELDS[modeKey]}`) || refs[modeKey];
+    const imported = JSON.parse(JSON.stringify(values));
+    pending.groups[kind] = { values: imported,
+      previousMode: pending.groups[kind]?.previousMode ?? field?.value ?? scenario.config?.[modeKey],
+      changedYears: Object.keys(imported).filter((year) => !sameValue(imported[year], scenario.config?.[valuesKey]?.[year])).length };
+    pending.revision += 1;
+    manualImports.set(scenario, pending);
+    if (field) field.value = "manual";
+    refreshRefinementState({ project, scenario, refs, querySelector, openDrafts: true });
+    return { ok: true };
+  }
 
   function buildRefinementState({ project = {}, scenario = {}, config = scenario.config || {} } = {}) {
     const groups = {
@@ -119,7 +200,12 @@
     });
     const progress = getField(querySelector, "#scenario-refinement-progress");
     if (progress) progress.textContent = `已确认 ${state.confirmed} / ${state.total} 项`;
-    refreshAnnualPreviews({ project, config, querySelector, resetOpen });
+    const pending = pendingImports(project, scenario);
+    const previewConfig = { ...config };
+    Object.entries(pending?.groups || {}).forEach(([kind, item]) => { previewConfig[MANUAL_GROUPS[kind][1]] = item.values; });
+    refreshAnnualPreviews({ project, config: previewConfig, savedConfig: scenario.config, pending, querySelector, resetOpen, openDrafts: input.openDrafts });
+    const discard = getField(querySelector, "#discard-manual-imports-button");
+    if (discard) discard.hidden = !pending;
     renderScenarioStatus(input, state);
     return state;
   }
@@ -170,6 +256,9 @@
       paintScenarioMessage(node, "本页修改尚未保存到本机，请处理上方保存提示。", "warning");
     } else if (notice?.tone === "error") {
       paintScenarioMessage(node, notice.text, notice.tone);
+    } else if (pendingImports(input.project, scenario)) {
+      const count = Object.keys(pendingImports(input.project, scenario).groups).length;
+      paintScenarioMessage(node, `已暂存 ${count} 类逐年表，请核对导入预览后确认并保存。`, "warning");
     } else if (editing) {
       paintScenarioMessage(node, "参数已修改，请确认并保存。", "warning");
     } else if (storageState === "pending" && state.confirmed === state.total) {
@@ -192,7 +281,7 @@
     if (context) refreshRefinementState({ ...context, clearNotice: false, resetOpen: false });
   }
 
-  function refreshAnnualPreviews({ project, config, querySelector, resetOpen }) {
+  function refreshAnnualPreviews({ project, config, savedConfig = config, pending, querySelector, resetOpen, openDrafts }) {
     const startYear = Number(project.startYear), count = Number(project.forecastYears);
     const years = Number.isInteger(startYear) && Number.isInteger(count) && count > 0 && count <= 100
       ? Array.from({ length: count }, (_, i) => startYear + i) : [];
@@ -214,15 +303,24 @@
       return String(key?.endsWith("Ratio") ? Number((Number(value) * 100).toPrecision(15)) : Number(value));
     };
     specifications.forEach(([id, key, title, columns]) => {
+      const staged = pending?.groups[id];
       const preview = getField(querySelector, `#${id}-annual-preview`);
       const summary = getField(querySelector, `#${id}-annual-preview-summary`);
       const content = getField(querySelector, `#${id}-annual-preview-content`);
-      if (preview && resetOpen) preview.open = false;
-      if (summary) summary.textContent = `查看逐年数值（${years.length} 年）`;
+      if (preview && (resetOpen || (staged && openDrafts))) preview.open = Boolean(staged);
+      if (summary) summary.textContent = staged
+        ? `导入预览（${years.length} 年 · ${staged.changedYears} 年变化 · 待保存）`
+        : `查看逐年数值（${years.length} 年）`;
       if (!content) return;
       content.innerHTML = `<table aria-label="${title}"><thead><tr><th scope="col">年份</th>${columns.map(([, label]) => `<th scope="col">${label}</th>`).join("")}</tr></thead><tbody>${years.map((year) => {
         const row = config[key]?.[year];
-        return `<tr><td>${year}</td>${columns.map(([field]) => `<td>${display(field === null ? row : row?.[field], field)}</td>`).join("")}</tr>`;
+        const oldRow = savedConfig[key]?.[year];
+        return `<tr><td>${year}</td>${columns.map(([field]) => {
+          const value = field === null ? row : row?.[field], before = field === null ? oldRow : oldRow?.[field];
+          return staged && !sameValue(value, before)
+            ? `<td data-import-changed="true"><span title="原年表值">${display(before, field)}</span> → <strong>${display(value, field)}</strong></td>`
+            : `<td>${display(value, field)}</td>`;
+        }).join("")}</tr>`;
       }).join("")}</tbody></table>`;
     });
   }
@@ -234,6 +332,19 @@
       const refresh = () => refreshRefinementState({ ...refinementForms.get(form), clearNotice: true });
       form.addEventListener("input", refresh);
       form.addEventListener("change", refresh);
+      getField(input.querySelector, "#discard-manual-imports-button")?.addEventListener?.("click", () => {
+        const current = refinementForms.get(form), pending = pendingImports(current.project, current.scenario);
+        if (!pending) return;
+        Object.entries(pending.groups).forEach(([kind, item]) => {
+          const modeKey = MANUAL_GROUPS[kind][0];
+          const field = getField(current.querySelector, `#${REFINEMENT_FIELDS[modeKey]}`) || current.refs?.[modeKey];
+          if (field?.value === "manual") field.value = item.previousMode;
+        });
+        clearManualImports(current.scenario);
+        setScenarioMessage({ ...current, text: "本次导入已放弃，原年表未改动。", tone: "info" });
+        current.onManualDraftDiscard?.();
+        refreshRefinementState(current);
+      });
     }
     refinementForms.set(form, input);
     refreshRefinementState({ ...input, resetOpen: true });
@@ -506,7 +617,7 @@
       actionMessages.delete(message);
     }
     if (message) validationMessages.delete(message);
-    const config = scenario.config;
+    const config = getScenarioConfigForForm(input.project, scenario);
     const storedMode = (key, allowed, fallback) => {
       const value = Object.prototype.hasOwnProperty.call(config, key) ? config[key] : modes[key] || fallback;
       return allowed.includes(value) ? value : "";
@@ -761,12 +872,13 @@
     const stored = scenario.config || {};
     const applicable = new Set(scenarioConfig.applicableConfigKeys?.(project, candidate) || Object.keys(candidate));
     const config = { ...stored, ...candidate };
+    const stagedKeys = new Set(Object.keys(pendingImports(project, scenario)?.groups || {}).map((kind) => MANUAL_GROUPS[kind][1]));
     Object.keys(stored).forEach((key) => {
       const field = getField(querySelector, `#${REFINEMENT_FIELDS[key]}`) || refs[key];
       const loaded = field && loadedInputs.get(field);
       const unchanged = loaded && String(field.value) === loaded.display
         && JSON.stringify(loaded.original) === JSON.stringify(stored[key]);
-      if (!applicable.has(key) || key.endsWith("ByYear") || unchanged) config[key] = stored[key];
+      if (!applicable.has(key) || (key.endsWith("ByYear") && !stagedKeys.has(key)) || unchanged) config[key] = stored[key];
     });
     // This value remains the original rough-price assumption. Refinement neither
     // edits it nor invents one for old scenarios that never saved the field.
@@ -792,6 +904,14 @@
     if (scenario.locked) {
       return invalid("当前方案已锁定，不能保存修改。");
     }
+    const pending = pendingImports(project, scenario);
+    if (pending && pending.source !== manualSource(project, scenario)) {
+      return invalid("已保存参数或项目边界发生变化，请先放弃本次导入，再重新核对文件。");
+    }
+    for (const kind of Object.keys(pending?.groups || {})) {
+      if (refs[MANUAL_GROUPS[kind][0]]?.value !== "manual") return invalid(`暂存的${MANUAL_GROUPS[kind][2]}需在逐年模式下保存，或先放弃本次导入。`);
+    }
+    const manualConfig = getScenarioConfigForForm(project, scenario);
 
     const scenarioName = textValue(querySelector, "#scenario-name") || "基准方案";
     const duplicatedName = (project.scenarios || []).find((item) => (
@@ -831,7 +951,7 @@
     const ltPricingMode = scenarioConfig.getLtPricingMode
       ? scenarioConfig.getLtPricingMode({ ltPricingMode: refs.ltPricingMode?.value })
       : "auto";
-    const ltManualPricesByYear = scenario.config?.ltManualPricesByYear || {};
+    const ltManualPricesByYear = manualConfig.ltManualPricesByYear || {};
     if (ltPricingMode === "manual") {
       const completeness = scenarioConfig.getLtManualCompleteness?.(project, { ltManualPricesByYear }) || { complete: 0, total: 0 };
       if (completeness.complete !== completeness.total) {
@@ -842,7 +962,7 @@
     const envValueMode = scenarioConfig.getEnvValueMode
       ? scenarioConfig.getEnvValueMode({ envValueMode: refs.envValueMode?.value })
       : "global";
-    const envManualValuesByYear = scenario.config?.envManualValuesByYear || {};
+    const envManualValuesByYear = manualConfig.envManualValuesByYear || {};
     const envAllocationDraft = readEnvValueAllocationDraft(project);
     if (envValueMode === "manual") {
       const completeness = scenarioConfig.getEnvManualCompleteness?.(project, { envManualValuesByYear }) || { complete: 0, total: 0 };
@@ -861,7 +981,7 @@
     const feeConfigMode = scenarioConfig.getFeeConfigMode
       ? scenarioConfig.getFeeConfigMode({ feeConfigMode: refs.feeConfigMode?.value })
       : "global";
-    const feeManualValuesByYear = scenario.config?.feeManualValuesByYear || {};
+    const feeManualValuesByYear = manualConfig.feeManualValuesByYear || {};
     if (feeConfigMode === "manual") {
       const completeness = scenarioConfig.getFeeManualCompleteness?.(project, { feeManualValuesByYear }) || { complete: 0, total: 0 };
       if (completeness.complete !== completeness.total) {
@@ -879,6 +999,7 @@
     return {
       ok: true,
       scenarioName,
+      ...(pending ? { manualImportRevision: pending.revision } : {}),
       config: preserveStoredConfig(input, buildScenarioConfigFromForm({
         project,
         refs,
@@ -906,6 +1027,10 @@
       return invalid(draft?.message || "方案保存失败。");
     }
     if (scenario.locked) return invalid("当前方案已锁定，不能保存修改。");
+    const pending = pendingImports(project, scenario);
+    if (pending && (pending.source !== manualSource(project, scenario) || draft.manualImportRevision !== pending.revision)) {
+      return invalid("导入草稿或已保存参数已变化，请重新核对后保存。");
+    }
     scenario.name = draft.scenarioName;
     getScenarioModel().invalidateInactiveConfirmations?.(project, scenario);
     scenario.config = draft.config;
@@ -932,6 +1057,7 @@
     scenario.updatedAt = nowIso();
     project.statuses = project.statuses || {};
     project.statuses["scenario-page"] = "completed";
+    clearManualImports(scenario);
     return {
       ok: true,
       message: `方案“${scenario.name}”已保存。`
@@ -949,6 +1075,12 @@
     buildScenarioSaveDraft,
     buildScenarioConfigFromForm,
     buildRefinementState,
+    stageManualImport,
+    getScenarioConfigForForm,
+    hasPendingManualImports,
+    getManualImportEpoch,
+    discardPendingManualImports,
+    renderManualImportStatus,
     refreshRefinementState,
     setScenarioMessage,
     updateScenarioStorageStatus,

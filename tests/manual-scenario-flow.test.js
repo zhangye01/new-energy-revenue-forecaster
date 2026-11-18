@@ -125,10 +125,11 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
     assert.equal(JSON.stringify(blankScenario), original, "failed imports preserve saved parameters and confirmation state");
   }
 
-  // Importing a manual table changes applicability just like saving that mode.
-  // Old global / auto values survive, but returning to them requires review.
+  // Reading a table only creates a preview. Existing values, confirmation
+  // evidence and applicability remain unchanged until explicit save.
   const scenarioModel = require("../src/domain/scenario-model");
-  const { buildRefinementState } = require("../src/ui/scenario-form");
+  const form = require("../src/ui/scenario-form");
+  const { buildRefinementState } = form;
   for (const [kind, modeKey, valuesKey, originalMode, globalKey, csvRow] of [
     ["lt", "ltPricingMode", "ltManualPricesByYear", "auto", "ltYear1Pnl", [2026, 8]],
     ["env", "envValueMode", "envManualValuesByYear", "global", "greenCertPrice", [2026, 20, 50, 10, 25, "否", 4, 25]],
@@ -139,8 +140,7 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
     const importScenario = scenarioModel.createBaselineScenario(importProject);
     scenarioModel.confirmConfig(importScenario, undefined, { project: importProject });
     const originalGlobalValue = importScenario.config[globalKey];
-    const originalEvidence = JSON.parse(JSON.stringify({ confirmedConfig: importScenario.confirmedConfig,
-      confirmedConfigSources: importScenario.confirmedConfigSources }));
+    const savedBefore = JSON.stringify(importScenario);
     importProject.roughPrice = { snapshots: [{ id: `rough-${kind}`, config: JSON.parse(JSON.stringify(importScenario.config)) }] };
     const roughBefore = JSON.stringify(importProject.roughPrice);
     const csvText = [realConfigs[kind].rows(importProject)[0], csvRow].map((row) => row.join(",")).join("\n");
@@ -148,19 +148,21 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
       scenario: importScenario, refs: createRefs({ name: `${kind}-valid.csv` }),
       actions: { readSpreadsheetToCsv: async () => ({ text: csvText }) }
     }), true);
-    assert.equal(importScenario.config[modeKey], "manual");
+    assert.equal(importScenario.config[modeKey], originalMode);
+    assert.equal(form.getScenarioConfigForForm(importProject, importScenario)[modeKey], "manual");
     assert.equal(importScenario.config[globalKey], originalGlobalValue);
-    assert.equal(scenarioModel.isConfigConfirmed(importScenario, globalKey), false);
-    assert.equal(scenarioModel.isConfigConfirmed(importScenario, valuesKey), true);
+    assert.equal(scenarioModel.isConfigConfirmed(importScenario, globalKey), true);
+    assert.equal(JSON.stringify(importScenario), savedBefore, "import leaves the entire saved scenario untouched");
     assert.equal(scenarioModel.isConfigConfirmed(importScenario, "mechanismPrice"), true, "unrelated active confirmation stays valid");
-    assert.deepEqual(importScenario.confirmationEvidence, originalEvidence);
     assert.equal(buildRefinementState({ project: importProject, scenario: importScenario,
-      config: { ...importScenario.config, [modeKey]: originalMode } }).fields[globalKey], "pending");
+      config: { ...importScenario.config, [modeKey]: originalMode } }).fields[globalKey], "confirmed");
     assert.equal(JSON.stringify(importProject.roughPrice), roughBefore);
   }
 
   const project = { id: "p1", statuses: {} };
   const scenario = { id: "s1", name: "基准场景", config: { mechanismPrice: 365 } };
+  project.scenarios = [scenario];
+  const successBefore = JSON.stringify(project);
   const successRefs = createRefs({ name: "ok.csv" });
   const successCalls = [];
   assert.equal(await importManualScenarioTemplate({
@@ -176,17 +178,16 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
       schedulePersistAppData: () => successCalls.push("persist")
     }
   }), true);
-  assert.equal(scenario.config.ltPricingMode, "manual");
-  assert.deepEqual(scenario.config.ltManualPricesByYear, { 2026: 8, 2027: 6.8 });
-  assert.deepEqual(scenario.confirmedConfig, {
-    ltPricingMode: "manual",
-    ltManualPricesByYear: { 2026: 8, 2027: 6.8 }
-  }, "manual import must confirm only the imported group, not unrelated defaults");
-  assert.equal(project.statuses["scenario-page"], "in_progress");
-  assert.ok(successCalls.includes("stale:p1:scenario-page"));
-  assert.ok(successCalls.includes("render"));
-  assert.ok(successCalls.includes("persist"));
-  assert.equal(successRefs.scenarioMessage.textContent, "已导入“基准场景”的逐年交易策略损益值，请确认后保存当前配置。");
+  assert.equal(JSON.stringify(project), successBefore);
+  assert.deepEqual(form.getScenarioConfigForForm(project, scenario).ltManualPricesByYear, { 2026: 8, 2027: 6.8 });
+  assert.equal(form.hasPendingManualImports([project]), true);
+  assert.equal(scenario.confirmedConfig, undefined);
+  assert.deepEqual(project.statuses, {});
+  assert.deepEqual(successCalls, [], "import cannot render/reset unrelated inputs, persist, or stale saved results");
+  assert.equal(successRefs.scenarioMessage.textContent, "已暂存“基准场景”的逐年交易策略损益值，请核对预览后确认并保存。");
+  assert.equal(form.discardPendingManualImports([project]), 1);
+  assert.equal(form.hasPendingManualImports([project]), false);
+  assert.equal(JSON.stringify(project), successBefore, "discarding preview never rewrites saved fields");
 
   for (const [kind, modeKey, valuesKey] of [
     ["env", "envValueMode", "envManualValuesByYear"],
@@ -194,17 +195,19 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
   ]) {
     const importScenario = { config: { mechanismPrice: 365 } };
     const values = { 2026: { value: 3 } };
+    const importProject = { statuses: {} };
     assert.equal(await importManualScenarioTemplate({
       kind,
       configs: createConfigs({ ok: true, values }),
       refs: createRefs({ name: "ok.csv" }),
-      project: { statuses: {} },
+      project: importProject,
       scenario: importScenario,
       actions: { readSpreadsheetToCsv: async () => ({ text: "ok" }) }
     }), true);
-    assert.deepEqual(importScenario.confirmedConfig, { [modeKey]: "manual", [valuesKey]: values });
+    assert.equal(importScenario.confirmedConfig, undefined);
+    assert.equal(importScenario.config[modeKey], undefined);
     values[2026].value = 99;
-    assert.equal(importScenario.confirmedConfig[valuesKey][2026].value, 3);
+    assert.equal(form.getScenarioConfigForForm(importProject, importScenario)[valuesKey][2026].value, 3, "draft values are isolated from parser objects");
   }
 
   const lockedDuringRead = { config: { mechanismPrice: 365 }, locked: false };
@@ -249,7 +252,8 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
       assert.equal(JSON.stringify([originalProject, originalScenario, otherProject, otherScenario]), before,
         `${kind}/${change} must preserve values, confirmations, snapshots and statuses`);
       assert.deepEqual(calls, [], `${kind}/${change} cannot persist or announce completion`);
-      assert.match(refs.scenarioMessage.textContent, /已取消|已锁定/);
+      if (change === "lock") assert.match(refs.scenarioMessage.textContent, /已锁定/);
+      else assert.equal(refs.scenarioMessage.textContent, "", "cancelled reads cannot overwrite the newly active form");
       assert.doesNotMatch(refs.scenarioMessage.textContent, /已导入/);
     }
   }
@@ -259,6 +263,36 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
     actions: { readSpreadsheetToCsv: async () => { unguardedRead = true; return { text: "ok" }; } }
   }), false, "an entry point without live target getters must fail closed");
   assert.equal(unguardedRead, false);
+
+  // A delayed old file must neither replace a newer same-kind preview nor
+  // resurrect a draft after the user explicitly discarded it.
+  for (const finishWithError of [false, true]) {
+    const s = { id: "race-s", name: "读取竞态", config: { otherFee: 3 } };
+    const p = { id: "race-p", scenarios: [s], statuses: {} };
+    const refs = createRefs({ name: "old.csv" });
+    let finish, fail;
+    const slowRead = new Promise((resolve, reject) => { finish = resolve; fail = reject; });
+    const old = importManualScenarioTemplate({ kind: "lt", configs: createConfigs({ ok: true, prices: { 2026: 1 } }),
+      project: p, scenario: s, refs, actions: { readSpreadsheetToCsv: () => slowRead } });
+    await importManualScenarioTemplate({ kind: "lt", configs: createConfigs({ ok: true, prices: { 2026: 9 } }),
+      project: p, scenario: s, refs, actions: { readSpreadsheetToCsv: async () => ({ text: "new" }) } });
+    const notice = refs.scenarioMessage.textContent;
+    if (finishWithError) fail(new Error("obsolete file error")); else finish({ text: "old" });
+    assert.equal(await old, false);
+    assert.equal(form.getScenarioConfigForForm(p, s).ltManualPricesByYear[2026], 9);
+    assert.equal(refs.scenarioMessage.textContent, notice);
+    let finishAfterDiscard;
+    const delayed = importManualScenarioTemplate({ kind: "env", configs: createConfigs({ ok: true, values: { 2026: { value: 8 } } }),
+      project: p, scenario: s, refs, actions: { readSpreadsheetToCsv: () => new Promise((resolve) => { finishAfterDiscard = resolve; }) } });
+    form.discardPendingManualImports([p]);
+    refs.scenarioMessage.textContent = "本次导入已放弃";
+    finishAfterDiscard({ text: "late" });
+    assert.equal(await delayed, false);
+    assert.equal(form.hasPendingManualImports([p]), false);
+    assert.equal(refs.scenarioMessage.textContent, "本次导入已放弃");
+    assert.deepEqual(s.config, { otherFee: 3 });
+    assert.deepEqual(p.statuses, {});
+  }
 
   console.log("manual scenario flow tests passed");
 })().catch((error) => {

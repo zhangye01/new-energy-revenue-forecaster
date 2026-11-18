@@ -1,7 +1,9 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const priceForecast = typeof module !== "undefined" && module.exports
+    ? require("./price-forecast") : root.NE_PRICE_FORECAST;
+  const api = factory(priceForecast);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -9,7 +11,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_PROJECT_MODEL = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (priceForecast) {
   const PROJECT_WORKSPACE_BUCKET_SET = new Set(["new", "history"]);
   const ASSET_TYPE_SET = new Set(["wind", "photovoltaic"]);
   const SITE_TYPE_SET = new Set(["onshore", "offshore"]);
@@ -501,8 +503,9 @@
       }));
   }
 
-  function resolveActiveRunId(priceRuns, rawActiveRunId) {
-    return Array.isArray(priceRuns) && priceRuns.some((run) => run.id === rawActiveRunId) ? rawActiveRunId : null;
+  function resolveActiveRunId(priceRuns, rawActiveRunId, project = null) {
+    return Array.isArray(priceRuns) && priceRuns.some((run) => run.id === rawActiveRunId
+      && priceForecast.validateForecastPriceData(project, run).ok) ? rawActiveRunId : null;
   }
 
   function sanitizeActivationLogs(rawLogs, options = {}) {

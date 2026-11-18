@@ -1092,7 +1092,7 @@ function sanitizeProjectForecastState(project, rawProject) {
     makeId,
     nowIso: () => new Date().toISOString()
   });
-  project.activeRunId = projectModel.resolveActiveRunId(project.priceRuns, rawProject.activeRunId);
+  project.activeRunId = projectModel.resolveActiveRunId(project.priceRuns, rawProject.activeRunId, project);
   supplyDemandFlow.hydrate(project, rawProject);
   project.spotMarketConfig = sanitizeSpotMarketConfig(project, rawProject.spotMarketConfig);
   project.activationLogs = projectModel.sanitizeActivationLogs(rawProject.activationLogs, {
@@ -1443,7 +1443,7 @@ function getBaselineScenario(project) {
 }
 
 function countScenariosForCompare(project) {
-  return compareAnalysis.buildAvailableScenarioResults(project).length;
+  return compareAnalysis.buildAvailableScenarioResults(project, getValidatedResultState).length;
 }
 
 function isProjectCreateCompleted(project) {
@@ -1541,28 +1541,24 @@ function getEnergyCompletionState(project) {
 }
 
 function hasActiveActivatableRun(project) {
-  return forecastRunFlow.hasActiveActivatableRun(project);
+  return forecastRunFlow.hasActiveActivatableRun(project, { validateSupplyDemandRun: supplyDemandFlow.validateSupplyDemandRun });
 }
 
 
-function hasResultForScenario(project, scenarioId) {
-  if (!project || !scenarioId) return false;
-  const result = project.resultsByScenario?.[scenarioId];
-  return Boolean(result && Array.isArray(result.annualRows) && result.annualRows.length);
-}
-
-function hasActiveScenarioResult(project) {
-  const scenario = getActiveScenario(project);
-  return hasResultForScenario(project, scenario?.id || "");
+function isScenarioConfigConfirmed(project, scenario) {
+  if (!scenario) return false;
+  const state = scenarioForm.buildRefinementState({ project, scenario });
+  return state.total > 0 && state.confirmed === state.total;
 }
 
 function buildWorkflowCompletionSnapshot(project) {
+  const scenario = getActiveScenario(project);
   return workflowStatus.buildCompletionSnapshot({
-    project, scenario: getActiveScenario(project), roughPrice,
+    project, scenario, roughPrice, getBaselineResultState: getValidatedResultState,
     energyState: getEnergyCompletionState(project),
     createCompleted: isProjectCreateCompleted(project),
     forecastCompleted: hasActiveActivatableRun(project),
-    resultsCompleted: hasActiveScenarioResult(project),
+    scenarioConfirmed: isScenarioConfigConfirmed(project, scenario),
     compareReadyCount: countScenariosForCompare(project)
   });
 }
@@ -3027,38 +3023,6 @@ function applyProvinceTypicalCurve() {
   return energyTemplateFlow.applyProvinceTypicalCurve(energyTemplateFlowContext());
 }
 
-function defaultAnnualEquivalentHours(project, offset = 0) {
-  const assetType = ASSET_TYPE_SET.has(project?.assetType) ? project.assetType : "wind";
-  const siteType = SITE_TYPE_SET.has(project?.siteType) ? project.siteType : "onshore";
-  let base = assetType === "photovoltaic" ? 1350 : 2450;
-  if (assetType === "wind" && siteType === "offshore") base = 3300;
-  if (assetType === "photovoltaic" && siteType === "offshore") base = 1450;
-  const provinceShift = ((getPriceBaseForProvince(project?.province) || 360) % 37) - 18;
-  const annualDrift = Math.pow(0.997, Math.max(0, offset));
-  return Number(Math.max(800, base + provinceShift * 4).toFixed(2)) * annualDrift;
-}
-
-function ensureHourlyEnergyForCalculation(project) {
-  const result = energyDataRules.prepareHourlyEnergyForCalculation(project, {
-    defaultAnnualEquivalentHours,
-    getProvinceTypicalCurveRecord
-  });
-  if (result.nextEnergyStep2Choice) {
-    appState.energyStep2Choice = result.nextEnergyStep2Choice;
-  }
-  return result;
-}
-
-function getHourlyEnergyForCalculation(project, year, yearIndex) {
-  return energyDataRules.getHourlyEnergyForCalculation(project, year, yearIndex, {
-    defaultAnnualEquivalentHours
-  });
-}
-
-function getPriceBaseForProvince(province) {
-  return priceForecast.getPriceBaseForProvince(province, PROVINCE_BENCHMARKS);
-}
-
 function priceShape(hourIndex, seed) {
   const day = Math.floor(hourIndex / 24);
   const hour = hourIndex % 24;
@@ -3105,12 +3069,12 @@ function evaluateRunQuality(project, run) {
   return priceForecast.evaluateRunQuality(project, run, QUALITY_GATE);
 }
 
-function canActivateRun(run) {
-  return forecastRunFlow.canActivateRun(run);
+function canActivateRun(run, project = getActiveProject()) {
+  return forecastRunFlow.canActivateRun(run, project);
 }
 
 function statusLabel(run) {
-  return forecastRunFlow.statusLabel(run);
+  return forecastRunFlow.statusLabel(run, getActiveProject());
 }
 
 function forecastRunFlowContext() {
@@ -3168,7 +3132,7 @@ function renderForecastRuns() {
   forecastPage.applyForecastRunsView({
     refs,
     view: forecastPage.buildForecastRunsView({ project, qualityGate: QUALITY_GATE, statusLabel, formatForecastGranularity, canActivateRun,
-      validateSupplyDemandRun: supplyDemandFlow.validateSupplyDemandRun })
+      validatePriceData: priceForecast.validateForecastPriceData, validateSupplyDemandRun: supplyDemandFlow.validateSupplyDemandRun })
   });
   forecastPage.bindForecastRunActions({
     documentRef: typeof document !== "undefined" ? document : null,
@@ -3178,7 +3142,7 @@ function renderForecastRuns() {
     documentRef: typeof document !== "undefined" ? document : null,
     project, scenario: project ? getActiveScenario(project) : null, domain: roughPrice, inputState: scenarioModel,
     mode: appState.activePage === "validation-page" ? "compare" : "rough",
-    getHourlyEnergyForCalculation, makeId, nowIso: () => new Date().toISOString(),
+    getBaselineResultState: getValidatedResultState, makeId, nowIso: () => new Date().toISOString(),
     onMessage: setTopMeta, onPersist: schedulePersistAppData, onNavigate: setActivePage,
     onChange: (change = {}) => { if (change.sharedChanged) markDownstreamStale(project, "scenario-page"); renderAll(); }
   });
@@ -3799,6 +3763,7 @@ function renderProvinceLibrary() {
 function loadScenarioToForm(project, scenario) {
   scenarioForm.loadScenarioToForm({
     project, scenario,
+    onManualDraftDiscard: syncScenarioFieldLocks,
     refs,
     querySelector: (selector) => document.querySelector(selector),
     asNum,
@@ -3909,6 +3874,7 @@ function updateEnvValueSpaceDisplay(project = getActiveProject(), scenario = nul
 function updateEnvManualStatus(project = getActiveProject(), scenario = null) {
   if (!refs.envManualStatus) return;
   const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  if (scenarioForm.renderManualImportStatus({ project, scenario: activeScenario, kind: "env", node: refs.envManualStatus })) return;
   if (!project || !activeScenario) {
     refs.envManualStatus.textContent = "请先创建或选择项目。";
     return;
@@ -3960,6 +3926,7 @@ function getFeeManualCompleteness(project, config) {
 function updateFeeManualStatus(project = getActiveProject(), scenario = null) {
   if (!refs.feeManualStatus) return;
   const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  if (scenarioForm.renderManualImportStatus({ project, scenario: activeScenario, kind: "fee", node: refs.feeManualStatus })) return;
   if (!project || !activeScenario) {
     refs.feeManualStatus.textContent = "请先创建或选择项目。";
     return;
@@ -4011,6 +3978,7 @@ function getLtManualCompleteness(project, config) {
 function updateLtManualStatus(project = getActiveProject(), scenario = null) {
   if (!refs.ltManualStatus) return;
   const activeScenario = scenario || (project ? getActiveScenario(project) : null);
+  if (scenarioForm.renderManualImportStatus({ project, scenario: activeScenario, kind: "lt", node: refs.ltManualStatus })) return;
   if (!project || !activeScenario) {
     refs.ltManualStatus.textContent = "请先创建或选择项目。";
     return;
@@ -4258,6 +4226,7 @@ function saveScenarioFromForm() {
     return;
   }
   const saved = scenarioForm.applyScenarioSaveDraft({ project, scenario, draft, nowIso: () => new Date().toISOString() });
+  if (!saved.ok) { setScenarioImportMessage(saved.message, "error"); return; }
   markDownstreamStale(project, "scenario-page");
   setScenarioImportMessage(saved.message, "success");
   renderAll();
@@ -4272,15 +4241,16 @@ function tradeStrategyPnlPriceForYear(config, yearIndex, year) {
 }
 
 function calculateScenarioResult(project, scenario, run) {
-  return revenueCalculator.calculateScenarioResult(project, scenario, run, {
-    getHourlyEnergyForCalculation,
-    hourIndexToTimestamp
-  });
+  return revenueCalculator.calculateScenarioResult(project, scenario, run, { hourIndexToTimestamp });
 }
 
 function runCalculation() {
   const project = getActiveProject();
   if (!project) return;
+  if (scenarioForm.hasPendingManualImports([project])) {
+    setTopMeta("请先在收益参数补充与细化页确认保存或放弃已暂存的年表，再发起基准测算。");
+    return;
+  }
   const scenario = getActiveScenario(project);
   const run = getActiveRun(project);
   if (project.hasStorage && run && run.marketPriceBasis !== priceForecast.MARKET_PRICE_BASIS) {
@@ -4293,7 +4263,7 @@ function runCalculation() {
     run,
     scenarioConfig,
     resultCalculation,
-    prepareEnergy: ensureHourlyEnergyForCalculation,
+    scenarioConfirmed: isScenarioConfigConfirmed(project, scenario),
     calculateScenarioResult, stampResult: roughPrice.stampBaselineResult, validateConfig: roughPrice.validateBaselineConfig,
     countScenariosForCompare,
     setTopMeta,
@@ -4429,7 +4399,7 @@ function renderCompare() {
   const project = getActiveProject();
   if (project) ensureScenarioMetadata(project);
   const frameState = compareAnalysis.buildCompareFrameState({
-    project,
+    project, getBaselineResultState: getValidatedResultState,
     comparePeriod: project ? getForecastPeriodDisplayRange(project) : "-",
     activeCompareScenarioId,
     activeSensitivityFactorKey,
@@ -4486,13 +4456,12 @@ function manualScenarioFlowContext() {
     project,
     scenario: project ? getActiveScenario(project) : null,
     actions: {
-      getActiveProject, getActiveScenario,
+      getActiveProject: () => appState.activePage === "scenario-page" ? getActiveProject() : null, getActiveScenario,
       setTopMeta,
       downloadCsv,
       readSpreadsheetToCsv,
-      markDownstreamStale,
-      renderAll,
-      schedulePersistAppData,
+      querySelector: (selector) => document.querySelector(selector),
+      renderDraft: syncScenarioFieldLocks,
       normalizeUserFacingError
     }
   };
@@ -4550,10 +4519,16 @@ function exportHistoryChartData(key) {
 
 function getValidatedResultState(project, scenario, result, options = {}) {
   const state = roughPrice.baselineResultState(project, scenario, result);
-  if (state.current && !compareAnalysis.isResultComplete(project, scenario, result, options)) {
+  if (!state.current && state.reason !== "stale_run") return state;
+  const sourceRun = project.priceRuns?.find((run) => run.id === result.sourceContext.runId);
+  if (!sourceRun || !priceForecast.validateForecastPriceData(project, sourceRun).ok) {
+    return { current: false, reason: "invalid_source_prices", message: "基准结果对应的现货曲线缺失或含无效价格，请生成完整曲线并重新测算。" };
+  }
+  if (!compareAnalysis.isResultComplete(project, scenario, result, options)) {
     return { current: false, reason: "incomplete_result", message: "结果明细缺失或金额无法对账，请重新发起基准测算。" };
   }
-  return state;
+  const priceSourceLabel = sourceRun.supplyDemandInput?.featureConsumption === "not_used_by_demo_model" ? "现货来源为演示曲线" : "";
+  return { ...state, priceSourceLabel };
 }
 
 function getCurrentExportContext(options = {}) {
@@ -4753,6 +4728,7 @@ function bindEvents() {
 
 function hasUnsubmittedInputs() {
   return window.NE_PROJECT_BACKUP.hasUnsubmittedFormChanges(document)
+    || scenarioForm.hasPendingManualImports(appState.projects)
     || supplyDemandFlow.hasUnsavedChanges()
     || roughPriceWorkspace.hasUnsubmittedChanges(document, appState.projects);
 }
@@ -4767,7 +4743,10 @@ function bindProjectBackup() {
     ],
     getAccount: () => appState.auth.loggedIn ? appState.auth.account : "", makeId,
     notify: setTopMeta,
-    reload: () => { allowStorageReload = true; cancelScheduledPersistAppData(); window.location.reload(); },
+    reload: () => {
+      if (scenarioForm.hasPendingManualImports(appState.projects) && !window.confirm("重新加载将丢失尚未确认保存的导入年表。确定继续吗？")) return;
+      allowStorageReload = true; cancelScheduledPersistAppData(); window.location.reload();
+    },
     restore: (projects) => {
       const restored = projects.map((project, index) => sanitizeProject(project, index));
       if (restored.some((project) => !project)) throw new Error("备份结构无效，未恢复项目。");

@@ -4,7 +4,8 @@
   const commonJs = typeof module !== "undefined" && module.exports;
   const api = factory(
     commonJs ? require("./revenue-rules") : root.NE_REVENUE_RULES,
-    commonJs ? require("./storage-dispatch") : root.NE_STORAGE_DISPATCH
+    commonJs ? require("./storage-dispatch") : root.NE_STORAGE_DISPATCH,
+    commonJs ? require("./price-forecast") : root.NE_PRICE_FORECAST
   );
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
@@ -13,8 +14,8 @@
   if (root.window && root.window !== root) {
     root.window.NE_REVENUE_CALCULATOR = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, dispatch) {
-  if (!rules || !dispatch) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, dispatch, priceForecast) {
+  if (!rules || !dispatch || !priceForecast) {
     throw new Error("收入测算初始化失败：缺少收入规则或配储调度模块");
   }
 
@@ -80,6 +81,11 @@
     const missingYears = [];
     const missingEnergyYears = [];
     const missingPriceYears = [];
+    const priceIntegrity = priceForecast.validateForecastPriceData(project, run);
+    if (!priceIntegrity.ok && !priceIntegrity.invalidYears.length) {
+      throw new RangeError(priceIntegrity.errors.join("；"));
+    }
+    const invalidPriceYears = new Set(priceIntegrity.invalidYears);
     const cfg = scenario.config;
     let hourlyPreview = [];
     let totalEnergy = 0;
@@ -88,9 +94,9 @@
     for (let year = startYear; year <= endYear; year += 1) {
       const yearIndex = year - startYear + 1;
       const hourlyHours = getHourlyEnergyForCalculation(project, year, yearIndex);
-      const prices = run.pricesByYear[year];
+      const prices = run?.pricesByYear?.[year];
       const energyReady = Array.isArray(hourlyHours) && hourlyHours.length === 8760;
-      const priceReady = Array.isArray(prices) && prices.length === 8760;
+      const priceReady = !invalidPriceYears.has(year) && Array.isArray(prices) && prices.length === 8760;
       if (!energyReady || !priceReady) {
         missingYears.push(year);
         if (!energyReady) missingEnergyYears.push(year);

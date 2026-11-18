@@ -118,7 +118,8 @@ assert.deepEqual(navigationCalls, ["rough-page", "scenario-page", "results-page"
 navigationData.project.activeRunId = "new-active-run";
 workspace.renderWorkspace(navigationOptions);
 assert.match(navigationFixture.compare.innerHTML, /生效现货预测已变化/);
-assert.match(navigationFixture.compare.innerHTML, /同一份已保存结果对照/);
+assert.match(navigationFixture.compare.innerHTML, /历史对照/);
+assert.match(navigationFixture.compare.innerHTML, /导出历史对照 CSV/);
 assert.match(navigationFixture.compare.innerHTML, /年度综合结算电价/, "预测切换仅提示旧结果，不暗中重算对照");
 
 const fixture = documentFixture();
@@ -486,4 +487,9 @@ const compareCsv = workspace.buildComparisonCsv(snapshot, { runId: 'run,"quoted"
 assert.match(compareCsv, /"run,""quoted"""/);
 assert.match(compareCsv, /综合价差异率/);
 assert.match(compareCsv, /基准结果生成时间/);
+assert.match(compareCsv, /与当前基准结果对照/);
+const historicCsv = workspace.buildComparisonCsv(snapshot, { runId: "old-run" }, {
+  rows: [], baselineState: { current: false, message: "生效现货预测已变化。" }
+});
+assert.match(historicCsv, /"基准结果状态","历史版。生效现货预测已变化。"/);
 console.log("rough price workspace tests passed");

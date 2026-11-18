@@ -342,7 +342,7 @@
     return {
       state: "ready",
       isHistorical: Boolean(resultState && !resultState.current),
-      executiveSummary: `${resultState && !resultState.current ? "已保存结果中" : "基准方案下"}，${project.name}测算周期为${labels.periodText}，周期全口径收入合计${asCompactMoney(result.totalFullRevenue)}，平均度电净价${asNum(result.avgFullRevenuePrice, 2)}元/MWh。首年度电净价较捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，${positiveText}，${negativeText}。`,
+      executiveSummary: `${resultState?.priceSourceLabel ? `${resultState.priceSourceLabel}。` : ""}${resultState && !resultState.current ? "已保存结果中" : "基准方案下"}，${project.name}测算周期为${labels.periodText}，周期全口径收入合计${asCompactMoney(result.totalFullRevenue)}，平均度电净价${asNum(result.avgFullRevenuePrice, 2)}元/MWh。首年度电净价较捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，${positiveText}，${negativeText}。`,
       metricHtml: buildMetricCards(metricItems),
       insightHtml: buildTextItems(insightItems, "result-insight-item"),
       assumptionHtml: buildTextItems(assumptionItems, "result-assumption-item"),
@@ -392,10 +392,10 @@
       };
     }
 
-    if (resultState?.reason === "incomplete_result" || !resultRowsAreRenderable(result)) {
+    if (["incomplete_result", "invalid_source_prices"].includes(resultState?.reason) || !resultRowsAreRenderable(result)) {
       return {
         state: "invalid_result", isHistorical: true, metaHtml,
-        executiveSummary: "已保存的结果明细不完整或无法对账，请重新发起基准测算。",
+        executiveSummary: resultState?.message || "已保存的结果明细不完整或无法对账，请重新发起基准测算。",
         metricHtml: buildEmptyMetricCards(), annualRowsHtml: "", hourlyRowsHtml: "",
         chartPlaceholder: "结果明细不完整，请重新测算"
       };
@@ -440,7 +440,7 @@
     const result = project ? project.resultsByScenario?.[scenario?.id || ""] : null;
     const cfg = scenario?.config || {};
     const resultState = result ? getBaselineResultState(project, scenario, result) : null;
-    const canSummarize = result && resultState?.reason !== "incomplete_result" && resultRowsAreRenderable(result);
+    const canSummarize = result && !["incomplete_result", "invalid_source_prices"].includes(resultState?.reason) && resultRowsAreRenderable(result);
     const view = buildResultPageViewModel({
       project,
       scenario,

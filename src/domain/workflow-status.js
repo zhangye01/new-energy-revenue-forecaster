@@ -31,11 +31,11 @@
   });
 
   function buildCompletionSnapshot(input = {}) {
-    const { project = {}, scenario = null, energyState = {}, roughPrice = {} } = input;
+    const { project = {}, scenario = null, energyState = {}, roughPrice = {}, getBaselineResultState = roughPrice.baselineResultState } = input;
     const snapshots = (project.roughPrice?.snapshots || []).filter((item) => item.scenarioId === scenario?.id);
     const roughSnapshot = snapshots.find((item) => roughPrice.snapshotState?.(project, scenario, item)?.comparable);
     const result = project.resultsByScenario?.[scenario?.id];
-    const baselineState = result && roughPrice.baselineResultState?.(project, scenario, result);
+    const baselineState = result && getBaselineResultState?.(project, scenario, result);
     return {
       ...input,
       resultsCompleted: baselineState ? baselineState.current : input.resultsCompleted,
@@ -45,7 +45,7 @@
       historyReady: Boolean(input.createCompleted && project.province),
       historyCompleted: Boolean(input.createCompleted && project.province && project.statuses?.["history-page"] === "completed"),
       hasPriceRuns: Boolean(project.priceRuns?.length),
-      scenarioCompleted: project.statuses?.["scenario-page"] === "completed",
+      scenarioCompleted: input.scenarioConfirmed ?? (project.statuses?.["scenario-page"] === "completed"),
       compareCompleted: input.compareReadyCount >= 2,
       roughStarted: Boolean(snapshots.length || project.roughPrice?.draftsByScenario?.[scenario?.id]?.spotNodes?.some((node) => node.value !== null && node.value !== "" && node.value !== undefined)),
       roughCompleted: Boolean(roughSnapshot),

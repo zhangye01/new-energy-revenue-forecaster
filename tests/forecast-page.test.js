@@ -28,14 +28,14 @@ assert.deepEqual(buildForecastRunsView({ project: null }), {
   runBodyHtml: "",
   activationBodyHtml: "",
   gateMessage: "请选择项目",
-  gateHelpText: "硬门槛：MAPE ≤ 15%，sMAPE ≤ 18%，缺失点 ≤ 0；按完整测算周期检查价格曲线。软门槛：MAE ≤ - 元/MWh，RMSE ≤ - 元/MWh。"
+  gateHelpText: "演示误差指标由模拟模型生成。误差硬门槛 MAPE ≤ 15%，sMAPE ≤ 18%。软门槛 MAE ≤ - 元/MWh，RMSE ≤ - 元/MWh。测算周期内要求价格点完整有效。"
 });
 
 const emptyView = buildForecastRunsView({ project: { priceRuns: [], activationLogs: [] } });
 assert.match(emptyView.runBodyHtml, /还没有电价预测版本/);
 assert.match(emptyView.activationBodyHtml, /暂无激活日志/);
 assert.equal(emptyView.gateMessage, DEFAULT_GATE_MESSAGE);
-assert.match(emptyView.gateHelpText, /MAPE ≤ 15%，sMAPE ≤ 18%，缺失点 ≤ 0/);
+assert.match(emptyView.gateHelpText, /MAPE ≤ 15%，sMAPE ≤ 18%。.*价格点完整有效/);
 
 const view = buildForecastRunsView({
   project: {
@@ -85,7 +85,7 @@ const view = buildForecastRunsView({
   formatDateTime: () => "2026/1/2 11:04:05"
 });
 
-assert.match(view.gateHelpText, /软门槛：MAE ≤ 15 元\/MWh，RMSE ≤ 20 元\/MWh/);
+assert.match(view.gateHelpText, /软门槛 MAE ≤ 15 元\/MWh，RMSE ≤ 20 元\/MWh/);
 assert.equal(view.gateMessage, "最新运行 run-1 · 可发布");
 assert.doesNotMatch(view.gateMessage, /门槛|MAPE|MAE/);
 assert.match(view.runBodyHtml, /Ensemble/);
@@ -99,6 +99,13 @@ assert.match(view.activationBodyHtml, /&lt;manual&gt;/);
 const otherRunView = buildForecastRunsView({ project: { activeRunId: "elsewhere", priceRuns: [{ id: "available", status: "publishable" }] },
   canActivateRun: () => true });
 assert.match(otherRunView.runBodyHtml, /data-active-run="available">设为生效/, "其他可用版本仍保留切换入口");
+const damagedRunView = buildForecastRunsView({
+  project: { activeRunId: "damaged", priceRuns: [{ id: "damaged", status: "publishable" }] },
+  canActivateRun: () => true,
+  validatePriceData: () => ({ ok: false, errors: ["含无效电价"] })
+});
+assert.match(damagedRunView.runBodyHtml, /需重新生成.*含无效电价/);
+assert.doesNotMatch(damagedRunView.runBodyHtml, /data-active-run|data-force-run|生效中/);
 
 const gateHelp = { textContent: "" };
 const gateStatus = {
@@ -122,7 +129,7 @@ const changedThresholdsView = buildForecastRunsView({
 });
 applyForecastRunsView({ refs, view: changedThresholdsView });
 assert.equal(gateStatus.textContent, "最新运行 <run-3> · 待复核");
-assert.match(gateHelp.textContent, /MAPE ≤ 10%，sMAPE ≤ 12%，缺失点 ≤ 2/);
+assert.match(gateHelp.textContent, /MAPE ≤ 10%，sMAPE ≤ 12%。.*价格点完整有效/);
 assert.match(gateHelp.textContent, /MAE ≤ 25 元\/MWh，RMSE ≤ 35 元\/MWh/);
 assert.doesNotMatch(gateHelp.textContent, /run-3|待复核/);
 const noRunsWithThresholds = buildForecastRunsView({

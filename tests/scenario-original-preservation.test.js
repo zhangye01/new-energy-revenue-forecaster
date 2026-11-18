@@ -293,8 +293,11 @@ assert.deepEqual([1, 2, 3].map((index) => rules.ltPnlPriceForYear(legacyLoaded.c
 const roughApi = require("../src/domain/rough-price");
 const calculator = require("../src/domain/revenue-calculator");
 const { validateCalculationReadiness } = require("../src/domain/result-calculation");
-const readinessFor = (scenario) => validateCalculationReadiness({ project, scenario, run: { id: "ready-run" },
-  scenarioConfig: configApi, validateConfig: roughApi.validateConfig });
+const readinessProject = { ...project, energyData: {
+  hourlyByYear: { 2026: Array(8760).fill(0.25), 2027: Array(8760).fill(0.25) }
+} };
+const readinessFor = (scenario) => validateCalculationReadiness({ project: readinessProject, scenario, run: { id: "ready-run" },
+  scenarioConfirmed: true, scenarioConfig: configApi, validateConfig: roughApi.validateConfig });
 
 // Manual strategies do not consume the old auto convergence ratio. Preserving an
 // invalid inactive value must not block a complete current annual table.

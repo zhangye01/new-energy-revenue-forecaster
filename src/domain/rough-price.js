@@ -630,7 +630,7 @@
     });
   }
 
-  function compareBaselineResult(project, scenario, snapshot, result) {
+  function compareBaselineResult(project, scenario, snapshot, result, getBaselineResultState = baselineResultState) {
     const roughState = snapshotState(project, scenario, snapshot);
     const unavailable = (reason, message, stale = false) => ({
       ...failedComparison([message], stale), reason, snapshotState: roughState
@@ -642,7 +642,7 @@
       return unavailable("missing_baseline", "请先完成基准测算，再与项目电价粗算对照。");
     }
     const source = result.sourceContext;
-    const baselineState = baselineResultState(project, scenario, result);
+    const baselineState = getBaselineResultState(project, scenario, result);
     if (!baselineState.current && baselineState.reason !== "stale_run") {
       return unavailable(baselineState.reason === "stale_context" ? "stale_baseline" : baselineState.reason,
         baselineState.message, baselineState.reason === "stale_context");

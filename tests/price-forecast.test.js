@@ -8,6 +8,8 @@ const {
   hourlyPricesFromQuarterPrices,
   buildForecastPriceSeries,
   countForecastPriceMissing,
+  evaluateRunQuality,
+  validateForecastPriceData,
   createForecastRunForModel,
   validateSupplyDemandRun,
   validateSupplyDemandDataset
@@ -94,6 +96,46 @@ const incompleteRun = {
   granularityMinutes: 15
 };
 assert.equal(countForecastPriceMissing(project, incompleteRun), 8760 + 35040 + 35040);
+
+// Stored flags and correct array lengths cannot turn a missing/non-number price
+// into a real zero. Sparse holes must be visited as well.
+const integrityProject = createProject({ forecastYears: 1 });
+const integrityRun = { status: "publishable_forced", qualityGatePassed: true, missingPoints: 0,
+  pricesByYear: { 2026: Array(8760).fill(0) }, mape: 0, smape: 0, mae: 0, rmse: 0 };
+integrityRun.pricesByYear[2026][10] = -125.5;
+assert.equal(validateForecastPriceData(integrityProject, integrityRun).ok, true, "negative and zero prices are valid");
+assert.equal(validateForecastPriceData(null, integrityRun).ok, true, "legacy hourly versions do not require new metadata");
+for (const value of [null, undefined, NaN, Infinity, -Infinity, "0", "", false]) {
+  const bad = structuredClone(integrityRun);
+  bad.pricesByYear[2026][16] = value;
+  const before = structuredClone(bad);
+  assert.deepEqual(validateForecastPriceData(integrityProject, bad).invalidYears, [2026]);
+  assert.equal(countForecastPriceMissing(integrityProject, bad), 1);
+  assert.deepEqual(bad, before, "validation preserves the original invalid value for inspection");
+  evaluateRunQuality(integrityProject, bad, { hard: { mape: 1, smape: 1, missingPoints: 99 }, soft: { mae: 100, rmse: 100 } });
+  assert.equal(bad.status, "validated", "a permissive quality threshold cannot bypass price integrity");
+  assert.equal(bad.qualityGatePassed, false);
+  assert.deepEqual(bad.pricesByYear, before.pricesByYear);
+}
+const sparsePrices = structuredClone(integrityRun);
+delete sparsePrices.pricesByYear[2026][400];
+assert.equal(countForecastPriceMissing(integrityProject, sparsePrices), 1);
+for (const prices of [Array(8759).fill(0), Array(8761).fill(0), new Array(8760), { length: 8760 }]) {
+  assert.equal(validateForecastPriceData(integrityProject, { pricesByYear: { 2026: prices } }).ok, false);
+}
+const quarterRun = { ...integrityRun, granularityMinutes: 15, pointsPerYear: 35040,
+  quarterPricesByYear: { 2026: Array(35040).fill(-50) } };
+assert.equal(validateForecastPriceData(integrityProject, quarterRun).ok, true);
+assert.ok(hourlyPricesFromQuarterPrices(quarterRun.quarterPricesByYear[2026]).every((value) => value === -50));
+for (const prices of [undefined, Array(35039).fill(0), Array(35041).fill(0), new Array(35040), { length: 35040 }]) {
+  assert.equal(validateForecastPriceData(integrityProject, { ...quarterRun, quarterPricesByYear: { 2026: prices } }).ok, false);
+}
+const badQuarters = Array(35040).fill(0);
+badQuarters[13] = null;
+assert.equal(validateForecastPriceData(integrityProject, { ...quarterRun, quarterPricesByYear: { 2026: badQuarters } }).ok, false);
+assert.deepEqual(hourlyPricesFromQuarterPrices(badQuarters), [], "quarter conversion never coerces null to zero");
+assert.equal(badQuarters[13], null);
+assert.equal(validateForecastPriceData({ ...integrityProject, forecastYears: 2 }, integrityRun).ok, false, "the project period is authoritative");
 
 const supplyConfig = supplyDemand.createConfig(project);
 Object.values(supplyConfig.elements).forEach((element) => {

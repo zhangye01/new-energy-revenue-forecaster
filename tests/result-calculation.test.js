@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   buildMissingCurveMessage,
   formatYearListCompact,
+  validateSavedEnergy,
   validateCalculationReadiness,
   validateManualCompleteness
 } = require("../src/domain/result-calculation");
@@ -32,14 +33,56 @@ assert.deepEqual(
   validateCalculationReadiness({ project: {}, scenario: { config: {} } }),
   { ok: false, message: "请先在电价预测工作台生成并生效一个电价版本。" }
 );
-assert.deepEqual(
-  validateCalculationReadiness({
-    project: {},
-    scenario: { config: {} },
-    run: {}
-  }),
-  { ok: true, message: "" }
-);
+const savedProject = { startYear: 2026, forecastYears: 2,
+  energyData: { hourlyByYear: { 2026: Array(8760).fill(0.2), 2027: Array(8760).fill(0.19) } } };
+const readyInput = { project: savedProject, scenario: { config: {} }, run: {}, scenarioConfirmed: true };
+assert.deepEqual(validateCalculationReadiness(readyInput), { ok: true, message: "" });
+assert.deepEqual(validateSavedEnergy(savedProject), { ok: true, message: "" },
+  "旧版直接导入的完整8760数据不依赖典型曲线元数据");
+for (const scenarioConfirmed of [undefined, false, 1, "true"]) {
+  const result = validateCalculationReadiness({ ...readyInput, scenarioConfirmed });
+  assert.equal(result.ok, false, "正式测算必须明确确认全部适用参数");
+  assert.match(result.message, /确认并保存全部适用参数/);
+}
+for (const corrupt of [
+  (project) => { delete project.energyData.hourlyByYear[2027]; },
+  (project) => { project.energyData.hourlyByYear[2027].pop(); },
+  (project) => { delete project.energyData.hourlyByYear[2027][17]; },
+  (project) => { project.energyData.hourlyByYear[2027][17] = -1; },
+  (project) => { project.energyData.hourlyByYear[2027][17] = NaN; },
+  (project) => { project.energyData.hourlyByYear[2027][17] = "0.2"; }
+]) {
+  const project = structuredClone(savedProject);
+  corrupt(project);
+  const before = structuredClone(project);
+  const result = validateCalculationReadiness({ ...readyInput, project });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /当前 1\/2 年/);
+  assert.deepEqual(project, before, "前置校验不得填补、归一化或修复电量输入");
+}
+const onlyAnnualInput = { startYear: 2026, forecastYears: 2,
+  energyData: { annualInputByYear: { 2026: 1700, 2027: 1650 }, typicalCurveProfile: Array(8760).fill(1 / 8760) } };
+assert.match(validateCalculationReadiness({ ...readyInput, project: onlyAnnualInput }).message, /当前 0\/2 年/,
+  "年度数值和典型曲线须先在电量页保存为完整逐年曲线");
+
+const scenarioModel = require("../src/domain/scenario-model");
+const scenarioForm = require("../src/ui/scenario-form");
+const confirmationProject = { ...savedProject, province: "jiangsu", assetType: "wind", siteType: "onshore", hasStorage: true };
+const confirmationScenario = scenarioModel.createBaselineScenario(confirmationProject);
+const confirmation = () => {
+  const state = scenarioForm.buildRefinementState({ project: confirmationProject, scenario: confirmationScenario });
+  return state.total > 0 && state.confirmed === state.total;
+};
+assert.equal(validateCalculationReadiness({ ...readyInput, project: confirmationProject,
+  scenario: confirmationScenario, scenarioConfirmed: confirmation() }).ok, false, "预填参数不等于确认");
+confirmationScenario.config.storageRoundTripEfficiency = 0.9;
+scenarioModel.confirmConfig(confirmationScenario);
+delete confirmationScenario.confirmedConfig.storageArbitragePrice;
+assert.equal(validateCalculationReadiness({ ...readyInput, project: confirmationProject,
+  scenario: confirmationScenario, scenarioConfirmed: confirmation() }).ok, true, "只读历史储能套利值无需确认");
+confirmationScenario.config.otherFee += 1;
+assert.equal(validateCalculationReadiness({ ...readyInput, project: confirmationProject,
+  scenario: confirmationScenario, scenarioConfirmed: confirmation() }).ok, false, "修改已确认参数后需要重新保存确认");
 
 assert.deepEqual(
   validateManualCompleteness({

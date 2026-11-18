@@ -50,6 +50,28 @@
     return { ok: true, message: "" };
   }
 
+  function validateSavedEnergy(project) {
+    const { startYear, forecastYears } = project || {};
+    if (!Number.isInteger(startYear) || !Number.isInteger(forecastYears) || forecastYears < 1) {
+      return { ok: false, message: "请先保存有效的项目测算周期。" };
+    }
+    let complete = 0;
+    for (let index = 0; index < forecastYears; index += 1) {
+      const hours = project.energyData?.hourlyByYear?.[startYear + index];
+      if (!Array.isArray(hours) || hours.length !== 8760) continue;
+      let total = 0;
+      for (const value of hours) {
+        if (!Number.isFinite(value) || value < 0) { total = NaN; break; }
+        total += value;
+      }
+      if (Number.isFinite(total)) complete += 1;
+    }
+    return complete === forecastYears ? { ok: true, message: "" } : {
+      ok: false,
+      message: `请先在结算电量页保存完整的逐年8760小时上网电量（当前 ${complete}/${forecastYears} 年），再发起正式测算。`
+    };
+  }
+
   function validateCalculationReadiness(input = {}) {
     const {
       project = null,
@@ -66,13 +88,20 @@
     if (!run) {
       return { ok: false, message: "请先在电价预测工作台生成并生效一个电价版本。" };
     }
+    const energy = validateSavedEnergy(project);
+    if (!energy.ok) return energy;
     const errors = input.validateConfig?.(project, scenario.config) || [];
     if (errors.length) return { ok: false, message: `请先补充或修正收益参数：${errors.join("；")}` };
-    return validateManualCompleteness({
+    const manual = validateManualCompleteness({
       project,
       config: scenario.config || {},
       scenarioConfig
     });
+    if (!manual.ok) return manual;
+    if (input.scenarioConfirmed !== true) {
+      return { ok: false, message: "请先在收益参数补充与细化页确认并保存全部适用参数，再发起正式测算。" };
+    }
+    return { ok: true, message: "" };
   }
 
   function formatYearListCompact(years) {
@@ -117,6 +146,7 @@
   return Object.freeze({
     buildMissingCurveMessage,
     formatYearListCompact,
+    validateSavedEnergy,
     validateCalculationReadiness,
     validateManualCompleteness
   });

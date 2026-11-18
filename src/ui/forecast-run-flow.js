@@ -1,7 +1,9 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const priceForecast = typeof module !== "undefined" && module.exports
+    ? require("../domain/price-forecast") : root.NE_PRICE_FORECAST;
+  const api = factory(priceForecast);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -9,7 +11,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_FORECAST_RUN_FLOW = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (priceForecast) {
   function forecastParameterError(options = {}, isRun = false) {
     const hasWindow = !isRun || options.trainStart !== undefined || options.trainEnd !== undefined;
     if (hasWindow && (![options.trainStart, options.trainEnd].every((year) => Number.isInteger(year) && year >= 2010 && year <= 2100))) {
@@ -25,12 +27,13 @@
     return "";
   }
 
-  function canActivateRun(run) {
+  function canActivateRun(run, project = null) {
     return ["publishable", "publishable_warn", "publishable_forced"].includes(run?.status)
-      && !forecastParameterError(run, true);
+      && !forecastParameterError(run, true) && priceForecast.validateForecastPriceData(project, run).ok;
   }
 
-  function statusLabel(run) {
+  function statusLabel(run, project = null) {
+    if (!priceForecast.validateForecastPriceData(project, run).ok) return "电价数据无效";
     const labels = {
       validated: "未过硬门槛",
       publishable: "可发布",
@@ -54,7 +57,7 @@
 
   function hasActiveActivatableRun(project, services = {}) {
     const run = getActiveRun(project);
-    return canActivateRun(run) && !supplyDemandRunError(project, run, services);
+    return canActivateRun(run, project) && !supplyDemandRunError(project, run, services);
   }
 
   function supplyDemandRunError(project, run, services = {}) {
@@ -162,6 +165,8 @@
       }
       validRuns = modelDefinitions.map((model) => services.createForecastRunForModel?.(project, model, options));
       if (!validRuns.length || validRuns.some((run) => !run)) throw new Error("预测版本未完整生成，请重试。");
+      const priceError = validRuns.map((run) => priceForecast.validateForecastPriceData(project, run)).find((state) => !state.ok);
+      if (priceError) throw new Error(priceError.errors.join("；"));
       const inputError = validRuns.map((run) => supplyDemandRunError(project, run, services)).find(Boolean);
       if (inputError) throw new Error(inputError);
     } catch (error) {
@@ -171,8 +176,8 @@
     if (!Array.isArray(project.priceRuns)) project.priceRuns = [];
     project.priceRuns.unshift(...validRuns.slice().reverse());
 
-    const preferredRun = validRuns.find((run) => run.algorithmFamily === "ensemble" && canActivateRun(run))
-      || validRuns.find((run) => canActivateRun(run));
+    const preferredRun = validRuns.find((run) => run.algorithmFamily === "ensemble" && canActivateRun(run, project))
+      || validRuns.find((run) => canActivateRun(run, project));
     if (preferredRun) {
       const oldRunId = project.activeRunId;
       project.activeRunId = preferredRun.id;
@@ -207,7 +212,9 @@
       actions.setTopMeta?.(`该版本参数无效，不能生效：${parameterError}`);
       return false;
     }
-    if (!canActivateRun(target)) {
+    const integrity = priceForecast.validateForecastPriceData(project, target);
+    if (!integrity.ok) { actions.setTopMeta?.(integrity.errors.join("；")); return false; }
+    if (!canActivateRun(target, project)) {
       actions.setTopMeta?.("该版本未通过硬门槛，不能直接生效。");
       return false;
     }
@@ -242,6 +249,8 @@
       actions.setTopMeta?.(`该版本参数无效，不能强制生效：${parameterError}`);
       return false;
     }
+    const integrity = priceForecast.validateForecastPriceData(project, target);
+    if (!integrity.ok) { actions.setTopMeta?.(integrity.errors.join("；")); return false; }
     const reason = actions.promptForceReason?.();
     if (reason === null) return false;
     target.status = "publishable_forced";

@@ -114,7 +114,7 @@
   }
 
   function hourlyPricesFromQuarterPrices(quarterPrices) {
-    if (!Array.isArray(quarterPrices) || quarterPrices.length !== 35040) return [];
+    if (countInvalidPricePoints(quarterPrices, 35040)) return [];
     const hourly = [];
     for (let hour = 0; hour < 8760; hour += 1) {
       const start = hour * 4;
@@ -204,24 +204,45 @@
     return { quarterPricesByYear, pricesByYear };
   }
 
-  function countForecastPriceMissing(project, run) {
-    let missing = 0;
+  function countInvalidPricePoints(values, expectedLength) {
+    if (!Array.isArray(values) || values.length !== expectedLength) return expectedLength;
+    let invalid = 0;
+    // Indexed access deliberately visits sparse holes; null/string/boolean are
+    // not prices, while a numeric zero or negative price is entirely valid.
+    for (let index = 0; index < expectedLength; index += 1) {
+      if (!Number.isFinite(values[index])) invalid += 1;
+    }
+    return invalid;
+  }
+
+  function validateForecastPriceData(project, run) {
     const pricesByYear = run?.pricesByYear || {};
     const quarterPricesByYear = run?.quarterPricesByYear || {};
-    for (let i = 0; i < project.forecastYears; i += 1) {
-      const year = project.startYear + i;
-      const price = pricesByYear[year];
-      if (!price || price.length !== 8760) {
-        missing += 8760;
-      }
-      if (run?.granularityMinutes === 15) {
-        const quarterPrice = quarterPricesByYear[year];
-        if (!quarterPrice || quarterPrice.length !== 35040) {
-          missing += 35040;
-        }
-      }
-    }
-    return missing;
+    const quarterRequired = run?.granularityMinutes === 15 || run?.pointsPerYear === 35040;
+    const metadataInvalid = (run?.granularityMinutes !== undefined && ![15, 60].includes(run.granularityMinutes))
+      || (run?.pointsPerYear !== undefined && run.pointsPerYear !== (quarterRequired ? 35040 : 8760))
+      || (run?.granularityMinutes === 60 && quarterRequired);
+    const years = project
+      ? Number.isInteger(project.startYear) && Number.isInteger(project.forecastYears) && project.forecastYears > 0 && project.forecastYears <= 100
+        ? Array.from({ length: project.forecastYears }, (_, index) => project.startYear + index) : []
+      : Array.from(new Set([...Object.keys(pricesByYear), ...(quarterRequired ? Object.keys(quarterPricesByYear) : [])]))
+        .filter((key) => /^\d{4}$/.test(key)).map(Number).sort((a, b) => a - b);
+    if (!years.length) return { ok: false, errors: ["电价曲线缺少有效测算年份。"], invalidYears: [], missingPoints: 1 };
+    let missingPoints = 0;
+    const invalidYears = years.filter((year) => {
+      const invalid = countInvalidPricePoints(pricesByYear[year], 8760)
+        + (quarterRequired ? countInvalidPricePoints(quarterPricesByYear[year], 35040) : 0);
+      missingPoints += invalid;
+      return invalid > 0 || metadataInvalid;
+    });
+    if (metadataInvalid) missingPoints = Math.max(1, missingPoints);
+    const errors = invalidYears.length ? [`电价曲线不完整或含无效数值：${invalidYears.join("、")}年。每年须有8760个有效小时价格${quarterRequired ? "及35040个有效15分钟价格" : ""}，请重新生成。`] : [];
+    if (metadataInvalid) errors.push("电价曲线粒度或年度点数声明无效，请核对原始版本。");
+    return { ok: !errors.length, errors, invalidYears, missingPoints };
+  }
+
+  function countForecastPriceMissing(project, run) {
+    return validateForecastPriceData(project, run).missingPoints;
   }
 
   function evaluateRunQuality(project, run, qualityGate) {
@@ -229,8 +250,9 @@
       hard: { mape: 0.15, smape: 0.18, missingPoints: 0 },
       soft: { mae: 55, rmse: 80 }
     };
-    const missingPoints = countForecastPriceMissing(project, run);
-    const hardPass = run.mape <= gate.hard.mape
+    const integrity = validateForecastPriceData(project, run);
+    const missingPoints = integrity.missingPoints;
+    const hardPass = integrity.ok && run.mape <= gate.hard.mape
       && run.smape <= gate.hard.smape
       && missingPoints <= gate.hard.missingPoints;
     const softPass = run.mae <= gate.soft.mae
@@ -459,6 +481,7 @@
     forecastQuarterPrice,
     buildForecastPriceSeries,
     countForecastPriceMissing,
+    validateForecastPriceData,
     evaluateRunQuality,
     snapshotSupplyDemandInput,
     validateSupplyDemandDataset,

@@ -116,4 +116,53 @@ assert.deepEqual(missing.missingPriceYears, [2026]);
 assert.deepEqual(missing.missingEnergyYears, []);
 assert.equal(missing.annualRows[0].note, "缺失曲线");
 
+for (const hasStorage of [false, true]) for (const value of [null, undefined, NaN, Infinity, "0", false]) {
+  const project = { ...createProject(), hasStorage, storagePowerMw: 0.2, storageDurationH: 2 };
+  const prices = fullYearHours(100);
+  prices[123] = value;
+  const before = structuredClone(prices);
+  const rejected = calculateScenarioResult(project, createScenario(), { pricesByYear: { 2026: prices } });
+  assert.deepEqual(rejected.missingPriceYears, [2026]);
+  assert.deepEqual(rejected.missingYears, [2026]);
+  assert.equal(rejected.hourlyPreview.length, 0);
+  assert.equal(rejected.totalFullRevenue, 0);
+  assert.deepEqual(prices, before);
+}
+const sparse = fullYearHours(0);
+delete sparse[8759];
+assert.deepEqual(calculateScenarioResult(createProject(), createScenario(), { pricesByYear: { 2026: sparse } }).missingYears, [2026]);
+const quarterBad = { granularityMinutes: 15, pricesByYear: { 2026: fullYearHours(100) },
+  quarterPricesByYear: { 2026: Array(35040).fill(100) } };
+quarterBad.quarterPricesByYear[2026][0] = null;
+assert.deepEqual(calculateScenarioResult(createProject(), createScenario(), quarterBad).missingYears, [2026],
+  "calculation independently checks the declared 15-minute source even when hourly prices look valid");
+const signed = fullYearHours(0);
+signed[0] = -100;
+const signedResult = calculateScenarioResult(createProject(), createScenario(), { pricesByYear: { 2026: signed } });
+assert.deepEqual(signedResult.missingYears, []);
+assert.equal(signedResult.hourlyPreview[0].spotRevenue, -100);
+assert.equal(signedResult.hourlyPreview[1].spotRevenue, 0);
+
+// A later-year fault must never replace a previously saved complete result with
+// a partial first-year total, even when activation/readiness flags were forged.
+const runner = require("../src/ui/result-runner");
+const calculationChecks = require("../src/domain/result-calculation");
+const protectedProject = { ...createProject(), forecastYears: 2, statuses: { "results-page": "completed" },
+  resultsByScenario: { saved: { marker: "original complete result" } } };
+protectedProject.energyData.hourlyByYear[2027] = fullYearHours(1);
+const protectedBefore = structuredClone(protectedProject);
+const damagedRun = { id: "forced", status: "publishable_forced", qualityGatePassed: true,
+  pricesByYear: { 2026: fullYearHours(100), 2027: fullYearHours(100) } };
+damagedRun.pricesByYear[2027][100] = null;
+const rejectedSave = runner.runScenarioCalculation({ project: protectedProject, scenario: { id: "saved", ...createScenario() },
+  run: damagedRun, resultCalculation: { ...calculationChecks, validateCalculationReadiness: () => ({ ok: true }) }, calculateScenarioResult });
+assert.equal(rejectedSave.status, "missing_curves");
+assert.deepEqual(rejectedSave.result.missingPriceYears, [2027]);
+assert.deepEqual(protectedProject, protectedBefore);
+for (const badPeriod of [{ startYear: null }, { startYear: 2026.5 }, { forecastYears: 0 }, { forecastYears: null }]) {
+  assert.throws(() => calculateScenarioResult({ ...createProject(), ...badPeriod }, createScenario(),
+    { pricesByYear: { 2026: fullYearHours(100) } }), /有效测算年份/,
+  "an empty invalid-year list from a malformed period must not permit calculation");
+}
+
 console.log("revenue calculator tests passed");

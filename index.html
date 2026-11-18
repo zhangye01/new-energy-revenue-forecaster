@@ -98,11 +98,11 @@
     <script src="./src/domain/energy-profiles.js?v=20261113c" defer></script>
     <script src="./src/domain/app-utils.js?v=20261113c" defer></script>
     <script src="./src/domain/supply-demand.js?v=20261113c" defer></script>
-    <script src="./src/domain/price-forecast.js?v=20261118c" defer></script>
+    <script src="./src/domain/price-forecast.js?v=20261118e" defer></script>
     <script src="./src/domain/revenue-rules.js?v=20261113c" defer></script>
     <script src="./src/domain/storage-dispatch.js?v=20261118b" defer></script>
-    <script src="./src/domain/revenue-calculator.js?v=20261118b" defer></script>
-    <script src="./src/domain/result-calculation.js?v=20261113c" defer></script>
+    <script src="./src/domain/revenue-calculator.js?v=20261118e" defer></script>
+    <script src="./src/domain/result-calculation.js?v=20261118e" defer></script>
     <script src="./src/domain/result-report.js?v=20261113c" defer></script>
     <script src="./src/ui/policy-panel.js?v=20261113c" defer></script>
     <script src="./src/ui/province-defaults.js?v=20261118d" defer></script>
@@ -113,21 +113,21 @@
     <script src="./src/ui/energy-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/supply-demand-workspace.js?v=20261113c" defer></script>
     <script src="./src/ui/supply-demand-flow.js?v=20261118a" defer></script>
-    <script src="./src/ui/forecast-page.js?v=20261118d" defer></script>
-    <script src="./src/ui/forecast-run-flow.js?v=20261113c" defer></script>
+    <script src="./src/ui/forecast-page.js?v=20261118e" defer></script>
+    <script src="./src/ui/forecast-run-flow.js?v=20261118e" defer></script>
     <script src="./src/ui/project-list.js?v=20261118d" defer></script>
-    <script src="./src/ui/result-page.js?v=20261118d" defer></script>
-    <script src="./src/ui/result-runner.js?v=20261118b" defer></script>
+    <script src="./src/ui/result-page.js?v=20261118e" defer></script>
+    <script src="./src/ui/result-runner.js?v=20261118e" defer></script>
     <script src="./src/ui/result-print.js?v=20261113c" defer></script>
     <script src="./src/ui/result-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/scenario-charts.js?v=20261113c" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20261118d" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261118e" defer></script>
     <script src="./src/ui/scenario-visual-data.js?v=20261118b" defer></script>
-    <script src="./src/ui/manual-scenario-flow.js?v=20261118d" defer></script>
+    <script src="./src/ui/manual-scenario-flow.js?v=20261118e" defer></script>
     <script src="./src/ui/compare-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/compare-page.js?v=20261113c" defer></script>
     <script src="./src/domain/compare-sensitivity.js?v=20261118b" defer></script>
-    <script src="./src/domain/compare-analysis.js?v=20261118c" defer></script>
+    <script src="./src/domain/compare-analysis.js?v=20261118e" defer></script>
     <script src="./src/domain/history-analysis.js?v=20261118b" defer></script>
     <script src="./src/ui/history-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/history-page.js?v=20261118b" defer></script>
@@ -135,20 +135,20 @@
     <script src="./src/ui/theme-controller.js?v=20261113c" defer></script>
     <script src="./src/ui/shell-events.js?v=20261113c" defer></script>
     <script src="./src/ui/app-event-bindings.js?v=20261113c" defer></script>
-    <script src="./src/domain/workflow-status.js?v=20261113c" defer></script>
+    <script src="./src/domain/workflow-status.js?v=20261118e" defer></script>
     <script src="./src/domain/scenario-config.js?v=20261118b" defer></script>
-    <script src="./src/domain/rough-price.js?v=20261118c" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261118d" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261118e" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261118e" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261118d" defer></script>
     <script src="./src/domain/project-settings.js?v=20261113c" defer></script>
-    <script src="./src/domain/project-model.js?v=20261118c" defer></script>
+    <script src="./src/domain/project-model.js?v=20261118e" defer></script>
     <script src="./src/domain/project-display.js?v=20261113c" defer></script>
     <script src="./src/domain/energy-data.js?v=20261118b" defer></script>
     <script src="./src/domain/energy-import-flow.js?v=20261113c" defer></script>
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261118c" defer></script>
-    <script src="./app.js?v=20261118d" defer></script>
+    <script src="./app.js?v=20261118e" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -957,7 +957,7 @@
             <small id="backend-forecast-note" class="backend-forecast-note">完成供需配置后提交，结果返回并生效后继续。</small>
           </section>
           <section class="panel forecast-demo-panel">
-            <div class="panel-head"><strong id="forecast-model-scope">演示预测</strong><span data-help="演示预测口径" data-help-anchor="#forecast-model-scope">沿用本地模拟曲线验证流程与计算口径；供需配置仅保存来源，尚未参与该演示模型定价。演示结果与后台算法结果分别标识。</span></div>
+            <div class="panel-head"><strong id="forecast-model-scope">演示预测</strong><span data-help="演示预测口径" data-help-anchor="#forecast-model-scope">演示曲线用于验证操作流程与计算口径。供需配置仅用于溯源，训练窗口和误差指标均为模拟值。</span></div>
             <form id="forecast-run-form" class="form-grid">
               <label>算法类型
                 <select id="algo-family">
@@ -973,10 +973,10 @@
               <label>数据快照ID
                 <input id="data-snapshot-id" type="text" value="snapshot-2026-12">
               </label>
-              <label>训练窗口起始
+              <label>模拟窗口起始
                 <input id="train-start" type="number" min="2010" max="2100" value="2018">
               </label>
-              <label>训练窗口结束
+              <label>模拟窗口结束
                 <input id="train-end" type="number" min="2010" max="2100" value="2025">
               </label>
               <label>随机种子
@@ -990,7 +990,7 @@
               </div>
             </form>
             <div class="info-box forecast-quality">
-              <span id="forecast-quality-heading">质量状态</span>
+              <span id="forecast-quality-heading">演示质量状态</span>
               <span data-help="预测质量门槛" data-help-anchor="#forecast-quality-heading" data-forecast-gate-help>质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。</span>
               <span id="forecast-gate-message">尚未生成预测版本</span>
             </div>
@@ -1003,7 +1003,7 @@
                     <th>版本</th>
                     <th>特征版本</th>
                     <th>颗粒度</th>
-                    <th>训练窗口</th>
+                    <th>模拟窗口</th>
                     <th>MAPE</th>
                     <th>sMAPE</th>
                     <th>MAE</th>
@@ -1366,6 +1366,7 @@
                   </details>
                   <div class="actions-row">
                     <button type="submit" class="primary-button">确认并保存细化参数</button>
+                    <button type="button" class="ghost-button" id="discard-manual-imports-button" hidden>放弃本次导入</button>
                   </div>
                 </form>
                 <div class="info-box" id="scenario-message" role="status" aria-live="polite" hidden></div>
@@ -1960,11 +1961,11 @@
                 </article>
                 <article class="help-card">
                   <strong>收益参数补充与细化</strong>
-                  <p>核对机制电价、策略损益、环境价值、费用及其他收入。配储项目在“配储补充收益配置”确认往返效率及独立补充收益。</p>
+                  <p>核对机制电价、策略损益、环境价值、费用及其他收入。导入年表后先预览，再确认并保存。配储项目还需确认往返效率及独立补充收益。</p>
                 </article>
                 <article class="help-card">
                   <strong>交叉验证</strong>
-                  <p>直接对照已保存的粗算与基准结果总览当前方案结果，查看整体及年度价差，提示明显偏差。偏差表示与预期的一致程度。</p>
+                  <p>对照原粗算与已保存的基准结果，查看整体及年度价差。仅切换生效曲线时，旧版对照仍可查阅，页面及导出均标为历史。</p>
                 </article>
                 <article class="help-card">
                   <strong>基准结果总览 / 多方案对比分析</strong>
@@ -2080,7 +2081,7 @@
                     <li>结算电量配置：逐年总量覆盖全部预测年份，且已选择典型曲线来源并生成年度电量。</li>
                     <li>历史电价分析：已按项目省份加载模拟样本并生成图表。</li>
                     <li>电价预测工作台：已有生效版本。供需输入生成状态在工作台单独显示。</li>
-                    <li>收益参数补充与细化：当前配置已保存。</li>
+                    <li>收益参数补充与细化：当前方案全部适用参数已确认并保存。</li>
                     <li>基准结果总览 / 多方案对比分析：已完成测算并生成结果。</li>
                   </ul>
                 </article>
@@ -2092,7 +2093,7 @@
               <div class="help-faq">
                 <details class="help-faq-item"><summary>1. 为什么导不出8760模板？</summary><p>请先进入一个项目，并完成“项目创建”页面的基础信息保存。未保存前，系统会阻止模板导出。</p></details>
                 <details class="help-faq-item"><summary>2. 为什么导入后侧边栏状态没有变绿？</summary><p>状态点按完成标准判断，不是点一下页面就完成。比如结算电量配置只有在满足页面要求后才会变为已完成。</p></details>
-                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>请核对测算周期的结算电量、已生效的预测曲线和已保存的方案配置。已保存的粗算版本用于交叉验证。</p></details>
+                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>请先保存测算周期内各年的8760小时上网电量，生效一条完整电价曲线，并确认保存当前方案全部适用的收益参数。已保存的粗算版本用于交叉验证。</p></details>
                 <details class="help-faq-item"><summary>4. 为什么页面刷新后输入还在？</summary><p>当前原型默认开启输入持久化，已保存的项目数据会在页面切换和刷新后自动恢复。</p></details>
                 <details class="help-faq-item"><summary>5. 省份参数库去哪了？</summary><p>省份参数库已合并进“收益参数补充与细化”页面，现在以“省份默认参数带入”的方式提供默认值，再在同页内完成微调。</p></details>
               </div>

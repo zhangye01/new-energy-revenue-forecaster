@@ -12,6 +12,10 @@ const {
   statusLabel
 } = require("../src/ui/forecast-run-flow");
 
+function curveRun(overrides = {}) {
+  return { pricesByYear: { 2026: Array(8760).fill(100) }, ...overrides };
+}
+
 function createDocument(values = {}) {
   return {
     querySelector(selector) {
@@ -40,8 +44,7 @@ function createServices(calls = [], overrides = {}) {
         id: `run-${model.family}`,
         algorithmFamily: model.family,
         status: model.status || "publishable",
-        pricesByYear: {},
-        quarterPricesByYear: {}
+        pricesByYear: Object.fromEntries(Array.from({ length: project.forecastYears }, (_, index) => [project.startYear + index, Array(8760).fill(100)]))
       };
     },
     markDownstreamStale: (project, page) => calls.push(`stale:${project.id}:${page}`),
@@ -49,10 +52,10 @@ function createServices(calls = [], overrides = {}) {
   };
 }
 
-assert.equal(canActivateRun({ status: "publishable" }), true);
+assert.equal(canActivateRun(curveRun({ status: "publishable" })), true);
 assert.equal(canActivateRun({ status: "validated" }), false);
-assert.equal(statusLabel({ status: "publishable_warn" }), "可发布(软门槛预警)");
-assert.equal(statusLabel({ status: "unknown" }), "unknown");
+assert.equal(statusLabel(curveRun({ status: "publishable_warn" })), "可发布(软门槛预警)");
+assert.equal(statusLabel(curveRun({ status: "unknown" })), "unknown");
 assert.equal(formatForecastGranularity({ granularityMinutes: 15, pointsPerYear: 35040 }), "15分钟 / 35040点/年");
 assert.equal(formatForecastGranularity({ granularityMinutes: 60 }), "小时 / 8760点/年");
 
@@ -128,12 +131,12 @@ assert.ok(generateCalls.some((call) => String(call).includes("已生成 LSTM、X
 assert.equal(hasActiveActivatableRun(project), true);
 
 const switchProject = {
-  id: "p2",
+  id: "p2", startYear: 2026, forecastYears: 1,
   activeRunId: "old",
   priceRuns: [
-    { id: "old", status: "publishable" },
-    { id: "next", status: "publishable_warn" },
-    { id: "bad", status: "validated" }
+    curveRun({ id: "old", status: "publishable" }),
+    curveRun({ id: "next", status: "publishable_warn" }),
+    curveRun({ id: "bad", status: "validated" })
   ],
   activationLogs: [],
   statuses: { "forecast-page": "in_progress", "scenario-page": "not_started" }
@@ -161,9 +164,9 @@ assert.equal(switchProject.statuses["scenario-page"], "in_progress");
 assert.ok(switchCalls.includes("stale:p2:forecast-page"));
 
 const forceProject = {
-  id: "p3",
+  id: "p3", startYear: 2026, forecastYears: 1,
   activeRunId: "old",
-  priceRuns: [{ id: "old", status: "publishable" }, { id: "force", status: "validated" }],
+  priceRuns: [curveRun({ id: "old", status: "publishable" }), curveRun({ id: "force", status: "validated" })],
   activationLogs: [],
   statuses: { "forecast-page": "in_progress", "scenario-page": "not_started" }
 };
@@ -225,7 +228,7 @@ assert.equal(generateForecastRun({
 
 for (const badParameters of [{ trainStart: 2030, trainEnd: 2025 }, { growth: -1 }, { growth: -1.5 }]) {
   const badRun = { id: "invalid-parameters", status: "publishable", ...badParameters };
-  const p = { activeRunId: "old", priceRuns: [{ id: "old", status: "publishable" }, badRun], activationLogs: [], statuses: {} };
+  const p = { activeRunId: "old", priceRuns: [curveRun({ id: "old", status: "publishable" }), badRun], activationLogs: [], statuses: {} };
   const original = JSON.stringify(p);
   assert.equal(canActivateRun(badRun), false);
   for (const activate of [setActiveRun, forceActivateRun]) {
@@ -267,7 +270,7 @@ assert.equal(generateForecastRun({ project: boundProject, documentRef: createDoc
       assert.equal(received, boundProject);
       assert.equal(options.supplyDemandInput.config, supplied.config);
       assert.equal(options.supplyDemandInput.dataset, supplied.dataset, "模型适配器应收到完整小时输入接口");
-      return { id: "bound", status: "publishable", algorithmFamily: model.family, supplyDemandInput: { fingerprint: "fingerprint" } };
+      return curveRun({ id: "bound", status: "publishable", algorithmFamily: model.family, supplyDemandInput: { fingerprint: "fingerprint" } });
     },
     validateSupplyDemandRun: (_, run) => ({ ok: run.supplyDemandInput?.fingerprint === "fingerprint", errors: ["供需已过期。"] })
   }), actions: createActions(boundCalls) }), true);
@@ -291,5 +294,40 @@ assert.equal(generateForecastRun({ project: boundProject, documentRef: createDoc
 assert.equal(JSON.stringify(boundProject), beforeFailure, "批量生成任一模型失败不得保存部分版本");
 assert.deepEqual(failCalls, ["top:小时数据无效"]);
 assert.equal(hasActiveActivatableRun(boundProject, { validateSupplyDemandRun: () => ({ ok: false, errors: [] }) }), false);
+
+for (const corrupt of [
+  (run) => { run.pricesByYear[2026][0] = null; },
+  (run) => { run.pricesByYear[2026][0] = Infinity; },
+  (run) => { run.pricesByYear[2026][0] = "0"; },
+  (run) => { delete run.pricesByYear[2026][25]; },
+  (run) => { run.pricesByYear[2026].push(10); },
+  (run) => { run.granularityMinutes = 15; run.quarterPricesByYear = { 2026: Array(35040).fill(0) }; run.quarterPricesByYear[2026][9] = null; },
+  (run) => { run.granularityMinutes = 15; }
+]) {
+  const bad = curveRun({ id: "bad-data", status: "publishable_forced", qualityGatePassed: true, missingPoints: 0 });
+  corrupt(bad);
+  const p = { id: "integrity", startYear: 2026, forecastYears: 1, activeRunId: bad.id,
+    priceRuns: [bad], activationLogs: [], statuses: { "forecast-page": "completed" } };
+  const before = structuredClone(p);
+  assert.equal(canActivateRun(bad, p), false);
+  assert.equal(hasActiveActivatableRun(p), false, "persisted active/status flags cannot bypass validation");
+  assert.equal(statusLabel(bad, p), "电价数据无效");
+  for (const activate of [setActiveRun, forceActivateRun]) {
+    const calls = [];
+    assert.equal(activate({ project: p, runId: bad.id, actions: createActions(calls, {
+      promptForceReason: () => { throw new Error("invalid data cannot reach the force activation prompt"); }
+    }) }), false);
+    assert.match(calls[0], /电价曲线/);
+    assert.deepEqual(p, before);
+  }
+  assert.equal(generateForecastRun({ project: p, documentRef: createDocument(), modelDefinitions: [{ family: "ensemble" }],
+    services: createServices([], { createForecastRunForModel: () => bad }), actions: createActions() }), false);
+  assert.deepEqual(p, before, "invalid newly generated curves never overwrite or append historical runs");
+}
+const validSignedRun = curveRun({ id: "signed", status: "publishable" });
+validSignedRun.pricesByYear[2026][0] = -100;
+validSignedRun.pricesByYear[2026][1] = 0;
+assert.equal(canActivateRun(validSignedRun, { startYear: 2026, forecastYears: 1 }), true);
+assert.equal(canActivateRun(validSignedRun, { startYear: 2026, forecastYears: 2 }), false);
 
 console.log("forecast run flow tests passed");

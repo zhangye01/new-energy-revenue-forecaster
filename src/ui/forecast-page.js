@@ -35,7 +35,7 @@
     const hard = qualityGate.hard || {};
     const mape = Number(((hard.mape ?? 0.15) * 100).toFixed(2));
     const smape = Number(((hard.smape ?? 0.18) * 100).toFixed(2));
-    return `硬门槛：MAPE ≤ ${mape}%，sMAPE ≤ ${smape}%，缺失点 ≤ ${hard.missingPoints ?? 0}；按完整测算周期检查价格曲线。软门槛：MAE ≤ ${qualityGate.soft?.mae ?? "-"} 元/MWh，RMSE ≤ ${qualityGate.soft?.rmse ?? "-"} 元/MWh。`;
+    return `演示误差指标由模拟模型生成。误差硬门槛 MAPE ≤ ${mape}%，sMAPE ≤ ${smape}%。软门槛 MAE ≤ ${qualityGate.soft?.mae ?? "-"} 元/MWh，RMSE ≤ ${qualityGate.soft?.rmse ?? "-"} 元/MWh。测算周期内要求价格点完整有效。`;
   }
 
   function buildEmptyForecastRunsView(qualityGate = {}) {
@@ -80,6 +80,7 @@
       statusLabel = () => "-",
       formatForecastGranularity = () => "-",
       canActivateRun = () => false,
+      validatePriceData = () => ({ ok: true }),
       validateSupplyDemandRun = null,
       formatDateTime = (value) => new Date(value).toLocaleString("zh-CN", { hour12: false })
     } = input;
@@ -94,13 +95,17 @@
     const runBodyHtml = priceRuns.map((run) => {
       const runId = escapeHtml(run.id);
       const supplyState = supplyInputState(project, run, validateSupplyDemandRun);
-      const active = project.activeRunId === run.id && supplyState.ok && canActivateRun(run);
+      const priceState = validatePriceData(project, run);
+      const activatable = priceState.ok && supplyState.ok && canActivateRun(run, project);
+      const active = project.activeRunId === run.id && activatable;
       const activeSuffix = active ? " / 生效中" : "";
       const supplyStatus = supplyState.ok ? "" : ` / ${run.supplyDemandInput ? "供需已过期" : "未绑定供需"}`;
-      const actionHtml = !supplyState.ok
+      const actionHtml = !priceState.ok
+        ? `<span>需重新生成</span><span data-help="电价曲线校验">${escapeHtml(priceState.errors?.join(" ") || "价格曲线含缺失或无效点。")}</span>`
+        : !supplyState.ok
         ? `<span>需重新生成</span><span data-help="供需版本核对">${escapeHtml(supplyState.errors?.join("；") || "请核对供需输入。")}</span>`
         : active ? '<span aria-hidden="true">—</span>'
-        : canActivateRun(run)
+        : activatable
         ? `<button class="ghost-button" data-active-run="${runId}">设为生效</button>`
         : `<button class="ghost-button" data-force-run="${runId}">强制发布</button>`;
       return `
