@@ -246,6 +246,7 @@ const refs = {
   resultWaterfallChart: document.querySelector("#result-waterfall-chart"),
   resultContributionChart: document.querySelector("#result-contribution-chart"),
   resultMetricGrid: document.querySelector("#result-metric-grid"),
+  storageDispatchSummary: document.querySelector("#storage-dispatch-summary"),
   annualResultBody: document.querySelector("#annual-result-body"),
   hourlyResultBody: document.querySelector("#hourly-result-body"),
   hourlyPreviewHint: document.querySelector("#hourly-preview-hint"),

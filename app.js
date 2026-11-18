@@ -1107,6 +1107,9 @@ function sanitizeProjectScenarioState(project, rawProject) {
   project.activeScenarioId = rawProject.activeScenarioId;
   scenarioModel.normalizeScenarioMetadata(project);
   project.resultsByScenario = isPlainObject(rawProject.resultsByScenario) ? rawProject.resultsByScenario : {};
+  if (isPlainObject(rawProject.legacyStorageResultsByScenario)) {
+    project.legacyStorageResultsByScenario = rawProject.legacyStorageResultsByScenario;
+  }
 }
 
 function sanitizeProject(rawProject, index) {
@@ -4283,6 +4286,10 @@ function runCalculation() {
   if (!project) return;
   const scenario = getActiveScenario(project);
   const run = getActiveRun(project);
+  if (project.hasStorage && run && run.marketPriceBasis !== priceForecast.MARKET_PRICE_BASIS) {
+    setTopMeta("这条历史价格曲线尚未核对为同一市场价口径。请先在电价预测工作台生成并启用新版价格，再测算配储增量。");
+    return;
+  }
   resultRunner.runScenarioCalculation({
     project,
     scenario,
@@ -4290,7 +4297,7 @@ function runCalculation() {
     scenarioConfig,
     resultCalculation,
     prepareEnergy: ensureHourlyEnergyForCalculation,
-    calculateScenarioResult, stampResult: roughPrice.stampBaselineResult, validateConfig: roughPrice.validateConfig,
+    calculateScenarioResult, stampResult: roughPrice.stampBaselineResult, validateConfig: roughPrice.validateBaselineConfig,
     countScenariosForCompare,
     setTopMeta,
     renderAll

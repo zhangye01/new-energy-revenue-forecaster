@@ -99,9 +99,7 @@
       project.startYear,
       project.assetType,
       project.siteType,
-      project.hasStorage ? "storage" : "plain",
-      project.storagePowerMw || 0,
-      project.storageDurationH || 0
+      priceForecast.MARKET_PRICE_BASIS
     ].join("|");
   }
 
@@ -124,8 +122,7 @@
     const seedBase = Math.round((project.capacityMw || 0) * 10)
       + project.startYear * 7
       + (project.siteType === "offshore" ? 211 : 109)
-      + (project.assetType === "photovoltaic" ? 307 : 173)
-      + (project.hasStorage ? 419 : 0);
+      + (project.assetType === "photovoltaic" ? 307 : 173);
     const years = [];
 
     for (let year = startYear; year <= endYear; year += 1) {
@@ -158,11 +155,10 @@
           const eveningPeak = 1.22 * Math.exp(-Math.pow((hour - 18.4) / 2.9, 2));
           const noonValley = 0.13 * Math.exp(-Math.pow((hour - 13.2) / 2.4, 2));
           const nightValley = 0.07 * Math.exp(-Math.pow((hour - 3.2) / 2.8, 2));
-          const storageShift = factors.storageScale;
           const diurnal = 0.9
             + factors.morningPeakWeight * morningPeak
             + factors.eveningPeakWeight * eveningPeak
-            - (factors.noonValleyWeight - storageShift * 0.05) * noonValley
+            - factors.noonValleyWeight * noonValley
             - factors.nightValleyWeight * nightValley;
           const weekendFactor = isWeekend ? factors.weekendLevel : 1;
           const randomFactor = 1 + (energyProfiles.pseudoNoise(dayIndex * 97 + quarter, seedBase + year) - 0.5) * factors.noiseAmplitude;
@@ -214,6 +210,7 @@
     const payload = {
       sourceType: "database",
       mock: true,
+      marketPriceBasis: priceForecast.MARKET_PRICE_BASIS,
       startYear,
       endYear,
       years

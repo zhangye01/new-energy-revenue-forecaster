@@ -203,4 +203,51 @@ assert.ok(existingCalls.includes("stale:proj-old:energy-page"));
 assert.ok(existingCalls.includes("top:当前项目已更新，请在步骤2重新导入电量。"));
 assert.ok(existingCalls.includes("page:energy-page"));
 
+const realProjectModel = require("../src/domain/project-model");
+const workflowStatus = require("../src/domain/workflow-status");
+for (const changes of [
+  { hasStorage: true, storagePowerMw: 30, storageDurationH: 2 },
+  { hasStorage: false, storagePowerMw: null, storageDurationH: null },
+  { storagePowerMw: 40 },
+  { storageDurationH: 4 },
+  { storageNote: "仅修改配储备注" },
+  { note: "仅修改项目备注" }
+]) {
+  const preserved = {
+    id: "preserved-project", name: "保留历史", province: "jiangsu", assetType: "wind", siteType: "onshore",
+    capacityMw: 100, startYear: 2028, forecastYears: 2, energyMode: "annual_hours",
+    hasStorage: true, storagePowerMw: 20, storageDurationH: 2, storageNote: "旧备注", note: "",
+    statuses: Object.fromEntries(workflowStatus.DEFAULT_WORKFLOW_PAGES.map((key) => [key, "completed"])),
+    energyData: { mode: "annual_hours", annualInputByYear: { 2028: 2200.123456789, 2029: 2180 }, hourlyByYear: { 2028: [0, 0.25] } },
+    historySpotImport: { sourceType: "csv", dataset: { values: [-32, 100.123456789] } },
+    energyTemplateExports: { annual_hours: "old-time" },
+    scenarios: [{ id: "baseline", config: { storageArbitragePrice: 7, feeManualValuesByYear: { 2028: { otherFee: 13 }, 2050: { otherFee: null } } }, confirmedConfig: {} }],
+    roughPrice: { snapshots: [{ id: "old-rough", value: 321.123456789 }] },
+    resultsByScenario: { baseline: { value: 321.5 } },
+    priceRuns: [{ id: "legacy-run", pricesByYear: { 2028: [-5, 300] } }], activeRunId: "legacy-run"
+  };
+  if (changes.hasStorage === true) Object.assign(preserved, { hasStorage: false, storagePowerMw: null, storageDurationH: null });
+  const retainedKeys = ["energyData", "historySpotImport", "energyTemplateExports", "scenarios", "roughPrice", "resultsByScenario", "priceRuns", "activeRunId"];
+  const before = Object.fromEntries(retainedKeys.map((key) => [key, JSON.stringify(preserved[key])]));
+  const statusesBefore = JSON.stringify(preserved.statuses);
+  const storageEdited = ["hasStorage", "storagePowerMw", "storageDurationH"].some((key) => Object.hasOwn(changes, key));
+  updateExistingProjectFromForm({
+    project: preserved, projectInput: { ...preserved, ...changes }, modules: { projectModel: realProjectModel },
+    actions: createActions([], {
+      syncProjectProvinceDefaultsToBaseline: () => { throw new Error("配储或备注编辑不得覆盖原收益参数"); },
+      clearHistoryAnalysisCacheForProject: () => { throw new Error("配储或备注编辑不得清空历史价格"); },
+      ensureProjectEnergyDataState: () => { throw new Error("配储或备注编辑不得重写原电量"); },
+      ensureProjectEnergyTemplateExports: (target) => target.energyTemplateExports,
+      markDownstreamStale: (target, page) => { target.statuses = workflowStatus.markDownstreamStale(target.statuses, page); }
+    })
+  });
+  retainedKeys.forEach((key) => assert.equal(JSON.stringify(preserved[key]), before[key], `${JSON.stringify(changes)}须逐值保留${key}`));
+  assert.equal(preserved.statuses["energy-page"], "completed");
+  assert.equal(preserved.statuses["history-page"], "completed");
+  assert.equal(preserved.statuses["forecast-page"], "completed", "市场价版本保留，旧配储价源是否可计算由运行前校验决定");
+  if (storageEdited) {
+    for (const page of ["rough-page", "scenario-page", "results-page", "validation-page", "compare-page"]) assert.equal(preserved.statuses[page], "stale");
+  } else assert.equal(JSON.stringify(preserved.statuses), statusesBefore, "备注编辑不触发测算失效");
+}
+
 console.log("create project flow tests passed");

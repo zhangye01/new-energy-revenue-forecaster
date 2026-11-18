@@ -575,4 +575,20 @@ const badBatch = applyBatchParameter(batchProject, {
 assert.equal(badBatch.ok, false);
 assert.equal(badBatch.message, "批量参数值无效，请输入数字。");
 
+const efficiencyProject = { siteType: "onshore", hasStorage: true, startYear: 2026, forecastYears: 1 };
+const withoutEfficiency = createBaselineScenario(efficiencyProject);
+const withoutEfficiencyBefore = JSON.stringify(withoutEfficiency);
+const hydratedWithoutEfficiency = sanitizeScenario(efficiencyProject, withoutEfficiency);
+assert.equal(Object.hasOwn(hydratedWithoutEfficiency.config, "storageRoundTripEfficiency"), false,
+  "hydration cannot add the new efficiency default to historical inputs");
+assert.equal(JSON.stringify(withoutEfficiency), withoutEfficiencyBefore);
+for (const efficiency of [0.912345678901234, null, "legacy-invalid"]) {
+  const savedEfficiency = { ...withoutEfficiency, config: { ...withoutEfficiency.config, storageRoundTripEfficiency: efficiency } };
+  assert.equal(sanitizeScenario(efficiencyProject, savedEfficiency).config.storageRoundTripEfficiency, efficiency,
+    "hydration preserves exact or invalid saved efficiency for explicit review");
+}
+withoutEfficiency.config.storageRoundTripEfficiency = 0.9;
+confirmConfig(withoutEfficiency, ["storageRoundTripEfficiency"], { project: efficiencyProject });
+assert.equal(isConfigConfirmed(sanitizeScenario(efficiencyProject, withoutEfficiency), "storageRoundTripEfficiency"), true);
+
 console.log("scenario model tests passed");

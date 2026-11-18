@@ -52,11 +52,18 @@
     const { projectModel } = modules;
     if (!project || !projectModel) return null;
     const oldProvince = project.province;
-    const baseChanged = projectModel.hasProjectBaseInputChanged(project, projectInput);
+    // Storage affects project revenue, not the imported generation or market
+    // history. Compare the remaining boundary separately before applying edits.
+    const storageKeys = ["hasStorage", "storagePowerMw", "storageDurationH"];
+    const storageChanged = storageKeys.some((key) => project[key] !== projectInput[key]);
+    const storageNeutralProject = { ...project, storageNote: projectInput.storageNote };
+    storageKeys.forEach((key) => { storageNeutralProject[key] = projectInput[key]; });
+    const baseChanged = projectModel.hasProjectBaseInputChanged(storageNeutralProject, projectInput);
+    const energyModeChanged = project.energyMode !== projectInput.energyMode;
 
     projectModel.applyCreateProjectInput(project, projectInput);
     project.statuses["create-page"] = actions.isProjectCreateCompleted?.(project) ? "completed" : "in_progress";
-    const provinceDefaultsAutoSynced = actions.syncProjectProvinceDefaultsToBaseline?.(project, {
+    const provinceDefaultsAutoSynced = baseChanged && actions.syncProjectProvinceDefaultsToBaseline?.(project, {
       force: actions.shouldAutoSyncProvinceDefaults?.(project)
     });
     actions.syncProjectProvinceScopedState?.(project, { force: true });
@@ -74,18 +81,22 @@
     } else {
       if (!project.energyData || typeof project.energyData !== "object") {
         project.energyData = actions.createEmptyEnergyDataState?.(projectInput.energyMode);
-      } else {
+      } else if (energyModeChanged) {
         const energyState = actions.ensureProjectEnergyDataState?.(project);
         if (energyState) energyState.mode = projectInput.energyMode;
       }
       if (project.statuses["energy-page"] === "not_started") {
         project.statuses["energy-page"] = "in_progress";
       }
-      actions.setTopMeta?.("当前项目已保存。");
-      const message = provinceDefaultsAutoSynced
-        ? `已更新当前项目：${project.name}。${actions.getProvinceName?.(project.province)}默认参数已同步到基准场景。`
-        : `已更新当前项目：${project.name}。`;
-      actions.setCreateSaveMessage?.(message, "success");
+      if (storageChanged) {
+        if (project.statuses["rough-page"] && project.statuses["rough-page"] !== "not_started") project.statuses["rough-page"] = "stale";
+        actions.markDownstreamStale?.(project, "forecast-page");
+        actions.setTopMeta?.("配储参数已更新，原电量与历史数据已保留，请复核收益参数并重新测算。");
+        actions.setCreateSaveMessage?.(`已更新当前项目：${project.name}。配储参数变化，请复核收益参数；原粗算与结果保留。`, "warn");
+      } else {
+        actions.setTopMeta?.("当前项目已保存。");
+        actions.setCreateSaveMessage?.(`已更新当前项目：${project.name}。`, "success");
+      }
     }
 
     actions.ensureProjectEnergyTemplateExports?.(project);

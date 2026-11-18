@@ -159,7 +159,7 @@ const insight = buildHistoryInsightText({
   maxStd: 42.18
 });
 assert.match(insight, /江苏省级现货模拟库/);
-assert.match(insight, /配储\(64MW \/ 2h\)/);
+assert.doesNotMatch(insight, /配储|平滑/);
 assert.match(insight, /18:00/);
 assert.match(insight, /7月/);
 assert.match(insight, /42.2 元\/MWh/);

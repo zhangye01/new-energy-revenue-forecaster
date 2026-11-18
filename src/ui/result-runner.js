@@ -43,7 +43,15 @@
     }
 
     const energyPrepared = prepareEnergy(project) || { changed: false };
-    let result = calculateScenarioResult(project, scenario, run);
+    let result;
+    try {
+      result = calculateScenarioResult(project, scenario, run);
+    } catch (error) {
+      const message = error?.message || "测算失败，请核对输入。";
+      setTopMeta(message);
+      if (energyPrepared.changed) renderAll();
+      return { status: "invalid_input", message };
+    }
     if (result?.missingYears?.length) {
       const message = resultCalculation.buildMissingCurveMessage?.(result) || "";
       setTopMeta(message);
@@ -52,6 +60,14 @@
     }
 
     result = stampResult(project, scenario, run, result);
+    const previous = project.resultsByScenario[scenario.id];
+    if (Array.isArray(previous?.annualRows) && previous.annualRows.length
+        && !previous.annualRows.some((row) => row?.storageDispatch)
+        && (project.hasStorage || previous.sourceContext?.storageContext?.hasStorage
+          || previous.annualRows.some((row) => row?.storageSupplementRevenue > 0))) {
+      project.legacyStorageResultsByScenario ||= {};
+      project.legacyStorageResultsByScenario[scenario.id] ??= previous;
+    }
     project.resultsByScenario[scenario.id] = result;
     project.statuses["results-page"] = "completed";
     project.statuses["compare-page"] = countScenariosForCompare(project) >= 2 ? "completed" : "in_progress";

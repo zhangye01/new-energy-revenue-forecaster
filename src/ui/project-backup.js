@@ -150,6 +150,7 @@
       throw new Error(`备份项目结构不完整：${path}，未恢复任何项目。`);
     }
     ["energyData", "statuses", "energyTemplateExports", "roughPrice", "resultsByScenario"].forEach((key) => validateContainer(project, key, false, path));
+    validateContainer(project, "legacyStorageResultsByScenario", false, path);
     ["priceRuns", "activationLogs", "restoredFromProjectIds"].forEach((key) => validateContainer(project, key, true, path));
     project.scenarios.forEach((scenario, i) => {
       if (!isObject(scenario)) throw new Error(`备份方案结构无效：${path}.scenarios[${i}]，未恢复任何项目。`);

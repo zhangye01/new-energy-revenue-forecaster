@@ -26,7 +26,7 @@
     carbonEnabled: "carbon-enabled", carbonPrice: "carbon-price", carbonRealizeRatio: "carbon-realize-ratio",
     feeConfigMode: "fee-config-mode", marketOpFee: "market-op-fee", gridAssessFee: "grid-assess-fee",
     ancillaryFee: "ancillary-fee", otherFee: "other-fee", otherIncome: "other-income",
-    storageArbitragePrice: "storage-arbitrage-price", storageCapacityCompPrice: "storage-capacity-comp-price",
+    storageRoundTripEfficiency: "storage-round-trip-efficiency", storageCapacityCompPrice: "storage-capacity-comp-price",
     storageAncillaryRevenuePrice: "storage-ancillary-revenue-price", storageOtherRevenuePrice: "storage-other-revenue-price"
   });
 
@@ -36,7 +36,7 @@
       trade: ["ltPricingMode"],
       environment: ["envValueMode"],
       fees: ["feeConfigMode"],
-      storage: project.hasStorage ? ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"] : []
+      storage: project.hasStorage ? ["storageRoundTripEfficiency", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"] : []
     };
     if (config.mechanismEnabled) {
       groups.mechanism.push("mechanismRatio", "mechanismPrice", "mechanismStartYm", "mechanismEndYm", "mechanismReferenceMode");
@@ -68,8 +68,9 @@
     const fields = {};
     const states = Object.entries(groups).map(([id, keys]) => {
       keys.forEach((key) => {
-        const missing = key.endsWith("ByYear") ? !annualComplete(key) : empty(config[key]);
-        fields[key] = missing ? "missing" : getScenarioModel().isConfigConfirmed(scenario, key, config[key]) ? "confirmed" : "pending";
+        const suggestedEfficiency = key === "storageRoundTripEfficiency" && !Object.hasOwn(config, key);
+        const missing = key.endsWith("ByYear") ? !annualComplete(key) : !suggestedEfficiency && empty(config[key]);
+        fields[key] = missing ? "missing" : !suggestedEfficiency && getScenarioModel().isConfigConfirmed(scenario, key, config[key]) ? "confirmed" : "pending";
       });
       const missing = keys.filter((key) => fields[key] === "missing").length;
       const pending = keys.filter((key) => fields[key] === "pending").length;
@@ -87,7 +88,7 @@
       const raw = field.value;
       config[key] = raw === "" ? "" : key.endsWith("Enabled") ? raw === "yes"
         : key.endsWith("Mode") || key.endsWith("Ym") ? raw
-          : key.endsWith("Ratio") ? readRatioValue(querySelector, `#${id}`, Number(raw) / 100) : Number(raw);
+          : key.endsWith("Ratio") || key === "storageRoundTripEfficiency" ? readRatioValue(querySelector, `#${id}`, Number(raw) / 100) : Number(raw);
     });
     const state = buildRefinementState({ project, scenario, config });
     state.groups.forEach((group) => {
@@ -354,8 +355,7 @@
       const valuePart = getEnvValueAllocation(project, scenario.config, project.startYear).unitValuePerMarketMwh;
       const feeConfig = getFeeConfigForYear(project, scenario.config, project.startYear);
       const storagePart = project.hasStorage
-        ? scenario.config.storageArbitragePrice
-          + scenario.config.storageCapacityCompPrice
+        ? scenario.config.storageCapacityCompPrice
           + scenario.config.storageAncillaryRevenuePrice
           + scenario.config.storageOtherRevenuePrice
         : null;
@@ -470,6 +470,8 @@
     setValue(querySelector, "#other-income", config.otherIncome);
     if (refs.feeConfigMode) refs.feeConfigMode.value = storedMode("feeConfigMode", ["global", "manual"], "global");
     if (refs.storageArbitragePrice) refs.storageArbitragePrice.value = config.storageArbitragePrice ?? "";
+    setRatioValue(querySelector, "#storage-round-trip-efficiency",
+      Object.hasOwn(config, "storageRoundTripEfficiency") ? config.storageRoundTripEfficiency : 0.9);
     if (refs.storageCapacityCompPrice) refs.storageCapacityCompPrice.value = config.storageCapacityCompPrice ?? "";
     if (refs.storageAncillaryRevenuePrice) refs.storageAncillaryRevenuePrice.value = config.storageAncillaryRevenuePrice ?? "";
     if (refs.storageOtherRevenuePrice) refs.storageOtherRevenuePrice.value = config.storageOtherRevenuePrice ?? "";
@@ -505,7 +507,7 @@
     });
 
     [
-      refs.storageArbitragePrice,
+      getField(querySelector, "#storage-round-trip-efficiency"),
       refs.storageCapacityCompPrice,
       refs.storageAncillaryRevenuePrice,
       refs.storageOtherRevenuePrice
@@ -513,6 +515,10 @@
       if (!field) return;
       field.disabled = locked || !canUseStorageRevenue;
     });
+    if (refs.storageArbitragePrice) {
+      refs.storageArbitragePrice.readOnly = true;
+      refs.storageArbitragePrice.disabled = locked || !canUseStorageRevenue;
+    }
     if (refs.scenarioLockHint) {
       refs.scenarioLockHint.textContent = locked
         ? "当前场景已锁定，请切换场景或解锁。"
@@ -612,6 +618,8 @@
       ancillaryFee: numberValue(querySelector, "#ancillary-fee"),
       otherFee: numberValue(querySelector, "#other-fee"),
       otherIncome: numberValue(querySelector, "#other-income"),
+      ...(project.hasStorage ? { storageRoundTripEfficiency: readRatioValue(querySelector,
+        "#storage-round-trip-efficiency", numberValue(querySelector, "#storage-round-trip-efficiency") / 100) } : {}),
       storageArbitragePrice: project.hasStorage ? Number(refs.storageArbitragePrice?.value || 0) : 0,
       storageCapacityCompPrice: project.hasStorage ? Number(refs.storageCapacityCompPrice?.value || 0) : 0,
       storageAncillaryRevenuePrice: project.hasStorage ? Number(refs.storageAncillaryRevenuePrice?.value || 0) : 0,
@@ -647,7 +655,12 @@
         ["#other-fee", "其他费用"], ["#other-income", "其他收入"]].forEach(([selector, label]) => add(selector, label));
     }
     if (project.hasStorage) {
-      [["storageArbitragePrice", "配储套利收益"], ["storageCapacityCompPrice", "配储容量补偿"],
+      const efficiency = getField(querySelector, "#storage-round-trip-efficiency")?.value;
+      if (efficiency === null || efficiency === undefined || String(efficiency).trim() === ""
+          || !Number.isFinite(Number(efficiency)) || Number(efficiency) <= 0 || Number(efficiency) > 100) {
+        return "储能往返效率须大于0且不超过100%。";
+      }
+      [["storageCapacityCompPrice", "配储容量补偿"],
         ["storageAncillaryRevenuePrice", "配储辅助服务收益"], ["storageOtherRevenuePrice", "配储其他收益"]]
         .forEach(([key, label]) => fields.push([refs[key]?.value, label, 0, Infinity]));
     }
@@ -682,6 +695,10 @@
         && JSON.stringify(loaded.original) === JSON.stringify(stored[key]);
       if (!applicable.has(key) || key.endsWith("ByYear") || unchanged) config[key] = stored[key];
     });
+    // This value remains the original rough-price assumption. Refinement neither
+    // edits it nor invents one for old scenarios that never saved the field.
+    if (Object.hasOwn(stored, "storageArbitragePrice")) config.storageArbitragePrice = stored.storageArbitragePrice;
+    else delete config.storageArbitragePrice;
     if (stored.ltConvergeSpeedUnit === "legacy_ratio") {
       config.ltConvergeSpeedUnit = "legacy_ratio";
     }
@@ -837,7 +854,7 @@
     }
     confirmedKeys.push(...(config.feeConfigMode === "manual" ? ["feeManualValuesByYear"]
       : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]));
-    if (project.hasStorage) confirmedKeys.push("storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice");
+    if (project.hasStorage) confirmedKeys.push("storageRoundTripEfficiency", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice");
     getScenarioModel().confirmConfig(scenario, confirmedKeys, { project });
     scenario.updatedAt = nowIso();
     project.statuses = project.statuses || {};

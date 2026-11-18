@@ -345,7 +345,7 @@
     return { comparable: true, refined, reason: "", message: refined ? "收益参数已细化，保留原粗算与基准结果对照。" : "" };
   }
 
-  function validateConfig(project, config, years = yearsForProject(project)) {
+  function validateConfig(project, config, years = yearsForProject(project), forBaseline = false) {
     const errors = [];
     if (!isObject(config)) return ["当前方案缺少共用结算参数。"];
     if (!years.length) errors.push("项目测算起始年份或年限无效，请先核对项目基础信息。");
@@ -393,11 +393,16 @@
     }
     if (project.hasStorage) {
       [
-        ["storageArbitragePrice", "配储套利收益"],
+        ...(!forBaseline ? [["storageArbitragePrice", "配储套利收益"]] : []),
         ["storageCapacityCompPrice", "配储容量补偿"],
         ["storageAncillaryRevenuePrice", "配储辅助服务收益"],
         ["storageOtherRevenuePrice", "配储其他收益"]
       ].forEach(([key, label]) => validateNumber(config, key, label, 0));
+      const efficiency = config.storageRoundTripEfficiency;
+      if (forBaseline && efficiency != null &&
+          (!Number.isFinite(efficiency) || efficiency <= 0 || efficiency > 1)) {
+        errors.push("配储往返效率应大于0%且不超过100%。");
+      }
     }
     const completeness = [
       [scenarioConfig.getLtPricingMode(config), scenarioConfig.getLtManualCompleteness(project, config), "交易策略损益"],
@@ -443,6 +448,10 @@
       }
     });
     return [...new Set(errors)];
+  }
+
+  function validateBaselineConfig(project, config) {
+    return validateConfig(project, config, yearsForProject(project), true);
   }
 
   function storedEnergyMwh(project, year) {
@@ -743,5 +752,5 @@
     };
   }
 
-  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, snapshotState, contextFingerprint, currentContextFingerprint, validateConfig });
+  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, snapshotState, contextFingerprint, currentContextFingerprint, validateConfig, validateBaselineConfig });
 });

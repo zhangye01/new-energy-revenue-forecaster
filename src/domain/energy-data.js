@@ -109,6 +109,11 @@
       && ["typical_curve_8760", "province_typical_curve"].includes(energyData?.typicalCurveSource);
   }
 
+  function hasStoredDirectHourlyEnergy(energyData) {
+    return energyData.mode === "hourly_8760" && !hasStoredEnergyTypicalCurve(energyData)
+      && Object.values(energyData.hourlyByYear).some((hours) => Array.isArray(hours) && hours.length === 8760);
+  }
+
   function hasEnergyTypicalCurve(project) {
     const energyData = ensureProjectEnergyDataState(project);
     return hasStoredEnergyTypicalCurve(energyData);
@@ -281,6 +286,7 @@
     if (Array.isArray(existing) && existing.length === 8760) {
       return existing;
     }
+    if (hasStoredDirectHourlyEnergy(energyData)) return [];
 
     const annualFromInput = Number(energyData.annualInputByYear?.[year]);
     const annualFromSummary = Number(energyData.annualSummary?.[year]?.annualHours);
@@ -338,6 +344,9 @@
     if (before === total) {
       return { changed: false, completed: before, total, defaultAnnualFilled: false };
     }
+    if (hasStoredDirectHourlyEnergy(project.energyData)) {
+      return { changed: false, completed: before, total, defaultAnnualFilled: false };
+    }
 
     const defaultAnnualFilled = ensureAnnualEnergyInputsForCalculation(project, options);
     const energyData = ensureProjectEnergyDataState(project);
@@ -371,6 +380,8 @@
       return energyData;
     }
 
+    // Historic direct hourly inputs are authoritative; keep their shape.
+    if (hasStoredDirectHourlyEnergy(energyData)) return energyData;
     const hasCurve = hasStoredEnergyTypicalCurve(energyData);
     let needsRebuild = false;
 

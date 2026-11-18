@@ -59,8 +59,7 @@
         .filter(([year]) => Number.isInteger(year))
     );
     const storageSupplementPerMwh = project?.hasStorage
-      ? Number(cfg.storageArbitragePrice || 0)
-        + Number(cfg.storageCapacityCompPrice || 0)
+      ? Number(cfg.storageCapacityCompPrice || 0)
         + Number(cfg.storageAncillaryRevenuePrice || 0)
         + Number(cfg.storageOtherRevenuePrice || 0)
       : 0;

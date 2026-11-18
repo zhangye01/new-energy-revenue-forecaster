@@ -124,7 +124,9 @@
     };
   }
 
-  const CONFIG_KEYS = new Set(Object.keys(defaultScenarioConfig()));
+  // Efficiency defaults in the calculation/form view, not during hydration:
+  // opening a historical scenario must not add fields to its saved assumptions.
+  const CONFIG_KEYS = new Set([...Object.keys(defaultScenarioConfig()), "storageRoundTripEfficiency"]);
   const ANNUAL_CONFIG_KEYS = new Set(["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]);
   const CONFIRMATION_REVIEW_VERSION = 1;
   const CONFIRMATION_SOURCES = new Set(["explicit", "rough_edit"]);

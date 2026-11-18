@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const {
   FORECAST_MODEL_DEFINITIONS,
+  MARKET_PRICE_BASIS,
   getHistoryMockShapeFactors,
   hourlyPricesFromQuarterPrices,
   buildForecastPriceSeries,
@@ -34,7 +35,7 @@ const ensemble = FORECAST_MODEL_DEFINITIONS.find((model) => model.family === "en
 assert.ok(ensemble, "应存在融合模型定义");
 
 const factors = getHistoryMockShapeFactors(project);
-assert.ok(factors.storageScale > 0);
+assert.deepEqual(factors, getHistoryMockShapeFactors(createProject({ hasStorage: false, storagePowerMw: null, storageDurationH: null })));
 assert.ok(factors.noiseAmplitude > 0);
 
 assert.deepEqual(hourlyPricesFromQuarterPrices([1, 2, 3]), []);
@@ -51,6 +52,14 @@ assert.equal(series.quarterPricesByYear[2027].length, 35040);
 assert.equal(series.pricesByYear[2026].length, 8760);
 assert.equal(series.pricesByYear[2027].length, 8760);
 assert.ok(series.quarterPricesByYear[2026].every((value) => Number.isFinite(value) && value >= -150 && value <= 950));
+for (const storageFields of [
+  { hasStorage: false, storagePowerMw: null, storageDurationH: null },
+  { hasStorage: true, storagePowerMw: 80, storageDurationH: 6, storageNote: "更新配储" }
+]) {
+  assert.deepEqual(buildForecastPriceSeries(createProject(storageFields), ensemble, 2300, 0.01, {
+    provinceBenchmarks: { jiangsu: { historyPrice: 365 } }
+  }), series, "配储开关、功率和时长不能改变项目面对的市场价");
+}
 
 const run = createForecastRunForModel(project, ensemble, {
   id: "run-test",
@@ -70,6 +79,8 @@ const run = createForecastRunForModel(project, ensemble, {
 });
 
 assert.equal(run.id, "run-test");
+assert.equal(run.marketPriceBasis, MARKET_PRICE_BASIS);
+assert.equal(MARKET_PRICE_BASIS, "project_storage_independent_v1");
 assert.equal(run.algorithmFamily, "ensemble");
 assert.equal(run.granularityMinutes, 15);
 assert.equal(run.pointsPerYear, 35040);

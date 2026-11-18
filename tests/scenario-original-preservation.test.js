@@ -20,7 +20,7 @@ const scalarIds = ["scenario-name", "mechanism-enabled", "mechanism-ratio", "mec
   "lt-target-pnl", "lt-converge-speed", "env-value-mode", "green-cert-price", "green-cert-realize-ratio",
   "green-premium-price", "green-premium-realize-ratio", "carbon-enabled", "carbon-price", "carbon-realize-ratio",
   "fee-config-mode", "market-op-fee", "grid-assess-fee", "ancillary-fee", "other-fee", "other-income",
-  "storage-arbitrage-price", "storage-capacity-comp-price", "storage-ancillary-revenue-price", "storage-other-revenue-price"];
+  "storage-arbitrage-price", "storage-round-trip-efficiency", "storage-capacity-comp-price", "storage-ancillary-revenue-price", "storage-other-revenue-price"];
 const refIds = { ltPricingMode: "lt-pricing-mode", envValueMode: "env-value-mode", feeConfigMode: "fee-config-mode",
   storageArbitragePrice: "storage-arbitrage-price", storageCapacityCompPrice: "storage-capacity-comp-price",
   storageAncillaryRevenuePrice: "storage-ancillary-revenue-price", storageOtherRevenuePrice: "storage-other-revenue-price" };
@@ -358,7 +358,9 @@ const originalValues = JSON.stringify(target.config);
 const initialDraft = loadForm(targetProject, target).draft();
 assert.equal(initialDraft.ok, true, initialDraft.message);
 form.applyScenarioSaveDraft({ project: targetProject, scenario: target, draft: initialDraft, nowIso: () => frozenTime });
-assert.equal(JSON.stringify(target.config), originalValues);
+assert.deepEqual(target.config, { ...JSON.parse(originalValues), storageRoundTripEfficiency: 0.9 },
+  "explicit refinement confirmation may add efficiency, preserving every previously stored value");
+assert.equal(JSON.stringify(targetProject.roughPrice), snapshotBefore);
 const beforeResult = resultFor();
 target.config.feeManualValuesByYear[2027].otherFee = 13;
 assert.equal(model.isConfigConfirmed(target, "feeManualValuesByYear"), false);
@@ -368,9 +370,10 @@ form.applyScenarioSaveDraft({ project: targetProject, scenario: target, draft: e
 const afterResult = resultFor();
 assert.deepEqual(afterResult.annualRows[0], beforeResult.annualRows[0]);
 assert.ok(Math.abs(afterResult.annualRows[1].fullRevenue - beforeResult.annualRows[1].fullRevenue + 210000) < 0.0001);
-assert.ok(Math.abs(afterResult.annualRows[1].fullRevenuePrice - 328.5) < 0.0001);
+assert.ok(Math.abs(afterResult.annualRows[1].fullRevenuePrice - 310.5) < 0.0001,
+  "flat positive prices produce no dispatch arbitrage; the old 18 yuan/MWh assumption is not added");
 const comparison = roughApi.compareBaselineResult(targetProject, target, targetProject.roughPrice.snapshots[0], afterResult);
-assert.ok(Math.abs(comparison.summary.delta - 7.20731707317) < 0.0001);
+assert.ok(Math.abs(comparison.summary.delta - (-10.79268292683)) < 0.0001);
 assert.equal(JSON.stringify(targetProject.roughPrice), snapshotBefore);
 
 console.log("scenario original-value preservation tests passed");

@@ -7,7 +7,7 @@ const analysis = require("../src/domain/compare-analysis");
 
 function fixture(manual, offshore, negative) {
   const project = { id: "sensitivity-audit", province: "shandong", assetType: "wind", siteType: offshore ? "offshore" : "onshore",
-    capacityMw: 100, hasStorage: offshore, startYear: 2026, forecastYears: 1,
+    capacityMw: 100, hasStorage: offshore, storagePowerMw: 20, storageDurationH: 2, startYear: 2026, forecastYears: 1,
     energyData: { hourlyByYear: { 2026: Array.from({ length: 8760 }, (_, index) => 0.1 + (index % 24) / 40) } } };
   const scenario = model.createBaselineScenario(project);
   Object.assign(scenario.config, { mechanismEnabled: true, mechanismRatio: 0.8, mechanismPrice: 365,

@@ -20,6 +20,7 @@
     throw new Error("电价预测初始化失败：缺少 energy-profiles.js");
   }
 
+  const MARKET_PRICE_BASIS = "project_storage_independent_v1";
   const FORECAST_MODEL_DEFINITIONS = Object.freeze([
     Object.freeze({
       family: "lstm",
@@ -82,27 +83,21 @@
   function getHistoryMockShapeFactors(project) {
     const isPhotovoltaic = project.assetType === "photovoltaic";
     const isOffshore = project.siteType === "offshore";
-    const hasStorage = Boolean(project.hasStorage);
-    const storageScale = hasStorage
-      ? clamp(((project.storagePowerMw || 0) * (project.storageDurationH || 0)) / Math.max(project.capacityMw || 1, 1), 0.05, 0.3)
-      : 0;
-
     return {
       baseShift: isPhotovoltaic ? -14 : 10,
       yearVolatility: isPhotovoltaic ? 0.96 : 1.07,
       winterScale: isOffshore ? 1.2 : (isPhotovoltaic ? 0.72 : 1),
       summerScale: isPhotovoltaic ? 1.22 : 0.92,
       morningPeakWeight: isPhotovoltaic ? 0.17 : 0.24,
-      eveningPeakWeight: hasStorage ? 0.26 : (isPhotovoltaic ? 0.37 : 0.42),
-      noonValleyWeight: hasStorage ? (isPhotovoltaic ? 0.11 : 0.08) : (isPhotovoltaic ? 0.21 : 0.13),
+      eveningPeakWeight: isPhotovoltaic ? 0.37 : 0.42,
+      noonValleyWeight: isPhotovoltaic ? 0.21 : 0.13,
       nightValleyWeight: isOffshore ? 0.03 : 0.07,
       weekendLevel: isPhotovoltaic ? 0.94 : 0.91,
       noiseAmplitude: isOffshore ? 0.16 : (isPhotovoltaic ? 0.2 : 0.22),
-      spikeThreshold: hasStorage ? 0.9978 : (isPhotovoltaic ? 0.9968 : 0.9962),
-      spikeScale: hasStorage ? 0.78 : 1,
-      negativeThreshold: hasStorage ? 0.9968 : (isPhotovoltaic ? 0.9918 : 0.9946),
-      negativeScale: hasStorage ? 0.55 : (isPhotovoltaic ? 1 : 0.78),
-      storageScale
+      spikeThreshold: isPhotovoltaic ? 0.9968 : 0.9962,
+      spikeScale: 1,
+      negativeThreshold: isPhotovoltaic ? 0.9918 : 0.9946,
+      negativeScale: isPhotovoltaic ? 1 : 0.78
     };
   }
 
@@ -147,11 +142,10 @@
     const eveningPeak = 1.22 * Math.exp(-Math.pow((hour - 18.4) / 2.9, 2));
     const noonValley = 0.13 * Math.exp(-Math.pow((hour - 13.2) / 2.4, 2));
     const nightValley = 0.07 * Math.exp(-Math.pow((hour - 3.2) / 2.8, 2));
-    const storageShift = factors.storageScale;
     const diurnal = 0.9
       + factors.morningPeakWeight * model.peakScale * morningPeak
       + factors.eveningPeakWeight * model.peakScale * eveningPeak
-      - (factors.noonValleyWeight - storageShift * 0.05) * noonValley
+      - factors.noonValleyWeight * noonValley
       - factors.nightValleyWeight * nightValley;
     const weekendFactor = isWeekend ? factors.weekendLevel : 1;
     const quarterIndex = dayIndex * 96 + quarterOfDay;
@@ -425,6 +419,7 @@
     const { quarterPricesByYear, pricesByYear } = buildForecastPriceSeries(project, model, modelSeed, growth, { provinceBenchmarks });
     const run = {
       id,
+      marketPriceBasis: MARKET_PRICE_BASIS,
       algorithmFamily: model.family,
       algorithmName: model.name,
       algorithmLabel: model.label,
@@ -451,6 +446,7 @@
   }
 
   return Object.freeze({
+    MARKET_PRICE_BASIS,
     FORECAST_MODEL_DEFINITIONS,
     getPriceBaseForProvince,
     getHistoryMockShapeFactors,

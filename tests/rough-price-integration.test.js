@@ -195,5 +195,47 @@ const { createBrowserSandbox } = require("../scripts/module-load-smoke");
   assert.equal(JSON.stringify(confirmedProject.scenarios[0].config), beforeAnnualReview);
   assert.equal(JSON.stringify(confirmedProject.roughPrice.snapshots), beforeAnnualSnapshot);
   assert.equal(JSON.stringify(confirmedProject.resultsByScenario), beforeAnnualBaseline);
+
+  const storageProject = { ...project, id: "dispatch-history-recheck", hasStorage: true,
+    capacityMw: 10, storagePowerMw: 1, storageDurationH: 1, forecastYears: 1,
+    statuses: {}, resultsByScenario: {}, ownerAccount: state.auth.account };
+  const energy = Array(8760).fill(0);
+  energy[0] = 0.1;
+  storageProject.energyData = { mode: "hourly_8760", hourlyByYear: { 2026: energy },
+    annualSummary: { 2026: { annualHours: 0.1, energyMwh: 1, status: "完整" } }, annualInputByYear: { 2026: 0.1 } };
+  const storageScenario = sandbox.NE_SCENARIO_MODEL.createBaselineScenario(storageProject);
+  Object.assign(storageScenario.config, { mechanismEnabled: false, storageArbitragePrice: 99, storageCapacityCompPrice: 7,
+    storageAncillaryRevenuePrice: 10, storageOtherRevenuePrice: 3, storageRoundTripEfficiency: 0.9 });
+  storageProject.scenarios = [storageScenario];
+  storageProject.activeScenarioId = storageScenario.id;
+  const savedRough = sandbox.NE_ROUGH_PRICE.calculateRough(storageProject, storageScenario, draft, { id: "storage-rough-history" });
+  assert.equal(savedRough.ok, true, savedRough.errors.join("；"));
+  storageProject.roughPrice = { snapshots: [savedRough.snapshot], draftsByScenario: {} };
+  const storedStorageRoughJson = JSON.stringify(storageProject.roughPrice.snapshots);
+  const historic = { annualRows: [{ year: 2026, storageSupplementRevenue: 119, fullRevenue: 193, fullRevenuePrice: 193 }],
+    sourceContext: { storageContext: { hasStorage: true, storagePowerMw: 1, storageDurationH: 1 } } };
+  storageProject.resultsByScenario[storageScenario.id] = historic;
+  const initialBaselineJson = JSON.stringify(historic);
+  const prices = Array(8760).fill(100);
+  prices[1] = 300;
+  const storageRun = { id: "shared-market-price", status: "publishable", pricesByYear: { 2026: prices } };
+  storageProject.priceRuns = [storageRun];
+  storageProject.activeRunId = storageRun.id;
+  state.projects = [storageProject];
+  state.activeProjectId = storageProject.id;
+  sandbox.runCalculation();
+  assert.equal(JSON.stringify(storageProject.resultsByScenario[storageScenario.id]), initialBaselineJson, "旧价格口径拒绝新配储计算，保留旧基准");
+  storageRun.marketPriceBasis = sandbox.NE_PRICE_FORECAST.MARKET_PRICE_BASIS;
+  sandbox.runCalculation();
+  const dispatchResult = storageProject.resultsByScenario[storageScenario.id];
+  assert.equal(dispatchResult.annualRows[0].storageDispatch.incrementalRevenue, 170);
+  assert.equal(dispatchResult.annualRows[0].storageSupplementRevenue, 190, "旧99元/MWh不参与新基准");
+  assert.equal(JSON.stringify(storageProject.legacyStorageResultsByScenario[storageScenario.id]), initialBaselineJson);
+  assert.equal(JSON.stringify(storageProject.roughPrice.snapshots), storedStorageRoughJson);
+  const restoredStorage = sandbox.sanitizeProject(JSON.parse(JSON.stringify(storageProject)), 9);
+  assert.equal(JSON.stringify(restoredStorage.legacyStorageResultsByScenario[storageScenario.id]), initialBaselineJson);
+  assert.equal(JSON.stringify(restoredStorage.roughPrice.snapshots), storedStorageRoughJson);
+  assert.equal(sandbox.NE_ROUGH_PRICE.compareBaselineResult(restoredStorage, restoredStorage.scenarios[0],
+    restoredStorage.roughPrice.snapshots[0], restoredStorage.resultsByScenario[storageScenario.id]).ok, true);
   console.log("rough price integration tests passed");
 })().catch((error) => { console.error(error); process.exit(1); });

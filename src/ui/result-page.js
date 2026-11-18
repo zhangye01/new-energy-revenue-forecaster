@@ -134,6 +134,10 @@
     setHtml(refs.resultMetricGrid, view.metricHtml);
     setHtml(refs.resultInsightList, view.insightHtml);
     setHtml(refs.resultAssumptionList, view.assumptionHtml);
+    if (refs.storageDispatchSummary) {
+      refs.storageDispatchSummary.hidden = !view.storageDispatchHtml;
+      refs.storageDispatchSummary.innerHTML = view.storageDispatchHtml || "";
+    }
     setHtml(refs.annualResultBody, view.annualRowsHtml);
     setHtml(refs.hourlyResultBody, view.hourlyRowsHtml);
     setText(refs.hourlyPreviewHint, view.hourlyPreviewHint);
@@ -209,6 +213,40 @@
   `).join("");
   }
 
+  function buildStorageDispatchHtml(rows) {
+    const storageRows = rows.filter((row) => row.storageDispatch);
+    if (!storageRows.length) return "";
+    const first = storageRows[0].storageDispatch;
+    const total = storageRows.reduce((sum, row) => sum + row.storageDispatch.incrementalRevenue, 0);
+    return `
+      <details class="result-disclosure">
+        <summary><span>配储增量测算 · 全期现货套利增量 ${asCompactMoney(total)}</span></summary>
+        <p>${asNum(first.powerMw)} MW / ${asNum(first.capacityMwh)} MWh，往返效率 ${asPercent(first.roundTripEfficiency)}。两侧使用同一条现货价格，充电取自项目上网电量，按日内价差配对。</p>
+        <div class="table-scroll"><table>
+          <caption>金额单位为元，充放电量单位为 MWh。全口径增量包含容量补偿、辅助服务与其他独立配储收益。</caption>
+          <thead><tr><th>年份</th><th>无储现货收入</th><th>有储现货收入</th><th>充电机会成本</th><th>放电收入</th><th>现货套利增量</th><th>全口径增量</th><th>充电量</th><th>放电量</th></tr></thead>
+          <tbody>${storageRows.map(({ year, storageDispatch: row }) => `<tr>
+            <td>${escapeHtml(year)}</td><td>${asMoney(row.withoutStorageSpotRevenue)}</td><td>${asMoney(row.withStorageSpotRevenue)}</td>
+            <td>${asMoney(row.chargeOpportunityCost)}</td><td>${asMoney(row.dischargeRevenue)}</td>
+            <td>${asMoney(row.incrementalRevenue)}</td><td>${asMoney(row.incrementalRevenue + row.independentSupplementRevenue)}</td>
+            <td>${asNum(row.chargeMwh, 2)}</td><td>${asNum(row.dischargeMwh, 2)}</td>
+          </tr>`).join("")}</tbody>
+        </table></div>
+      </details>`;
+  }
+
+  function buildArchivedStorageHtml(archive) {
+    const rows = Array.isArray(archive?.annualRows) ? archive.annualRows.filter((row) =>
+      Number.isInteger(row?.year) && Number.isFinite(row.fullRevenue) && Number.isFinite(row.fullRevenuePrice)) : [];
+    if (!rows.length) return "";
+    return `<details><summary>历史基准 · 原测算口径</summary>
+      <div class="table-scroll"><table><thead>
+        <tr><th>年份</th><th>原全口径收入（元）</th><th>原综合电价（元/MWh）</th></tr>
+      </thead><tbody>${rows.map((row) => `<tr><td>${row.year}</td>
+        <td>${asMoney(row.fullRevenue)}</td><td>${asNum(row.fullRevenuePrice, 2)}</td></tr>`).join("")}</tbody></table></div>
+    </details>`;
+  }
+
   function buildReadyResultView(input) {
     const {
       project,
@@ -232,7 +270,7 @@
       { label: "首年全口径收入", value: asCompactMoney(first.fullRevenue), note: `度电净价 ${asNum(first.fullRevenuePrice, 2)} 元/MWh` },
       { label: "首年度电净价", value: `${asNum(first.fullRevenuePrice, 2)} 元/MWh`, note: `较捕获电价${liftText} ${asNum(Math.abs(unitLift), 2)}` },
       { label: "周期全口径收入", value: asCompactMoney(result.totalFullRevenue), note: `测算周期 ${labels.periodText}` },
-      { label: "周期平均度电净价", value: `${asNum(result.avgFullRevenuePrice, 2)} 元/MWh`, note: `总电量 ${asNum(result.totalEnergy, 0)} MWh` },
+      { label: "周期平均度电净价", value: `${asNum(result.avgFullRevenuePrice, 2)} 元/MWh`, note: `${first.storageDispatch ? "储前结算电量" : "总电量"} ${asNum(result.totalEnergy, 0)} MWh` },
       { label: "首年捕获电价", value: `${asNum(first.capturePrice, 2)} 元/MWh`, note: `现货均价 ${asNum(first.spotAvgPrice, 2)} 元/MWh` },
       { label: "年度收入区间", value: `${asNum(minRevenueRow.fullRevenue / 10000, 1)}-${asNum(maxRevenueRow.fullRevenue / 10000, 1)} 万元`, note: `${minRevenueRow.year} 至 ${maxRevenueRow.year}` }
     ];
@@ -282,6 +320,12 @@
           : "综合费用与其他收入按当前默认全周期配置执行；配储补充收益按当前储能收益口径计入。"
       }
     ];
+    if (first.storageDispatch) {
+      assumptionItems.push({
+        title: "配储调度口径",
+        body: "使用同一市场价和场站发电曲线，站内充电、日首日末荷电量为零。现货套利按放电收入减充电机会成本计算；差价机制、环境价值等其他项沿用储前结算电量。"
+      });
+    }
     const previewRows = (result.hourlyPreview || []).slice(0, previewLimit);
 
     return {
@@ -291,6 +335,8 @@
       metricHtml: buildMetricCards(metricItems),
       insightHtml: buildTextItems(insightItems, "result-insight-item"),
       assumptionHtml: buildTextItems(assumptionItems, "result-assumption-item"),
+      storageDispatchHtml: buildStorageDispatchHtml(rows)
+        + buildArchivedStorageHtml(project.legacyStorageResultsByScenario?.[scenario?.id]),
       annualRowsHtml: buildAnnualRowsHtml(rows),
       hourlyRowsHtml: buildHourlyRowsHtml(previewRows),
       hourlyPreviewHint: `测算完成 · 首年小时明细 ${(result.hourlyPreview || []).length} 条`

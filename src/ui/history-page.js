@@ -129,9 +129,6 @@
       provinceLabel = "-",
       assetLabel = "-",
       siteLabel = "-",
-      hasStorage = false,
-      storagePowerMw = 0,
-      storageDurationH = 0,
       yearsRangeText = "",
       peakTime = "--:--",
       maxStdMonthLabel = "",
@@ -140,10 +137,7 @@
     const sourceLabel = dataset.sourceType === "database"
       ? `${provinceLabel}${dataset.mock ? "省级现货模拟库" : "省级现货数据库"}`
       : "历史现货数据库";
-    const storageLabel = hasStorage
-      ? `；配储(${storagePowerMw || 0}MW / ${storageDurationH || 0}h)已做波动平滑`
-      : "";
-    return `${sourceLabel} · ${assetLabel} / ${siteLabel} · ${yearsRangeText}（15分钟）${storageLabel}。工作日高价约 ${peakTime}；波动最大 ${maxStdMonthLabel}（标准差 ${Number(maxStd || 0).toFixed(1)} 元/MWh）。`;
+    return `${sourceLabel} · ${assetLabel} / ${siteLabel} · ${yearsRangeText}（15分钟）。工作日高价约 ${peakTime}；波动最大 ${maxStdMonthLabel}（标准差 ${Number(maxStd || 0).toFixed(1)} 元/MWh）。`;
   }
 
   function buildHistoryReadyViewModel(input = {}) {
@@ -184,9 +178,6 @@
         provinceLabel: labels.provinceLabel,
         assetLabel: labels.assetLabel,
         siteLabel: labels.siteLabel,
-        hasStorage: project.hasStorage,
-        storagePowerMw: project.storagePowerMw,
-        storageDurationH: project.storageDurationH,
         yearsRangeText,
         peakTime,
         maxStdMonthLabel: monthLabels[historyData.maxStdMonth],

@@ -73,9 +73,9 @@ assert.equal(rows[0].marketEnergy, 640);
 assert.equal(rows[0].mechanismEnergy, 360);
 assert.equal(rows[0].greenCertEnergy, 256);
 assert.equal(rows[0].unredeemedMarketEnergy, 160);
-assert.equal(rows[0].storageSupplementPerMwh, 38);
+assert.equal(rows[0].storageSupplementPerMwh, 20);
 assert.equal(rows[0].feeTotal, 30);
-assert.equal(rows[0].netImpact, 0.64 * 8 + 0.64 * 12.8 + 38 + 2 - 30);
+assert.equal(rows[0].netImpact, 0.64 * 8 + 0.64 * 12.8 + 20 + 2 - 30);
 assert.equal(rows[1].energyMwh, 2000);
 assert.equal(rows[1].mechanismActive, false);
 

@@ -53,9 +53,18 @@
     return rows.map((row, index) => [...row, ...(index === 0 ? headers : values)]);
   }
 
+  function withDispatchColumns(rows, details, fields) {
+    if (!details.some(Boolean)) return rows;
+    return rows.map((row, index) => [...row, ...fields.map(([column, key, digits]) => {
+      if (index === 0) return column;
+      const value = details[index - 1]?.[key];
+      return Number.isFinite(value) ? value.toFixed(digits) : "";
+    })]);
+  }
+
   function buildAnnualResultExportRows(result, options = {}) {
     const rows = Array.isArray(result?.annualRows) ? result.annualRows : [];
-    return withSourceMetadata([
+    const baseRows = [
       ["year", "annual_hours_h", "energy_mwh", "spot_avg_price", "capture_price", "spot_revenue", "mechanism_revenue", "lt_pnl_revenue", "env_revenue", "storage_supplement_revenue", "comprehensive_fee", "other_income", "full_revenue", "full_revenue_price"],
       ...rows.map((row) => [
         row.year,
@@ -73,12 +82,22 @@
         Number(row.fullRevenue || 0).toFixed(2),
         Number(row.fullRevenuePrice || 0).toFixed(6)
       ])
-    ], result, options);
+    ];
+    const exported = withDispatchColumns(baseRows, rows.map((row) => row.storageDispatch), [
+      ["storage_power_mw", "powerMw", 6], ["storage_duration_h", "durationH", 6],
+      ["storage_capacity_mwh", "capacityMwh", 6], ["storage_round_trip_efficiency_ratio", "roundTripEfficiency", 6],
+      ["storage_charge_mwh", "chargeMwh", 6], ["storage_discharge_mwh", "dischargeMwh", 6],
+      ["storage_charge_opportunity_cost", "chargeOpportunityCost", 2], ["storage_discharge_revenue", "dischargeRevenue", 2],
+      ["storage_spot_increment", "incrementalRevenue", 2], ["storage_independent_revenue", "independentSupplementRevenue", 2],
+      ["without_storage_spot_revenue", "withoutStorageSpotRevenue", 2], ["with_storage_spot_revenue", "withStorageSpotRevenue", 2],
+      ["without_storage_full_revenue", "withoutStorageFullRevenue", 2], ["with_storage_full_revenue", "withStorageFullRevenue", 2]
+    ]);
+    return withSourceMetadata(exported, result, options);
   }
 
   function buildHourlyResultExportRows(result, options = {}) {
     const rows = Array.isArray(result?.hourlyPreview) ? result.hourlyPreview : [];
-    return withSourceMetadata([
+    const baseRows = [
       ["time", "equivalent_hours_h", "energy_mwh", "spot_price_yuan_per_mwh", "spot_revenue", "full_revenue"],
       ...rows.map((row) => [
         row.time,
@@ -88,7 +107,13 @@
         Number(row.spotRevenue || 0).toFixed(2),
         Number(row.fullRevenue || 0).toFixed(2)
       ])
-    ], result, options);
+    ];
+    const exported = withDispatchColumns(baseRows, rows.map((row) => row.storageDispatch), [
+      ["storage_charge_mwh", "chargeMwh", 6], ["storage_discharge_mwh", "dischargeMwh", 6],
+      ["storage_soc_mwh", "socMwh", 6], ["net_export_with_storage_mwh", "netExportMwh", 6],
+      ["storage_spot_increment", "incrementalRevenue", 2], ["with_storage_spot_revenue", "withStorageSpotRevenue", 2]
+    ]);
+    return withSourceMetadata(exported, result, options);
   }
 
   return Object.freeze({

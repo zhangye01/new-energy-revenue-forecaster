@@ -30,6 +30,8 @@ function createGoldenProject() {
     assetType: "wind",
     siteType: "offshore",
     hasStorage: true,
+    storagePowerMw: 2,
+    storageDurationH: 2,
     capacityMw: 10,
     startYear: 2026,
     forecastYears: 2,
@@ -120,20 +122,21 @@ function testScenarioGoldenCalculation() {
   approx(first.ltPnlPrice, 8, "首年交易策略损益度电值");
   approx(first.ltPnlRevenue, 96000, "首年交易策略损益");
   approx(first.envRevenue, 162000, "首年环境价值收益");
-  approx(first.storageSupplementRevenue, 760000, "首年配储补充收益");
+  approx(first.storageSupplementRevenue, 400000, "平价下只计独立补充收益，不计旧手工套利");
+  approx(first.storageDispatch.incrementalRevenue, 0, "平价下逐时套利为零");
   approx(first.comprehensiveFee, 600000, "首年综合费用");
   approx(first.otherIncome, 40000, "首年其他收入");
-  approx(first.fullRevenue, 6858000, "首年全口径收入");
-  approx(first.fullRevenuePrice, 342.9, "首年度电全口径收入");
+  approx(first.fullRevenue, 6498000, "首年全口径收入");
+  approx(first.fullRevenuePrice, 324.9, "首年度电全口径收入");
 
   const second = result.annualRows[1];
   approx(second.mechanismRatio, 0, "机制结束后次年机制占比");
   approx(second.mechanismRevenue, 0, "机制结束后次年机制收入");
   approx(second.ltPnlPrice, 5, "次年交易策略固定步长收敛");
-  approx(second.fullRevenue, 7108500, "次年全口径收入");
+  approx(second.fullRevenue, 6730500, "次年全口径收入");
   approx(result.totalEnergy, 41000, "周期总上网电量");
-  approx(result.totalFullRevenue, 13966500, "周期全口径总收入");
-  approx(result.avgFullRevenuePrice, 340.6463414634146, "周期平均度电收入");
+  approx(result.totalFullRevenue, 13228500, "周期全口径总收入");
+  approx(result.avgFullRevenuePrice, 322.6463414634146, "周期平均度电收入");
 }
 
 function testManualYearOverrides() {
@@ -173,7 +176,7 @@ function testManualYearOverrides() {
   approx(row.envRevenue, 103200, "手工逐年环境价值收入");
   approx(row.comprehensiveFee, 200000, "手工逐年综合费用");
   approx(row.otherIncome, 100000, "手工逐年其他收入");
-  approx(row.fullRevenue, 7283200, "手工逐年配置全口径收入");
+  approx(row.fullRevenue, 6923200, "手工逐年配置全口径收入");
 }
 
 function testMissingCurveReporting() {
@@ -191,5 +194,26 @@ function testMissingCurveReporting() {
 testScenarioGoldenCalculation();
 testManualYearOverrides();
 testMissingCurveReporting();
+
+const oneYear = { ...createGoldenProject(), forecastYears: 1, storagePowerMw: 1, storageDurationH: 1 };
+oneYear.energyData.hourlyByYear[2026] = flatPrices(0);
+oneYear.energyData.hourlyByYear[2026][0] = 0.1;
+const priceSeries = flatPrices(100);
+priceSeries[1] = 300;
+const hourlyRun = { pricesByYear: { 2026: priceSeries } };
+const scenario = createGoldenScenario();
+Object.assign(scenario.config, { mechanismEnabled: false, storageArbitragePrice: 99, storageRoundTripEfficiency: 0.9 });
+const withoutStorage = calculateScenarioResult({ ...oneYear, hasStorage: false }, scenario, hourlyRun);
+const withStorage = calculateScenarioResult(oneYear, scenario, hourlyRun);
+const storageYear = withStorage.annualRows[0];
+approx(storageYear.storageDispatch.chargeOpportunityCost, 100, "充电放弃100元售电收入");
+approx(storageYear.storageDispatch.dischargeRevenue, 270, "放电0.9MWh收入270元");
+approx(storageYear.storageDispatch.incrementalRevenue, 170, "同一价格曲线的净套利差额");
+approx(storageYear.fullRevenue - withoutStorage.annualRows[0].fullRevenue, 190, "只加套利170元和独立收益20元");
+approx(withStorage.hourlyPreview.reduce((sum, hour) => sum + hour.fullRevenue, 0), storageYear.fullRevenue, "首年小时收入与年度结果对账");
+const reducedEfficiency = calculateScenarioResult(oneYear, {
+  ...scenario, config: { ...scenario.config, storageRoundTripEfficiency: 0.8 }
+}, hourlyRun);
+approx(reducedEfficiency.annualRows[0].storageDispatch.incrementalRevenue, 140, "效率改变实际套利收入");
 
 console.log("scenario golden tests passed");

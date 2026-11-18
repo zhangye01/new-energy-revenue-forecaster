@@ -222,7 +222,7 @@
     }
     keys.push(...(getFeeConfigMode(config) === "manual" ? ["feeManualValuesByYear"]
       : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]));
-    if (project.hasStorage) keys.push("storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice");
+    if (project.hasStorage) keys.push("storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice", "storageRoundTripEfficiency");
     return keys;
   }
 

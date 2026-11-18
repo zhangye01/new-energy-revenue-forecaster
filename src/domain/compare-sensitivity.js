@@ -1,16 +1,19 @@
 "use strict";
 
 (function (root, factory) {
-  const rules = typeof module !== "undefined" && module.exports
-    ? require("./revenue-rules") : root.NE_REVENUE_RULES;
-  const api = factory(rules);
+  const commonJs = typeof module !== "undefined" && module.exports;
+  const api = factory(
+    commonJs ? require("./revenue-rules") : root.NE_REVENUE_RULES,
+    commonJs ? require("./storage-dispatch") : root.NE_STORAGE_DISPATCH
+  );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.NE_COMPARE_SENSITIVITY = api;
   if (root.window && root.window !== root) root.window.NE_COMPARE_SENSITIVITY = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (rules) {
-  if (!rules) throw new Error("敏感性分析初始化失败：缺少收入规则模块");
+})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, dispatch) {
+  if (!rules || !dispatch) throw new Error("敏感性分析初始化失败：缺少收入规则或配储调度模块");
   const cache = new Map();
   const STORAGE_KEYS = ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"];
+  const DISPATCH_FACTORS = new Set(["spot", "hours", "capture_spread"]);
   const FEE_KEYS = ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee"];
   const ENV_PRICE_KEYS = ["greenCertPrice", "greenPremiumPrice", "carbonPrice"];
   const ENV_RATIO_KEYS = ["greenCertRealizeRatio", "greenPremiumRealizeRatio", "carbonRealizeRatio"];
@@ -55,7 +58,7 @@
       else config.ltYear1Pnl *= factor;
     }
     if (key === "fee") scaleFields(yearlySource(config, "feeConfigMode", "feeManualValuesByYear", first.year), FEE_KEYS, factor);
-    if (key === "storage") scaleFields(config, STORAGE_KEYS, factor);
+    if (key === "storage") scaleFields(config, first.storageDispatch ? STORAGE_KEYS.slice(1) : STORAGE_KEYS, factor);
     if (key === "env_value" || key === "env_ratio") {
       const source = yearlySource(config, "envValueMode", "envManualValuesByYear", first.year);
       const count = project.siteType === "offshore" && source.carbonEnabled ? 3 : 2;
@@ -67,9 +70,8 @@
     return { config, row };
   }
 
-  // Exact annual equivalent of revenue-calculator for fixed hourly energy/price shape.
-  // Price and energy perturbations have closed-form capture effects; all settlement
-  // terms use the same rules as the 8760 calculator. Tests reconcile every factor.
+  // Settlement terms mirror the annual result. For hourly input changes,
+  // buildFactors recalculates dispatch separately against the perturbed series.
   function calculateAnnualRevenue(project, config, row) {
     const energy = row.energyMwh;
     const months = config.mechanismEnabled
@@ -80,8 +82,9 @@
     const strategy = rules.tradeStrategyPnlPriceForYear(config, row.year - project.startYear + 1, row.year);
     const environment = rules.getEnvValueAllocation(project, config, row.year).unitValuePerMarketMwh;
     const fees = rules.getFeeConfigForYear(project, config, row.year);
-    const storage = project.hasStorage ? STORAGE_KEYS.reduce((sum, key) => sum + (Number(config[key]) || 0), 0) : 0;
-    return energy * row.capturePrice + mechanism + marketEnergy * (strategy + environment)
+    const storageKeys = row.storageDispatch ? STORAGE_KEYS.slice(1) : STORAGE_KEYS;
+    const storage = project.hasStorage ? storageKeys.reduce((sum, key) => sum + (Number(config[key]) || 0), 0) : 0;
+    return energy * row.capturePrice + mechanism + marketEnergy * (strategy + environment) + (row.storageDispatch?.incrementalRevenue ?? 0)
       + energy * (storage - FEE_KEYS.reduce((sum, key) => sum + fees[key], 0) + fees.otherIncome);
   }
 
@@ -97,20 +100,40 @@
     return { ok: true, message: "" };
   }
 
+  function perturbDispatch(row, hours, key, ratio) {
+    const factor = 1 + ratio;
+    const prices = hours.map(({ spotPrice }) => key === "spot" ? spotPrice * factor
+      : key === "capture_spread" ? row.spotAvgPrice + (spotPrice - row.spotAvgPrice) * factor : spotPrice);
+    const generationMwh = hours.map(({ energyMwh }) => key === "hours" ? energyMwh * factor : energyMwh);
+    const { powerMw, durationH, roundTripEfficiency } = row.storageDispatch;
+    const value = dispatch.calculateHourlyDispatch({ prices, generationMwh, powerMw, durationH, roundTripEfficiency });
+    return { ...row.storageDispatch, incrementalRevenue: value.incrementalRevenue };
+  }
+
   function buildFactors(project, baseline, ratios) {
     const first = baseline?.result?.annualRows?.[0];
     if (!availability(project, baseline).ok) return [];
-    const cacheKey = JSON.stringify([project.siteType, project.hasStorage, project.startYear, baseline.scenario.config, first, ratios]);
+    const { hourlyPreview, sourceContext } = baseline.result;
+    const hoursReady = hourlyPreview?.length === 8760 && hourlyPreview.every((hour) =>
+      Number.isFinite(hour?.spotPrice) && Number.isFinite(hour?.energyMwh) && hour.energyMwh >= 0);
+    const cacheKey = JSON.stringify([project.id, project.siteType, project.hasStorage, project.startYear,
+      baseline.scenario.config, first, sourceContext?.runId, hoursReady, ratios]);
     if (cache.has(cacheKey)) return cache.get(cacheKey);
     const base = first.fullRevenue / 10000;
-    const factors = FACTORS.filter(([key]) => key !== "storage" || project.hasStorage).map(([key, name, note, colorIndex]) => {
+    const factors = FACTORS.filter(([key]) => (key !== "storage" || project.hasStorage)
+      && (!first.storageDispatch || !DISPATCH_FACTORS.has(key) || hoursReady)).map(([key, name, note, colorIndex]) => {
       const series = ratios.map((ratio) => {
         if (ratio === 0) return base;
         const changed = createPerturbation(project, baseline.scenario, first, key, ratio);
+        if (first.storageDispatch && DISPATCH_FACTORS.has(key)) {
+          changed.row.storageDispatch = perturbDispatch(changed.row, hourlyPreview, key, ratio);
+        }
         return calculateAnnualRevenue(project, changed.config, changed.row) / 10000;
       });
       const lowDelta = series[0] - base, highDelta = series[series.length - 1] - base;
-      return { key, name, note, colorIndex, series, lowDelta, highDelta,
+      const description = first.storageDispatch && key === "storage"
+        ? "同比调整容量补偿、辅助服务与其他补充收益，逐时现货套利保持固定" : note;
+      return { key, name, note: description, colorIndex, series, lowDelta, highDelta,
         sensitivity: Math.max(...series.map((value) => Math.abs(value - base))) };
     }).filter((factor) => factor.series.every(Number.isFinite) && factor.sensitivity > Math.max(1e-8, Math.abs(base) * 1e-12))
       .sort((a, b) => b.sensitivity - a.sensitivity);

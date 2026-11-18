@@ -1,10 +1,11 @@
 "use strict";
 
 (function (root, factory) {
-  const rules = typeof module !== "undefined" && module.exports
-    ? require("./revenue-rules")
-    : root.NE_REVENUE_RULES;
-  const api = factory(rules);
+  const commonJs = typeof module !== "undefined" && module.exports;
+  const api = factory(
+    commonJs ? require("./revenue-rules") : root.NE_REVENUE_RULES,
+    commonJs ? require("./storage-dispatch") : root.NE_STORAGE_DISPATCH
+  );
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -12,10 +13,12 @@
   if (root.window && root.window !== root) {
     root.window.NE_REVENUE_CALCULATOR = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (rules) {
-  if (!rules) {
-    throw new Error("收入测算初始化失败：缺少 revenue-rules.js");
+})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, dispatch) {
+  if (!rules || !dispatch) {
+    throw new Error("收入测算初始化失败：缺少收入规则或配储调度模块");
   }
+
+  const DEFAULT_STORAGE_EFFICIENCY = 0.9;
 
   function dayOfYearToMonthDay(dayOfYear) {
     const monthLengths = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -125,12 +128,18 @@
       const carbonRevenue = nonMechanismEnergy * envAllocation.carbonRatio * envAllocation.carbonPrice;
       const envRevenue = greenCertRevenue + greenPremiumRevenue + carbonRevenue;
       const storageSupplementPerMwh = project.hasStorage
-        ? Number(cfg.storageArbitragePrice || 0)
-          + Number(cfg.storageCapacityCompPrice || 0)
+        ? Number(cfg.storageCapacityCompPrice || 0)
           + Number(cfg.storageAncillaryRevenuePrice || 0)
           + Number(cfg.storageOtherRevenuePrice || 0)
         : 0;
-      const storageSupplementRevenue = energyMwh * storageSupplementPerMwh;
+      const independentSupplementRevenue = energyMwh * storageSupplementPerMwh;
+      const efficiency = cfg.storageRoundTripEfficiency ?? DEFAULT_STORAGE_EFFICIENCY;
+      const dispatchResult = project.hasStorage ? dispatch.calculateHourlyDispatch({
+        prices, generationMwh: hourlyHours.map((hours) => hours * project.capacityMw),
+        powerMw: project.storagePowerMw, durationH: project.storageDurationH,
+        roundTripEfficiency: efficiency, includeHourly: year === startYear
+      }) : null;
+      const storageSupplementRevenue = independentSupplementRevenue + (dispatchResult?.incrementalRevenue ?? 0);
 
       const feeConfig = rules.getFeeConfigForYear(project, cfg, year);
       const comprehensiveFeePerMwh = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
@@ -162,6 +171,15 @@
         otherIncome,
         fullRevenue,
         fullRevenuePrice,
+        ...(dispatchResult ? { storageDispatch: {
+          version: dispatch.ALGORITHM_VERSION, powerMw: project.storagePowerMw, durationH: project.storageDurationH,
+          capacityMwh: project.storagePowerMw * project.storageDurationH, roundTripEfficiency: efficiency,
+          chargeMwh: dispatchResult.chargeMwh, dischargeMwh: dispatchResult.dischargeMwh,
+          chargeOpportunityCost: dispatchResult.chargeOpportunityCost, dischargeRevenue: dispatchResult.dischargeRevenue,
+          incrementalRevenue: dispatchResult.incrementalRevenue, independentSupplementRevenue,
+          withoutStorageSpotRevenue: spotRevenue, withStorageSpotRevenue: spotRevenue + dispatchResult.incrementalRevenue,
+          withoutStorageFullRevenue: fullRevenue - storageSupplementRevenue, withStorageFullRevenue: fullRevenue
+        } } : {}),
         note: ""
       });
 
@@ -180,14 +198,20 @@
           const hourEnergy = hourlyHours[i] * project.capacityMw;
           const price = prices[i];
           const spot = hourEnergy * price;
-          const full = hourEnergy * (price + adjustmentPerMwh);
+          const scheduled = dispatchResult?.hourly?.[i];
+          const full = hourEnergy * (price + adjustmentPerMwh) + (scheduled?.incrementalRevenue ?? 0);
           hourlyPreview.push({
             time: formatHourTimestamp(year, i),
             equivalentHours: hourlyHours[i],
             energyMwh: hourEnergy,
             spotPrice: price,
             spotRevenue: spot,
-            fullRevenue: full
+            fullRevenue: full,
+            ...(scheduled ? { storageDispatch: {
+              ...scheduled,
+              netExportMwh: hourEnergy - scheduled.chargeMwh + scheduled.dischargeMwh,
+              withStorageSpotRevenue: spot + scheduled.incrementalRevenue
+            } } : {})
           });
         }
       }

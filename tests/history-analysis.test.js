@@ -178,7 +178,7 @@ const mockProject = {
   storagePowerMw: 32,
   storageDurationH: 2
 };
-assert.equal(historyCacheKey(mockProject), "proj-a|jiangsu|64|2026|wind|offshore|storage|32|2");
+assert.equal(historyCacheKey(mockProject), "proj-a|jiangsu|64|2026|wind|offshore|project_storage_independent_v1");
 const cache = new Map();
 const mockDataset = buildMockHistorySpotAnalysisDataset(mockProject, {
   provinceBenchmarks: { jiangsu: { historyPrice: 365 } },
@@ -186,6 +186,7 @@ const mockDataset = buildMockHistorySpotAnalysisDataset(mockProject, {
 });
 assert.equal(mockDataset.sourceType, "database");
 assert.equal(mockDataset.mock, true);
+assert.equal(mockDataset.marketPriceBasis, "project_storage_independent_v1");
 assert.equal(mockDataset.startYear, 2018);
 assert.equal(mockDataset.endYear, 2025);
 assert.equal(mockDataset.years.length, 8);
@@ -197,5 +198,10 @@ assert.equal(buildMockHistorySpotAnalysisDataset(mockProject, {
   provinceBenchmarks: { jiangsu: { historyPrice: 365 } },
   cache
 }), mockDataset);
+const noStorageProject = { ...mockProject, hasStorage: false, storagePowerMw: null, storageDurationH: null };
+assert.equal(historyCacheKey(noStorageProject), historyCacheKey(mockProject), "缓存口径不依赖项目配储");
+assert.deepEqual(buildMockHistorySpotAnalysisDataset(noStorageProject, {
+  provinceBenchmarks: { jiangsu: { historyPrice: 365 } }
+}), mockDataset, "不用缓存重新生成，有储与无储的市场历史价仍完全一致");
 
 console.log("history analysis tests passed");
