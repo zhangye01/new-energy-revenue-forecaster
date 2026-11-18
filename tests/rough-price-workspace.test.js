@@ -195,6 +195,8 @@ assert.equal(snapshot.rows[0].capturePrice, 270);
 assert.equal(comparisons, 0, "rough calculations do not run full precision comparisons");
 assert.match(fixture.rough.innerHTML, /年度粗算结果/);
 assert.match(fixture.rough.innerHTML, /导出粗算 CSV/);
+assert.match(fixture.rough.innerHTML, /<th scope="col">三项费用<\/th><th scope="col">其他净收入<\/th>/);
+assert.doesNotMatch(fixture.rough.innerHTML, /<th scope="col">(?:综合扣费|其他费用|其他收入)<\/th>/);
 assert.ok(inputState.isConfigConfirmed(scenario, "mechanismPrice"));
 assert.match(fixture.rough.innerHTML, /data-rough-group="mechanism" open/,
   "only the edited mechanism price is confirmed; unchanged defaults remain visible");
@@ -447,7 +449,7 @@ const netIncomeFixture = documentFixture();
 const netIncomeData = projectFixture();
 const netConfig = netIncomeData.scenario.config;
 delete netConfig.otherNetIncome;
-Object.assign(netConfig, { otherFee: 7.25, otherIncome: 3.25,
+Object.assign(netConfig, { marketOpFee: 7, gridAssessFee: 8, ancillaryFee: 18, otherFee: 7.25, otherIncome: 3.25,
   feeManualValuesByYear: { 2027: { marketOpFee: 4, gridAssessFee: 1, ancillaryFee: 2, otherFee: 6.5, otherIncome: 2 } } });
 const netSnapshot = domain.calculateRough(netIncomeData.project, netIncomeData.scenario, {
   spotNodes: [{ year: 2027, value: 300 }], captureRate: 95
@@ -481,6 +483,14 @@ netIncomeFixture.controls.save.onclick();
 assert.deepEqual(netIncomeData.scenario.config.feeManualValuesByYear[2027],
   { marketOpFee: 4, gridAssessFee: 1, ancillaryFee: 2, otherFee: 6.5, otherIncome: 2, otherNetIncome: 1 });
 assert.equal(netIncomeData.scenario.config.feeManualValuesByYear[2028].otherNetIncome, -7);
+workspace.renderWorkspace(netOptions);
+assert.match(netIncomeFixture.rough.innerHTML, /<td>33\.00<\/td><td>-4\.00<\/td><td><strong>/,
+  "旧粗算展示按原版本参数计算的净额，不读取现场编辑的净额");
+const historicNetCsv = workspace.buildRoughCsv(netIncomeData.project.roughPrice.snapshots[0]);
+for (const row of netSnapshot.rows) {
+  assert.equal(row.fee - row.otherIncome, 33 - (-4), "合并后的费用净额应与保存结果对平");
+  assert.ok(historicNetCsv.includes(`"33","-4","${row.fullRevenuePrice}","${row.energyMwh}"`));
+}
 assert.equal(JSON.stringify(netIncomeData.project.roughPrice.snapshots[0]), beforeNetSnapshot, "signed inputs preserve the original rough snapshot");
 
 // Switching presentation modes must not silently turn a missing assumption into a zero.
@@ -523,6 +533,8 @@ const csv = workspace.buildRoughCsv(snapshot);
 assert.match(csv, /^\ufeff/);
 assert.match(csv, /"历史参考, ""来源"" <script>alert\(1\)<\/script>"/);
 assert.match(csv, /策略贡献/);
+assert.match(csv, /"三项费用\(元\/MWh\)","其他净收入\(元\/MWh\)"/);
+assert.doesNotMatch(csv, /"(?:综合扣费|其他费用|其他收入)\(元\/MWh\)"/);
 // Export helper accepts already computed data and performs proper CSV quoting.
 const conditionalFixture = documentFixture();
 const conditionalData = projectFixture();

@@ -36,12 +36,11 @@ const rows = [
     tradeImpact: 5.12,
     envImpact: 8.2,
     storageImpact: 38,
-    otherIncomeImpact: 2,
-    feeImpact: -30,
+    otherNetIncome: -1,
     netImpact: 23.32,
     ltPnlPrice: 8,
     envUnitValue: 12.8,
-    feeTotal: 30,
+    primaryFees: 27,
     storageSupplementPerMwh: 38
   },
   {
@@ -57,12 +56,11 @@ const rows = [
     tradeImpact: 2,
     envImpact: 12.8,
     storageImpact: 38,
-    otherIncomeImpact: 2,
-    feeImpact: -30,
-    netImpact: 24.8,
+    otherNetIncome: 3,
+    netImpact: 28.8,
     ltPnlPrice: 2,
     envUnitValue: 12.8,
-    feeTotal: 30,
+    primaryFees: 27,
     storageSupplementPerMwh: 38
   }
 ];
@@ -86,13 +84,15 @@ assert.ok(options.energy.tooltip.formatter([
 ]).includes("市场化交易电量合计：64000 MWh"));
 
 assert.equal(options.unit.series.at(-1).name, "净影响");
-assert.deepEqual(options.unit.series.at(-1).data, [23.32, 24.8]);
+assert.deepEqual(options.unit.series.at(-1).data, [23.32, 28.8]);
+assert.deepEqual(options.unit.series.find((item) => item.name === "其他净收入").data, [-1, 3]);
+assert.deepEqual(options.unit.series.find((item) => item.name === "三项费用").data, [-27, -27]);
 assert.deepEqual(options.trend.series.map((item) => item.name), [
   "交易策略损益",
   "环境价值度电收益",
-  "综合费用",
+  "三项费用",
   "配储补充收益",
-  "其他收入"
+  "其他净收入"
 ]);
 assert.deepEqual(options.trend.series[0].data, [8, 2]);
 assert.equal(options.trend.tooltip.valueFormatter(12.345), "12.35 元/MWh");

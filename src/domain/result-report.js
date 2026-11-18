@@ -2,7 +2,8 @@
 
 (function (root, factory) {
   const rules = root.NE_REVENUE_RULES || (typeof require !== "undefined" ? require("./revenue-rules") : null);
-  const api = factory(rules);
+  const versions = root.NE_RESULT_VERSIONS || (typeof require !== "undefined" ? require("./result-versions") : null);
+  const api = factory(rules, versions);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -10,9 +11,9 @@
   if (root.window && root.window !== root) {
     root.window.NE_RESULT_REPORT = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (rules) {
-  if (!rules) {
-    throw new Error("结果简报初始化失败：缺少 revenue-rules.js");
+})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, versions) {
+  if (!rules || !versions) {
+    throw new Error("结果简报初始化失败：缺少结算规则或结果版本模块");
   }
 
   const ANNUAL_COMPONENTS = Object.freeze([
@@ -20,9 +21,7 @@
     Object.freeze({ name: "差价机制", key: "mechanismRevenue", colorKey: "mechanism" }),
     Object.freeze({ name: "交易策略", key: "ltPnlRevenue", colorKey: "trade" }),
     Object.freeze({ name: "环境价值", key: "envRevenue", colorKey: "env" }),
-    Object.freeze({ name: "配储补充", key: "storageSupplementRevenue", colorKey: "storage" }),
-    Object.freeze({ name: "其他收入", key: "otherIncome", colorKey: "other" }),
-    Object.freeze({ name: "综合费用", key: "comprehensiveFee", colorKey: "fee", negative: true })
+    Object.freeze({ name: "配储补充", key: "storageSupplementRevenue", colorKey: "storage" })
   ]);
 
   const CONTRIBUTION_COMPONENTS = Object.freeze([
@@ -30,10 +29,26 @@
     Object.freeze({ label: "差价机制结算", key: "mechanismRevenue", colorKey: "mechanism" }),
     Object.freeze({ label: "交易策略损益", key: "ltPnlRevenue", colorKey: "trade" }),
     Object.freeze({ label: "环境价值兑现", key: "envRevenue", colorKey: "env" }),
-    Object.freeze({ label: "配储补充收益", key: "storageSupplementRevenue", colorKey: "storage" }),
-    Object.freeze({ label: "综合费用", key: "comprehensiveFee", colorKey: "fee", negative: true }),
-    Object.freeze({ label: "其他收入", key: "otherIncome", colorKey: "other" })
+    Object.freeze({ label: "配储补充收益", key: "storageSupplementRevenue", colorKey: "storage" })
   ]);
+
+  function rowsWithFeeBreakdown(rows, config) {
+    return rows.map((row) => ({
+      ...row,
+      ...rules.getOtherNetBreakdown(config, row.year, row.comprehensiveFee, row.otherIncome, row.energyMwh),
+      combinedFeeImpact: row.otherIncome - row.comprehensiveFee
+    }));
+  }
+
+  function feeComponents(rows) {
+    if (rows.some((row) => row.primaryFees === null)) {
+      return [{ label: "费用与其他净收入合计", key: "combinedFeeImpact", colorKey: "fee" }];
+    }
+    return [
+      { label: "三项费用", key: "primaryFees", colorKey: "fee", negative: true },
+      { label: "其他净收入", key: "otherNetIncome", colorKey: "other" }
+    ];
+  }
 
   function resultMoneyWan(value) {
     return Number(((Number(value) || 0) / 10000).toFixed(2));
@@ -43,14 +58,19 @@
     return Number((Number(value || 0)).toFixed(4));
   }
 
-  function getResultContributionItems(result) {
-    const rows = result?.annualRows || [];
+  function contributionItemsFor(rows, feeItems) {
     const sum = (key) => rows.reduce((total, row) => total + Number(row[key] || 0), 0);
-    return CONTRIBUTION_COMPONENTS.map((item) => ({
+    return [...CONTRIBUTION_COMPONENTS, ...feeItems].map((item) => ({
       label: item.label,
       amount: item.negative ? -sum(item.key) : sum(item.key),
       colorKey: item.colorKey
     }));
+  }
+
+  function getResultContributionItems(result, verifiedConfig) {
+    const config = versions.getResultFeeConfig(result, verifiedConfig);
+    const rows = rowsWithFeeBreakdown(result?.annualRows || [], config);
+    return contributionItemsFor(rows, feeComponents(rows));
   }
 
   function hasMechanismLine(rows, cfg) {
@@ -80,18 +100,19 @@
     return series;
   }
 
-  function buildFirstYearBridgeItems(rows) {
+  function buildFirstYearBridgeItems(rows, feeItems) {
     const first = rows[0] || null;
     if (!first) return [];
-    const energyMwh = Math.max(1, Number(first.energyMwh || 0));
+    const energyMwh = first.energyMwh > 0 ? first.energyMwh : 1;
     return [
       { label: "捕获电价", value: first.capturePrice, colorKey: "spot" },
       { label: "差价机制", value: first.mechanismRevenue / energyMwh, colorKey: "mechanism" },
       { label: "交易策略", value: first.ltPnlRevenue / energyMwh, colorKey: "trade" },
       { label: "环境价值", value: first.envRevenue / energyMwh, colorKey: "env" },
       { label: "配储补充", value: first.storageSupplementRevenue / energyMwh, colorKey: "storage" },
-      { label: "综合费用", value: -first.comprehensiveFee / energyMwh, colorKey: "fee" },
-      { label: "其他收入", value: first.otherIncome / energyMwh, colorKey: "other" },
+      ...feeItems.map(({ label, key, colorKey, negative }) => ({
+        label, value: (negative ? -first[key] : first[key]) / energyMwh, colorKey
+      })),
       { label: "度电净价", value: first.fullRevenuePrice, colorKey: "net" }
     ].map((item) => ({
       ...item,
@@ -99,30 +120,33 @@
     }));
   }
 
-  function buildResultChartData(result, cfg = {}) {
+  function buildResultChartData(result, verifiedConfig) {
     const rows = Array.isArray(result?.annualRows) ? result.annualRows : [];
+    const config = versions.getResultFeeConfig(result, verifiedConfig);
+    const displayRows = rowsWithFeeBreakdown(rows, config);
+    const feeItems = feeComponents(displayRows);
     return {
       rows,
       years: rows.map((row) => String(row.year)),
-      annualComponents: ANNUAL_COMPONENTS.map((item) => ({
+      annualComponents: [...ANNUAL_COMPONENTS, ...feeItems.map((item) => ({ ...item, name: item.label }))].map((item) => ({
         ...item,
-        data: rows.map((row) => resultMoneyWan(item.negative ? -row[item.key] : row[item.key]))
+        data: displayRows.map((row) => resultMoneyWan(item.negative ? -row[item.key] : row[item.key]))
       })),
       annualNet: {
         name: "全口径收入",
         colorKey: "net",
         data: rows.map((row) => resultMoneyWan(row.fullRevenue))
       },
-      priceSeries: buildPriceSeries(rows, cfg),
-      firstYearBridgeItems: buildFirstYearBridgeItems(rows),
-      contributionItems: getResultContributionItems(result).map((item) => ({
+      priceSeries: buildPriceSeries(rows, config),
+      firstYearBridgeItems: buildFirstYearBridgeItems(displayRows, feeItems),
+      contributionItems: contributionItemsFor(displayRows, feeItems).map((item) => ({
         ...item,
         valueWan: resultMoneyWan(item.amount)
       }))
     };
   }
 
-  function buildResultSummaryData(result) {
+  function buildResultSummaryData(result, verifiedConfig) {
     const rows = Array.isArray(result?.annualRows) ? result.annualRows : [];
     const first = rows.find((row) => Number(row.energyMwh) > 0) || rows[0] || null;
     if (!first) {
@@ -142,7 +166,7 @@
     const maxRevenueRow = rows.reduce((best, row) => (Number(row.fullRevenue) > Number(best.fullRevenue) ? row : best), first);
     const minRevenueRow = rows.reduce((worst, row) => (Number(row.fullRevenue) < Number(worst.fullRevenue) ? row : worst), first);
     const unitLift = Number(first.fullRevenuePrice || 0) - Number(first.capturePrice || 0);
-    const contributionItems = getResultContributionItems(result);
+    const contributionItems = getResultContributionItems(result, verifiedConfig);
     const leadingPositive = contributionItems
       .filter((item) => item.amount > 0 && item.label !== "现货市场收入")
       .sort((a, b) => b.amount - a.amount)[0] || null;

@@ -255,7 +255,7 @@ const summaryData = {
   unitLift: 40,
   liftText: "增加",
   leadingPositive: { label: "配储补充收益", amount: 120000 },
-  leadingNegative: { label: "综合费用", amount: -70000 },
+  leadingNegative: { label: "三项费用", amount: -70000 },
   firstMarketRatio: 0.64
 };
 
@@ -280,7 +280,7 @@ assert.match(ready.executiveSummary, /周期全口径收入合计350.0 万元/);
 assert.match(ready.metricHtml, /首年度电净价/);
 assert.match(ready.insightHtml, /主要贡献项/);
 assert.match(ready.assumptionHtml, /环境价值采用逐年配置，兑现空间按市场化交易电量核对/);
-assert.match(ready.assumptionHtml, /综合费用与其他收入采用逐年导入配置/);
+assert.match(ready.assumptionHtml, /三项费用与其他净收入采用逐年配置/);
 assert.match(ready.annualRowsHtml, /¥3,500,000/);
 assert.match(ready.hourlyRowsHtml, /2026-01-01 00:00/);
 assert.equal(ready.hourlyPreviewHint, "测算完成 · 首年小时明细 1 条");

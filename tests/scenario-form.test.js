@@ -670,7 +670,9 @@ const managerProject = {
         storageArbitragePrice: 1,
         storageCapacityCompPrice: 2,
         storageAncillaryRevenuePrice: 3,
-        storageOtherRevenuePrice: 4
+        storageOtherRevenuePrice: 4,
+        otherFee: 3,
+        otherIncome: 2
       }
     },
     {
@@ -686,7 +688,9 @@ const managerProject = {
         storageArbitragePrice: 0,
         storageCapacityCompPrice: 0,
         storageAncillaryRevenuePrice: 0,
-        storageOtherRevenuePrice: 0
+        storageOtherRevenuePrice: 0,
+        feeConfigMode: "manual",
+        feeManualValuesByYear: { 2026: { otherNetIncome: 3 }, 2027: { otherNetIncome: -8 } }
       }
     }
   ]
@@ -705,6 +709,8 @@ assert.match(managerView.selectorHtml, /基准&lt;场景&gt;（基准） \[已�
 assert.match(managerView.listHtml, /基准&lt;场景&gt;/);
 assert.match(managerView.listHtml, /当前 \/ 基准 \/ 已锁定/);
 assert.match(managerView.listHtml, /9.0/);
+assert.match(managerView.listHtml, /<td>27\.0<\/td>\s*<td>-1\.0<\/td>/);
+assert.match(managerView.listHtml, /<td>27\.0<\/td>\s*<td>3\.0<\/td>/);
 assert.equal(managerView.deleteDisabled, true);
 assert.equal(managerView.renameDisabled, true);
 assert.equal(managerView.toggleBaselineText, "解锁基准方案");

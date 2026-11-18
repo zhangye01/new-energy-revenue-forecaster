@@ -8,7 +8,8 @@ const {
   ltPnlPriceForYear,
   tradeStrategyPnlPriceForYear,
   getEnvValueAllocation,
-  getFeeConfigForYear
+  getFeeConfigForYear,
+  getOtherNetBreakdown
 } = require("../src/domain/revenue-rules");
 
 assert.equal(monthSerial("2026-01"), 2026 * 12);
@@ -100,6 +101,22 @@ for (const [net, expense, income] of [[-4.25, 4.25, 0], [0, 0, 0], [5.125, 0, 5.
       marketOpFee: 3, gridAssessFee: 0, ancillaryFee: 0, otherFee: expense, otherIncome: income
     });
   }
+}
+
+const feeRates = { marketOpFee: 6, gridAssessFee: 7, ancillaryFee: 14 };
+const legacyRates = { ...feeRates, otherFee: 3, otherIncome: 2 };
+const manualRates = { feeConfigMode: "manual", feeManualValuesByYear: { 2026: legacyRates } };
+const unknown = { primaryFees: null, otherNetIncome: null };
+assert.deepEqual(getOtherNetBreakdown(manualRates, 2026, 3000, 200, 100), { primaryFees: 2700, otherNetIncome: -100 });
+assert.deepEqual(getOtherNetBreakdown(manualRates, 2027, 3000, 200, 100), unknown);
+assert.deepEqual(getOtherNetBreakdown(legacyRates, 2026, 3000, 300, 100), unknown);
+assert.deepEqual(getOtherNetBreakdown(null, 2026, 3000, 200, 100), unknown);
+assert.deepEqual(getOtherNetBreakdown(null, 2026, 0, 0, 0), { primaryFees: 0, otherNetIncome: 0 });
+assert.deepEqual(getOtherNetBreakdown({ ...legacyRates, otherNetIncome: null }, 2026, 27, 0), unknown);
+for (const net of [-1.5, 0, 2.5]) {
+  const signed = { ...legacyRates, otherNetIncome: net };
+  assert.deepEqual(getOtherNetBreakdown(signed, 2026, 27 + Math.max(-net, 0), Math.max(net, 0)),
+    { primaryFees: 27, otherNetIncome: net });
 }
 
 console.log("revenue rules tests passed");

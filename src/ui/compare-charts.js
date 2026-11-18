@@ -293,14 +293,19 @@
   }
 
   function buildScenarioBridgeItems(focusTotals, baseTotals, tokens) {
+    const feeItems = Number.isFinite(focusTotals.primaryFees) && Number.isFinite(baseTotals.primaryFees)
+      ? [
+        { label: "三项费用", key: "primaryFees", color: tokens.negative },
+        { label: "其他净收入", key: "otherNetIncome", color: tokens.secondary }
+      ]
+      : [{ label: "费用与其他净收入合计", key: "feesAndOtherNetIncome", color: tokens.secondary }];
     return [
       { label: "现货收入", key: "spotRevenue", color: tokens.primary },
       { label: "差价机制", key: "mechanismRevenue", color: tokens.baseline },
       { label: "交易策略", key: "ltPnlRevenue", color: "#7569d8" },
       { label: "环境价值", key: "envRevenue", color: tokens.tertiary },
       { label: "配储补充", key: "storageSupplementRevenue", color: "#a36cc1" },
-      { label: "综合费用", key: "comprehensiveFee", color: tokens.negative },
-      { label: "其他收入", key: "otherIncome", color: tokens.secondary }
+      ...feeItems
     ].map((item) => ({
       ...item,
       value: Number(((Number(focusTotals[item.key] || 0) - Number(baseTotals[item.key] || 0)) / 10000).toFixed(2))

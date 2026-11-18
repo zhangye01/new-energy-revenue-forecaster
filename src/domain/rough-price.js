@@ -414,7 +414,7 @@
     const completeness = [
       [scenarioConfig.getLtPricingMode(config), scenarioConfig.getLtManualCompleteness(project, config), "交易策略损益"],
       [scenarioConfig.getEnvValueMode(config), scenarioConfig.getEnvManualCompleteness(project, config), "环境价值"],
-      [scenarioConfig.getFeeConfigMode(config), scenarioConfig.getFeeManualCompleteness(project, config), "综合费用及其他收入"]
+      [scenarioConfig.getFeeConfigMode(config), scenarioConfig.getFeeManualCompleteness(project, config), "费用与其他净收入"]
     ];
     completeness.forEach(([mode, item, label]) => {
       if (mode === "manual" && item.complete !== item.total) {

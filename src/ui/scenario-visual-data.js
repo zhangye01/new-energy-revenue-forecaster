@@ -90,13 +90,12 @@
       const greenPremiumEnergy = marketEnergy * envAllocation.greenPremiumRatio;
       const unredeemedMarketEnergy = Math.max(0, marketEnergy * (1 - envTotalRatio));
       const feeConfig = getFeeConfigForYear(project, cfg, year);
-      const feeTotal = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
+      const primaryFees = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee;
       const envUnitValue = envAllocation.unitValuePerMarketMwh;
       const tradeImpact = marketRatio * ltPnlPrice;
       const envImpact = marketRatio * envUnitValue;
       const storageImpact = storageSupplementPerMwh;
-      const otherIncomeImpact = feeConfig.otherIncome;
-      const feeImpact = -feeTotal;
+      const otherNetIncome = feeConfig.otherIncome - feeConfig.otherFee;
 
       return {
         year,
@@ -116,14 +115,13 @@
         envAllocation,
         envUnitValue,
         feeConfig,
-        feeTotal,
+        primaryFees,
         storageSupplementPerMwh,
         tradeImpact,
         envImpact,
         storageImpact,
-        otherIncomeImpact,
-        feeImpact,
-        netImpact: tradeImpact + envImpact + storageImpact + otherIncomeImpact + feeImpact
+        otherNetIncome,
+        netImpact: tradeImpact + envImpact + storageImpact + otherNetIncome - primaryFees
       };
     });
   }

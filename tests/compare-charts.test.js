@@ -87,8 +87,9 @@ const focusTotals = {
   ltPnlRevenue: 20000,
   envRevenue: 30000,
   storageSupplementRevenue: 40000,
-  comprehensiveFee: -60000,
-  otherIncome: 10000
+  primaryFees: -60000,
+  otherNetIncome: -10000,
+  feesAndOtherNetIncome: -70000
 };
 const baseTotals = {
   spotRevenue: 400000,
@@ -96,15 +97,20 @@ const baseTotals = {
   ltPnlRevenue: 10000,
   envRevenue: 20000,
   storageSupplementRevenue: 20000,
-  comprehensiveFee: -50000,
-  otherIncome: 5000
+  primaryFees: -50000,
+  otherNetIncome: 5000,
+  feesAndOtherNetIncome: -45000
 };
 const bridgeItems = buildScenarioBridgeItems(focusTotals, baseTotals, tokens);
 assert.equal(bridgeItems.find((item) => item.label === "现货收入").value, 10);
-assert.equal(bridgeItems.find((item) => item.label === "综合费用").value, -1);
+assert.equal(bridgeItems.find((item) => item.label === "三项费用").value, -1);
+assert.equal(bridgeItems.find((item) => item.label === "其他净收入").value, -1.5);
 
 const bridge = buildScenarioBridgeOption(focusTotals, baseTotals, tokens);
-assert.deepEqual(bridge.xAxis.data, ["现货收入", "差价机制", "交易策略", "环境价值", "配储补充", "综合费用", "其他收入"]);
+assert.deepEqual(bridge.xAxis.data, ["现货收入", "差价机制", "交易策略", "环境价值", "配储补充", "三项费用", "其他净收入"]);
 assert.equal(bridge.series[0].data.find((item) => item.value === -1).itemStyle.color, tokens.negative);
+const noFeeSource = buildScenarioBridgeItems({ ...focusTotals, primaryFees: null, otherNetIncome: null }, baseTotals, tokens);
+assert.equal(noFeeSource.at(-1).label, "费用与其他净收入合计");
+assert.equal(noFeeSource.at(-1).value, -2.5);
 
 console.log("compare charts tests passed");

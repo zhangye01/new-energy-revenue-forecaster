@@ -129,6 +129,25 @@
     };
   }
 
+  function getOtherNetBreakdown(config, year, totalFee, otherIncome, energyMwh = 1) {
+    const unknown = { primaryFees: null, otherNetIncome: null };
+    if (![totalFee, otherIncome, energyMwh].every(Number.isFinite) || energyMwh < 0) return unknown;
+    if (energyMwh === 0) return totalFee === 0 && otherIncome === 0 ? { primaryFees: 0, otherNetIncome: 0 } : unknown;
+    const source = getFeeConfigMode(config) === "manual" ? getFeeManualEntryForYear(config, year) : config;
+    if (!isPlainObject(source)) return unknown;
+    const otherKeys = Object.hasOwn(source, "otherNetIncome") ? ["otherNetIncome"] : ["otherFee", "otherIncome"];
+    const required = ["marketOpFee", "gridAssessFee", "ancillaryFee", ...otherKeys];
+    if (!required.every((key) => {
+      const value = source[key];
+      return (typeof value === "number" || (typeof value === "string" && value.trim())) && Number.isFinite(Number(value));
+    })) return unknown;
+    const fees = getFeeConfigForYear(null, config, year);
+    const primaryRate = fees.marketOpFee + fees.gridAssessFee + fees.ancillaryFee;
+    const close = (actual, expected) => Number.isFinite(expected) && Math.abs(actual - expected) <= 1e-9 * Math.max(1, Math.abs(actual), Math.abs(expected));
+    if (!close(totalFee, energyMwh * (primaryRate + fees.otherFee)) || !close(otherIncome, energyMwh * fees.otherIncome)) return unknown;
+    return { primaryFees: energyMwh * primaryRate, otherNetIncome: energyMwh * (fees.otherIncome - fees.otherFee) };
+  }
+
   return Object.freeze({
     ENVIRONMENT_VALUE_VERSION,
     monthSerial,
@@ -138,6 +157,7 @@
     tradeStrategyPnlPriceForYear,
     getEnvValueAllocation,
     legacyCarbonValuePerMarketMwh,
-    getFeeConfigForYear
+    getFeeConfigForYear,
+    getOtherNetBreakdown
   });
 });

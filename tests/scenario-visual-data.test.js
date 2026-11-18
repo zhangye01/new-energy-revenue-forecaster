@@ -73,7 +73,8 @@ assert.equal(rows[0].mechanismEnergy, 360);
 assert.equal(rows[0].greenCertEnergy, 256);
 assert.equal(rows[0].unredeemedMarketEnergy, 256);
 assert.equal(rows[0].storageSupplementPerMwh, 20);
-assert.equal(rows[0].feeTotal, 30);
+assert.equal(rows[0].primaryFees, 27);
+assert.equal(rows[0].otherNetIncome, -1);
 assert.equal(rows[0].netImpact, 0.64 * 8 + 0.64 * 12.8 + 20 + 2 - 30);
 assert.equal(rows[1].energyMwh, 2000);
 assert.equal(rows[1].mechanismActive, false);
@@ -132,12 +133,13 @@ const activeView = buildScenarioVisualViewModel({
     marketOpFee: 6,
     gridAssessFee: 7,
     ancillaryFee: 14,
-    otherFee: 3,
-    otherIncome: 2
+    otherFee: 0,
+    otherIncome: 3
   })
 });
 assert.equal(activeView.ok, true);
 assert.equal(activeView.rows.length, 2);
 assert.equal(activeView.rows[0].marketEnergy, 640);
+assert.equal(activeView.rows[0].otherNetIncome, 3);
 
 console.log("scenario visual data tests passed");

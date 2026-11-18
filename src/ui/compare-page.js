@@ -372,7 +372,7 @@
     } = input;
     return available.map((item) => {
       const deltaRevenue = item.result.totalFullRevenue - baseline.result.totalFullRevenue;
-      const topDriver = detectTopDriver(item.result, baseline.result);
+      const topDriver = detectTopDriver(item.result, baseline.result, item.scenario.config, baseline.scenario.config);
       const firstRow = item.result.annualRows[0] || {};
       const scenarioLabel = item.scenario.isBaseline
         ? `${escapeHtml(item.scenario.name)} <span class="table-tag">基准</span>`

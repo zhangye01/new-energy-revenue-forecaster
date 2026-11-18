@@ -5,7 +5,9 @@
   const api = factory(
     isCommonJs ? require("./compare-sensitivity") : root.NE_COMPARE_SENSITIVITY,
     () => isCommonJs ? require("./rough-price") : root.NE_ROUGH_PRICE,
-    isCommonJs ? require("./result-calculation") : root.NE_RESULT_CALCULATION
+    isCommonJs ? require("./result-calculation") : root.NE_RESULT_CALCULATION,
+    isCommonJs ? require("./revenue-rules") : root.NE_REVENUE_RULES,
+    isCommonJs ? require("./result-versions") : root.NE_RESULT_VERSIONS
   );
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
@@ -14,7 +16,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_COMPARE_ANALYSIS = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (sensitivity, getResultValidity, calculation) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (sensitivity, getResultValidity, calculation, rules, versions) {
   const { annualStorageIsComplete, closeAmount, hourlyRowsAreComplete } = calculation;
 
   function clamp(value, min, max) {
@@ -53,25 +55,32 @@
     return sensitivity?.buildFactors(project, baseline, ratios) || [];
   }
 
-  function resultComponentTotals(result) {
+  function resultComponentTotals(result, verifiedConfig) {
     const rows = result?.annualRows || [];
+    const config = versions.getResultFeeConfig(result, verifiedConfig);
     const sum = (key) => rows.reduce((total, row) => total + Number(row[key] || 0), 0);
+    const feeRows = rows.map((row) => rules.getOtherNetBreakdown(config, row.year, row.comprehensiveFee, row.otherIncome, row.energyMwh));
+    const hasFeeBreakdown = feeRows.every((row) => row.primaryFees !== null && row.otherNetIncome !== null);
     return {
       spotRevenue: sum("spotRevenue"),
       mechanismRevenue: sum("mechanismRevenue"),
       ltPnlRevenue: sum("ltPnlRevenue"),
       envRevenue: sum("envRevenue"),
       storageSupplementRevenue: sum("storageSupplementRevenue"),
-      comprehensiveFee: -sum("comprehensiveFee"),
-      otherIncome: sum("otherIncome")
+      primaryFees: hasFeeBreakdown ? -feeRows.reduce((total, row) => total + row.primaryFees, 0) : null,
+      otherNetIncome: hasFeeBreakdown ? feeRows.reduce((total, row) => total + row.otherNetIncome, 0) : null,
+      feesAndOtherNetIncome: sum("otherIncome") - sum("comprehensiveFee")
     };
   }
 
-  function detectTopDriver(result, baselineResult) {
+  function detectTopDriver(result, baselineResult, config, baselineConfig) {
     if (!result?.annualRows?.length || !baselineResult?.annualRows?.length) return "-";
-    const totals = resultComponentTotals(result), baseline = resultComponentTotals(baselineResult);
+    const totals = resultComponentTotals(result, config), baseline = resultComponentTotals(baselineResult, baselineConfig);
+    const feeNames = totals.primaryFees !== null && baseline.primaryFees !== null
+      ? { primaryFees: "三项费用", otherNetIncome: "其他净收入" }
+      : { feesAndOtherNetIncome: "费用与其他净收入合计" };
     const names = { spotRevenue: "现货收入", mechanismRevenue: "差价机制", ltPnlRevenue: "交易策略损益",
-      envRevenue: "环境价值", storageSupplementRevenue: "配储补充收益", comprehensiveFee: "综合费用", otherIncome: "其他收入" };
+      envRevenue: "环境价值", storageSupplementRevenue: "配储补充收益", ...feeNames };
     const ranked = Object.keys(names).map((key) => ({ name: names[key], value: Math.abs(totals[key] - baseline[key]) }))
       .sort((a, b) => b.value - a.value);
     return ranked[0].value > 0.000001 ? ranked[0].name : "无差异";

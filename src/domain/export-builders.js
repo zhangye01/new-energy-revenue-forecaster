@@ -3,7 +3,8 @@
 (function (root, factory) {
   const isCommonJs = typeof module !== "undefined" && module.exports;
   const api = factory(isCommonJs ? require("./csv-utils") : root.NE_CSV_UTILS,
-    isCommonJs ? require("./result-versions") : root.NE_RESULT_VERSIONS);
+    isCommonJs ? require("./result-versions") : root.NE_RESULT_VERSIONS,
+    isCommonJs ? require("./revenue-rules") : root.NE_REVENUE_RULES);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -11,9 +12,9 @@
   if (root.window && root.window !== root) {
     root.window.NE_EXPORT_BUILDERS = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (csvUtils, versions) {
-  if (!csvUtils || !versions) {
-    throw new Error("导出模块初始化失败：缺少 CSV 工具或结果版本模块");
+})(typeof globalThis !== "undefined" ? globalThis : window, function (csvUtils, versions, rules) {
+  if (!csvUtils || !versions || !rules) {
+    throw new Error("导出模块初始化失败：缺少 CSV 工具、结果版本或结算规则模块");
   }
 
   function sanitizeExportFilenamePart(value) {
@@ -71,24 +72,28 @@
 
   function buildAnnualResultExportRows(result, options = {}) {
     const rows = Array.isArray(result?.annualRows) ? result.annualRows : [];
+    const config = versions.getResultFeeConfig(result, options.verifiedConfig);
     const baseRows = [
-      ["year", "annual_hours_h", "energy_mwh", "spot_avg_price", "capture_price", "spot_revenue", "mechanism_revenue", "lt_pnl_revenue", "env_revenue", "storage_supplement_revenue", "comprehensive_fee", "other_income", "full_revenue", "full_revenue_price"],
-      ...rows.map((row) => [
-        row.year,
-        Number(row.annualHours || 0).toFixed(6),
-        Number(row.energyMwh || 0).toFixed(6),
-        Number(row.spotAvgPrice || 0).toFixed(6),
-        Number(row.capturePrice || 0).toFixed(6),
-        Number(row.spotRevenue || 0).toFixed(2),
-        Number(row.mechanismRevenue || 0).toFixed(2),
-        Number(row.ltPnlRevenue || 0).toFixed(2),
-        Number(row.envRevenue || 0).toFixed(2),
-        Number(row.storageSupplementRevenue || 0).toFixed(2),
-        Number(row.comprehensiveFee || 0).toFixed(2),
-        Number(row.otherIncome || 0).toFixed(2),
-        Number(row.fullRevenue || 0).toFixed(2),
-        Number(row.fullRevenuePrice || 0).toFixed(6)
-      ])
+      ["year", "annual_hours_h", "energy_mwh", "spot_avg_price", "capture_price", "spot_revenue", "mechanism_revenue", "lt_pnl_revenue", "env_revenue", "storage_supplement_revenue", "primary_fees", "other_net_income", "full_revenue", "full_revenue_price"],
+      ...rows.map((row) => {
+        const fees = rules.getOtherNetBreakdown(config, row.year, row.comprehensiveFee, row.otherIncome, row.energyMwh);
+        return [
+          row.year,
+          Number(row.annualHours || 0).toFixed(6),
+          Number(row.energyMwh || 0).toFixed(6),
+          Number(row.spotAvgPrice || 0).toFixed(6),
+          Number(row.capturePrice || 0).toFixed(6),
+          Number(row.spotRevenue || 0).toFixed(2),
+          Number(row.mechanismRevenue || 0).toFixed(2),
+          Number(row.ltPnlRevenue || 0).toFixed(2),
+          Number(row.envRevenue || 0).toFixed(2),
+          Number(row.storageSupplementRevenue || 0).toFixed(2),
+          fees.primaryFees?.toFixed(2) ?? "",
+          fees.otherNetIncome?.toFixed(2) ?? "",
+          Number(row.fullRevenue || 0).toFixed(2),
+          Number(row.fullRevenuePrice || 0).toFixed(6)
+        ];
+      })
     ];
     const exported = withDispatchColumns(baseRows, rows.map((row) => row.storageDispatch), [
       ["storage_power_mw", "powerMw", 6], ["storage_duration_h", "durationH", 6],

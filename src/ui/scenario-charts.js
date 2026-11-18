@@ -292,13 +292,13 @@
         color: tokens.storage
       },
       {
-        name: "其他收入",
-        data: rows.map((row) => rounded(row.otherIncomeImpact)),
+        name: "其他净收入",
+        data: rows.map((row) => rounded(row.otherNetIncome)),
         color: tokens.other
       },
       {
-        name: "综合费用",
-        data: rows.map((row) => rounded(row.feeImpact)),
+        name: "三项费用",
+        data: rows.map((row) => rounded(-row.primaryFees)),
         color: tokens.negative
       }
     ];
@@ -352,8 +352,8 @@
         color: tokens.env
       },
       {
-        name: "综合费用",
-        data: rows.map((row) => rounded(row.feeTotal)),
+        name: "三项费用",
+        data: rows.map((row) => rounded(row.primaryFees)),
         color: tokens.negative
       },
       {
@@ -362,8 +362,8 @@
         color: tokens.storage
       },
       {
-        name: "其他收入",
-        data: rows.map((row) => rounded(row.otherIncomeImpact)),
+        name: "其他净收入",
+        data: rows.map((row) => rounded(row.otherNetIncome)),
         color: tokens.other
       }
     ];

@@ -3,11 +3,12 @@
 (function (root, factory) {
   const isCommonJs = typeof module !== "undefined" && module.exports;
   const api = factory(isCommonJs ? require("../domain/result-versions") : root.NE_RESULT_VERSIONS,
-    isCommonJs ? require("../domain/scenario-config") : root.NE_SCENARIO_CONFIG);
+    isCommonJs ? require("../domain/scenario-config") : root.NE_SCENARIO_CONFIG,
+    isCommonJs ? require("../domain/revenue-rules") : root.NE_REVENUE_RULES);
   if (isCommonJs) module.exports = api;
   root.NE_ROUGH_PRICE_WORKSPACE = api;
   if (root.window && root.window !== root) root.window.NE_ROUGH_PRICE_WORKSPACE = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (versions, scenarioConfig) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (versions, scenarioConfig, revenueRules) {
   const states = new WeakMap();
   const ENV_FIELDS = [
     ["greenCertPrice", "绿证价格"], ["greenCertRealizeRatio", "绿证兑现比例", "ratio"],
@@ -164,15 +165,22 @@
     return `<figure class="rough-trend"><figcaption>${escapeHtml(title)} <span>${lines.map((line, index) => `<i class="rough-legend rough-legend-${index}">${escapeHtml(line.label)}</i>`).join(" ")}</span></figcaption><svg viewBox="0 0 620 190" role="img" aria-label="${escapeHtml(title)}，详细数值见下方年度明细"><line x1="58" y1="154" x2="592" y2="154" class="rough-trend-axis"/><text x="5" y="37">${escapeHtml(number(high))}</text><text x="5" y="145">${escapeHtml(number(low))}</text>${path}<text x="58" y="177">${rows[0].year}</text><text x="558" y="177">${rows.at(-1).year}</text></svg></figure>`;
   }
 
+  function roughFeeBreakdown(snapshot, row) {
+    return revenueRules.getOtherNetBreakdown(snapshot.calculationConfig || snapshot.config, row.year, row.fee, row.otherIncome);
+  }
+
   function roughResultsHtml(snapshot, snapshots, entry, snapshotState) {
     if (!snapshot) return `<section class="rough-card rough-empty"><h3>暂无粗算结果</h3><p>填写现货均价节点和捕获率，生成首版粗算。</p></section>`;
     const summary = snapshot.summary;
-    return `<section class="rough-card"><div class="rough-section-head"><div><h3 id="rough-results-heading">年度粗算结果</h3><p data-help="粗算结果与计算口径" data-help-anchor="#rough-results-heading">每次生成保存独立参数快照，可选择历史版本追溯。综合结算价＝捕获电价＋机制补差＋非机制电量策略贡献＋环境价值贡献＋配储收益－综合扣费＋其他收入。金额收入仍以收入测算工作台为准。</p></div><button type="button" class="ghost-button" data-rough-export>导出粗算 CSV</button></div>${snapshotSelectorHtml(snapshots, snapshot.id, "rough")}
+    return `<section class="rough-card"><div class="rough-section-head"><div><h3 id="rough-results-heading">年度粗算结果</h3><p data-help="粗算结果与计算口径" data-help-anchor="#rough-results-heading">每次生成保存独立参数快照，可选择历史版本追溯。综合结算价＝捕获电价＋机制补差＋非机制电量策略贡献＋环境价值贡献＋配储收益－三项费用＋其他净收入。三项费用包括市场运营费、电网考核费和辅助服务费。历史明细无法核对时，费用分项留空，仍显示原结算价。</p></div><button type="button" class="ghost-button" data-rough-export>导出粗算 CSV</button></div>${snapshotSelectorHtml(snapshots, snapshot.id, "rough")}
       ${snapshotState && !snapshotState.comparable ? `<p class="rough-alert">${escapeHtml(snapshotState.message)}</p>` : snapshotState?.refined ? '<span class="rough-badge">已保留原粗算 · 收益参数已细化</span>' : ""}
       <div class="rough-metrics"><div><span>全周期电量加权均价</span><strong>${number(summary.weightedPrice)}<small> 元/MWh</small></strong>${summary.weightedPrice === null ? "<small>电量未完整录入，暂不展示</small>" : ""}</div><div><span>年度算术均价（参考）</span><strong>${number(summary.simpleAverage)}<small> 元/MWh</small></strong></div><div><span>首年 / 末年综合结算价</span><strong>${number(summary.firstPrice)} / ${number(summary.lastPrice)}</strong></div></div>
       <div class="rough-assumptions"><span>捕获率 ${number(snapshot.draft.captureRate)}%</span><span>${snapshot.config.mechanismReferenceMode === "same_type" ? `同类型补差 · 价差 ${number(snapshot.config.sameTypeSpread)} 元/MWh` : "项目捕获价补差"}</span><span id="rough-source-summary">${snapshot.draft.sourceNote ? "已记录假设来源" : "未填写假设来源"}</span>${snapshot.draft.sourceNote ? `<p data-help="假设来源" data-help-anchor="#rough-source-summary">${escapeHtml(snapshot.draft.sourceNote)}</p>` : ""}</div>
       ${trendSvg(snapshot.rows, [{ key: "spotAvgPrice", label: "现货均价" }, { key: "capturePrice", label: "捕获电价" }, { key: "fullRevenuePrice", label: "综合结算价" }], "年度粗算电价趋势（元/MWh）")}
-      <div class="rough-table-wrap"><table class="rough-table"><caption>年度价格及结算贡献（元/MWh；电量为 MWh）</caption><thead><tr>${["年份", "现货均价", "捕获电价", "有效机制占比", "机制补差", "策略贡献", "环境价值贡献", "配储收益", "综合扣费", "其他收入", "综合结算价", "电量"].map((label) => `<th scope="col">${label}</th>`).join("")}</tr></thead><tbody>${snapshot.rows.map((row) => `<tr><th scope="row">${row.year}</th><td>${number(row.spotAvgPrice)}</td><td>${number(row.capturePrice)}</td><td>${number(row.mechanismRatio * 100)}%</td><td>${number(row.mechanismAdjustment)}</td><td>${number((1 - row.mechanismRatio) * row.ltPnlPrice)}</td><td>${number(row.envValue)}</td><td>${number(row.storageSupplement)}</td><td>${number(row.fee)}</td><td>${number(row.otherIncome)}</td><td><strong>${number(row.fullRevenuePrice)}</strong></td><td>${number(row.energyMwh)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="rough-table-wrap"><table class="rough-table"><caption>年度价格及结算贡献（元/MWh；电量为 MWh）</caption><thead><tr>${["年份", "现货均价", "捕获电价", "有效机制占比", "机制补差", "策略贡献", "环境价值贡献", "配储收益", "三项费用", "其他净收入", "综合结算价", "电量"].map((label) => `<th scope="col">${label}</th>`).join("")}</tr></thead><tbody>${snapshot.rows.map((row) => {
+        const { primaryFees, otherNetIncome } = roughFeeBreakdown(snapshot, row);
+        return `<tr><th scope="row">${row.year}</th><td>${number(row.spotAvgPrice)}</td><td>${number(row.capturePrice)}</td><td>${number(row.mechanismRatio * 100)}%</td><td>${number(row.mechanismAdjustment)}</td><td>${number((1 - row.mechanismRatio) * row.ltPnlPrice)}</td><td>${number(row.envValue)}</td><td>${number(row.storageSupplement)}</td><td>${number(primaryFees)}</td><td>${number(otherNetIncome)}</td><td><strong>${number(row.fullRevenuePrice)}</strong></td><td>${number(row.energyMwh)}</td></tr>`;
+      }).join("")}</tbody></table></div>
       </section>`;
   }
 
@@ -238,10 +246,13 @@
   function buildRoughCsv(snapshot) {
     return csvText([["粗算版本", snapshot.id], ["生成时间", snapshot.createdAt], ["方案", snapshot.scenarioName],
       ["预期捕获率(%)", snapshot.draft.captureRate], ["假设来源", snapshot.draft.sourceNote],
-      ["年份", "现货均价(元/MWh)", "捕获电价(元/MWh)", "有效机制占比", "机制补差(元/MWh)", "策略贡献(元/MWh)", "环境价值贡献(元/MWh)", "配储收益(元/MWh)", "综合扣费(元/MWh)", "其他收入(元/MWh)", "综合结算价(元/MWh)", "电量(MWh)"],
-      ...snapshot.rows.map((row) => [row.year, row.spotAvgPrice, row.capturePrice, row.mechanismRatio,
-        row.mechanismAdjustment, (1 - row.mechanismRatio) * row.ltPnlPrice, row.envValue,
-        row.storageSupplement, row.fee, row.otherIncome, row.fullRevenuePrice, row.energyMwh])]);
+      ["年份", "现货均价(元/MWh)", "捕获电价(元/MWh)", "有效机制占比", "机制补差(元/MWh)", "策略贡献(元/MWh)", "环境价值贡献(元/MWh)", "配储收益(元/MWh)", "三项费用(元/MWh)", "其他净收入(元/MWh)", "综合结算价(元/MWh)", "电量(MWh)"],
+      ...snapshot.rows.map((row) => {
+        const { primaryFees, otherNetIncome } = roughFeeBreakdown(snapshot, row);
+        return [row.year, row.spotAvgPrice, row.capturePrice, row.mechanismRatio,
+          row.mechanismAdjustment, (1 - row.mechanismRatio) * row.ltPnlPrice, row.envValue,
+          row.storageSupplement, primaryFees, otherNetIncome, row.fullRevenuePrice, row.energyMwh];
+      })]);
   }
   function buildComparisonCsv(snapshot, source, comparison) {
     const trace = comparison.resultTrace || versions.describeResult({ sourceContext: source });

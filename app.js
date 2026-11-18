@@ -3648,8 +3648,8 @@ function renderScenarioBridgeChart(focusItem, baseline) {
       ? "基准方案自身，无差异"
       : `${focusItem.scenario.name} 相对 ${baseline.scenario.name}`;
   }
-  const focusTotals = compareAnalysis.resultComponentTotals(focusItem.result);
-  const baseTotals = compareAnalysis.resultComponentTotals(baseline.result);
+  const focusTotals = compareAnalysis.resultComponentTotals(focusItem.result, focusItem.scenario.config);
+  const baseTotals = compareAnalysis.resultComponentTotals(baseline.result, baseline.scenario.config);
   chart.setOption(compareCharts.buildScenarioBridgeOption(focusTotals, baseTotals, tokens), true);
 }
 
@@ -4334,7 +4334,7 @@ function renderResultChartsPlaceholder(message) {
   });
 }
 
-function renderResultCharts(project, scenario, result) {
+function renderResultCharts(verifiedConfig, result) {
   if (resolveVisiblePageId(appState.activePage) !== "results-page") return;
   const rows = result?.annualRows || [];
   if (!rows.length) {
@@ -4343,7 +4343,7 @@ function renderResultCharts(project, scenario, result) {
   }
 
   const tokens = resultChartTokens();
-  const chartData = resultReport.buildResultChartData(result, scenario?.config || {});
+  const chartData = resultReport.buildResultChartData(result, verifiedConfig);
   const options = resultCharts.buildResultChartOptions(chartData, tokens, {
     yearInterval: scenarioCharts.scenarioVisualYearInterval(rows)
   });
@@ -4383,7 +4383,7 @@ function renderResults() {
     renderResultChartsPlaceholder(view.chartPlaceholder);
     return;
   }
-  renderResultCharts(project, view.isHistorical ? null : scenario, result);
+  renderResultCharts(state.verifiedConfig, result);
 }
 
 function createCompareRenderers() {
@@ -4554,7 +4554,7 @@ function exportResultCsv(kind) {
   const filename = hourly ? exportBuilders.buildHourlyResultExportFilename : exportBuilders.buildAnnualResultExportFilename;
   const rows = hourly ? exportBuilders.buildHourlyResultExportRows : exportBuilders.buildAnnualResultExportRows;
   const run = project.priceRuns?.find((item) => item.id === result.sourceContext?.runId);
-  downloadCsv(filename(project, scenario, result), rows(result, { includeSource: true, run }));
+  downloadCsv(filename(project, scenario, result), rows(result, { includeSource: true, run, verifiedConfig: scenario.config }));
 }
 
 function exportAnnualCsv() { exportResultCsv("annual"); }

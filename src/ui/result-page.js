@@ -1,7 +1,9 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const commonJs = typeof module !== "undefined" && module.exports;
+  const api = factory(commonJs ? require("../domain/revenue-rules") : root.NE_REVENUE_RULES,
+    commonJs ? require("../domain/result-versions") : root.NE_RESULT_VERSIONS);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -9,7 +11,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_RESULT_PAGE = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, versions) {
   const EMPTY_METRIC_LABELS = Object.freeze([
     "首年全口径收入",
     "首年度电净价",
@@ -192,8 +194,11 @@
     `).join("");
   }
 
-  function buildAnnualRowsHtml(rows) {
-    return rows.map((row) => `
+  function buildAnnualRowsHtml(rows, feeConfig) {
+    const money = (amount) => amount === null ? "—" : asMoney(amount);
+    return rows.map((row) => {
+      const { primaryFees, otherNetIncome } = rules.getOtherNetBreakdown(feeConfig, row.year, row.comprehensiveFee, row.otherIncome, row.energyMwh);
+      return `
     <tr>
       <td>${row.year}</td>
       <td>${asNum(row.annualHours, 2)}</td>
@@ -205,12 +210,13 @@
       <td>${asMoney(row.ltPnlRevenue)}</td>
       <td>${asMoney(row.envRevenue)}</td>
       <td>${asMoney(row.storageSupplementRevenue)}</td>
-      <td>${asMoney(-row.comprehensiveFee)}</td>
-      <td>${asMoney(row.otherIncome)}</td>
+      <td>${money(primaryFees)}</td>
+      <td>${money(otherNetIncome)}</td>
       <td>${asMoney(row.fullRevenue)}</td>
       <td>${asNum(row.fullRevenuePrice, 2)}</td>
     </tr>
-  `).join("");
+  `;
+    }).join("");
   }
 
   function buildHourlyRowsHtml(rows) {
@@ -270,6 +276,7 @@
       envValueMode,
       feeConfigMode,
       resultState,
+      verifiedConfig,
       previewLimit
     } = input;
     const { rows, first, maxRevenueRow, minRevenueRow, unitLift, liftText, leadingPositive, leadingNegative } = summaryData;
@@ -329,8 +336,8 @@
       {
         title: "费用与补充收益",
         body: feeConfigMode === "manual"
-          ? "综合费用与其他收入采用逐年导入配置；配储补充收益按当前储能收益口径计入。"
-          : "综合费用与其他收入按当前默认全周期配置执行；配储补充收益按当前储能收益口径计入。"
+          ? "三项费用与其他净收入采用逐年配置。配储补充收益按储能收益口径计入。"
+          : "三项费用与其他净收入采用全周期统一配置。配储补充收益按储能收益口径计入。"
       }
     ];
     if (first.storageDispatch) {
@@ -350,7 +357,7 @@
       assumptionHtml: buildTextItems(assumptionItems, "result-assumption-item"),
       storageDispatchHtml: buildStorageDispatchHtml(rows)
         + buildArchivedStorageHtml(project.legacyStorageResultsByScenario?.[scenario?.id]),
-      annualRowsHtml: buildAnnualRowsHtml(rows),
+      annualRowsHtml: buildAnnualRowsHtml(rows, versions.getResultFeeConfig(result, verifiedConfig)),
       hourlyRowsHtml: buildHourlyRowsHtml(previewRows),
       hourlyPreviewHint: `测算完成 · 首年小时明细 ${(result.hourlyPreview || []).length} 条`
     };
@@ -371,6 +378,7 @@
       envValueMode = "global",
       feeConfigMode = "global",
       resultState = null,
+      verifiedConfig = null,
       previewLimit = 240
     } = input;
     const scenarioName = String(scenario?.name || "").trim();
@@ -430,6 +438,7 @@
         envValueMode,
         feeConfigMode,
         resultState,
+        verifiedConfig,
         previewLimit
       })
     };
@@ -452,13 +461,15 @@
     const result = project ? project.resultsByScenario?.[scenario?.id || ""] : null;
     const cfg = scenario?.config || {};
     const resultState = result ? getBaselineResultState(project, scenario, result) : null;
+    const verifiedConfig = resultState?.current || resultState?.reason === "stale_run" ? cfg : null;
     const canSummarize = result && !["incomplete_result", "invalid_source_prices"].includes(resultState?.reason) && resultRowsAreRenderable(result);
     const view = buildResultPageViewModel({
       project,
       scenario,
       result,
       resultState,
-      summaryData: canSummarize ? buildResultSummaryData(result) : null,
+      summaryData: canSummarize ? buildResultSummaryData(result, verifiedConfig) : null,
+      verifiedConfig,
       labels: {
         projectName: project?.name || "-",
         scenarioName: scenario?.name || "-",
@@ -470,7 +481,7 @@
       envValueMode: getEnvValueMode(cfg),
       feeConfigMode: getFeeConfigMode(cfg)
     });
-    return { project, scenario, result, view };
+    return { project, scenario, result, view, verifiedConfig };
   }
 
   return Object.freeze({

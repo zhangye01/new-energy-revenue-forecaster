@@ -20,7 +20,7 @@ assert.equal(buildFeeManualTemplateFilename(project, scenario), "江苏-海上�
 assert.equal(buildAnnualResultExportFilename(project, scenario), "江苏-海上风电-基准-乐观-年度收入.csv");
 assert.equal(buildHourlyResultExportFilename(project, scenario), "江苏-海上风电-基准-乐观-首年8760小时明细.csv");
 
-const annualRows = buildAnnualResultExportRows({
+const storedAnnual = {
   annualRows: [{
     year: 2026,
     annualHours: 2000,
@@ -37,8 +37,12 @@ const annualRows = buildAnnualResultExportRows({
     fullRevenue: 19329470.9,
     fullRevenuePrice: 302.023
   }]
-});
+};
+const verifiedConfig = { marketOpFee: 100 / 64000, gridAssessFee: 50 / 64000, ancillaryFee: 200 / 64000,
+  otherFee: 150 / 64000, otherIncome: 60 / 64000 };
+const annualRows = buildAnnualResultExportRows(storedAnnual, { verifiedConfig });
 assert.equal(annualRows[0][0], "year");
+assert.deepEqual(annualRows[0].slice(10, 12), ["primary_fees", "other_net_income"]);
 assert.deepEqual(annualRows[1], [
   2026,
   "2000.000000",
@@ -50,11 +54,20 @@ assert.deepEqual(annualRows[1], [
   "800.00",
   "300.00",
   "400.00",
-  "500.00",
-  "60.00",
+  "350.00",
+  "-90.00",
   "19329470.90",
   "302.023000"
 ]);
+const missingConfigRows = buildAnnualResultExportRows(storedAnnual);
+assert.deepEqual(missingConfigRows[1].slice(10), ["", "", "19329470.90", "302.023000"]);
+const archived = { ...storedAnnual, sourceContext: { projectId: "p", scenarioId: "s" }, resultVersion: {
+  id: "old-version", schemaVersion: 1, scenarioConfig: verifiedConfig,
+  project: { id: "p", startYear: 2026, forecastYears: 1, capacityMw: 40, hasStorage: false }
+} };
+const storedBefore = JSON.stringify(archived);
+assert.deepEqual(buildAnnualResultExportRows(archived, { verifiedConfig: { ...verifiedConfig, otherNetIncome: 7 } }), annualRows);
+assert.equal(JSON.stringify(archived), storedBefore, "年度导出读取归档配置，不写回历史行或配置");
 
 const hourlyRows = buildHourlyResultExportRows({
   hourlyPreview: [{

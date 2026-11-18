@@ -25,7 +25,7 @@
   const MANUAL_GROUPS = Object.freeze({
     lt: ["ltPricingMode", "ltManualPricesByYear", "交易策略损益"],
     env: ["envValueMode", "envManualValuesByYear", "环境价值"],
-    fee: ["feeConfigMode", "feeManualValuesByYear", "费用与其他收益"]
+    fee: ["feeConfigMode", "feeManualValuesByYear", "费用与其他净收入"]
   });
   const FEE_FIELDS = ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherNetIncome"];
   let storageState = "saved";
@@ -508,8 +508,7 @@
       getFeeConfigForYear = () => ({
         marketOpFee: 0,
         gridAssessFee: 0,
-        ancillaryFee: 0,
-        otherFee: 0
+        ancillaryFee: 0
       }),
       asPercent = (value) => String(value),
       asNum = (value) => String(value),
@@ -542,12 +541,15 @@
     const listHtml = scenarios.map((scenario) => {
       const valuePart = getEnvValueAllocation(project, scenario.config, project.startYear).unitValuePerMarketMwh;
       const feeConfig = getFeeConfigForYear(project, scenario.config, project.startYear);
+      const feeSource = scenario.config.feeConfigMode === "manual"
+        ? scenario.config.feeManualValuesByYear?.[project.startYear] : scenario.config;
+      const otherNetIncome = getScenarioConfig().getOtherNetIncome(feeSource);
       const storagePart = project.hasStorage
         ? scenario.config.storageCapacityCompPrice
           + scenario.config.storageAncillaryRevenuePrice
           + scenario.config.storageOtherRevenuePrice
         : null;
-      const feePart = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
+      const primaryFees = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee;
       const marks = [
         scenario.id === project.activeScenarioId ? "当前" : "",
         scenario.isBaseline ? "基准" : "",
@@ -562,7 +564,8 @@
         <td>${asNum(scenario.config.ltYear1Pnl, 1)}</td>
         <td>${asNum(valuePart, 1)}</td>
         <td>${storagePart === null ? "-" : asNum(storagePart, 1)}</td>
-        <td>${asNum(feePart, 1)}</td>
+        <td>${asNum(primaryFees, 1)}</td>
+        <td>${otherNetIncome === null ? "—" : asNum(otherNetIncome, 1)}</td>
         <td>${formatDate(scenario.updatedAt)}</td>
       </tr>
     `;

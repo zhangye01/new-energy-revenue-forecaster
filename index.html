@@ -98,13 +98,13 @@
     <script src="./src/domain/app-utils.js?v=20261113c" defer></script>
     <script src="./src/domain/supply-demand.js?v=20261113c" defer></script>
     <script src="./src/domain/price-forecast.js?v=20261118e" defer></script>
-    <script src="./src/domain/result-versions.js?v=20261118f" defer></script>
-    <script src="./src/domain/export-builders.js?v=20261118f" defer></script>
-    <script src="./src/domain/revenue-rules.js?v=20261118h" defer></script>
+    <script src="./src/domain/result-versions.js?v=20261118i" defer></script>
+    <script src="./src/domain/revenue-rules.js?v=20261118i" defer></script>
+    <script src="./src/domain/export-builders.js?v=20261118i" defer></script>
     <script src="./src/domain/storage-dispatch.js?v=20261118b" defer></script>
     <script src="./src/domain/revenue-calculator.js?v=20261118h" defer></script>
     <script src="./src/domain/result-calculation.js?v=20261118f" defer></script>
-    <script src="./src/domain/result-report.js?v=20261113c" defer></script>
+    <script src="./src/domain/result-report.js?v=20261118i" defer></script>
     <script src="./src/ui/policy-panel.js?v=20261113c" defer></script>
     <script src="./src/ui/province-defaults.js?v=20261118h" defer></script>
     <script src="./src/ui/energy-workspace.js?v=20261113c" defer></script>
@@ -117,18 +117,18 @@
     <script src="./src/ui/forecast-page.js?v=20261118e" defer></script>
     <script src="./src/ui/forecast-run-flow.js?v=20261118e" defer></script>
     <script src="./src/ui/project-list.js?v=20261118d" defer></script>
-    <script src="./src/ui/result-page.js?v=20261118h" defer></script>
+    <script src="./src/ui/result-page.js?v=20261118i" defer></script>
     <script src="./src/ui/result-runner.js?v=20261118f" defer></script>
     <script src="./src/ui/result-print.js?v=20261118g" defer></script>
     <script src="./src/ui/result-charts.js?v=20261113c" defer></script>
-    <script src="./src/ui/scenario-charts.js?v=20261118h" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20261118h" defer></script>
-    <script src="./src/ui/scenario-visual-data.js?v=20261118h" defer></script>
+    <script src="./src/ui/scenario-charts.js?v=20261118i" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261118i" defer></script>
+    <script src="./src/ui/scenario-visual-data.js?v=20261118i" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20261118e" defer></script>
-    <script src="./src/ui/compare-charts.js?v=20261113c" defer></script>
-    <script src="./src/ui/compare-page.js?v=20261118f" defer></script>
-    <script src="./src/domain/compare-sensitivity.js?v=20261118h" defer></script>
-    <script src="./src/domain/compare-analysis.js?v=20261118h" defer></script>
+    <script src="./src/ui/compare-charts.js?v=20261118i" defer></script>
+    <script src="./src/ui/compare-page.js?v=20261118i" defer></script>
+    <script src="./src/domain/compare-sensitivity.js?v=20261118i" defer></script>
+    <script src="./src/domain/compare-analysis.js?v=20261118i" defer></script>
     <script src="./src/ui/result-history.js?v=20261118f" defer></script>
     <script src="./src/domain/history-analysis.js?v=20261118b" defer></script>
     <script src="./src/ui/history-charts.js?v=20261113c" defer></script>
@@ -139,8 +139,8 @@
     <script src="./src/ui/app-event-bindings.js?v=20261113c" defer></script>
     <script src="./src/domain/workflow-status.js?v=20261118e" defer></script>
     <script src="./src/domain/scenario-config.js?v=20261118h" defer></script>
-    <script src="./src/domain/rough-price.js?v=20261118h" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261118h" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261118i" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261118i" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261118h" defer></script>
     <script src="./src/domain/project-settings.js?v=20261113c" defer></script>
     <script src="./src/domain/project-model.js?v=20261118h" defer></script>
@@ -150,7 +150,7 @@
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261118f" defer></script>
-    <script src="./app.js?v=20261118h" defer></script>
+    <script src="./app.js?v=20261118i" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -1098,7 +1098,8 @@
                         <th>交易策略首年损益</th>
                         <th>绿色价值</th>
                         <th>配储独立补充</th>
-                        <th>综合费用</th>
+                        <th>三项费用</th>
+                        <th>其他净收入</th>
                         <th>更新时间</th>
                       </tr>
                     </thead>
@@ -1396,8 +1397,8 @@
                   </article>
                   <article class="scenario-visual-chart-card scenario-visual-chart-card-wide">
                     <div class="scenario-visual-chart-head">
-                      <strong id="scenario-trend-chart-title">其他收入项目度电路径</strong>
-                      <span data-help="度电参数路径" data-help-anchor="#scenario-trend-chart-title">交易、环境、费用、其他收入和配储收益</span>
+                      <strong id="scenario-trend-chart-title">收益参数度电路径</strong>
+                      <span data-help="度电参数路径" data-help-anchor="#scenario-trend-chart-title">交易策略、环境价值、三项费用、其他净收入和配储收益的年度变化。</span>
                     </div>
                     <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-trend-chart" aria-label="度电参数周期曲线图"></div>
                   </article>
@@ -1546,7 +1547,7 @@
               <details class="result-disclosure result-drill" open>
                 <summary>
                   <span id="result-annual-detail-heading">年度结果明细附表</span>
-                  <small data-help="年度结果明细附表" data-help-anchor="#result-annual-detail-heading">用于校核简报图表，导出年度CSV保留完整口径</small>
+                  <small data-help="年度结果明细附表" data-help-anchor="#result-annual-detail-heading">三项费用为市场运营费、电网考核费和辅助服务费，以扣减金额列示。其他净收入以带符号的净额列示。缺少原费用参数的旧结果保留合计，两项明细留空。</small>
                 </summary>
                 <div class="table-scroll">
                   <table>
@@ -1562,8 +1563,8 @@
                         <th>交易策略损益</th>
                         <th>环境价值</th>
                         <th>配储补充收益</th>
-                        <th>综合费用</th>
-                        <th>其他收入</th>
+                        <th>三项费用</th>
+                        <th>其他净收入</th>
                         <th>全口径收入</th>
                         <th>度电净价 <span class="table-unit">元/MWh</span></th>
                       </tr>
@@ -1950,7 +1951,7 @@
                 </article>
                 <article class="help-card">
                   <strong>收益参数补充与细化</strong>
-                  <p>核对机制电价、策略损益、环境价值、费用及其他收入。导入年表后先预览，再确认并保存。配储项目还需确认往返效率及独立补充收益。</p>
+                  <p>核对机制电价、策略损益、环境价值、三项费用及其他净收入。导入年表后先预览，再确认并保存。配储项目还需确认往返效率及独立补充收益。</p>
                 </article>
                 <article class="help-card">
                   <strong>交叉验证</strong>
@@ -2036,12 +2037,8 @@
                   <p>绿证和绿电溢价按市场化交易电量及各自兑现比例测算。</p>
                 </article>
                 <article class="help-card">
-                  <strong>综合费用</strong>
-                  <p>配置市场运营费、并网考核费、辅助服务费和其他净收入。其他净收入填正数计收入，填负数计费用。</p>
-                </article>
-                <article class="help-card">
-                  <strong>其他收入项</strong>
-                  <p>用于承接前述标准项以外的补充收入，保持结构开放，便于后续扩展。</p>
+                  <strong>三项费用与其他净收入</strong>
+                  <p>三项费用为市场运营费、电网考核费和辅助服务费。其他净收入＝其他收入减其他费用，填正数计收入，填负数计费用。</p>
                 </article>
                 <article class="help-card">
                   <strong>配储逐时充放电</strong>

@@ -107,6 +107,10 @@
       isBaseline: version.isBaseline, config: version.scenarioConfig } };
   }
 
+  function getResultFeeConfig(result, verifiedConfig = null) {
+    return getArchivedCalculationContext(result)?.scenario.config || (result?.resultVersion ? null : verifiedConfig);
+  }
+
   function describeResult(result, run = null) {
     const source = result?.sourceContext;
     const runId = typeof source?.runId === "string" ? source.runId : "";
@@ -156,6 +160,6 @@
       .filter(({ result }) => object(result) && Array.isArray(result.annualRows) && result.annualRows.length).reverse();
   }
 
-  return Object.freeze({ archivePreviousResult, describeResult, getArchivedCalculationContext, getPriceSourceLabel, listArchivedResults,
+  return Object.freeze({ archivePreviousResult, describeResult, getArchivedCalculationContext, getResultFeeConfig, getPriceSourceLabel, listArchivedResults,
     matchesSavedPriceSource, priceContentFingerprint, restoreResultHistory, stampComputedResult });
 });
