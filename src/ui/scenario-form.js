@@ -16,6 +16,9 @@
   const loadedInputs = new WeakMap();
   const refinementForms = new WeakMap();
   const validationMessages = new WeakMap();
+  const messageContexts = new WeakMap();
+  const actionMessages = new WeakMap();
+  let storageState = "saved";
   const REFINEMENT_FIELDS = Object.freeze({
     mechanismEnabled: "mechanism-enabled", mechanismRatio: "mechanism-ratio", mechanismPrice: "mechanism-price",
     mechanismStartYm: "mechanism-start-ym", mechanismEndYm: "mechanism-end-ym",
@@ -117,7 +120,76 @@
     const progress = getField(querySelector, "#scenario-refinement-progress");
     if (progress) progress.textContent = `已确认 ${state.confirmed} / ${state.total} 项`;
     refreshAnnualPreviews({ project, config, querySelector, resetOpen });
+    renderScenarioStatus(input, state);
     return state;
+  }
+
+  function scenarioKey(input = {}) {
+    return input.scenario?.id ? `${input.project?.id || ""}/${input.scenario.id}` : input.scenario;
+  }
+
+  function paintScenarioMessage(node, text, tone = "info") {
+    if (!node) return;
+    node.textContent = text;
+    node.hidden = !text;
+    if (node.dataset) node.dataset.tone = tone;
+    if (!node.style) return;
+    const color = { success: "--green", error: "--red", warning: "--orange" }[tone];
+    node.style.borderColor = color ? `var(${color})` : "";
+    node.style.background = color ? `color-mix(in srgb, var(${color}) 10%, var(--panel))` : "";
+    node.style.color = color ? "var(--ink)" : "";
+  }
+
+  function setScenarioMessage(input = {}) {
+    const node = input.refs?.scenarioMessage;
+    if (!node) return;
+    const context = input.scenario ? input : messageContexts.get(node);
+    actionMessages.set(node, { key: scenarioKey(context), text: input.text || "", tone: input.tone || "error" });
+    paintScenarioMessage(node, input.text || "", input.tone || "error");
+    if (["error", "conflict"].includes(storageState)) renderScenarioStatus(messageContexts.get(node) || input);
+  }
+
+  function renderScenarioStatus(input = {}, refinementState) {
+    const { refs = {}, scenario, querySelector } = input;
+    const node = refs.scenarioMessage;
+    if (!node || !scenario?.config) return;
+    messageContexts.set(node, input);
+    const state = refinementState || buildRefinementState(input);
+    const keys = ["scenarioName", ...Object.keys(state.fields)];
+    const editing = keys.some((key) => {
+      const field = getField(querySelector, key === "scenarioName" ? "#scenario-name" : `#${REFINEMENT_FIELDS[key]}`) || refs[key];
+      const loaded = field && loadedInputs.get(field);
+      return loaded && String(field.value) !== loaded.display;
+    });
+    let notice = actionMessages.get(node);
+    if (notice?.key !== scenarioKey(input) || input.clearNotice) {
+      actionMessages.delete(node);
+      notice = null;
+    }
+    if (["error", "conflict"].includes(storageState)) {
+      paintScenarioMessage(node, "本页修改尚未保存到本机，请处理上方保存提示。", "warning");
+    } else if (notice?.tone === "error") {
+      paintScenarioMessage(node, notice.text, notice.tone);
+    } else if (editing) {
+      paintScenarioMessage(node, "参数已修改，请确认并保存。", "warning");
+    } else if (storageState === "pending" && state.confirmed === state.total) {
+      paintScenarioMessage(node, "参数已确认，正在保存到本机。", "info");
+    } else if (notice) {
+      paintScenarioMessage(node, notice.text, notice.tone);
+    } else if (state.confirmed === state.total) {
+      paintScenarioMessage(node, "当前方案参数已确认并保存。", "success");
+    } else {
+      const missing = state.groups.reduce((sum, group) => sum + group.missing, 0);
+      const pending = state.total - state.confirmed - missing;
+      paintScenarioMessage(node, [missing ? `待补充 ${missing} 项` : "", pending ? `待确认 ${pending} 项` : ""].filter(Boolean).join(" · ") + "，完成后确认并保存。");
+    }
+  }
+
+  function updateScenarioStorageStatus({ refs = {}, status = {} } = {}) {
+    // A retry must not hide a known failed write before it actually succeeds.
+    if (status.state !== "pending" || !["error", "conflict"].includes(storageState)) storageState = status.state || storageState;
+    const context = refs.scenarioMessage && messageContexts.get(refs.scenarioMessage);
+    if (context) refreshRefinementState({ ...context, clearNotice: false, resetOpen: false });
   }
 
   function refreshAnnualPreviews({ project, config, querySelector, resetOpen }) {
@@ -157,9 +229,9 @@
 
   function bindRefinementState(input) {
     const form = getField(input.querySelector, "#scenario-form");
-    if (!form?.addEventListener) return;
+    if (!form?.addEventListener) { refreshRefinementState({ ...input, resetOpen: true }); return; }
     if (!refinementForms.has(form)) {
-      const refresh = () => refreshRefinementState(refinementForms.get(form));
+      const refresh = () => refreshRefinementState({ ...refinementForms.get(form), clearNotice: true });
       form.addEventListener("input", refresh);
       form.addEventListener("change", refresh);
     }
@@ -391,10 +463,10 @@
       renameDisabled: !activeScenario || activeScenario.locked,
       toggleBaselineDisabled: !baselineScenario,
       applyBatchDisabled: !scenarios.length,
-      toggleBaselineText: baselineScenario?.locked ? "解锁基准场景" : "锁定基准场景",
+      toggleBaselineText: baselineScenario?.locked ? "解锁基准方案" : "锁定基准方案",
       lockHint: baselineScenario?.locked
-        ? "基准场景已锁定。切换到其他场景可继续编辑。"
-        : "基准场景未锁定。"
+        ? "基准方案已锁定。切换到其他方案可继续编辑。"
+        : "基准方案未锁定。"
     };
   }
 
@@ -431,8 +503,7 @@
     const message = refs.scenarioMessage;
     const staleError = message && validationMessages.get(message);
     if (staleError && message.textContent === staleError) {
-      message.textContent = "已带入当前方案参数。";
-      if (message.style) { message.style.borderColor = ""; message.style.background = ""; }
+      actionMessages.delete(message);
     }
     if (message) validationMessages.delete(message);
     const config = scenario.config;
@@ -441,6 +512,8 @@
       return allowed.includes(value) ? value : "";
     };
     setValue(querySelector, "#scenario-name", scenario.name);
+    const nameField = getField(querySelector, "#scenario-name");
+    if (nameField) loadedInputs.set(nameField, { display: String(nameField.value), original: scenario.name });
     setValue(querySelector, "#mechanism-enabled", typeof config.mechanismEnabled === "boolean" ? config.mechanismEnabled ? "yes" : "no" : "");
     setRatioValue(querySelector, "#mechanism-ratio", config.mechanismRatio);
     setValue(querySelector, "#mechanism-price", config.mechanismPrice);
@@ -521,8 +594,8 @@
     }
     if (refs.scenarioLockHint) {
       refs.scenarioLockHint.textContent = locked
-        ? "当前场景已锁定，请切换场景或解锁。"
-        : "当前场景可编辑。";
+        ? "当前方案已锁定，请切换方案或解锁。"
+        : "当前方案可编辑。";
     }
   }
 
@@ -717,15 +790,15 @@
       readEnvValueAllocationDraft = () => ({})
     } = input;
     if (scenario.locked) {
-      return invalid("当前场景已锁定，不能保存修改。");
+      return invalid("当前方案已锁定，不能保存修改。");
     }
 
-    const scenarioName = textValue(querySelector, "#scenario-name") || "基准场景";
+    const scenarioName = textValue(querySelector, "#scenario-name") || "基准方案";
     const duplicatedName = (project.scenarios || []).find((item) => (
       item.id !== scenario.id && item.name === scenarioName
     ));
     if (duplicatedName) {
-      return invalid("场景名称重复，请修改后再保存。");
+      return invalid("方案名称重复，请修改后再保存。");
     }
 
     const choices = [
@@ -830,9 +903,9 @@
       nowIso = () => new Date().toISOString()
     } = input;
     if (!project || !scenario || !draft?.ok) {
-      return invalid(draft?.message || "场景保存失败。");
+      return invalid(draft?.message || "方案保存失败。");
     }
-    if (scenario.locked) return invalid("当前场景已锁定，不能保存修改。");
+    if (scenario.locked) return invalid("当前方案已锁定，不能保存修改。");
     scenario.name = draft.scenarioName;
     getScenarioModel().invalidateInactiveConfirmations?.(project, scenario);
     scenario.config = draft.config;
@@ -861,7 +934,7 @@
     project.statuses["scenario-page"] = "completed";
     return {
       ok: true,
-      message: `场景“${scenario.name}”已保存。`
+      message: `方案“${scenario.name}”已保存。`
     };
   }
 
@@ -877,6 +950,8 @@
     buildScenarioConfigFromForm,
     buildRefinementState,
     refreshRefinementState,
+    setScenarioMessage,
+    updateScenarioStorageStatus,
     loadScenarioToForm
   });
 });

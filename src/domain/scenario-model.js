@@ -293,7 +293,7 @@
     const makeId = typeof options.makeId === "function" ? options.makeId : ((prefix) => `${prefix}-baseline`);
     return {
       id: makeId("scn"),
-      name: "基准场景",
+      name: "基准方案",
       isBaseline: true,
       locked: false,
       confirmedConfig: {},
@@ -323,25 +323,25 @@
 
   function renameScenario(project = {}, scenario = {}, input = {}) {
     if (scenario.locked) {
-      return { ok: false, changed: false, tone: "error", message: "当前场景已锁定，不能重命名。" };
+      return { ok: false, changed: false, tone: "error", message: "当前方案已锁定，不能重命名。" };
     }
     const name = typeof input.name === "string" ? input.name.trim() : "";
     if (!name) {
-      return { ok: false, changed: false, tone: "error", message: "场景名称不能为空。" };
+      return { ok: false, changed: false, tone: "error", message: "方案名称不能为空。" };
     }
     if (name === scenario.name) {
-      return { ok: true, changed: false, tone: "success", message: "场景名称未变化。" };
+      return { ok: true, changed: false, tone: "success", message: "方案名称未变化。" };
     }
     const duplicatedName = (project.scenarios || []).some((item) => (
       item.id !== scenario.id && item.name === name
     ));
     if (duplicatedName) {
-      return { ok: false, changed: false, tone: "error", message: "场景名称重复，请换一个名称。" };
+      return { ok: false, changed: false, tone: "error", message: "方案名称重复，请换一个名称。" };
     }
     const oldName = scenario.name;
     scenario.name = name;
     scenario.updatedAt = resolveNowIso(input);
-    return { ok: true, changed: true, tone: "success", message: `场景“${oldName}”已重命名为“${scenario.name}”。` };
+    return { ok: true, changed: true, tone: "success", message: `方案“${oldName}”已重命名为“${scenario.name}”。` };
   }
 
   function applyProvinceDefaultsToScenario(project = {}, scenario = {}, input = {}) {
@@ -403,14 +403,14 @@
 
   function buildBatchResultMessage(result) {
     if (!result.updated) {
-      return result.skippedInapplicable ? `没有可更新的场景；${result.skippedInapplicable} 个场景当前不适用，原值保留且未确认。`
-        : "没有可更新的场景（可能被锁定或范围过滤）。";
+      return result.skippedInapplicable ? `没有可更新的方案；${result.skippedInapplicable} 个方案当前不适用，原值保留且未确认。`
+        : "没有可更新的方案（可能被锁定或范围过滤）。";
     }
-    let message = `批量更新完成：${result.updated} 个场景已更新，跳过基准 ${result.skippedBaseline} 个，跳过锁定 ${result.skippedLocked} 个。`;
+    let message = `批量更新完成：${result.updated} 个方案已更新，跳过基准 ${result.skippedBaseline} 个，跳过锁定 ${result.skippedLocked} 个。`;
     if (result.skippedSpace) {
-      message += ` 另有 ${result.skippedSpace} 个场景因环境价值兑现空间超过100%未更新。`;
+      message += ` 另有 ${result.skippedSpace} 个方案因环境价值兑现空间超过100%未更新。`;
     }
-    if (result.skippedInapplicable) message += ` 另有 ${result.skippedInapplicable} 个场景因当前不适用而保留原值、未确认。`;
+    if (result.skippedInapplicable) message += ` 另有 ${result.skippedInapplicable} 个方案因当前不适用而保留原值、未确认。`;
     return message;
   }
 

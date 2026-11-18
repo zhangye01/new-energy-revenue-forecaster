@@ -13,13 +13,23 @@
 
 .result-report-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.34fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: linear-gradient(135deg, color-mix(in srgb, var(--panel) 92%, var(--blue)), var(--panel));
+}
+
+.result-report-meta[hidden] {
+  display: none;
+}
+
+@media (min-width: 1001px) {
+  .result-report-hero:has(> .result-report-meta:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 0.34fr);
+  }
 }
 
 .result-report-hero h2 {
@@ -375,6 +385,7 @@
 
   .sidebar,
   .topbar,
+  .workflow-context,
   #results-page .button-inline,
   #results-page .result-report-tabbar,
   #results-page .result-hourly-detail,

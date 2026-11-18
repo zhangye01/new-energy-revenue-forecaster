@@ -18,6 +18,7 @@
   const boundDocuments = new WeakSet();
   const closeTimers = new WeakMap();
   let nextHelpId = 0;
+  let nextFieldId = 0;
 
   function getContextHelpButton(container) {
     return container?.querySelector?.(BUTTON_SELECTOR) || null;
@@ -148,13 +149,43 @@
     return true;
   }
 
+  function queryAnchor(scope, selector) {
+    try { return scope?.querySelector?.(selector) || null; }
+    catch (_) { return null; }
+  }
+
+  function fieldLabelAnchor(label, source, documentRef) {
+    if (!label || label === source || source.contains(label)) return null;
+    const explicit = Array.from(label.querySelectorAll("[data-help-label]")).find((candidate) =>
+      candidate.closest("label") === label && !source.contains(candidate)
+      && !candidate.closest("button,a,input,select,textarea") && !candidate.querySelector("input,select,textarea"));
+    if (explicit) return explicit;
+    // Older fields have a plain-text name followed by the control and help.
+    // Wrap only that leading text; never move controls, status badges or hints.
+    const textNodes = [];
+    for (const node of Array.from(label.childNodes || [])) {
+      if (node.nodeType !== 3) break;
+      textNodes.push(node);
+    }
+    if (!textNodes.some((node) => node.textContent.trim())) return null;
+    const anchor = documentRef.createElement("span");
+    anchor.setAttribute("data-help-label", "");
+    textNodes[0].before(anchor);
+    anchor.append(...textNodes);
+    return anchor;
+  }
+
   function findHelpAnchor(source, documentRef) {
     const selector = source.dataset.helpAnchor;
     if (selector) {
       const scope = source.closest("section,fieldset,article,.policy-card,.rough-card") || source.parentElement;
-      const explicit = scope?.querySelector(selector) || documentRef.querySelector(selector);
+      const explicit = queryAnchor(scope, selector) || queryAnchor(documentRef, selector);
       if (explicit && explicit !== source && !source.contains(explicit)) return explicit;
     }
+    const control = source.dataset.helpFor && documentRef.getElementById(source.dataset.helpFor);
+    const label = control?.closest("label") || control?.labels?.[0] || source.closest("label");
+    const fieldAnchor = fieldLabelAnchor(label, source, documentRef);
+    if (fieldAnchor) return fieldAnchor;
     const previous = source.previousElementSibling;
     if (previous?.matches(HEADING_SELECTOR)) return previous;
     const parent = source.parentElement;
@@ -162,13 +193,24 @@
     return heading || null;
   }
 
-  function preserveFieldName(anchor) {
+  function preserveFieldName(anchor, documentRef) {
     const label = anchor?.closest("label");
     if (!label) return;
-    const control = label.querySelector("input,select,textarea");
-    if (!control || control.hasAttribute("aria-label") || control.hasAttribute("aria-labelledby")) return;
+    const control = label.querySelector("input,select,textarea") || label.control;
+    if (!control || !control.matches("input,select,textarea")) return;
+    // A help button preceding an implicit label's input would otherwise become
+    // its labelled control. Keep clicking the field name focused on the input.
+    if (!label.hasAttribute("for")) {
+      if (!control.id) {
+        let id;
+        do { id = `context-help-field-${++nextFieldId}`; } while (documentRef.getElementById(id));
+        control.id = id;
+      }
+      label.setAttribute("for", control.id);
+    }
+    if (control.hasAttribute("aria-label") || control.hasAttribute("aria-labelledby")) return;
     const copy = label.cloneNode(true);
-    copy.querySelectorAll("input,select,textarea,button,[data-help],[data-context-help]").forEach((node) => node.remove());
+    copy.querySelectorAll("input,select,textarea,button,[data-help],[data-context-help],[data-refinement-field]").forEach((node) => node.remove());
     const name = copy.textContent.replace(/\s+/g, " ").trim();
     if (name) control.setAttribute("aria-label", name);
   }
@@ -207,7 +249,7 @@
     let anchor = findHelpAnchor(source, documentRef);
     const outerControl = (anchor || source).closest("button,a,input,select,textarea");
     if (outerControl) anchor = null;
-    preserveFieldName(anchor || source);
+    preserveFieldName(anchor || source, documentRef);
     const existing = anchor && Array.from(anchor.children).find((child) => child.matches(".context-help-auto"));
     const container = existing || createHelp(source.dataset.help || "相关", documentRef);
     if (!existing) {

@@ -83,8 +83,8 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
     project: { id: "p1" },
     scenario: { id: "s1", name: "锁定场景", locked: true }
   }), false);
-  assert.equal(lockedRefs.scenarioMessage.textContent, "当前场景已锁定，不能导入逐年损益。");
-  assert.equal(lockedRefs.scenarioMessage.style.borderColor, "#d39191");
+  assert.equal(lockedRefs.scenarioMessage.textContent, "当前方案已锁定，不能导入逐年损益。");
+  assert.equal(lockedRefs.scenarioMessage.style.borderColor, "var(--red)");
 
   const missingFileRefs = createRefs();
   assert.equal(await importManualScenarioTemplate({

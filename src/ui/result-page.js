@@ -16,7 +16,7 @@
     "周期全口径收入",
     "周期平均度电净价",
     "周期总上网电量",
-    "生效场景"
+    "生效方案"
   ]);
 
   function escapeHtml(text) {
@@ -118,11 +118,21 @@
     if (refs.hourlyPreviewHint) refs.hourlyPreviewHint.textContent = "等待测算";
   }
 
+  function applyResultPrimaryAction(refs, view) {
+    const current = view.state === "ready" && !view.isHistorical;
+    for (const [button, primary] of [[refs.runCalcButton, !current], [refs.resultValidationButton, current]]) {
+      button?.classList?.toggle("primary-button", primary);
+      button?.classList?.toggle("ghost-button", !primary);
+    }
+    if (refs.runCalcButton) refs.runCalcButton.disabled = view.state === "no_project";
+  }
+
   function applyResultPageViewModel(input = {}) {
     const {
       refs = {},
       view = {}
     } = input;
+    applyResultPrimaryAction(refs, view);
     for (const button of [refs.exportAnnualButton, refs.exportHourlyButton, refs.printReportButton]) {
       if (button) {
         button.disabled = view.state !== "ready" || Boolean(view.isHistorical);
@@ -130,6 +140,7 @@
       }
     }
     setHtml(refs.resultReportMeta, view.metaHtml);
+    if (refs.resultReportMeta) refs.resultReportMeta.hidden = !view.isHistorical;
     setText(refs.resultExecutiveSummary, view.executiveSummary);
     setHtml(refs.resultMetricGrid, view.metricHtml);
     setHtml(refs.resultInsightList, view.insightHtml);
@@ -268,7 +279,7 @@
     const negativeText = leadingNegative ? `主要扣减来自${leadingNegative.label}（${asCompactMoney(leadingNegative.amount)}）` : "未形成显著扣减项";
     const metricItems = [
       { label: "首年全口径收入", value: asCompactMoney(first.fullRevenue), note: `度电净价 ${asNum(first.fullRevenuePrice, 2)} 元/MWh` },
-      { label: "首年度电净价", value: `${asNum(first.fullRevenuePrice, 2)} 元/MWh`, note: `较捕获电价${liftText} ${asNum(Math.abs(unitLift), 2)}` },
+      { label: "首年度电净价", value: `${asNum(first.fullRevenuePrice, 2)} 元/MWh`, note: `较捕获电价${liftText} ${asNum(Math.abs(unitLift), 2)} 元/MWh` },
       { label: "周期全口径收入", value: asCompactMoney(result.totalFullRevenue), note: `测算周期 ${labels.periodText}` },
       { label: "周期平均度电净价", value: `${asNum(result.avgFullRevenuePrice, 2)} 元/MWh`, note: `${first.storageDispatch ? "储前结算电量" : "总电量"} ${asNum(result.totalEnergy, 0)} MWh` },
       { label: "首年捕获电价", value: `${asNum(first.capturePrice, 2)} 元/MWh`, note: `现货均价 ${asNum(first.spotAvgPrice, 2)} 元/MWh` },
@@ -301,7 +312,7 @@
         title: "差价机制口径",
         body: cfg.mechanismEnabled
           ? `机制电量按有效月份折算，首年机制电量占比${asPercent(first.mechanismRatio)}，机制电价${asNum(cfg.mechanismPrice, 1)}元/MWh。`
-          : "当前基准场景未启用差价机制。"
+          : "当前基准方案未启用差价机制。"
       },
       {
         title: "市场化交易电量",
@@ -331,7 +342,7 @@
     return {
       state: "ready",
       isHistorical: Boolean(resultState && !resultState.current),
-      executiveSummary: `${resultState && !resultState.current ? "已保存结果中" : "基准场景下"}，${project.name}测算周期为${labels.periodText}，周期全口径收入合计${asCompactMoney(result.totalFullRevenue)}，平均度电净价${asNum(result.avgFullRevenuePrice, 2)}元/MWh。首年度电净价较捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，${positiveText}，${negativeText}。`,
+      executiveSummary: `${resultState && !resultState.current ? "已保存结果中" : "基准方案下"}，${project.name}测算周期为${labels.periodText}，周期全口径收入合计${asCompactMoney(result.totalFullRevenue)}，平均度电净价${asNum(result.avgFullRevenuePrice, 2)}元/MWh。首年度电净价较捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，${positiveText}，${negativeText}。`,
       metricHtml: buildMetricCards(metricItems),
       insightHtml: buildTextItems(insightItems, "result-insight-item"),
       assumptionHtml: buildTextItems(assumptionItems, "result-assumption-item"),
@@ -364,7 +375,7 @@
     if (!project) {
       return {
         state: "no_project",
-        executiveSummary: "请先选择项目并完成基准场景测算，生成可导出的结果简报。",
+        executiveSummary: "请先选择项目并完成基准方案测算，生成可导出的结果简报。",
         metaHtml: "<span>项目：-</span><span>方案：-</span><span>周期：-</span><span>口径：-</span>",
         chartPlaceholder: "请选择项目后发起测算"
       };
@@ -374,7 +385,7 @@
     if (!result) {
       return {
         state: "no_result",
-        executiveSummary: "当前基准场景尚未生成测算结果。点击“发起基准测算”后，将自动形成简报摘要、图表与明细附表。",
+        executiveSummary: "当前基准方案尚未生成测算结果。点击“发起基准测算”后，将自动形成简报摘要、图表与明细附表。",
         metaHtml,
         metricHtml: buildEmptyMetricCards(),
         chartPlaceholder: "请先发起基准测算"

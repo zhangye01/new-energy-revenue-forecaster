@@ -97,6 +97,7 @@ assert.equal(pricePane.hidden, false);
 assert.equal(annualPane.hidden, true);
 
 assert.match(buildEmptyMetricCards(), /首年全口径收入/);
+assert.match(buildEmptyMetricCards(), /生效方案/);
 assert.match(
   buildResultMetaHtml({
     projectName: "江苏<风电>",
@@ -160,6 +161,28 @@ applyResultPageViewModel({
 });
 assert.equal(resultDomRefs.resultMetricGrid.innerHTML, "");
 assert.equal(resultDomRefs.hourlyPreviewHint.textContent, "");
+
+const actionRefs = { runCalcButton: new FakeTarget(), resultValidationButton: new FakeTarget({ jump: "validation-page" }),
+  resultReportMeta: { innerHTML: "" }, printReportHeader: { innerHTML: "独立打印页头", hidden: false } };
+actionRefs.resultValidationButton.classes.add("next-step-button");
+for (const [view, current] of [
+  [{ state: "no_project" }, false], [{ state: "no_result" }, false],
+  [{ state: "ready", isHistorical: true, metaHtml: "历史期间与来源" }, false],
+  [{ state: "invalid_result", isHistorical: true }, false],
+  [{ state: "ready", isHistorical: false, metaHtml: "当前项目" }, true]
+]) {
+  applyResultPageViewModel({ refs: actionRefs, view });
+  assert.equal(actionRefs.runCalcButton.classes.has("primary-button"), !current);
+  assert.equal(actionRefs.runCalcButton.classes.has("ghost-button"), current);
+  assert.equal(actionRefs.resultValidationButton.classes.has("primary-button"), current);
+  assert.equal(actionRefs.resultValidationButton.classes.has("ghost-button"), !current);
+  assert.equal(actionRefs.runCalcButton.disabled, view.state === "no_project");
+  assert.equal(actionRefs.resultReportMeta.hidden, !view.isHistorical);
+  if (view.isHistorical) assert.equal(actionRefs.resultReportMeta.innerHTML, "历史期间与来源");
+  assert.equal(actionRefs.resultValidationButton.dataset.jump, "validation-page", "CTA层级不改变导航目标");
+  assert.equal(actionRefs.resultValidationButton.classes.has("next-step-button"), true);
+  assert.deepEqual(actionRefs.printReportHeader, { innerHTML: "独立打印页头", hidden: false }, "屏幕摘要去重不影响打印页头");
+}
 
 const project = { name: "江苏海上风电示例项目" };
 const scenario = {

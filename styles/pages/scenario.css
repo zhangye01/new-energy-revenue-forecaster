@@ -7,43 +7,6 @@
   align-items: start;
 }
 
-.scenario-page-summary {
-  display: grid;
-  grid-template-columns: minmax(260px, 1.35fr) repeat(3, minmax(160px, 1fr));
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.scenario-summary-card {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--panel-soft) 72%, var(--panel));
-}
-
-.scenario-summary-card-primary {
-  border-color: color-mix(in srgb, var(--brand) 20%, var(--line));
-  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 9%, var(--panel)), var(--panel-soft));
-}
-
-.scenario-summary-card span {
-  color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 800;
-}
-
-.scenario-summary-card strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 0.98rem;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .scenario-workspace {
   display: grid;
   gap: 8px;

@@ -36,11 +36,14 @@
   max-width: 100%;
   padding: 0 14px 0 12px;
   gap: 7px;
-  background: linear-gradient(135deg, #2b6ab7 0%, #1f5ba4 100%);
-  box-shadow: 0 6px 14px rgba(32, 91, 165, 0.14);
   white-space: normal;
   overflow-wrap: anywhere;
   text-align: center;
+}
+
+.primary-button.next-step-button {
+  background: linear-gradient(135deg, #2b6ab7 0%, #1f5ba4 100%);
+  box-shadow: 0 6px 14px rgba(32, 91, 165, 0.14);
 }
 
 .next-step-button::after {
@@ -82,12 +85,12 @@ body[data-theme="dark"] .primary-button:hover {
   background: #3f6ea9;
 }
 
-body[data-theme="dark"] .next-step-button {
+body[data-theme="dark"] .primary-button.next-step-button {
   background: linear-gradient(135deg, #5a89c6 0%, #4374b2 100%);
   box-shadow: 0 10px 18px rgba(7, 16, 31, 0.34);
 }
 
-body[data-theme="eye"] .next-step-button {
+body[data-theme="eye"] .primary-button.next-step-button {
   background: linear-gradient(135deg, #4f8f67 0%, #3f7855 100%);
   box-shadow: 0 8px 18px rgba(55, 91, 62, 0.16);
 }
@@ -98,6 +101,6 @@ body[data-theme="eye"] .next-step-button {
   cursor: not-allowed;
 }
 
-.next-step-button:disabled {
+.primary-button.next-step-button:disabled {
   box-shadow: none;
 }

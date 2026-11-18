@@ -14,6 +14,8 @@ const {
   buildScenarioConfigFromForm,
   buildRefinementState,
   refreshRefinementState,
+  setScenarioMessage,
+  updateScenarioStorageStatus,
   loadScenarioToForm
 } = require("../src/ui/scenario-form");
 
@@ -274,7 +276,7 @@ assert.equal(lockHarness.fields.get("#mechanism-ratio").disabled, true);
 assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, true);
 assert.equal(lockRefs.storageArbitragePrice.disabled, true);
 assert.equal(lockRefs.storageArbitragePrice.value, "18", "hiding storage controls must preserve their loaded values");
-assert.equal(lockRefs.scenarioLockHint.textContent, "当前场景可编辑。");
+assert.equal(lockRefs.scenarioLockHint.textContent, "当前方案可编辑。");
 
 lockHarness.fields.get("#mechanism-enabled").value = "yes";
 applyScenarioFieldLocks({
@@ -286,7 +288,7 @@ applyScenarioFieldLocks({
 assert.equal(lockHarness.fields.get("#mechanism-price").disabled, true);
 assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, false);
 assert.equal(lockRefs.storageCapacityCompPrice.disabled, true);
-assert.equal(lockRefs.scenarioLockHint.textContent, "当前场景已锁定，请切换场景或解锁。");
+assert.equal(lockRefs.scenarioLockHint.textContent, "当前方案已锁定，请切换方案或解锁。");
 
 const envHarness = makeFields({
   "#green-cert-price": "22",
@@ -530,7 +532,7 @@ const applySaveResult = applyScenarioSaveDraft({
 });
 assert.deepEqual(applySaveResult, {
   ok: true,
-  message: "场景“新场景”已保存。"
+  message: "方案“新场景”已保存。"
 });
 assert.equal(applySaveScenario.name, "新场景");
 assert.deepEqual(applySaveScenario.config, { mechanismEnabled: true, mechanismPrice: 365 });
@@ -550,7 +552,7 @@ assert.deepEqual(applyScenarioSaveDraft({
   project: applySaveProject,
   scenario: lockedSaveScenario,
   draft: { ok: true, scenarioName: "不应修改", config: { mechanismPrice: 999 } }
-}), { ok: false, message: "当前场景已锁定，不能保存修改。" });
+}), { ok: false, message: "当前方案已锁定，不能保存修改。" });
 assert.equal(lockedSaveScenario.name, "新场景");
 assert.deepEqual(lockedSaveScenario.confirmedConfig, { mechanismEnabled: true, mechanismPrice: 365 });
 
@@ -560,7 +562,7 @@ const duplicateDraft = buildScenarioSaveDraft({
   querySelector: makeFields({ "#scenario-name": "乐观场景" }).querySelector
 });
 assert.equal(duplicateDraft.ok, false);
-assert.equal(duplicateDraft.message, "场景名称重复，请修改后再保存。");
+assert.equal(duplicateDraft.message, "方案名称重复，请修改后再保存。");
 
 const invalidEnvDraft = buildScenarioSaveDraft({
   project: saveProject,
@@ -739,8 +741,8 @@ assert.match(managerView.listHtml, /当前 \/ 基准 \/ 已锁定/);
 assert.match(managerView.listHtml, /9.0/);
 assert.equal(managerView.deleteDisabled, true);
 assert.equal(managerView.renameDisabled, true);
-assert.equal(managerView.toggleBaselineText, "解锁基准场景");
-assert.match(managerView.lockHint, /基准场景已锁定/);
+assert.equal(managerView.toggleBaselineText, "解锁基准方案");
+assert.match(managerView.lockHint, /基准方案已锁定/);
 
 const managerRefs = {
   scenarioSelector: makeNode(),
@@ -757,7 +759,7 @@ applyScenarioManagerView(managerRefs, managerView);
 assert.equal(managerRefs.scenarioSelector.value, "base");
 assert.equal(managerRefs.scenarioQuickName.value, "基准<场景>");
 assert.equal(managerRefs.scenarioQuickName.disabled, true);
-assert.equal(managerRefs.toggleBaselineLockButton.textContent, "解锁基准场景");
+assert.equal(managerRefs.toggleBaselineLockButton.textContent, "解锁基准方案");
 assert.equal(managerRefs.applyBatchButton.disabled, false);
 
 // Rough pricing permits decimal ratios; continuing to the full-income page and
@@ -949,14 +951,14 @@ const reloadMessage = { textContent: "", style: { borderColor: "#d39191", backgr
 const invalidReload = buildScenarioSaveDraft({ scenario: { locked: true }, refs: { scenarioMessage: reloadMessage } });
 reloadMessage.textContent = invalidReload.message;
 loadScenarioToForm({ scenario: refinementScenario, refs: { scenarioMessage: reloadMessage }, querySelector: () => null });
-assert.equal(reloadMessage.textContent, "已带入当前方案参数。");
-assert.equal(reloadMessage.style.borderColor, "");
-assert.equal(reloadMessage.style.background, "");
+assert.equal(reloadMessage.textContent, "当前方案参数已确认并保存。");
+assert.equal(reloadMessage.style.borderColor, "var(--green)");
+assert.match(reloadMessage.style.background, /var\(--panel\)/);
 const previousReloadError = buildScenarioSaveDraft({ scenario: { locked: true }, refs: { scenarioMessage: reloadMessage } });
 reloadMessage.textContent = previousReloadError.message;
-reloadMessage.textContent = "场景已保存。";
+setScenarioMessage({ scenario: refinementScenario, refs: { scenarioMessage: reloadMessage }, text: "方案已保存。", tone: "success" });
 loadScenarioToForm({ scenario: refinementScenario, refs: { scenarioMessage: reloadMessage }, querySelector: () => null });
-assert.equal(reloadMessage.textContent, "场景已保存。", "a newer success notice must survive a saved-value reload");
+assert.equal(reloadMessage.textContent, "方案已保存。", "a newer success notice must survive a saved-value reload");
 
 // A display-only efficiency default becomes stored only on an explicit save.
 // The old manual arbitrage assumption remains immutable in refinement.
@@ -995,5 +997,79 @@ loadScenarioToForm({ ...storageOptions });
 const absentArbitrageDraft = buildScenarioSaveDraft(storageOptions);
 assert.equal(absentArbitrageDraft.ok, true, absentArbitrageDraft.message);
 assert.equal(Object.hasOwn(absentArbitrageDraft.config, "storageArbitragePrice"), false);
+
+// Status is a view of the active form and confirmation records, never another
+// persisted flag. A reloaded complete scenario must not look like a new draft.
+const statusProject = { id: "status-project", startYear: 2026, forecastYears: 1, siteType: "onshore", hasStorage: false };
+const statusScenario = modelForConfirmation.createBaselineScenario(statusProject);
+statusScenario.name = "客户原有场景名称";
+modelForConfirmation.confirmConfig(statusScenario, undefined, { project: statusProject });
+const statusBefore = JSON.stringify(statusScenario);
+const statusFields = makeFields();
+const statusForm = new FakeTarget();
+statusFields.fields.set("#scenario-form", statusForm);
+const statusRefs = { scenarioMessage: { textContent: "等待配置保存", hidden: true, dataset: {}, style: {} },
+  ...Object.fromEntries([["ltPricingMode", "lt-pricing-mode"], ["envValueMode", "env-value-mode"], ["feeConfigMode", "fee-config-mode"]]
+    .map(([key, id]) => [key, statusFields.querySelector(`#${id}`)])) };
+const statusUi = { project: statusProject, scenario: statusScenario, refs: statusRefs, querySelector: statusFields.querySelector };
+loadScenarioToForm(statusUi);
+assert.equal(statusRefs.scenarioMessage.textContent, "当前方案参数已确认并保存。");
+assert.equal(statusRefs.scenarioMessage.hidden, false);
+assert.equal(statusRefs.scenarioMessage.dataset.tone, "success");
+assert.equal(statusFields.querySelector("#scenario-name").value, "客户原有场景名称", "display wording does not rename historical scenarios");
+assert.equal(JSON.stringify(statusScenario), statusBefore);
+
+statusFields.querySelector("#other-fee").value = "18.625";
+statusForm.dispatch("input");
+assert.equal(statusRefs.scenarioMessage.textContent, "参数已修改，请确认并保存。");
+assert.equal(statusRefs.scenarioMessage.dataset.tone, "warning");
+assert.equal(JSON.stringify(statusScenario), statusBefore, "editing status cannot save or confirm the draft");
+statusFields.querySelector("#other-fee").value = statusScenario.config.otherFee;
+statusForm.dispatch("change");
+assert.equal(statusRefs.scenarioMessage.textContent, "当前方案参数已确认并保存。");
+statusFields.querySelector("#scenario-name").value = "新名称";
+statusForm.dispatch("input");
+assert.match(statusRefs.scenarioMessage.textContent, /参数已修改/);
+loadScenarioToForm(statusUi);
+
+setScenarioMessage({ ...statusUi, text: "环境价值兑现空间超过100%。", tone: "error" });
+refreshRefinementState(statusUi);
+assert.equal(statusRefs.scenarioMessage.textContent, "环境价值兑现空间超过100%。", "routine refresh retains the active validation error");
+assert.equal(statusRefs.scenarioMessage.style.borderColor, "var(--red)");
+assert.match(statusRefs.scenarioMessage.style.background, /var\(--panel\)/);
+statusForm.dispatch("input");
+assert.equal(statusRefs.scenarioMessage.textContent, "当前方案参数已确认并保存。");
+setScenarioMessage({ ...statusUi, text: "逐年数值已导入，请确认。", tone: "success" });
+loadScenarioToForm(statusUi);
+assert.equal(statusRefs.scenarioMessage.textContent, "逐年数值已导入，请确认。", "render after import preserves its actionable notice");
+
+updateScenarioStorageStatus({ refs: statusRefs, status: { state: "error" } });
+assert.match(statusRefs.scenarioMessage.textContent, /尚未保存到本机/);
+statusFields.querySelector('[data-refinement-group="fees"]').open = true;
+statusFields.querySelector("#fee-annual-preview").open = true;
+updateScenarioStorageStatus({ refs: statusRefs, status: { state: "pending" } });
+assert.equal(statusFields.querySelector('[data-refinement-group="fees"]').open, true);
+assert.equal(statusFields.querySelector("#fee-annual-preview").open, true, "storage updates do not collapse the user's open review");
+loadScenarioToForm(statusUi);
+assert.match(statusRefs.scenarioMessage.textContent, /尚未保存到本机/, "render and retry cannot erase a known failed write");
+updateScenarioStorageStatus({ refs: statusRefs, status: { state: "saved" } });
+assert.equal(statusRefs.scenarioMessage.textContent, "逐年数值已导入，请确认。");
+statusForm.dispatch("input");
+updateScenarioStorageStatus({ refs: statusRefs, status: { state: "pending" } });
+assert.equal(statusRefs.scenarioMessage.textContent, "参数已确认，正在保存到本机。");
+updateScenarioStorageStatus({ refs: statusRefs, status: { state: "conflict" } });
+assert.match(statusRefs.scenarioMessage.textContent, /尚未保存到本机/);
+updateScenarioStorageStatus({ refs: statusRefs, status: { state: "saved" } });
+assert.equal(statusRefs.scenarioMessage.textContent, "当前方案参数已确认并保存。");
+
+setScenarioMessage({ ...statusUi, text: "上一方案的错误", tone: "error" });
+const pendingScenario = modelForConfirmation.createBaselineScenario(statusProject, { makeId: () => "pending-scenario" });
+delete pendingScenario.config.otherFee;
+loadScenarioToForm({ ...statusUi, scenario: pendingScenario });
+assert.match(statusRefs.scenarioMessage.textContent, /待补充 1 项.*待确认/);
+assert.doesNotMatch(statusRefs.scenarioMessage.textContent, /上一方案|已保存|等待配置保存/);
+assert.equal(statusRefs.scenarioMessage.style.borderColor, "");
+assert.equal(statusRefs.scenarioMessage.style.background, "");
+assert.equal(JSON.stringify(statusScenario), statusBefore, "all status transitions leave the persisted scenario untouched");
 
 console.log("scenario form tests passed");

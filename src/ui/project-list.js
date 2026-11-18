@@ -45,8 +45,8 @@
         ? `${provinceName} / ${assetTypeText} / ${siteTypeText} / ${storageText}`
         : "基础信息待填写 / 风光类型待选 / 陆海类型待选",
       runtimeLine: createReady
-        ? `场景：${scenario?.name || "未配置"} | 电价版本：${activeRun?.algorithmVersion || "未生成"}`
-        : "场景：未配置 | 电价版本：未生成",
+        ? `方案：${scenario?.name || "未配置"} | 电价版本：${activeRun?.algorithmVersion || "未生成"}`
+        : "方案：未配置 | 电价版本：未生成",
       statuses
     };
   }

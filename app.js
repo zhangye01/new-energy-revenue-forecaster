@@ -119,6 +119,9 @@ const backendForecastPanel = forecastPage.createBackendForecastPanel({
   documentRef: document, getProject: getActiveProject,
   getService: () => config.backendForecastService,
   inspectInput: supplyDemandFlow.inspectSupplyDemand, prepareInput: supplyDemandFlow.prepareSupplyDemand,
+  hasUsableDemoRun: (project) => getActiveRun(project)?.executionKind !== "real_model"
+    && !supplyDemandFlow.hasUnsavedChanges() && !supplyDemandFlow.hasPendingDraft(project)
+    && forecastRunFlow.hasActiveActivatableRun(project, { validateSupplyDemandRun: supplyDemandFlow.validateSupplyDemandRun }),
   isRunActive: (project, runId) => {
     const run = getActiveRun(project);
     return run?.id === runId && run.executionKind === "real_model"
@@ -329,9 +332,9 @@ const PAGE_COMPLETION_STANDARD_MAP = {
   "history-page": "已按项目省份自动展示历史现货图表。",
   "forecast-page": "存在已生效且可发布的电价预测版本。",
   "scenario-page": "当前收益参数补充与细化已保存。",
-  "results-page": "当前场景已成功生成一版基准结果。",
+  "results-page": "当前方案已成功生成一版基准结果。",
   "validation-page": "已有同口径的粗算与基准结果，可查看偏差。",
-  "compare-page": "至少两个场景存在可对比结果。"
+  "compare-page": "至少两个方案存在可对比结果。"
 };
 const PAGE_VIEW_ALIAS = {
   "energy-page": "create-page",
@@ -791,7 +794,7 @@ function getCurrentResultContext() {
   if (!result) return null;
   return {
     projectName: project.name || "当前项目",
-    scenarioName: scenario.name || "当前场景",
+    scenarioName: scenario.name || "当前方案",
     years: Array.isArray(result.annualRows) ? result.annualRows.length : 0
   };
 }
@@ -802,7 +805,7 @@ function resolveLogoutPersistChoice() {
     return "direct";
   }
   const shouldSave = window.confirm(
-    `当前项目“${context.projectName}”场景“${context.scenarioName}”已有测算结果。\n是否在退出前立即保存当前结果？\n\n选择“确定”= 保存并退出\n选择“取消”= 继续选择`
+    `当前项目“${context.projectName}”方案“${context.scenarioName}”已有测算结果。\n是否在退出前立即保存当前结果？\n\n选择“确定”= 保存并退出\n选择“取消”= 继续选择`
   );
   if (shouldSave) return "save";
   const shouldDirectExit = window.confirm("将直接退出（不执行额外保存动作）。是否继续？");
@@ -1311,7 +1314,10 @@ function persistAppDataNow(options = {}) {
       storageWarningShown = value;
     },
     setTopMeta,
-    onStorageStateChange: (state) => window.NE_PROJECT_BACKUP.renderStorageState(document, state),
+    onStorageStateChange: (state) => {
+      window.NE_PROJECT_BACKUP.renderStorageState(document, state);
+      scenarioForm.updateScenarioStorageStatus({ refs, status: state });
+    },
     consoleRef: console
   });
   appDataStorageMode = result.storageMode;
@@ -1688,10 +1694,10 @@ function resolveVisiblePageId(pageId) {
 
 function scrollCreateWorkspaceToStep(pageId) {
   if (typeof window === "undefined") return;
-  const target = pageId === "energy-page" ? refs.createStepEnergy : refs.createStepForm;
-  if (!target) return;
   window.requestAnimationFrame(() => {
-    target.scrollIntoView({ block: "start", behavior: "smooth" });
+    const target = refs.workflowContext && !refs.workflowContext.hidden ? refs.workflowContext
+      : pageId === "energy-page" ? refs.createStepEnergy : refs.createStepForm;
+    target?.scrollIntoView({ block: "start", behavior: "smooth" });
   });
 }
 
@@ -3170,7 +3176,7 @@ function renderForecastRuns() {
   });
   if (["rough-page", "validation-page"].includes(appState.activePage)) roughPriceWorkspace.renderWorkspace({
     documentRef: typeof document !== "undefined" ? document : null,
-    project, scenario: project ? getActiveScenario(project) : null, domain: roughPrice, inputState: scenarioModel, getProvinceName,
+    project, scenario: project ? getActiveScenario(project) : null, domain: roughPrice, inputState: scenarioModel,
     mode: appState.activePage === "validation-page" ? "compare" : "rough",
     getHourlyEnergyForCalculation, makeId, nowIso: () => new Date().toISOString(),
     onMessage: setTopMeta, onPersist: schedulePersistAppData, onNavigate: setActivePage,
@@ -3274,7 +3280,10 @@ function applyEnergyWorkspaceModel(model, project) {
   } else if (model.projectIdForMessage) {
     refs.energyImportMessage.dataset.projectId = model.projectIdForMessage;
   }
-  if (refs.energyProjectContext) refs.energyProjectContext.textContent = model.projectContext;
+  if (refs.energyProjectContext) {
+    refs.energyProjectContext.hidden = isProjectCreateCompleted(project);
+    refs.energyProjectContext.textContent = model.projectContext;
+  }
   setEnergyTemplateStatus(refs.energyTemplateAnnualStatus, model.templateStatuses.annual);
   setEnergyTemplateStatus(refs.energyTemplateTypicalStatus, model.templateStatuses.typical);
   setEnergyTemplateStatus(refs.energyTemplateProvinceStatus, model.templateStatuses.province);
@@ -3888,8 +3897,8 @@ function updateEnvValueSpaceDisplay(project = getActiveProject(), scenario = nul
   if (refs.envValueUsedRatio) {
     refs.envValueUsedRatio.value = project && activeScenario ? asPercent(draft.totalRatio) : "-";
     if (draft.totalRatio > 1 + 0.000001) {
-      refs.envValueUsedRatio.style.borderColor = "#d39191";
-      refs.envValueUsedRatio.style.background = "#fff2f2";
+      refs.envValueUsedRatio.style.borderColor = "var(--red)";
+      refs.envValueUsedRatio.style.background = "color-mix(in srgb, var(--red) 10%, var(--panel))";
     } else {
       refs.envValueUsedRatio.style.removeProperty("border-color");
       refs.envValueUsedRatio.style.removeProperty("background");
@@ -4061,27 +4070,24 @@ function renderScenarioManager() {
   }));
 }
 
-function renderScenarioPageSummary() {
-  if (!refs.scenarioSummaryProject) return;
-  const project = getActiveProject();
-  if (!project) {
-    refs.scenarioSummaryProject.textContent = "请选择项目";
-    refs.scenarioSummaryActive.textContent = "-";
-    refs.scenarioSummaryPeriod.textContent = "-";
-    refs.scenarioSummaryStorage.textContent = "-";
-    return;
-  }
-  ensureScenarioMetadata(project);
+function renderWorkflowContext() {
+  const { workflowContext } = refs;
+  if (!workflowContext) return;
+  const project = WORKFLOW_PAGES.includes(appState.activePage) ? getActiveProject() : null;
+  const visiblePageId = resolveVisiblePageId(appState.activePage);
+  const page = refs.pages.find((node) => node.id === visiblePageId);
+  workflowContext.hidden = !project || !page;
+  if (workflowContext.hidden) return;
+  if (workflowContext.parentElement !== page) page.prepend(workflowContext);
   const scenario = getActiveScenario(project);
-  const provinceName = getProvinceName(project.province || "") || "未选省份";
-  const assetText = getAssetTypeLabel(project.assetType);
-  const siteText = getSiteTypeLabel(project.siteType);
-  refs.scenarioSummaryProject.textContent = `${project.name || "未命名项目"} | ${provinceName} / ${assetText} / ${siteText}`;
-  refs.scenarioSummaryActive.textContent = scenario
-    ? `${scenario.name}${scenario.isBaseline ? "（基准）" : ""}${scenario.locked ? " / 已锁定" : ""}`
-    : "-";
-  refs.scenarioSummaryPeriod.textContent = getForecastPeriodDisplayRange(project);
-  refs.scenarioSummaryStorage.textContent = getStorageConfigText(project);
+  const asset = [getProvinceName(project.province), project.assetType && getAssetTypeLabel(project.assetType),
+    project.siteType && getSiteTypeLabel(project.siteType), project.capacityMw && `${project.capacityMw} MW`].filter(Boolean).join(" · ");
+  refs.workflowContextProject.textContent = project.name || "未命名项目";
+  refs.workflowContextAsset.hidden = !asset;
+  refs.workflowContextAsset.textContent = asset;
+  refs.workflowContextScenario.textContent = scenario ? `${scenario.name}${scenario.isBaseline ? "（基准）" : ""}${scenario.locked ? " · 已锁定" : ""}` : "—";
+  refs.workflowContextPeriod.textContent = getForecastPeriodDisplayRange(project);
+  refs.workflowContextStorage.textContent = project.hasStorage == null ? "待配置" : getStorageConfigText(project);
 }
 
 function switchActiveScenario(scenarioId) {
@@ -4124,14 +4130,13 @@ function duplicateActiveScenario() {
   project.scenarios.push(clone);
   project.activeScenarioId = clone.id;
   project.statuses["scenario-page"] = "in_progress";
-  refs.scenarioMessage.textContent = `已复制场景“${source.name}”，当前正在编辑“${clone.name}”。`;
-  refs.scenarioMessage.style.borderColor = "#8fb48d";
-  refs.scenarioMessage.style.background = "#f1fbf1";
+  setScenarioImportMessage(`已复制方案“${source.name}”，当前正在编辑“${clone.name}”。`, "success");
   renderAll();
 }
 
 function setScenarioImportMessage(text, tone = "error") {
-  manualScenarioFlow.setScenarioImportMessage({ refs, text, tone });
+  const project = getActiveProject(), scenario = project && getActiveScenario(project);
+  manualScenarioFlow.setScenarioImportMessage({ refs, project, scenario, text, tone });
 }
 
 function renameActiveScenario() {
@@ -4156,15 +4161,11 @@ function deleteActiveScenario() {
   const target = getActiveScenario(project);
   if (!target) return;
   if (target.isBaseline) {
-    refs.scenarioMessage.textContent = "基准场景不能删除。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
+    setScenarioImportMessage("基准方案不能删除。", "error");
     return;
   }
   if (target.locked) {
-    refs.scenarioMessage.textContent = "当前场景已锁定，无法删除。";
-    refs.scenarioMessage.style.borderColor = "#d39191";
-    refs.scenarioMessage.style.background = "#fff2f2";
+    setScenarioImportMessage("当前方案已锁定，无法删除。", "error");
     return;
   }
   project.scenarios = project.scenarios.filter((scenario) => scenario.id !== target.id);
@@ -4172,9 +4173,7 @@ function deleteActiveScenario() {
   const fallback = getBaselineScenario(project) || project.scenarios[0] || null;
   project.activeScenarioId = fallback?.id || null;
   project.statuses["compare-page"] = countScenariosForCompare(project) >= 2 ? "completed" : "in_progress";
-  refs.scenarioMessage.textContent = `场景“${target.name}”已删除。`;
-  refs.scenarioMessage.style.borderColor = "#8fb48d";
-  refs.scenarioMessage.style.background = "#f1fbf1";
+  setScenarioImportMessage(`方案“${target.name}”已删除。`, "success");
   renderAll();
 }
 
@@ -4186,9 +4185,7 @@ function toggleBaselineLock() {
   if (!baseline) return;
   baseline.locked = !baseline.locked;
   baseline.updatedAt = new Date().toISOString();
-  refs.scenarioMessage.textContent = baseline.locked ? "基准场景已锁定。" : "基准场景已解锁。";
-  refs.scenarioMessage.style.borderColor = "#8fb48d";
-  refs.scenarioMessage.style.background = "#f1fbf1";
+  setScenarioImportMessage(baseline.locked ? "基准方案已锁定。" : "基准方案已解锁。", "success");
   renderAll();
 }
 
@@ -4609,7 +4606,7 @@ function renderWorkflowViews() {
   renderEnergyCurveChart();
   renderHistoryPrices();
   renderForecastRuns();
-  renderScenarioPageSummary();
+  renderWorkflowContext();
   renderScenarioForm();
   renderProvinceLibrary();
   renderScenarioVisualization();

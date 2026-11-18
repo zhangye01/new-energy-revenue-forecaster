@@ -75,7 +75,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
   const restoredRoughState = sandbox.NE_ROUGH_PRICE.snapshotState(restored, restoredScenario, restoredRough);
   const restoredHtml = sandbox.NE_ROUGH_PRICE_WORKSPACE.roughHtml(restored, restoredScenario, restoredRough.draft,
     restored.roughPrice.snapshots, restoredRough, { config: restoredScenario.config, groupOpen: {}, message: "" },
-    restoredRoughState, undefined, sandbox.NE_SCENARIO_MODEL);
+    restoredRoughState, sandbox.NE_SCENARIO_MODEL);
   assert.match(restoredHtml, /年度粗算结果/);
   assert.doesNotMatch(restoredHtml, /项目、测算期或电量口径已变化/);
   assert.equal(sandbox.NE_ROUGH_PRICE.compareBaselineResult(restored, restoredScenario, restoredRough, calculate(restored)).ok, true);

@@ -28,7 +28,7 @@ assert.deepEqual(buildForecastRunsView({ project: null }), {
   runBodyHtml: "",
   activationBodyHtml: "",
   gateMessage: "请选择项目",
-  gateHelpText: "硬门槛：MAPE ≤ 15%，sMAPE ≤ 18%，缺失点 ≤ 0；按完整测算周期检查价格曲线。软门槛：MAE ≤ -，RMSE ≤ -。"
+  gateHelpText: "硬门槛：MAPE ≤ 15%，sMAPE ≤ 18%，缺失点 ≤ 0；按完整测算周期检查价格曲线。软门槛：MAE ≤ - 元/MWh，RMSE ≤ - 元/MWh。"
 });
 
 const emptyView = buildForecastRunsView({ project: { priceRuns: [], activationLogs: [] } });
@@ -85,16 +85,20 @@ const view = buildForecastRunsView({
   formatDateTime: () => "2026/1/2 11:04:05"
 });
 
-assert.match(view.gateHelpText, /软门槛：MAE ≤ 15，RMSE ≤ 20/);
+assert.match(view.gateHelpText, /软门槛：MAE ≤ 15 元\/MWh，RMSE ≤ 20 元\/MWh/);
 assert.equal(view.gateMessage, "最新运行 run-1 · 可发布");
 assert.doesNotMatch(view.gateMessage, /门槛|MAPE|MAE/);
 assert.match(view.runBodyHtml, /Ensemble/);
 assert.match(view.runBodyHtml, /12\.00%/);
-assert.match(view.runBodyHtml, /run-1">设为生效/);
+assert.doesNotMatch(view.runBodyHtml, /data-active-run="run-1"/);
+assert.equal((view.runBodyHtml.match(/生效中/g) || []).length, 1, "当前生效状态不重复成为操作按钮");
 assert.match(view.runBodyHtml, /生效中/);
 assert.match(view.runBodyHtml, /run-2">强制发布/);
 assert.match(view.activationBodyHtml, /2026\/1\/2 11:04:05/);
 assert.match(view.activationBodyHtml, /&lt;manual&gt;/);
+const otherRunView = buildForecastRunsView({ project: { activeRunId: "elsewhere", priceRuns: [{ id: "available", status: "publishable" }] },
+  canActivateRun: () => true });
+assert.match(otherRunView.runBodyHtml, /data-active-run="available">设为生效/, "其他可用版本仍保留切换入口");
 
 const gateHelp = { textContent: "" };
 const gateStatus = {
@@ -119,14 +123,14 @@ const changedThresholdsView = buildForecastRunsView({
 applyForecastRunsView({ refs, view: changedThresholdsView });
 assert.equal(gateStatus.textContent, "最新运行 <run-3> · 待复核");
 assert.match(gateHelp.textContent, /MAPE ≤ 10%，sMAPE ≤ 12%，缺失点 ≤ 2/);
-assert.match(gateHelp.textContent, /MAE ≤ 25，RMSE ≤ 35/);
+assert.match(gateHelp.textContent, /MAE ≤ 25 元\/MWh，RMSE ≤ 35 元\/MWh/);
 assert.doesNotMatch(gateHelp.textContent, /run-3|待复核/);
 const noRunsWithThresholds = buildForecastRunsView({
   project: { priceRuns: [] }, qualityGate: { soft: { mae: 7, rmse: 9 } }
 });
 applyForecastRunsView({ refs, view: noRunsWithThresholds });
 assert.equal(gateStatus.textContent, DEFAULT_GATE_MESSAGE);
-assert.match(gateHelp.textContent, /MAE ≤ 7，RMSE ≤ 9/);
+assert.match(gateHelp.textContent, /MAE ≤ 7 元\/MWh，RMSE ≤ 9 元\/MWh/);
 assert.doesNotThrow(() => applyForecastRunsView({ refs: { forecastGateMessage: {} }, view }));
 
 const activeButton = new FakeButton({ activeRun: "run-1" });
@@ -250,7 +254,37 @@ async function testBackendForecastPanel() {
   assert.equal(el("status").textContent, "等待提交预测", "晚到响应不能串到另一项目");
 }
 
-testBackendForecastPanel().then(() => console.log("forecast page tests passed")).catch((error) => {
+async function testDemoContinuation() {
+  const nodes = Object.fromEntries(["status", "note", "submit", "refresh", "activate", "next"]
+    .map((key) => [`#backend-forecast-${key}`, new FakeButton()]));
+  const el = (key) => nodes[`#backend-forecast-${key}`];
+  let project = { id: "demo-project" }, usable = false, service, finish;
+  const panel = createBackendForecastPanel({
+    documentRef: { querySelector: (selector) => nodes[selector] }, getProject: () => project,
+    getService: () => service, inspectInput: () => ({ ok: true, fingerprint: "saved-supply" }),
+    prepareInput: () => ({ ok: true, config: {}, dataset: { source: {}, hourlyByYear: {} } }),
+    isRunActive: () => false, hasUsableDemoRun: (candidate) => usable && candidate.id === "demo-project"
+  });
+  panel.render();
+  assert.equal(el("next").disabled, true);
+  usable = true; panel.render();
+  assert.equal(el("next").disabled, false, "未接后台时，已通过应用验证的演示版本也可继续");
+  for (const action of ["submit", "refresh", "activate"]) assert.equal(el(action).disabled, true,
+    "演示版本不能绕过后台动作门禁");
+  usable = false; panel.render();
+  assert.equal(el("next").disabled, true, "演示版本过期或不可用时继续按钮重新禁用");
+  usable = true;
+  service = { submit: () => new Promise((resolve) => { finish = resolve; }) };
+  panel.render(); el("submit").click();
+  assert.equal(el("next").disabled, true, "请求处理中不允许继续，即使已有演示版本");
+  finish({ id: "task-demo", projectId: project.id, inputFingerprint: "saved-supply", status: "running" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(el("next").disabled, false);
+  project = { id: "another-project" }; panel.render();
+  assert.equal(el("next").disabled, true, "不能沿用其他项目的演示版本可用状态");
+}
+
+testBackendForecastPanel().then(testDemoContinuation).then(() => console.log("forecast page tests passed")).catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

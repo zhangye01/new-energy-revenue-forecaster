@@ -123,7 +123,7 @@
       actions = {}
     } = input;
     if (provinceDefaultsAutoSynced) {
-      actions.setCreateSaveMessage?.(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量；${actions.getProvinceName?.(project.province)}默认参数已同步到基准场景。`, "warn");
+      actions.setCreateSaveMessage?.(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量；${actions.getProvinceName?.(project.province)}默认参数已同步到基准方案。`, "warn");
     } else if (oldProvince !== projectInput.province) {
       actions.setCreateSaveMessage?.(`已更新当前项目：${project.name}。基础参数变化，请重新导入电量，并在收益参数补充与细化页复核${actions.getProvinceName?.(project.province)}默认参数。`, "warn");
     } else {

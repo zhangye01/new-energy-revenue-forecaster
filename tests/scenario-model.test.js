@@ -190,7 +190,7 @@ const baselineScenario = createBaselineScenario(offshoreStorageProject, {
   makeId: (prefix) => `${prefix}-base`
 });
 assert.equal(baselineScenario.id, "scn-base");
-assert.equal(baselineScenario.name, "基准场景");
+assert.equal(baselineScenario.name, "基准方案");
 assert.equal(baselineScenario.isBaseline, true);
 assert.equal(baselineScenario.locked, false);
 assert.equal(baselineScenario.config.carbonEnabled, true);
@@ -421,15 +421,15 @@ const renameProject = {
 };
 assert.equal(
   renameScenario(renameProject, renameProject.scenarios[2], { name: "新名称" }).message,
-  "当前场景已锁定，不能重命名。"
+  "当前方案已锁定，不能重命名。"
 );
 assert.equal(
   renameScenario(renameProject, renameProject.scenarios[1], { name: " " }).message,
-  "场景名称不能为空。"
+  "方案名称不能为空。"
 );
 assert.equal(
   renameScenario(renameProject, renameProject.scenarios[1], { name: "基准场景" }).message,
-  "场景名称重复，请换一个名称。"
+  "方案名称重复，请换一个名称。"
 );
 const unchangedRename = renameScenario(renameProject, renameProject.scenarios[1], { name: "原方案" });
 assert.equal(unchangedRename.ok, true);
@@ -442,7 +442,7 @@ assert.equal(changedRename.ok, true);
 assert.equal(changedRename.changed, true);
 assert.equal(renameProject.scenarios[1].name, "新方案");
 assert.equal(renameProject.scenarios[1].updatedAt, "2026-06-11T00:00:00.000Z");
-assert.equal(changedRename.message, "场景“原方案”已重命名为“新方案”。");
+assert.equal(changedRename.message, "方案“原方案”已重命名为“新方案”。");
 
 const batchProject = {
   siteType: "offshore",
@@ -502,7 +502,7 @@ assert.equal(batchProject.scenarios[2].updatedAt, "2026-06-10T00:00:00.000Z");
 assert.deepEqual(batchProject.scenarios[2].confirmedConfig, { greenCertRealizeRatio: 0.4 });
 assert.equal(batchProject.scenarios[0].confirmedConfig, undefined);
 assert.equal(batchProject.scenarios[1].confirmedConfig, undefined);
-assert.match(batchResult.message, /批量更新完成：1 个场景已更新/);
+assert.match(batchResult.message, /批量更新完成：1 个方案已更新/);
 
 const skipSpaceResult = applyBatchParameter(batchProject, {
   key: "greenPremiumRealizeRatio",
@@ -515,7 +515,7 @@ const skipSpaceResult = applyBatchParameter(batchProject, {
 });
 assert.equal(skipSpaceResult.updated, 0);
 assert.equal(skipSpaceResult.skippedSpace, 2);
-assert.match(skipSpaceResult.message, /没有可更新的场景/);
+assert.match(skipSpaceResult.message, /没有可更新的方案/);
 
 const onshoreProject = {
   siteType: "onshore",

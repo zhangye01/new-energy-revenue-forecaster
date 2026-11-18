@@ -3,7 +3,9 @@
 (function (root, factory) {
   const getScenarioModel = () => typeof module !== "undefined" && module.exports
     ? require("../domain/scenario-model") : root.NE_SCENARIO_MODEL;
-  const api = factory(getScenarioModel);
+  const getScenarioForm = () => typeof module !== "undefined" && module.exports
+    ? require("./scenario-form") : root.NE_SCENARIO_FORM;
+  const api = factory(getScenarioModel, getScenarioForm);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -11,7 +13,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_MANUAL_SCENARIO_FLOW = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel, getScenarioForm) {
   function createManualScenarioImportConfigs(input = {}) {
     const {
       exportBuilders = {},
@@ -28,7 +30,7 @@
         rows: scenarioConfig.buildLtManualTemplateRows,
         parse: scenarioConfig.parseLtManualPricesCsv,
         exportedMessage: "已导出空白逐年损益模板，可填写后重新导入。",
-        lockedMessage: "当前场景已锁定，不能导入逐年损益。",
+        lockedMessage: "当前方案已锁定，不能导入逐年损益。",
         successMessage: (scenario) => `已导入“${scenario.name}”的逐年交易策略损益值，请确认后保存当前配置。`
       },
       env: {
@@ -41,7 +43,7 @@
         rows: scenarioConfig.buildEnvManualTemplateRows,
         parse: scenarioConfig.parseEnvManualValuesCsv,
         exportedMessage: "已导出空白逐年环境价值兑现模板，可填写后重新导入。",
-        lockedMessage: "当前场景已锁定，不能导入逐年环境价值兑现配置。",
+        lockedMessage: "当前方案已锁定，不能导入逐年环境价值兑现配置。",
         successMessage: (scenario) => `已导入“${scenario.name}”的逐年环境价值兑现配置，请确认后保存当前配置。`
       },
       fee: {
@@ -54,7 +56,7 @@
         rows: scenarioConfig.buildFeeManualTemplateRows,
         parse: scenarioConfig.parseFeeManualValuesCsv,
         exportedMessage: "已导出空白逐年扣费收益模板，可填写后重新导入。",
-        lockedMessage: "当前场景已锁定，不能导入逐年扣费收益配置。",
+        lockedMessage: "当前方案已锁定，不能导入逐年扣费收益配置。",
         successMessage: (scenario) => `已导入“${scenario.name}”的逐年扣费收益配置，请确认后保存当前配置。`
       }
     });
@@ -75,16 +77,7 @@
   }
 
   function setScenarioImportMessage(input = {}) {
-    const {
-      refs = {},
-      text = "",
-      tone = "error"
-    } = input;
-    const node = refs.scenarioMessage;
-    if (!node) return;
-    node.textContent = text;
-    node.style.borderColor = tone === "success" ? "#8fb48d" : "#d39191";
-    node.style.background = tone === "success" ? "#f1fbf1" : "#fff2f2";
+    getScenarioForm().setScenarioMessage(input);
   }
 
   function exportManualScenarioTemplate(input = {}) {
@@ -124,7 +117,7 @@
       return false;
     }
     if (scenario.locked) {
-      setScenarioImportMessage({ refs, text: config.lockedMessage, tone: "error" });
+      setScenarioImportMessage({ refs, project, scenario, text: config.lockedMessage, tone: "error" });
       return false;
     }
     const file = refs[config.fileInputRef]?.files?.[0];
@@ -140,7 +133,7 @@
     const rejectChangedTarget = () => {
       const text = `“${file.name || "所选文件"}”导入已取消：项目或方案已切换、删除或重新载入，请在目标方案重新导入。`;
       setManualScenarioStatus({ refs, config, text });
-      setScenarioImportMessage({ refs, text, tone: "error" });
+      setScenarioImportMessage({ refs, project, scenario, text, tone: "error" });
       return false;
     };
     if (!targetIsCurrent()) return rejectChangedTarget();
@@ -150,12 +143,12 @@
       const parsed = config.parse(text, project);
       if (!parsed.ok) {
         setManualScenarioStatus({ refs, config, text: parsed.message });
-        setScenarioImportMessage({ refs, text: parsed.message, tone: "error" });
+        setScenarioImportMessage({ refs, project, scenario, text: parsed.message, tone: "error" });
         return false;
       }
       if (!targetIsCurrent()) return rejectChangedTarget();
       if (scenario.locked) {
-        setScenarioImportMessage({ refs, text: config.lockedMessage, tone: "error" });
+        setScenarioImportMessage({ refs, project, scenario, text: config.lockedMessage, tone: "error" });
         return false;
       }
       if (!scenario.config || typeof scenario.config !== "object") {
@@ -170,14 +163,14 @@
       }
       project.statuses["scenario-page"] = "in_progress";
       actions.markDownstreamStale?.(project, "scenario-page");
-      setScenarioImportMessage({ refs, text: config.successMessage(scenario), tone: "success" });
+      setScenarioImportMessage({ refs, project, scenario, text: config.successMessage(scenario), tone: "success" });
       actions.renderAll?.();
       actions.schedulePersistAppData?.();
       return true;
     } catch (error) {
       const message = actions.normalizeUserFacingError?.(error) || error?.message || "导入失败，请检查文件后重试。";
       setManualScenarioStatus({ refs, config, text: message });
-      setScenarioImportMessage({ refs, text: message, tone: "error" });
+      setScenarioImportMessage({ refs, project, scenario, text: message, tone: "error" });
       return false;
     }
   }

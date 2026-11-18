@@ -117,7 +117,7 @@
       const complete = count === keys.length;
       const open = entry.groupOpen[key] ?? !complete;
       const status = complete ? "已带入，可展开修改" : count ? `已带入 ${count} 项 · 其余待确认` : "请填写或确认";
-      return `<details class="rough-parameter-group" data-rough-group="${key}"${open ? " open" : ""}><summary>${title}<span>${status}</span></summary><div class="rough-fieldset">${fieldStates(body)}</div></details>`;
+      return `<details class="rough-parameter-group" data-rough-group="${key}"${open ? " open" : ""}><summary><strong id="rough-group-${key}-title">${title}</strong><span>${status}</span></summary><div class="rough-fieldset">${fieldStates(body)}</div></details>`;
     };
     const referenceMode = config.mechanismReferenceMode === "same_type" ? "same_type" : "project_capture";
     const mechanism = inputField("mechanismEnabled", "启用机制电价", config.mechanismEnabled, { type: "checkbox", disabled: locked }) +
@@ -137,20 +137,13 @@
       }).join("")}</div>`;
     return `<section class="rough-shared"><div class="rough-section-head"><h3 id="rough-shared-heading">结算参数</h3>${locked ? '<span class="rough-badge">方案已锁定，只读</span>' : ""}</div>
       <p class="rough-note" data-help="结算参数" data-help-anchor="#rough-shared-heading">已确认参数自动带入，未确认参数保留填写。生成粗算不会批量确认参数；实际调整的单项参数自动带入，未修改的默认值仍待确认。逐年表需明确确认；核对本页适用参数后，可点击“确认并保存本页结算参数”。</p>
-      ${groupHtml("mechanism", "机制电价与补差口径", `<div class="rough-fields">${mechanism}</div><p class="rough-note" data-help="机制补差口径">同类型机组均价＝项目捕获电价＋同类型机组价差；年度有效机制占比按执行月份折算。</p>`)}
+      ${groupHtml("mechanism", "机制电价与补差口径", `<div class="rough-fields">${mechanism}</div><p class="rough-note" data-help="机制补差口径" data-help-anchor="#rough-group-mechanism-title">同类型机组均价＝项目捕获电价＋同类型机组价差；年度有效机制占比按执行月份折算。</p>`)}
       ${groupHtml("strategy", "交易策略损益", selectField("ltPricingMode", "配置方式", config.ltPricingMode || "auto", [["auto", "按首年与目标逐年收敛"], ["manual", "保留 / 设置逐年值"]], locked) + ltFields)}
-      ${groupHtml("environment", "环境价值", selectField("envValueMode", "配置方式", config.envValueMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + '<p class="rough-note" data-help="环境价值">价格与兑现比例按绿证、绿电、碳收益分别配置；兑现比例合计不得超过 100%。</p>' + (config.envValueMode === "manual" ? manualFieldsHtml("envManualValuesByYear", ENV_FIELDS, config, project, locked, confirmed("envManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(ENV_FIELDS, config, project, locked)}</div>`))}
+      ${groupHtml("environment", "环境价值", selectField("envValueMode", "配置方式", config.envValueMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + '<p class="rough-note" data-help="环境价值" data-help-anchor="#rough-group-environment-title">价格与兑现比例按绿证、绿电、碳收益分别配置；兑现比例合计不得超过 100%。</p>' + (config.envValueMode === "manual" ? manualFieldsHtml("envManualValuesByYear", ENV_FIELDS, config, project, locked, confirmed("envManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(ENV_FIELDS, config, project, locked)}</div>`))}
       ${groupHtml("fees", "费用与其他收入", selectField("feeConfigMode", "配置方式", config.feeConfigMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + (config.feeConfigMode === "manual" ? manualFieldsHtml("feeManualValuesByYear", FEE_FIELDS, config, project, locked, confirmed("feeManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(FEE_FIELDS, config, project, locked)}</div>`))}
       ${project.hasStorage ? groupHtml("storage", "配储补充收益", `<div class="rough-fields">${fieldsHtml(STORAGE_FIELDS, config, project, locked)}</div>`) : ""}
       <div class="rough-actions"><button type="button" class="ghost-button" data-rough-save-shared${locked ? " disabled" : ""}>确认并保存本页结算参数</button><span data-rough-dirty>${entry.dirty ? "有未保存调整，生成粗算时一并保存。" : ""}</span></div>
     </section>`;
-  }
-
-  function projectSummaryHtml(project, scenario, getProvinceName = (value) => value) {
-    const years = yearsFor(project);
-    const energy = years.filter((year) => project.energyData?.annualSummary?.[year]?.energyMwh !== undefined ||
-      Array.isArray(project.energyData?.hourlyByYear?.[year])).length;
-    return `<div class="rough-context"><div><span>当前项目</span><strong>${escapeHtml(project.name || project.projectName || "当前项目")}</strong><small>${escapeHtml(getProvinceName(project.province) || "")} · ${project.assetType === "wind" ? "风电" : "光伏"} · ${number(project.capacityMw)} MW${project.hasStorage ? " · 含配储" : ""}</small></div><div><span>当前方案</span><strong>${escapeHtml(scenario.name || "当前方案")}${scenario.locked ? "（已锁定）" : ""}</strong></div><div><span>测算周期</span><strong>${escapeHtml(years[0] ?? "—")} — ${escapeHtml(years.at(-1) ?? "—")} 年</strong><small>${years.length} 年 · 电量记录 ${energy}/${years.length} 年</small></div></div>`;
   }
 
   function snapshotSelectorHtml(snapshots, selected, key) {
@@ -181,10 +174,14 @@
       </section>`;
   }
 
-  function roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, getProvinceName, inputState) {
-    return `${projectSummaryHtml(project, scenario, getProvinceName)}<form id="rough-price-form" class="rough-card" novalidate><div class="rough-section-head"><div><h3>粗算价格假设</h3><p data-help="粗算价格假设">已有项目、周期、电量与已确认结算参数自动带入；未确认参数在下方填写，用于与后续基准结果对照。缺少电量时，仍可计算年度价格；补齐电量后生成新版，查看全周期加权均价。</p></div><span class="rough-badge">元/MWh</span></div>
+  function roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, inputState) {
+    const years = yearsFor(project);
+    const savedEnergyYears = years.filter((year) => project.energyData?.annualSummary?.[year]?.energyMwh !== undefined ||
+      Array.isArray(project.energyData?.hourlyByYear?.[year])).length;
+    const energyStatus = savedEnergyYears < years.length ? `<span class="rough-badge">结算电量 ${savedEnergyYears}/${years.length} 年</span>` : "";
+    return `<form id="rough-price-form" class="rough-card" novalidate><div class="rough-section-head"><div><h3 id="rough-assumptions-heading">粗算价格假设</h3><p data-help="粗算价格假设" data-help-anchor="#rough-assumptions-heading">已有项目、周期、电量与已确认结算参数自动带入；未确认参数在下方填写，用于与后续基准结果对照。缺少电量时，仍可计算年度价格；补齐电量后生成新版，查看全周期加权均价。</p></div><span class="rough-badge">元/MWh</span>${energyStatus}</div>
       <div class="rough-draft-grid"><fieldset class="rough-fieldset"><legend>年度现货均价预期</legend><p class="rough-note" data-help="价格节点">填写起始年及关键变化年份。节点值沿用至下一个节点前一年，采用阶梯填充。</p><div class="rough-nodes">${draft.spotNodes.map((node, index) => `<div class="rough-node"><label>节点年份<input type="number" min="${project.startYear}" max="${Number(project.startYear) + Number(project.forecastYears) - 1}" step="1" data-rough-node="${index}" data-node-field="year" value="${escapeHtml(node.year)}"></label><label>现货均价<input type="number" step="any" data-rough-node="${index}" data-node-field="value" value="${escapeHtml(node.value)}" placeholder="请输入预期价格"></label><button type="button" class="ghost-button" data-rough-remove="${index}" aria-label="删除第 ${index + 1} 个价格节点"${draft.spotNodes.length <= 1 ? " disabled" : ""}>删除</button></div>`).join("")}</div><button type="button" class="ghost-button" data-rough-add>＋ 增加价格节点</button></fieldset>
-      <fieldset class="rough-fieldset"><legend>捕获率与假设来源</legend><label>预期捕获率（%）<input type="number" min="0" max="150" step="any" data-rough-capture value="${escapeHtml(draft.captureRate)}"></label><p class="rough-note" data-help="捕获率">粗算捕获电价＝现货均价×捕获率。初始建议值 95%，请结合项目确认。</p><label>假设来源 / 判断依据（选填）<textarea rows="3" data-rough-source placeholder="如历史价格、同类项目经验或客户判断">${escapeHtml(draft.sourceNote)}</textarea></label></fieldset></div>
+      <fieldset class="rough-fieldset"><legend>捕获率与假设来源</legend><label>预期捕获率（%）<input type="number" min="0" max="150" step="any" id="rough-capture-input" data-rough-capture value="${escapeHtml(draft.captureRate)}"></label><p class="rough-note" data-help="捕获率" data-help-for="rough-capture-input">粗算捕获电价＝现货均价×捕获率。初始建议值 95%，请结合项目确认。</p><label>假设来源 / 判断依据（选填）<textarea rows="3" data-rough-source placeholder="如历史价格、同类项目经验或客户判断">${escapeHtml(draft.sourceNote)}</textarea></label></fieldset></div>
       ${sharedConfigHtml(project, scenario, entry, inputState)}<div class="rough-actions"><button type="submit" class="primary-button">生成并保存粗算版本</button></div><div data-rough-message role="status" class="rough-message ${entry.tone === "error" ? "rough-alert" : ""}">${escapeHtml(entry.message)}</div></form>${roughResultsHtml(snapshot, snapshots, entry, snapshotState)}`;
   }
 
@@ -454,7 +451,7 @@
     const result = project.resultsByScenario?.[scenario.id];
     const comparison = mode === "compare" && snapshot ? domain.compareBaselineResult(project, scenario, snapshot, result) : null;
     target.innerHTML = mode === "rough"
-      ? roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, options.getProvinceName, options.inputState)
+      ? roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, options.inputState)
       : compareHtml(project, snapshots, snapshot, entry, comparison, scenario, result);
     bindWorkspace(options, refs, state, entry, draft, snapshot, comparison);
   }

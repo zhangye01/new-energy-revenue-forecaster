@@ -127,7 +127,6 @@ let changes = 0, persistence = 0, comparisons = 0;
 const changesMetadata = [];
 const options = {
   documentRef: fixture.documentRef, project, scenario, inputState, mode: "rough",
-  getProvinceName: (key) => key === "shandong" ? "山东" : key,
   domain: { ...domain,
     compareSnapshot() { throw new Error("must never recompute a run for comparison"); },
     compareBaselineResult(...args) { comparisons += 1; return domain.compareBaselineResult(...args); } },
@@ -136,10 +135,8 @@ const options = {
   onChange(metadata) { changes += 1; changesMetadata.push(metadata); workspace.renderWorkspace(options); }
 };
 workspace.renderWorkspace(options);
-assert.match(fixture.rough.innerHTML, /&lt;风电 &quot;项目&quot;&gt;/);
-assert.match(fixture.rough.innerHTML, /现有&lt;方案&gt;/);
-assert.match(fixture.rough.innerHTML, /山东 · 风电/);
-assert.doesNotMatch(fixture.rough.innerHTML, /shandong/);
+assert.doesNotMatch(fixture.rough.innerHTML, /粗算.*当前项目|class="rough-context"/,
+  "project identity is presented once in the shared workflow context");
 assert.match(fixture.rough.innerHTML, /机制电价/);
 assert.match(fixture.rough.innerHTML, /data-shared-key="mechanismPrice"[^>]* min="0"/);
 assert.match(fixture.rough.innerHTML, /未确认参数保留填写/);

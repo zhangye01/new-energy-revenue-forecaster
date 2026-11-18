@@ -9,10 +9,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .scenario-page-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .scenario-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -114,7 +110,6 @@
   .compare-drill-grid,
   .compare-variable-grid,
   .compare-factor-drill-list,
-  .scenario-page-summary,
   .scenario-form-grid,
   .scenario-trade-manual-actions,
   .scenario-workspace-grid {

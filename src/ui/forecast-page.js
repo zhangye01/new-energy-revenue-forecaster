@@ -35,7 +35,7 @@
     const hard = qualityGate.hard || {};
     const mape = Number(((hard.mape ?? 0.15) * 100).toFixed(2));
     const smape = Number(((hard.smape ?? 0.18) * 100).toFixed(2));
-    return `硬门槛：MAPE ≤ ${mape}%，sMAPE ≤ ${smape}%，缺失点 ≤ ${hard.missingPoints ?? 0}；按完整测算周期检查价格曲线。软门槛：MAE ≤ ${qualityGate.soft?.mae ?? "-"}，RMSE ≤ ${qualityGate.soft?.rmse ?? "-"}。`;
+    return `硬门槛：MAPE ≤ ${mape}%，sMAPE ≤ ${smape}%，缺失点 ≤ ${hard.missingPoints ?? 0}；按完整测算周期检查价格曲线。软门槛：MAE ≤ ${qualityGate.soft?.mae ?? "-"} 元/MWh，RMSE ≤ ${qualityGate.soft?.rmse ?? "-"} 元/MWh。`;
   }
 
   function buildEmptyForecastRunsView(qualityGate = {}) {
@@ -94,10 +94,12 @@
     const runBodyHtml = priceRuns.map((run) => {
       const runId = escapeHtml(run.id);
       const supplyState = supplyInputState(project, run, validateSupplyDemandRun);
-      const activeSuffix = project.activeRunId === run.id && supplyState.ok ? " / 生效中" : "";
+      const active = project.activeRunId === run.id && supplyState.ok && canActivateRun(run);
+      const activeSuffix = active ? " / 生效中" : "";
       const supplyStatus = supplyState.ok ? "" : ` / ${run.supplyDemandInput ? "供需已过期" : "未绑定供需"}`;
       const actionHtml = !supplyState.ok
         ? `<span>需重新生成</span><span data-help="供需版本核对">${escapeHtml(supplyState.errors?.join("；") || "请核对供需输入。")}</span>`
+        : active ? '<span aria-hidden="true">—</span>'
         : canActivateRun(run)
         ? `<button class="ghost-button" data-active-run="${runId}">设为生效</button>`
         : `<button class="ghost-button" data-force-run="${runId}">强制发布</button>`;
@@ -173,7 +175,8 @@
     failed: "后台预测失败"
   };
 
-  function createBackendForecastPanel({ documentRef, getProject, getService, inspectInput, prepareInput, isRunActive }) {
+  function createBackendForecastPanel({ documentRef, getProject, getService, inspectInput, prepareInput, isRunActive,
+    hasUsableDemoRun = () => false }) {
     const nodes = Object.fromEntries(["status", "note", "submit", "refresh", "activate", "next"]
       .map((key) => [key, documentRef.querySelector(`#backend-forecast-${key}`)]));
     const states = new WeakMap();
@@ -216,7 +219,7 @@
       if (nodes.submit) nodes.submit.disabled = !(project && service?.submit && input?.ok && !pending && !busy);
       if (nodes.refresh) nodes.refresh.disabled = !(project && service?.refresh && !busy);
       if (nodes.activate) nodes.activate.disabled = !(service?.activate && ready && !active && !busy);
-      if (nodes.next) nodes.next.disabled = !(service && active && !busy);
+      if (nodes.next) nodes.next.disabled = !(!busy && ((service && active) || (project && hasUsableDemoRun(project))));
     }
 
     // The service owns transport and result validation. No task is generated

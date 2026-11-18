@@ -153,7 +153,7 @@ assert.match(selectedOther.bodyHtml, /aria-expanded="true"/);
 const preservedMessage = buildProvinceDefaultsViewModel({
   project: { id: "p1", province: "jiangsu", hasStorage: false },
   provinces,
-  currentMessage: "已带入 江苏 默认参数，并应用到当前场景。",
+  currentMessage: "已带入 江苏 默认参数，并应用到当前方案。",
   getProvinceDefaults,
   getProvinceName,
   getRegionKey
@@ -234,7 +234,7 @@ const lockedResult = applyProvinceDefaultsToProjectFlow({
 });
 assert.equal(lockedResult.ok, false);
 assert.equal(lockedResult.reason, "locked_scenario");
-assert.match(lockedMessage.textContent, /当前场景已锁定/);
+assert.match(lockedMessage.textContent, /当前方案已锁定/);
 assert.equal(lockedProject.statuses["scenario-page"], undefined);
 
 const appliedProject = { province: "jiangsu", statuses: {}, hasStorage: true };
@@ -273,7 +273,7 @@ assert.deepEqual(flowCalls, [
 ]);
 assert.match(provinceApplyMessage.textContent, /已调用 上海 默认参数/);
 assert.match(provinceApplyMessage.textContent, /项目省份仍为 江苏/);
-assert.match(scenarioMessage.textContent, /场景“基准场景”已按 上海 参数更新/);
+assert.match(scenarioMessage.textContent, /方案“基准场景”已按 上海 参数更新/);
 assert.equal(scenarioMessage.style.background, "#f1fbf1");
 
 console.log("province defaults tests passed");

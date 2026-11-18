@@ -118,7 +118,7 @@
               ${isExpanded ? "收起详情" : "展开详情"}
             </button>
             <button type="button" class="ghost-button" data-apply-province="${escapeHtml(province.key)}" ${hasProject ? "" : "disabled"}>
-              带入当前场景
+              带入当前方案
             </button>
           </div>
         </div>
@@ -303,7 +303,7 @@
     if (scenario.locked) {
       applyMessageToElement(
         refs.provinceApplyMessage,
-        message("当前场景已锁定，请先切换到可编辑场景。", "#d39191", "#fff2f2")
+        message("当前方案已锁定，请先切换到可编辑方案。", "#d39191", "#fff2f2")
       );
       return { ok: false, reason: "locked_scenario" };
     }
@@ -319,15 +319,15 @@
       refs.provinceApplyMessage,
       message(
         provinceKey === project.province
-          ? `已带入 ${sourceProvinceName} 默认参数，并应用到当前场景“${scenario.name}”。`
-          : `已调用 ${sourceProvinceName} 默认参数，并应用到当前场景“${scenario.name}”。项目省份仍为 ${projectProvinceName}。`,
+          ? `已带入 ${sourceProvinceName} 默认参数，并应用到当前方案“${scenario.name}”。`
+          : `已调用 ${sourceProvinceName} 默认参数，并应用到当前方案“${scenario.name}”。项目省份仍为 ${projectProvinceName}。`,
         "#8fb48d",
         "#f1fbf1"
       )
     );
     applyMessageToElement(
       refs.scenarioMessage,
-      message(`场景“${scenario.name}”已按 ${sourceProvinceName} 参数更新。`, "#8fb48d", "#f1fbf1")
+      message(`方案“${scenario.name}”已按 ${sourceProvinceName} 参数更新。`, "#8fb48d", "#f1fbf1")
     );
     actions.renderAll?.();
     actions.schedulePersistAppData?.();

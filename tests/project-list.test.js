@@ -64,7 +64,7 @@ const project = {
   name: "江苏<海上>风电",
   period: "2026-2050",
   metaLine: "江苏 / 风电 / 海上 / 配储",
-  runtimeLine: "场景：基准 | 电价版本：1.0.0",
+  runtimeLine: "方案：基准 | 电价版本：1.0.0",
   statuses: {
     "create-page": "completed",
     "energy-page": "stale"
@@ -90,14 +90,14 @@ assert.deepEqual(projectListItem, {
   name: "基准项目",
   period: "2026-2050",
   metaLine: "江苏 / 风电 / 海上 / 配储",
-  runtimeLine: "场景：基准场景 | 电价版本：run-v1",
+  runtimeLine: "方案：基准场景 | 电价版本：run-v1",
   statuses: { "create-page": "completed" }
 });
 
 const draftListItem = buildProjectListItem({ id: "draft", name: "草稿" });
 assert.equal(draftListItem.period, "待创建");
 assert.equal(draftListItem.metaLine, "基础信息待填写 / 风光类型待选 / 陆海类型待选");
-assert.equal(draftListItem.runtimeLine, "场景：未配置 | 电价版本：未生成");
+assert.equal(draftListItem.runtimeLine, "方案：未配置 | 电价版本：未生成");
 
 const listItemBuilder = createProjectListItemViewBuilder({
   isProjectCreateCompleted: (item) => item.ready,
@@ -121,7 +121,7 @@ assert.deepEqual(listItemBuilder({
   name: "已建项目",
   period: "2026-2056",
   metaLine: "江苏 / 风电 / 海上 / 配储",
-  runtimeLine: "场景：测算场景 | 电价版本：v2",
+  runtimeLine: "方案：测算场景 | 电价版本：v2",
   statuses: { "create-page": "completed" }
 });
 assert.equal(listItemBuilder({
@@ -172,7 +172,7 @@ const listView = buildProjectListView({
     name: item.name,
     period: "2026-2050",
     metaLine: "江苏 / 风电 / 海上 / 配储",
-    runtimeLine: "场景：基准 | 电价版本：v1",
+    runtimeLine: "方案：基准 | 电价版本：v1",
     statuses: {}
   }),
   workflowPages,

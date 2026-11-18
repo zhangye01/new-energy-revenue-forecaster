@@ -1,6 +1,6 @@
 /* Forecast workbench additions: use the shared theme for all three modes. */
 #rough-price-root, #rough-compare-root { display: grid; gap: 10px; min-width: 0; }
-.rough-card, .rough-context > div {
+.rough-card {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -8,11 +8,6 @@
   background: var(--panel);
 }
 .rough-card { display: grid; gap: 12px; }
-.rough-context { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; }
-.rough-context > div { display: grid; gap: 5px; background: var(--panel-soft); }
-.rough-context span, .rough-metrics span { color: var(--muted); font-size: 0.78rem; }
-.rough-context strong { font-size: 1rem; overflow-wrap: anywhere; }
-.rough-context small { color: var(--muted); font-size: 0.74rem; line-height: 1.5; }
 .rough-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .rough-section-head > div:not(.rough-actions) { display: grid; gap: 5px; }
 .rough-section-head h3 { margin: 0; font-size: 1.02rem; }
@@ -23,6 +18,7 @@
   line-height: 1.65;
 }
 .rough-badge { flex-shrink: 0; color: var(--blue); font-size: 0.75rem; background: var(--info-bg); border-radius: 4px; padding: 5px 8px; }
+.rough-metrics span { color: var(--muted); font-size: 0.78rem; }
 .rough-draft-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; align-items: start; }
 .rough-fieldset { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 6px; }
 .rough-fieldset legend { padding: 0 6px; color: var(--ink); font-size: 0.86rem; font-weight: 750; }
@@ -108,8 +104,7 @@
 }
 @media (max-width: 760px) {
   .rough-card { padding: 11px; }
-  .rough-context, .rough-draft-grid, .rough-metrics, .rough-compare-controls, .rough-comparison-grid { grid-template-columns: minmax(0, 1fr); }
-  .rough-context > div { padding: 10px; }
+  .rough-draft-grid, .rough-metrics, .rough-compare-controls, .rough-comparison-grid { grid-template-columns: minmax(0, 1fr); }
   .rough-section-head { flex-direction: column; }
   .rough-parameter-group > summary > span:not([data-context-help]) { display: block; margin: 5px 0 0 16px; }
   .rough-fieldset { padding: 9px; }
@@ -154,14 +149,12 @@
 }
 .backend-forecast-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
 .backend-forecast-actions button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
-.backend-forecast-actions .next-step-button { margin-left: auto; }
 .backend-forecast-note { display: block; color: var(--muted); font-size: .76rem; line-height: 1.6; overflow-wrap: anywhere; }
 .backend-forecast-note:empty { display: none; }
 .forecast-demo-panel { min-width: 0; }
 @media (max-width: 760px) {
   .backend-forecast-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .backend-forecast-actions button { width: 100%; min-width: 0; min-height: 40px; }
-  .backend-forecast-actions .next-step-button { margin-left: 0; }
 }
 @media (max-width: 420px) {
   .backend-forecast-actions { grid-template-columns: minmax(0, 1fr); }

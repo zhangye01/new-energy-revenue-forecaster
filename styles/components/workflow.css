@@ -1,5 +1,64 @@
 /* CSS governance: shared workflow transition rows between major process pages. Load after buttons.css and before auth.css. */
 
+.workflow-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(100px, .6fr) minmax(116px, .65fr);
+  align-self: start;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.workflow-context[hidden] {
+  display: none;
+}
+
+.page:has(> .workflow-context:not([hidden])) {
+  grid-template-rows: min-content;
+}
+
+.workflow-context > div {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.workflow-context dt,
+.workflow-context-secondary {
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+.workflow-context dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.workflow-context dd:not(.workflow-context-secondary) {
+  color: var(--text);
+  font-size: .875rem;
+  font-weight: 800;
+}
+
+.table-unit {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: .75em;
+  white-space: nowrap;
+}
+
+@media (max-width: 1220px) {
+  .workflow-context {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .create-next-step-bar,
 .energy-next-step-row,
 .history-next-step-row {
