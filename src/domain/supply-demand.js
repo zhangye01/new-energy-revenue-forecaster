@@ -337,7 +337,7 @@
     return { ok: false, errors, fingerprint: "", annualRows: [], typicalRows: [], hourlyByYear: {}, source: null };
   }
 
-  function buildDataset(project, config) {
+  function buildTemporalData(project, config, expandHours) {
     const errors = validateConfig(project, config);
     if (errors.length) return failed(errors);
     const entries = activeSeries(config).map(({ key, series }) => ({ key, series, annual: annualValues(project, series), defaults: compileCurve(series) }));
@@ -346,7 +346,7 @@
     for (let index = 0; index < project.forecastYears; index += 1) {
       const year = project.startYear + index;
       const annual = annualRows[index];
-      const hourly = Object.fromEntries(VALUE_KEYS.map((key) => [key, []]));
+      const hourly = expandHours ? Object.fromEntries(VALUE_KEYS.map((key) => [key, []])) : null;
       const yearlyTypical = [];
       const curves = entries.map(({ key, series, annual: annualSeries, defaults }) => ({ key, energy: annualSeries[index],
         ...(config.version === 2 && Object.hasOwn(series.curveOverridesByYear || {}, year) ? compileCurve(series, year) : defaults) }));
@@ -357,6 +357,7 @@
           return { year, month: monthIndex + 1, hour, representedDays: days, ...deriveValues(values, bidirectional) };
         });
         yearlyTypical.push(...monthRows);
+        if (!hourly) return;
         for (let day = 0; day < days; day += 1) {
           monthRows.forEach((row) => VALUE_KEYS.forEach((key) => hourly[key].push(row[key])));
         }
@@ -365,13 +366,13 @@
       for (const key of VALUE_KEYS) {
         const arithmeticScale = key === "residualDemand" ? absoluteInputTotal
           : key === "tieLine" ? annual.tieLineExport + annual.tieLineImport : Math.abs(annual[key]);
-        if (!hourly[key].every(Number.isFinite) || !conserved(sum(hourly[key]), annual[key], arithmeticScale)
-            || !conserved(sum(yearlyTypical.map((row) => row[key] * row.representedDays)), annual[key], arithmeticScale)) {
+        const hourlyMismatch = hourly && (!hourly[key].every(Number.isFinite) || !conserved(sum(hourly[key]), annual[key], arithmeticScale));
+        if (hourlyMismatch || !conserved(sum(yearlyTypical.map((row) => row[key] * row.representedDays)), annual[key], arithmeticScale)) {
           return failed([`${year}年${key}小时数据未通过电量守恒校验，请核对输入数值范围。`]);
         }
       }
       typicalRows.push(...yearlyTypical);
-      hourlyByYear[year] = hourly;
+      if (hourly) hourlyByYear[year] = hourly;
     }
     const inputFingerprint = fingerprint(project, config);
     return { ok: true, errors: [], fingerprint: inputFingerprint, annualRows, typicalRows, hourlyByYear,
@@ -381,6 +382,15 @@
         intervalHours: 1, energyUnit: "MWh", averagePowerUnit: "MW", typicalDayExpansion: true,
         tieLinePositiveDirection: "export", tieLineNegativeDirection: "import",
         curveReuse: config.version === 2 ? "default_with_year_overrides" : "same_monthly_and_hourly_weights_across_years" } };
+  }
+
+  function buildDataset(project, config) {
+    return buildTemporalData(project, config, true);
+  }
+
+  function buildTypicalSummary(project, config) {
+    const { ok, errors, fingerprint: inputFingerprint, annualRows, typicalRows } = buildTemporalData(project, config, false);
+    return { ok, errors, fingerprint: inputFingerprint, annualRows, typicalRows };
   }
 
   function csvRows(dataset, kind) {
@@ -407,5 +417,5 @@
   }
 
   return Object.freeze({ ELEMENTS, MONTH_DAYS, MAX_FORECAST_YEARS, createSeries, createConfig, prepareShareConfig, getCurve, validateShares,
-    validateConfig, fingerprint, buildAnnualSummary, buildDataset, csvRows });
+    validateConfig, fingerprint, buildAnnualSummary, buildTypicalSummary, buildDataset, csvRows });
 });

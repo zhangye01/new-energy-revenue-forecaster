@@ -21,6 +21,7 @@ SeriesWithMode在单向时{mode:'net',...Series}；双向时{mode:'bidirectional
 领域模块NE_SUPPLY_DEMAND提供：
 - ELEMENTS（key/label）、MONTH_DAYS、createConfig(project)、validateConfig(project,config)返回字符串错误数组。
 - buildAnnualSummary(project,config)返回{ok,errors,annualRows}，仅计算年度摘要，供已保存预测来源核验使用，不展开典型日或8760数组。
+- buildTypicalSummary(project,config)返回年度与典型日数据，供页面预览。不展开逐小时数组。
 - fingerprint(project,config)只读稳定指纹，覆盖省份/项目ID/起始年/年限及完整配置。
 - buildDataset(project,config)返回{ok,errors,fingerprint,annualRows,typicalRows,hourlyByYear,source}。annualRows每年{year,load,tieLine,wind,solar,hydro,nonMarket,residualDemand,tieLineExport,tieLineImport}。typicalRows每年每月每小时{year,month,hour,representedDays,...六元素及residualDemand}，hour为0..23。hourlyByYear[year]包含各要素的8760小时序列。source记录模型日历和单位，`curveReuse`对新版占比使用`default_with_year_overrides`，历史相对权重继续使用原标识。
 - csvRows(dataset,kind)返回表头+数据行，kind=annual/typical/hourly，导出必须带year/month/hour与单位（8760另含day/hourIndex）。
@@ -32,7 +33,9 @@ SeriesWithMode在单向时{mode:'net',...Series}；双向时{mode:'bidirectional
 
 项目起始年变动时，首年电量须重新填写。默认典型年曲线和重叠年份的调整可带入核对，重叠的后续年份可带入已有增长率。界面和工作簿共同编辑一份待保存的配置。旧的已保存配置及预测版本保留生成时输入。
 
-`NE_SUPPLY_DEMAND_TEMPLATE`负责工作簿生成和导入校验。`NE_SUPPLY_DEMAND_WORKSPACE.createController({root,getProject,onCommit,downloadCsv,onDraftChange})`返回`{render,hasUnsavedChanges}`。主控在保存时校验目标项目及供需配置，并在输入版本变化时更新预测生效状态。根节点`#supply-demand-root`位于预测表单之前。已生成结果仍可通过`downloadCsv(filename,rows)`导出。
+供需堆积面积图读取已生成数据。分月视图将每个典型小时的电量按代表天数计入月合计。典型日视图展示所选月份的24小时。供给面积由风电、光伏、水电、非市场化出力和联络线受入构成，总需求线为省内负荷加联络线送出。悬停可查看各项电量及剩余需求。
+
+`NE_SUPPLY_DEMAND_TEMPLATE`负责工作簿生成和导入校验。`NE_SUPPLY_DEMAND_WORKSPACE.createController({root,getProject,onCommit,downloadCsv,onDraftChange})`返回`{render,hasUnsavedChanges,disposeChart}`。主控在保存时校验目标项目及供需配置，并在输入版本变化时更新预测生效状态。根节点`#supply-demand-root`位于预测表单之前。已生成结果仍可通过`downloadCsv(filename,rows)`导出。
 
 ## 预测集成与历史保护
 

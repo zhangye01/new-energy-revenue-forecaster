@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const domain = require("../src/domain/supply-demand");
 const { ELEMENTS, MONTH_DAYS, createConfig, createSeries, prepareShareConfig, getCurve, validateShares,
-  validateConfig, fingerprint, buildAnnualSummary, buildDataset, csvRows } = domain;
+  validateConfig, fingerprint, buildAnnualSummary, buildTypicalSummary, buildDataset, csvRows } = domain;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 const approx = (actual, expected, tolerance = 1e-6) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} != ${expected}`);
@@ -302,6 +302,12 @@ const bidiShare = prepareShareConfig(project, bidirectional);
 bidiShare.elements.tieLine.import.curveOverridesByYear = { 2029: { hourlyWeightsByMonth: { 1: oneHour(22) } } };
 const bidiShareData = buildDataset(project, bidiShare);
 assert.equal(bidiShareData.ok, true, bidiShareData.errors.join(";"));
+for (const [config, full] of [[raw, result], [bidiShare, bidiShareData]]) {
+  const { ok, errors, fingerprint, annualRows, typicalRows } = full;
+  assert.deepEqual(buildTypicalSummary(project, config), { ok, errors, fingerprint, annualRows, typicalRows },
+    "saved chart preview must match the full dataset without retaining hourly arrays");
+}
+assert.equal(buildTypicalSummary(project, invalidDefault).ok, false);
 approx(bidiShareData.hourlyByYear[2029].tieLine[22], -24);
 approx(bidiShareData.hourlyByYear[2029].tieLine[23], 0);
 approx(bidiShareData.hourlyByYear[2028].tieLine[23], -24);

@@ -3117,6 +3117,8 @@ function renderForecastRuns() {
   if (appState.activePage === "forecast-page") {
     supplyDemandFlow.render();
     backendForecastPanel.render();
+  } else {
+    supplyDemandFlow.disposeChart();
   }
   forecastPage.applyForecastRunsView({
     refs,

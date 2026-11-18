@@ -62,6 +62,7 @@
 | `rough-price-workspace.js` | 独立粗算页面、机制参数和简化结算假设、粗算快照与结果阶段交叉验证 |
 | `rough-trend-chart.js` | 读取粗算快照构建年度趋势图，统一坐标轴、价格节点与年度悬停提示 |
 | `supply-demand-template.js` | 默认典型年和指定年的曲线 Excel 模板、占比校验与局部合并 |
+| `supply-demand-chart.js` | 读取已生成的供需时序，展示分月和典型日供给构成与总需求曲线 |
 | `supply-demand-workspace.js` | 供需模板导入、年度预览、保存生成及 CSV 导出 |
 | `supply-demand-flow.js` | 供需保存/水合、预测输入准备、来源有效性及旧运行失效编排 |
 | `forecast-page.js` | 电价预测版本列表、质量门槛和激活日志 HTML 构造 |

@@ -181,19 +181,32 @@
     const config = project.supplyDemand.config;
     const typical = dataset.typicalRows.filter((row) => row.year === entry.previewYear && row.month === entry.previewMonth);
     return `<div class="sd-preview-content"><h4>年度供需总量</h4>${tableRows(dataset.annualRows, PERIOD_START, config)}
-      <div class="sd-actions"><h4>典型日24小时</h4>
-        <label>年份<select data-sd-select="previewYear">${years(project).map((year) => option(year, year + "年", entry.previewYear)).join("")}</select></label>
-        <label>月份<select data-sd-select="previewMonth">${Array.from({ length: 12 }, (_, i) => option(i + 1, (i + 1) + "月", entry.previewMonth)).join("")}</select></label>
-      </div>${tableRows(typical, TYPICAL_START, config)}</div>`;
+      <h4>${entry.previewYear} 年 ${entry.previewMonth} 月典型日24小时</h4>${tableRows(typical, TYPICAL_START, config)}</div>`;
   }
 
-  function renderSaved(entry, project, errors, loadDataset) {
+  function renderSupplyChart(entry, project) {
+    return `<section class="sd-section sd-supply-chart-panel" aria-labelledby="sd-supply-chart-heading">
+      <div class="sd-section-head"><h4 id="sd-supply-chart-heading">供需堆积面积图</h4>
+        <div class="sd-actions sd-supply-chart-controls">
+          <label>年份<select data-sd-select="previewYear">${years(project).map((year) => option(year, `${year}年`, entry.previewYear)).join("")}</select></label>
+          <label>粒度<select data-sd-select="previewGranularity">${option("monthly", "分月", entry.previewGranularity)}${option("typical", "典型日", entry.previewGranularity)}</select></label>
+          <label data-sd-chart-month${entry.previewGranularity !== "typical" && !entry.previewOpen ? " hidden" : ""}>月份<select data-sd-select="previewMonth">${MONTHS.map((month) => option(month, `${month}月`, entry.previewMonth)).join("")}</select></label>
+        </div></div>
+      <p data-help="供需堆积面积图" data-help-anchor="#sd-supply-chart-heading">面积为风电、光伏、水电、非市场化出力及联络线受入。需求线为省内负荷加联络线送出。图表读取已生成数据，悬停可查看各项电量。</p>
+      <div class="sd-supply-chart" data-sd-supply-chart role="img" aria-label="已生成供需数据，供给堆积面积及总需求"></div>
+      <p class="sd-color-muted sd-supply-chart-feedback" data-sd-chart-fallback role="status" hidden>图表暂不可用，可查看或导出已保存数据。</p>
+    </section>`;
+  }
+
+  function renderSaved(entry, project, savedErrors, dataset) {
     const saved = project.supplyDemand?.config;
     if (!saved) return "";
-    if (errors.length) return `<div class="sd-alert">请核对已保存的供需配置。 ${escape(errors[0])}</div>`;
-    const display = entry.previewOpen ? renderSavedDetails(entry, project, loadDataset(project, entry, saved)) : "";
+    const errors = savedErrors.length ? savedErrors : dataset?.errors || [];
+    if (errors.length || !dataset?.ok) return `<div class="sd-alert">请核对已保存的供需配置。 ${escape(errors[0])}</div>`;
+    const display = entry.previewOpen ? renderSavedDetails(entry, project, dataset) : "";
     return `<div class="sd-saved-head"><span>已生成 ${project.forecastYears} 年 · 每年288个典型小时 / 8760小时</span>
         <div class="sd-actions">${Object.keys(CSV_LABELS).map((key) => button("export-" + key, CSV_LABELS[key] + "CSV")).join("")}</div></div>
+      ${renderSupplyChart(entry, project)}
       <details class="sd-preview"${entry.previewOpen ? " open" : ""} data-sd-preview><summary>查看已保存数据（MWh）</summary>${display}</details>`;
   }
 
@@ -216,13 +229,12 @@
       <span>${changedRows ? `已载入 ${changedRows} 行曲线变更` : "模板与当前曲线一致"}${legacy ? " · 仅载入旧模板的曲线" : ""}</span>${preview}</section>`;
   }
 
-  function markup(project, entry, domain, loadDataset, config) {
+  function markup(project, entry, domain, config, savedErrors, savedDataset) {
     const saved = project.supplyDemand?.config, draft = project.supplyDemand?.draft;
-    const savedErrors = saved ? domain.validateConfig(project, saved) : [];
-    const status = statusLabel(entry, saved, savedErrors, draft);
+    const status = statusLabel(entry, saved, savedErrors.length ? savedErrors : savedDataset?.errors || [], draft);
     const canGenerate = Boolean((entry.staged || draft) && !entry.loading && !entry.conflict);
     const canDiscard = Boolean(entry.staged || entry.loading || draft);
-    const savedMarkup = renderSaved(entry, project, savedErrors, loadDataset);
+    const savedMarkup = renderSaved(entry, project, savedErrors, savedDataset);
     const labels = seriesLabels(config);
     const disabled = entry.loading || entry.conflict ? " disabled" : "";
     return `<div class="panel sd-workspace"><div class="sd-section-head">
@@ -242,9 +254,11 @@
       downloadCsv = () => {}, now = () => new Date().toISOString() } = options;
     const domain = options.domain || globalRoot.NE_SUPPLY_DEMAND || (typeof module !== "undefined" && module.exports ? require("../domain/supply-demand") : null);
     const template = () => options.template || globalRoot.NE_SUPPLY_DEMAND_TEMPLATE;
+    const supplyChartOptions = () => options.supplyChart || globalRoot.NE_SUPPLY_DEMAND_CHART;
     const xlsx = () => options.xlsx || globalRoot.XLSX;
     const entries = new WeakMap();
     let renderedProject = null, bound = false;
+    let mountedChart = null;
 
     function source(project) {
       return JSON.stringify([project.id, project.province, project.startYear, project.forecastYears, project.supplyDemand || {}]);
@@ -254,7 +268,7 @@
       let entry = entries.get(project);
       if (!entry || entry.projectId !== project.id) {
         entry = { projectId: project.id, staged: null, loading: null, conflict: false, message: "", errors: [],
-          previewYear: project.startYear, previewMonth: 1, previewOpen: false, dataset: null,
+          previewYear: project.startYear, previewMonth: 1, previewGranularity: "monthly", previewOpen: false, dataset: null, chartDataset: null,
           growthSeries: null, growthFill: null, curveYear: null, curveSeries: "load", curveMonth: 1 };
         entries.set(project, entry);
       }
@@ -286,12 +300,82 @@
       return entry.dataset;
     }
 
+    function loadChartDataset(project, entry, config) {
+      const fingerprint = domain.fingerprint(project, config);
+      if (entry.dataset?.fingerprint === fingerprint) return entry.dataset;
+      if (entry.chartDataset?.fingerprint !== fingerprint) {
+        entry.chartDataset = { fingerprint, dataset: domain.buildTypicalSummary(project, config) };
+      }
+      return entry.chartDataset.dataset;
+    }
+
+    function disposeChart() {
+      mountedChart?.dispose();
+      mountedChart = null;
+    }
+
+    function mountChart(entry, dataset) {
+      const plot = root.querySelector?.("[data-sd-supply-chart]");
+      if (!plot) return;
+      const fallback = root.querySelector("[data-sd-chart-fallback]");
+      const windowRef = plot.ownerDocument?.defaultView || globalRoot;
+      const engine = options.echarts || windowRef.echarts;
+      const builder = supplyChartOptions();
+      const unavailable = () => {
+        plot.hidden = true;
+        if (fallback) fallback.hidden = false;
+      };
+      if (!engine?.init || !builder?.buildOption) { unavailable(); return; }
+
+      let chart = null, width = 0;
+      const draw = () => {
+        const currentWidth = plot.clientWidth;
+        if (!currentWidth || plot.hidden) return;
+        try {
+          const style = windowRef.getComputedStyle?.(plot);
+          const tokenKeys = { ink: "ink", muted: "muted", line: "line", lineStrong: "line-strong", panel: "panel" };
+          const tokens = Object.fromEntries(Object.entries(tokenKeys).map(([key, cssKey]) =>
+            [key, style?.getPropertyValue(`--${cssKey}`).trim()]).filter(([, value]) => value));
+          const option = builder.buildOption(dataset, { year: entry.previewYear, month: entry.previewMonth,
+            granularity: entry.previewGranularity, tokens, width: currentWidth });
+          if (!option) { unavailable(); return; }
+          chart ||= engine.init(plot, null, { renderer: "canvas" });
+          width = currentWidth;
+          chart.setOption(option, true);
+        } catch {
+          chart?.dispose();
+          chart = null;
+          unavailable();
+        }
+      };
+      const resize = () => {
+        if (!plot.clientWidth || plot.hidden) return;
+        chart?.resize();
+        if (width !== plot.clientWidth) draw();
+      };
+      const sizeObserver = windowRef.ResizeObserver ? new windowRef.ResizeObserver(resize) : null;
+      const body = plot.ownerDocument?.body;
+      const themeObserver = body && windowRef.MutationObserver ? new windowRef.MutationObserver(draw) : null;
+      if (sizeObserver) sizeObserver.observe(plot);
+      else windowRef.addEventListener?.("resize", resize);
+      themeObserver?.observe(body, { attributes: true, attributeFilter: ["data-theme"] });
+      mountedChart = { draw, dispose() {
+        sizeObserver?.disconnect();
+        if (!sizeObserver) windowRef.removeEventListener?.("resize", resize);
+        themeObserver?.disconnect();
+        chart?.dispose();
+        chart = null;
+      } };
+      draw();
+    }
+
     function render() {
       if (!root) return;
+      disposeChart();
       const project = getProject();
       if (renderedProject && renderedProject !== project) {
         const previous = entries.get(renderedProject);
-        if (previous) previous.loading = null;
+        if (previous) { previous.loading = null; previous.dataset = null; }
       }
       renderedProject = project;
       if (!project || !years(project).length) {
@@ -307,7 +391,11 @@
       const active = seriesLabels(config).map(([key]) => key);
       if (!active.includes(entry.curveSeries)) entry.curveSeries = "load";
       if (!active.includes(entry.growthSeries) || project.forecastYears === 1) entry.growthSeries = null;
-      root.innerHTML = markup(project, entry, domain, loadDataset, config);
+      const saved = project.supplyDemand?.config;
+      const savedErrors = saved ? domain.validateConfig(project, saved) : [];
+      const savedDataset = saved && !savedErrors.length ? loadChartDataset(project, entry, saved) : null;
+      root.innerHTML = markup(project, entry, domain, config, savedErrors, savedDataset);
+      if (savedDataset?.ok) mountChart(entry, savedDataset);
       if (!bound && root.addEventListener) {
         root.addEventListener("input", onInput);
         root.addEventListener("change", onChange);
@@ -333,10 +421,27 @@
       context.entry.previewOpen = Boolean(event.target.open);
       // Keep keyboard focus on the disclosure while filling its lazy contents.
       const { project, entry } = context;
+      syncChartMonth(entry);
+      if (event.target.open) refreshSavedDetails(event.target, entry, project);
+    }
+
+    function syncChartMonth(entry) {
+      const label = root.querySelector?.("[data-sd-chart-month]");
+      if (label) label.hidden = entry.previewGranularity !== "typical" && !entry.previewOpen;
+    }
+
+    function refreshSavedDetails(details, entry, project) {
       const saved = project.supplyDemand?.config;
-      if (event.target.open && saved && !event.target.querySelector(".sd-preview-content")) {
-        event.target.insertAdjacentHTML("beforeend", renderSavedDetails(entry, project, loadDataset(project, entry, saved)));
-      }
+      if (!details || !saved || !entry.previewOpen) return;
+      details.querySelector(".sd-preview-content")?.remove();
+      details.insertAdjacentHTML("beforeend", renderSavedDetails(entry, project, loadChartDataset(project, entry, saved)));
+    }
+
+    function redrawSavedPreview(entry, project) {
+      if (!root.querySelector) { render(); return; }
+      syncChartMonth(entry);
+      refreshSavedDetails(root.querySelector("[data-sd-preview]"), entry, project);
+      mountedChart?.draw();
     }
 
     function onChange(event) {
@@ -362,12 +467,18 @@
       } else if (selected === "curveSeries" && seriesLabels(editableConfig(project, entry)).some(([key]) => key === value)) {
         entry.curveSeries = value;
         render();
-      } else if (["curveMonth", "previewMonth"].includes(selected) && MONTHS.includes(Number(value))) {
-        entry[selected] = Number(value);
+      } else if (selected === "curveMonth" && MONTHS.includes(Number(value))) {
+        entry.curveMonth = Number(value);
         render();
       } else if (selected === "previewYear" && years(project).includes(Number(value))) {
         entry.previewYear = Number(value);
-        render();
+        redrawSavedPreview(entry, project);
+      } else if (selected === "previewMonth" && MONTHS.includes(Number(value))) {
+        entry.previewMonth = Number(value);
+        redrawSavedPreview(entry, project);
+      } else if (selected === "previewGranularity" && ["monthly", "typical"].includes(value)) {
+        entry.previewGranularity = value;
+        redrawSavedPreview(entry, project);
       }
       else return;
       root.querySelector?.(`[data-sd-select="${selected}"]`)?.focus?.({ preventScroll: true });
@@ -638,7 +749,7 @@
       }
     }
 
-    return Object.freeze({ render, hasUnsavedChanges(project = getProject()) {
+    return Object.freeze({ render, disposeChart, hasUnsavedChanges(project = getProject()) {
       const entry = project && entries.get(project);
       return Boolean(entry && (entry.staged || entry.loading));
     } });

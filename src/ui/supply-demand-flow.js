@@ -94,7 +94,7 @@
       controller.render();
     }
 
-    return { render, hydrate, reconcile, inspectSupplyDemand, prepareSupplyDemand, validateSupplyDemandRun, hasPendingDraft,
+    return { render, disposeChart: () => controller?.disposeChart?.(), hydrate, reconcile, inspectSupplyDemand, prepareSupplyDemand, validateSupplyDemandRun, hasPendingDraft,
       hasUnsavedChanges: () => Boolean(controller?.hasUnsavedChanges?.()) };
   }
 

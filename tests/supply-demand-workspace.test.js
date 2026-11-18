@@ -105,6 +105,7 @@ async function main() {
   assert.equal((initial.root.innerHTML.match(/data-sd-input="month-share"/g) || []).length, 12);
   assert.match(initial.root.innerHTML, /data-sd-action="generate" disabled/);
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-growth-panel|sd-curve-bars|<textarea/);
+  assert.doesNotMatch(initial.root.innerHTML, /data-sd-supply-chart/, "chart appears after successful generation");
   initial.click("download-template");
   assert.deepEqual(initial.downloads[0], { target: fresh, config: undefined, options: { xlsx: initial.xlsx, year: null } });
 
@@ -141,6 +142,8 @@ async function main() {
   assert.equal(fresh.supplyDemand.inputFingerprint, domain.fingerprint(fresh, valid));
   assert.deepEqual(fresh.supplyDemand.config, valid);
   assert.notEqual(fresh.supplyDemand.config, valid);
+  assert.match(initial.root.innerHTML, /供需堆积面积图[\s\S]*data-sd-supply-chart/);
+  assert.match(initial.root.innerHTML, /<option value="monthly" selected>分月/);
   const { supplyDemand, ...projectWithoutSupply } = fresh;
   assert.deepEqual(projectWithoutSupply, original, "rough, history and other scenario input stay intact");
   assert.match(initial.openSavedPreview(), /典型日24小时/);
@@ -148,6 +151,7 @@ async function main() {
   initial.select("previewMonth", 2);
   assert.match(initial.root.innerHTML, /<option value="2028" selected/);
   assert.match(initial.root.innerHTML, /<option value="2" selected/);
+  assert.match(initial.root.innerHTML, /2028 年 2 月典型日24小时/);
 
   await initial.upload("替换.xlsx", { ok: true, config: completeConfig(fresh, 90000) });
   initial.click("export-annual"); initial.click("export-typical"); initial.click("export-hourly");
@@ -172,6 +176,56 @@ async function main() {
   assert.deepEqual(historical.statuses, [true, true, false]);
   assert.equal(historical.commits.length, 0, "exact no-op save skips persistence and forecast invalidation");
   assert.equal(JSON.stringify(history), historyBefore);
+
+  const chartProject = project("display-chart");
+  const chartRoot = new Root(), drawn = [];
+  const monthLabel = { hidden: true }, fallback = { hidden: true };
+  const plot = { clientWidth: 680, hidden: false, ownerDocument: { defaultView: {
+    getComputedStyle() { return { getPropertyValue: (key) => key === "--ink" ? "#444444" : "" }; }
+  } } };
+  chartRoot.querySelector = (selector) => ({
+    "[data-sd-supply-chart]": chartRoot.innerHTML.includes("data-sd-supply-chart") ? plot : null,
+    "[data-sd-chart-month]": monthLabel,
+    "[data-sd-chart-fallback]": fallback
+  })[selector] || null;
+  let chartCount = 0, disposed = 0, summaries = 0;
+  const chartController = workspace.createController({ root: chartRoot, getProject: () => chartProject,
+    domain: { ...domain, buildDataset() { assert.fail("chart must not expand 8760-hour dataset"); },
+      buildTypicalSummary(...args) { summaries += 1; return domain.buildTypicalSummary(...args); } },
+    echarts: { init(target, _theme, options) {
+      assert.equal(target, plot);
+      assert.equal(options.renderer, "canvas");
+      chartCount += 1;
+      return { setOption(value) { drawn.push(value); }, resize() {}, dispose() { disposed += 1; } };
+    } },
+    supplyChart: { buildOption(dataset, settings) { return { load: dataset.annualRows[0].load, ...settings }; } }
+  });
+  chartController.render();
+  assert.equal(chartCount, 0);
+  chartProject.supplyDemand = savedState(chartProject);
+  const chartBefore = JSON.stringify(chartProject);
+  chartController.render();
+  assert.deepEqual(drawn.at(-1), { load: 120000, year: 2027, month: 1, granularity: "monthly", tokens: { ink: "#444444" }, width: 680 });
+  chartRoot.fire("input", { sdInput: "base", sdSeries: "load" }, { value: "180000" });
+  assert.equal(drawn.length, 1, "typing into the draft does not repaint the saved chart");
+  chartRoot.fire("change", { sdSelect: "previewYear" }, { value: "2028" });
+  chartRoot.fire("change", { sdSelect: "previewGranularity" }, { value: "typical" });
+  assert.equal(monthLabel.hidden, false);
+  chartRoot.fire("change", { sdSelect: "previewMonth" }, { value: "7" });
+  assert.deepEqual(drawn.at(-1), { load: 120000, year: 2028, month: 7, granularity: "typical", tokens: { ink: "#444444" }, width: 680 });
+  assert.equal(chartCount, 1, "filters update the current instance");
+  assert.equal(summaries, 1);
+  assert.equal(JSON.stringify(chartProject), chartBefore, "chart filters show saved data and never commit project changes");
+  chartController.disposeChart();
+  assert.equal(disposed, 1);
+  assert.equal(chartController.hasUnsavedChanges(), true, "disposing the chart preserves edits");
+  chartController.render();
+  assert.equal(chartCount, 2);
+  assert.equal(summaries, 1, "reopening the page uses its cached typical summary");
+  chartProject.startYear += 1;
+  chartController.render();
+  assert.doesNotMatch(chartRoot.innerHTML, /data-sd-supply-chart/);
+  assert.equal(disposed, 2);
 
   const hybrid = project("hybrid", 3);
   hybrid.supplyDemand = savedState(hybrid);
