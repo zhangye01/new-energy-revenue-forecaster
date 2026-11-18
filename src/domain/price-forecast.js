@@ -309,7 +309,6 @@
         || source.calendar !== "fixed_365_days" || source.daysPerYear !== 365 || source.hoursPerYear !== 8760 || source.intervalHours !== 1
         || source.typicalHoursPerYear !== 288 || source.hourOfDayBase !== 0 || source.hourIndexBase !== 1
         || source.typicalDayExpansion !== true || source.tieLinePositiveDirection !== "export" || source.tieLineNegativeDirection !== "import"
-        || source.curveReuse !== "same_monthly_and_hourly_weights_across_years"
         || JSON.stringify(source.monthDays) !== JSON.stringify(supplyDemand.MONTH_DAYS)
         || source.energyUnit !== "MWh" || source.averagePowerUnit !== "MW") {
       supplyDemandError("项目、测算周期、模型日历或单位不一致。");
@@ -323,6 +322,9 @@
     // from that configuration. Recompute from the authoritative input contract.
     const expected = supplyDemand.buildDataset(project, config);
     if (!expected.ok) supplyDemandError(expected.errors.join("；"));
+    if (source.curveReuse !== expected.source.curveReuse) {
+      supplyDemandError("曲线复用方式与原始供需配置不一致。");
+    }
     const keys = [...supplyDemand.ELEMENTS.map(({ key }) => key), "residualDemand", "tieLineExport", "tieLineImport"];
     dataset.annualRows.forEach((annual, index) => {
       const year = project.startYear + index;

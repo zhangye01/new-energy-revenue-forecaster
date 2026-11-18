@@ -17,8 +17,8 @@ class Root {
   }
 }
 
-function project(id = "p1") {
-  return { id, name: "供需测试", province: "shandong", startYear: 2027, forecastYears: 2,
+function project(id = "p1", forecastYears = 2) {
+  return { id, name: "供需测试", province: "shandong", startYear: 2027, forecastYears,
     roughPrice: { snapshots: [{ id: "frozen-rough", value: 327 }] },
     forecastSettlement: { history: [{ year: 2027, price: 329 }] },
     scenarios: [{ id: "s1", config: { managementFee: 12.5 } }] };
@@ -53,8 +53,8 @@ function fixture(p = project(), behavior = {}) {
   let active = p;
   const xlsx = {};
   const template = {
-    download(target, config, options) { downloads.push({ target, config, options }); },
-    readFile(target, file, options) {
+    downloadCurves(target, config, options) { downloads.push({ target, config, options }); },
+    readCurveFile(target, file, options) {
       reads.push({ target, file, options });
       return file.result;
     }
@@ -81,7 +81,8 @@ function fixture(p = project(), behavior = {}) {
   return { root, controller, commits, exports, downloads, reads, statuses, xlsx,
     setActive(value) { active = value; controller.render(); },
     upload(name, result) { return root.fire("change", { sdTemplateFile: "" }, { files: [{ name, result }] }); },
-    click(action) { return root.fire("click", { sdAction: action }); },
+    click(action, dataset = {}) { return root.fire("click", { sdAction: action, ...dataset }); },
+    edit(input, value, dataset = {}) { return root.fire("input", { sdInput: input, ...dataset }, { value: String(value) }); },
     select(key, value) { return root.fire("change", { sdSelect: key }, { value: String(value) }); },
     openSavedPreview() {
       const markup = [];
@@ -100,9 +101,12 @@ async function main() {
   assert.match(initial.root.innerHTML, /2027—2028年/);
   assert.match(initial.root.innerHTML, /data-sd-action="download-template"/);
   assert.match(initial.root.innerHTML, /<input type="file" data-sd-template-file accept="\.xlsx/);
-  assert.doesNotMatch(initial.root.innerHTML, /data-sd-field|data-sd-action="generate"|<textarea/);
+  assert.equal((initial.root.innerHTML.match(/data-sd-input="base"/g) || []).length, 6);
+  assert.equal((initial.root.innerHTML.match(/data-sd-input="month-share"/g) || []).length, 12);
+  assert.match(initial.root.innerHTML, /data-sd-action="generate" disabled/);
+  assert.doesNotMatch(initial.root.innerHTML, /data-sd-growth-panel|sd-curve-bars|<textarea/);
   initial.click("download-template");
-  assert.deepEqual(initial.downloads[0], { target: fresh, config: undefined, options: { xlsx: initial.xlsx } });
+  assert.deepEqual(initial.downloads[0], { target: fresh, config: undefined, options: { xlsx: initial.xlsx, year: null } });
 
   const pending = deferred();
   const valid = completeConfig(fresh);
@@ -111,20 +115,20 @@ async function main() {
   assert.match(initial.root.innerHTML, /读取模板中/);
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-import-preview/);
   assert.deepEqual(fresh, original);
-  pending.resolve({ ok: true, config: valid });
+  pending.resolve({ ok: true, config: valid, changedRows: 1, changes: [{ label: "省内负荷", month: 1 }] });
   await firstUpload;
   assert.equal(initial.controller.hasUnsavedChanges(), true);
   assert.deepEqual(initial.statuses, [true, true]);
   assert.match(initial.root.innerHTML, /data-sd-import-preview/);
   assert.match(initial.root.innerHTML, /假设&lt;&amp;&gt;\.xlsx/);
-  assert.match(initial.root.innerHTML, /126,000\.00/);
-  assert.match(initial.root.innerHTML, /-600\.00/);
+  assert.match(initial.root.innerHTML, /省内负荷 · 1月典型日分时/);
+  assert.match(initial.root.innerHTML, /value="-600" data-sd-series="tieLine"/);
   assert.doesNotMatch(initial.root.innerHTML, /联络线送出|联络线受入/, "net-mode review stays compact");
   assert.deepEqual(fresh, original, "validation and preview leave the project untouched");
 
-  await initial.upload("坏模板.xlsx", { ok: false, errors: ["年度总量单元格 E2 缺失"] });
-  assert.match(initial.root.innerHTML, /年度总量单元格 E2 缺失/);
-  assert.match(initial.root.innerHTML, /126,000\.00/, "invalid replacement keeps the prior staged preview");
+  await initial.upload("坏模板.xlsx", { ok: false, errors: ["分月占比单元格 E2 缺失"] });
+  assert.match(initial.root.innerHTML, /分月占比单元格 E2 缺失/);
+  assert.match(initial.root.innerHTML, /假设&lt;&amp;&gt;\.xlsx/, "invalid replacement keeps the prior staged preview");
   assert.deepEqual(initial.reads.at(-1).options.baseConfig, valid);
   assert.notEqual(initial.reads.at(-1).options.baseConfig, valid, "the codec receives an isolated basis");
   assert.equal(initial.controller.hasUnsavedChanges(), true);
@@ -163,11 +167,68 @@ async function main() {
   const historyBefore = JSON.stringify(history), historical = fixture(history);
   await historical.upload("原配置.xlsx", { ok: true, config: clone(history.supplyDemand.config) });
   assert.equal(historical.controller.hasUnsavedChanges(), true, "equal reimports still require explicit review");
-  assert.match(historical.root.innerHTML, /配置与已保存版本一致/);
+  assert.match(historical.root.innerHTML, /模板与当前曲线一致/);
   historical.click("generate");
   assert.deepEqual(historical.statuses, [true, true, false]);
   assert.equal(historical.commits.length, 0, "exact no-op save skips persistence and forecast invalidation");
   assert.equal(JSON.stringify(history), historyBefore);
+
+  const hybrid = project("hybrid", 3);
+  hybrid.supplyDemand = savedState(hybrid);
+  const hybridBefore = JSON.stringify(hybrid);
+  const hybridFixture = fixture(hybrid);
+  hybridFixture.edit("base", 130000, { sdSeries: "load" });
+  hybridFixture.click("growth-open", { sdSeries: "load" });
+  assert.match(hybridFixture.root.innerHTML, /省内负荷 · 逐年增长率/);
+  hybridFixture.edit("growth-rate", "", { sdSeries: "load", sdYear: "2029" });
+  hybridFixture.edit("growth-fill", 8);
+  hybridFixture.click("growth-fill");
+  assert.match(hybridFixture.root.innerHTML, /已填入 1 个空白年份/);
+  hybridFixture.select("curveYear", 2029);
+  assert.match(hybridFixture.root.innerHTML, /2029 年分月电量（MWh）/);
+  assert.match(hybridFixture.root.innerHTML, /沿用默认/);
+  assert.match(hybridFixture.root.innerHTML, /sd-curve-bars/);
+  for (const [month, pct] of [[1, 0], [2, 100 / 6]]) hybridFixture.edit("month-share", pct, { sdMonth: String(month) });
+  assert.match(hybridFixture.root.innerHTML, /本年已调整 · 分月已调整/);
+  hybridFixture.click("download-template");
+  const combined = clone(hybridFixture.downloads.at(-1).config);
+  assert.equal(hybridFixture.downloads.at(-1).options.year, 2029);
+  assert.deepEqual(combined.elements.load.growthRatesByYear, { 2028: 5, 2029: 8 }, "batch fills blank years and preserves existing rates");
+  assert.equal(combined.elements.load.baseEnergyMwh, 130000);
+  assert.equal(combined.elements.load.monthlyWeights[0], 1 / 12);
+  assert.equal(combined.elements.load.curveOverridesByYear[2029].monthlyWeights[0], 0);
+  combined.elements.load.curveOverridesByYear[2029].hourlyWeightsByMonth = { 7: [1, ...Array(23).fill(0)] };
+  await hybridFixture.upload("2029年分时.xlsx", { ok: true, config: combined, changedRows: 1, changes: [{ label: "省内负荷", month: 7 }] });
+  hybridFixture.select("curveMonth", 7);
+  assert.equal(hybridFixture.reads.at(-1).options.year, 2029);
+  assert.equal(hybridFixture.reads.at(-1).options.baseConfig.elements.load.baseEnergyMwh, 130000);
+  assert.match(hybridFixture.root.innerHTML, /本月分时已调整/);
+  assert.match(hybridFixture.root.innerHTML, /典型日分时曲线（MWh）/);
+  assert.equal(JSON.stringify(hybrid), hybridBefore, "annual and curve edits share an isolated draft until save");
+  hybridFixture.click("generate");
+  assert.deepEqual(hybrid.supplyDemand.config, combined);
+  assert.equal(hybrid.supplyDemand.config.version, 2);
+  hybridFixture.select("curveYear", 2028);
+  assert.match(hybridFixture.root.innerHTML, /data-sd-curve-origin>沿用默认/);
+  hybridFixture.select("curveYear", 2029);
+  hybridFixture.click("restore-curve");
+  assert.match(hybridFixture.root.innerHTML, /2029 年该要素已恢复默认曲线/);
+  hybridFixture.click("generate");
+  assert.equal(hybrid.supplyDemand.config.elements.load.curveOverridesByYear, undefined);
+  assert.equal(hybrid.supplyDemand.config.elements.load.baseEnergyMwh, 130000);
+  assert.equal(hybrid.supplyDemand.config.elements.load.growthRatesByYear[2029], 8);
+
+  const noOpEdit = project("no-op-edit");
+  noOpEdit.supplyDemand = savedState(noOpEdit);
+  const exactLegacy = JSON.stringify(noOpEdit), noOpFixture = fixture(noOpEdit);
+  noOpFixture.edit("base", 130000, { sdSeries: "load" });
+  noOpFixture.edit("base", 120000, { sdSeries: "load" });
+  noOpFixture.click("generate");
+  assert.equal(noOpFixture.commits.length, 0, "reversing a UI edit keeps the recorded v1 configuration and fingerprint");
+  assert.equal(JSON.stringify(noOpEdit), exactLegacy);
+
+  const single = fixture(project("single", 1));
+  assert.doesNotMatch(single.root.innerHTML, /data-sd-action="growth-open"/);
 
   const directional = project("directions"), directions = fixture(directional);
   const directionalConfig = completeConfig(directional);
@@ -177,8 +238,8 @@ async function main() {
   tieLine.export = { baseEnergyMwh: 800, growthRatesByYear, monthlyWeights, hourlyWeightsByMonth };
   tieLine.import = { baseEnergyMwh: 1200, growthRatesByYear, monthlyWeights, hourlyWeightsByMonth };
   await directions.upload("双向.xlsx", { ok: true, config: directionalConfig });
-  assert.match(directions.root.innerHTML, /联络线净电量.*联络线送出.*联络线受入/);
-  assert.match(directions.root.innerHTML, /<td>-400\.00<\/td><td>800\.00<\/td><td>1,200\.00<\/td>/);
+  assert.match(directions.root.innerHTML, /联络线送出.*联络线受入/);
+  assert.equal((directions.root.innerHTML.match(/data-sd-input="base"/g) || []).length, 7);
   directions.click("generate");
   const savedDirections = directions.openSavedPreview();
   assert.equal((savedDirections.match(/联络线送出/g) || []).length, 2, "both annual and typical saved views show direction");
@@ -187,8 +248,8 @@ async function main() {
   const legacy = project("legacy");
   legacy.supplyDemand = { ...savedState(legacy), draft: completeConfig(legacy, 350000) };
   const legacyBefore = JSON.stringify(legacy), old = fixture(legacy);
-  assert.match(old.root.innerHTML, /已保存草稿预览/);
-  assert.match(old.root.innerHTML, /350,000\.00/);
+  assert.match(old.root.innerHTML, /草稿待生成/);
+  assert.match(old.root.innerHTML, /value="350000" data-sd-series="load"/);
   assert.equal(JSON.stringify(legacy), legacyBefore, "opening preserves pre-existing drafts");
   old.click("download-template");
   assert.equal(old.downloads.at(-1).config, legacy.supplyDemand.draft);
@@ -210,8 +271,7 @@ async function main() {
   const conflictProject = project("conflict");
   conflictProject.supplyDemand = { ...savedState(conflictProject), draft: { startYear: 2025, forecastYears: 1 } };
   const conflict = fixture(conflictProject);
-  assert.match(conflict.root.innerHTML, /草稿待核对/);
-  assert.match(conflict.root.innerHTML, /data-sd-action="generate" disabled/);
+  assert.match(conflict.root.innerHTML, /草稿待生成/);
   conflict.click("generate");
   assert.equal(conflict.commits.length, 0);
   conflict.click("discard");
@@ -238,7 +298,7 @@ async function main() {
   await newUpload;
   oldPromise.resolve({ ok: true, config: completeConfig(a, 3000) });
   await oldUpload;
-  assert.match(races.root.innerHTML, /7,000\.00/);
+  assert.match(races.root.innerHTML, /value="7000" data-sd-series="load"/);
   assert.doesNotMatch(races.root.innerHTML, /旧\.xlsx/);
   races.click("discard");
 

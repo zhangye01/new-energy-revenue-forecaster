@@ -11,6 +11,10 @@
   const SHEETS = Object.freeze({ annual: "年度电量与增长率", monthly: "分月权重", hourly: "典型日分时" });
   const TEMPLATE_NAME = "供需配置模板";
   const TEMPLATE_VERSION = 1;
+  const CURVE_SHEETS = Object.freeze({ notes: "填写说明", monthly: "分月占比", hourly: "典型日分时占比" });
+  const CURVE_TEMPLATE_NAME = "供需曲线模板";
+  const CURVE_TEMPLATE_VERSION = 1;
+  const DEFAULT_CURVE_LABEL = "默认典型年";
   const ANNUAL_HEADER_ROW = 6;
   const MODE_LABELS = Object.freeze({ net: "净额", bidirectional: "双向" });
   const MONTHS = Object.freeze(domain.MONTH_DAYS.map((_, index) => index + 1));
@@ -115,10 +119,10 @@
     const digits = percent ? text.slice(0, -1).trim() : text;
     const raw = typeof value === "number" ? value : DECIMAL.test(digits) ? Number(digits) : NaN;
     const parsed = percent && kind === "growth" && typeof value === "number" ? raw * 100
-      : percent && kind === "weight" && typeof value === "string" ? raw / 100 : raw;
+      : percent && (kind === "weight" || kind === "ratio") && typeof value === "string" ? raw / 100 : raw;
     if (kind === "month" && (percent || cell?.t === "e" || cell?.t === "d")) return NaN;
     if (kind !== "month" && (!Number.isFinite(parsed) || cell?.t === "e" || cell?.t === "d" || percent && kind === "base")) {
-      const expected = { growth: "有效增长率", base: "MWh 数值", weight: "有效权重" };
+      const expected = { growth: "有效增长率", base: "MWh 数值", weight: "有效权重", ratio: "有效占比" };
       throw new Error(`${sheet.location(row, column)} 须填写${expected[kind]}。`);
     }
     return parsed;
@@ -128,10 +132,10 @@
     if (sheet.value(row, column) !== expected) throw new Error(`${sheet.location(row, column)} 应为「${expected}」，请使用当前项目模板。`);
   }
 
-  function locateRows(sheet, headerRow, columns, monthRows) {
+  function locateRows(sheet, headerRow, columns, monthRows, descriptors = SERIES) {
     columns.forEach((label, index) => assertLabel(sheet, headerRow, index, label));
     const rows = new Map();
-    const rowCount = SERIES.length * (monthRows ? MONTHS.length : 1);
+    const rowCount = descriptors.length * (monthRows ? MONTHS.length : 1);
     const cellHasValue = (row, column) => sheet.cell(row, column)?.f || (sheet.value(row, column) != null && sheet.value(row, column) !== "");
     for (let row = headerRow; row <= headerRow + rowCount; row += 1) {
       for (let column = columns.length; column <= sheet.lastColumn; column += 1) {
@@ -141,7 +145,7 @@
     for (let row = headerRow + 1; row <= headerRow + rowCount; row += 1) {
       const label = sheet.value(row, 0);
       if ((label == null || label === "") && columns.every((_, column) => !cellHasValue(row, column))) continue;
-      if (!SERIES.some((series) => series.label === label)) throw new Error(`${sheet.location(row, 0)} 的供需要素无效。`);
+      if (!descriptors.some((series) => series.label === label)) throw new Error(`${sheet.location(row, 0)} 的供需要素无效。`);
       const month = monthRows ? numberAt(sheet, row, 1, "month") : 0;
       if (monthRows && !MONTHS.includes(month)) throw new Error(`${sheet.location(row, 1)} 的月份须为 1 至 12 的整数。`);
       const key = monthRows ? `${label}/${month}` : label;
@@ -249,7 +253,159 @@
     }
   }
 
-  async function readFile(project, file, options = {}) {
+  function curveScope(years, year) {
+    if (year == null) return DEFAULT_CURVE_LABEL;
+    if (!years.includes(year)) throw new Error("请选择测算周期内的曲线年份。");
+    return year;
+  }
+
+  function activeCurves(config) {
+    const mode = config?.elements?.tieLine?.mode === "bidirectional" ? "bidirectional" : "net";
+    return { mode: MODE_LABELS[mode], series: SERIES.filter((item) => !item.mode || item.mode === mode) };
+  }
+
+  function appendCurveSheet(workbook, xlsx, name, rows, startColumn, filter = false) {
+    const sheet = xlsx.utils.aoa_to_sheet(rows);
+    sheet["!cols"] = rows[0].map((_, column) => ({ wch: column === 0 ? 19 : column < startColumn ? 8 : 12 }));
+    for (let row = 1; row < rows.length; row += 1) {
+      for (let column = startColumn; column < rows[0].length; column += 1) {
+        const cell = sheet[xlsx.utils.encode_cell({ r: row, c: column })];
+        if (cell?.t === "n") cell.z = "0.00####%";
+      }
+    }
+    if (filter) sheet["!autofilter"] = { ref: sheet["!ref"] };
+    xlsx.utils.book_append_sheet(workbook, sheet, name);
+  }
+
+  function buildCurveWorkbook(project, config, { xlsx = root.XLSX, year = null } = {}) {
+    if (!xlsx?.utils) throw new Error("Excel 组件未加载，请刷新后重试。");
+    const years = periodYears(project);
+    const scope = curveScope(years, year);
+    const normalized = domain.prepareShareConfig(project, config);
+    const { mode, series } = activeCurves(normalized);
+    const { monthly, hourly } = headers(years);
+    const workbook = xlsx.utils.book_new();
+    const notes = xlsx.utils.aoa_to_sheet([
+      [CURVE_TEMPLATE_NAME, CURVE_TEMPLATE_VERSION],
+      ["起始年", years[0], "末年", years.at(-1)],
+      ["曲线范围", scope],
+      ["联络线方式", mode],
+      ["分月占比", "每个要素的 12 个月占比合计须为 1（100%）。"],
+      ["典型日分时占比", "每个要素每月的 24 小时占比合计须为 1（100%）。"],
+      ["填写方式", "10% 和 0.1 表示同一个占比。空白保留现有值，填 0 更新为零。"],
+      ["生效范围", year === null ? "默认曲线供各年沿用。" : "本文件的修改仅应用于所选年份，其他年份继续使用各自的曲线。"]
+    ]);
+    notes["!cols"] = [{ wch: 21 }, { wch: 17 }, { wch: 10 }, { wch: 11 }, { wch: 39 }];
+    notes["!merges"] = Array.from({ length: 4 }, (_, index) => ({ s: { r: 4 + index, c: 1 }, e: { r: 4 + index, c: 4 } }));
+    notes["!ref"] = "A1:E8";
+    xlsx.utils.book_append_sheet(workbook, notes, CURVE_SHEETS.notes);
+    const curves = series.map((item) => ({ item, curve: domain.getCurve(readSeries(normalized, item), year) }));
+    appendCurveSheet(workbook, xlsx, CURVE_SHEETS.monthly, [monthly, ...curves.map(({ item, curve }) =>
+      [item.label, ...MONTHS.map((_, index) => exportValue(curve.monthlyWeights?.[index]))])], 1);
+    appendCurveSheet(workbook, xlsx, CURVE_SHEETS.hourly, [hourly, ...curves.flatMap(({ item, curve }) => MONTHS.map((month) =>
+      [item.label, month, ...HOURS.map((_, hour) => exportValue(curve.hourlyWeightsByMonth?.[month]?.[hour]))]))], 2, true);
+    return workbook;
+  }
+
+  function validateCurveNotes(workbook, xlsx, years, scope, mode) {
+    const notes = reader(workbook, xlsx, CURVE_SHEETS.notes, 8, 5);
+    assertLabel(notes, 0, 0, CURVE_TEMPLATE_NAME);
+    assertLabel(notes, 0, 1, CURVE_TEMPLATE_VERSION);
+    assertLabel(notes, 1, 0, "起始年");
+    assertLabel(notes, 1, 2, "末年");
+    if (notes.value(1, 1) !== years[0] || notes.value(1, 3) !== years.at(-1)) {
+      throw new Error(`模板测算周期与项目不符，请下载 ${years[0]}—${years.at(-1)} 年曲线模板。`);
+    }
+    assertLabel(notes, 2, 0, "曲线范围");
+    if (notes.value(2, 1) !== scope) throw new Error(`模板曲线范围与当前选择不符，请下载「${scope}」曲线模板。`);
+    assertLabel(notes, 3, 0, "联络线方式");
+    if (notes.value(3, 1) !== mode) throw new Error(`模板联络线方式与当前选择不符，请下载「${mode}」曲线模板。`);
+  }
+
+  function curveRows(workbook, xlsx, name, columns, descriptors, hasMonthColumn) {
+    const raw = workbook?.Sheets?.[name];
+    if (!raw || !Object.keys(raw).some((address) => !address.startsWith("!") &&
+        (raw[address]?.f || raw[address]?.v != null && raw[address].v !== ""))) return null;
+    const rowCount = descriptors.length * (hasMonthColumn ? MONTHS.length : 1);
+    const sheet = reader(workbook, xlsx, name, rowCount + 1, columns.length);
+    const rows = locateRows(sheet, 0, columns, hasMonthColumn, descriptors);
+    return { sheet, rows };
+  }
+
+  function sameCurveVector(values, prior) {
+    return Array.isArray(prior) && prior.length === values.length && values.every((value, index) => {
+      const before = prior[index] ?? null;
+      return value === before || value > 0 && value <= 1 && before > 0 && before <= 1 && Math.abs(value - before) <= 1e-12;
+    });
+  }
+
+  function applyCurveUpdate(table, rowKey, label, series, month, year) {
+    const row = table?.rows.get(rowKey);
+    if (row === undefined) return false;
+    const { sheet } = table;
+    const isMonthly = month == null;
+    const [count, startColumn] = isMonthly ? [MONTHS.length, 1] : [HOURS.length, 2];
+    const effective = domain.getCurve(series, year);
+    const prior = isMonthly ? effective.monthlyWeights : effective.hourlyWeightsByMonth?.[month];
+    const updated = Array.from({ length: count }, (_, index) => numberAt(sheet, row, startColumn + index, "ratio"));
+    if (updated.every((value) => value === null)) return false;
+    const values = updated.map((value, index) => value ?? prior?.[index] ?? null);
+    if (sameCurveVector(values, prior)) return false;
+    const issue = domain.validateShares(values, count, `${sheet.location(row, startColumn)} ${label}`);
+    if (issue) throw new Error(issue);
+
+    if (year == null) {
+      if (isMonthly) series.monthlyWeights = values;
+      else (series.hourlyWeightsByMonth ||= {})[month] = values;
+      return true;
+    }
+
+    const overrides = series.curveOverridesByYear ||= {};
+    const override = overrides[year] ||= {};
+    const fallback = isMonthly ? series.monthlyWeights : series.hourlyWeightsByMonth?.[month];
+    const matchesDefault = sameCurveVector(values, fallback);
+    if (isMonthly) {
+      if (matchesDefault) delete override.monthlyWeights;
+      else override.monthlyWeights = values;
+    } else if (matchesDefault) {
+      if (override.hourlyWeightsByMonth) delete override.hourlyWeightsByMonth[month];
+      if (override.hourlyWeightsByMonth && !Object.keys(override.hourlyWeightsByMonth).length) delete override.hourlyWeightsByMonth;
+    } else (override.hourlyWeightsByMonth ||= {})[month] = values;
+    if (!Object.keys(override).length) delete overrides[year];
+    if (!Object.keys(overrides).length) delete series.curveOverridesByYear;
+    return true;
+  }
+
+  function parseCurveWorkbook(project, workbook, { xlsx = root.XLSX, year = null, baseConfig } = {}) {
+    try {
+      if (!xlsx?.utils) throw new Error("Excel 组件未加载，请刷新后重试。");
+      const years = periodYears(project);
+      const scope = curveScope(years, year);
+      const config = domain.prepareShareConfig(project, baseConfig);
+      const { mode, series } = activeCurves(config);
+      validateCurveNotes(workbook, xlsx, years, scope, mode);
+      const columns = headers(years);
+      const monthly = curveRows(workbook, xlsx, CURVE_SHEETS.monthly, columns.monthly, series, false);
+      const hourly = curveRows(workbook, xlsx, CURVE_SHEETS.hourly, columns.hourly, series, true);
+      const changes = [];
+      for (const descriptor of series) {
+        const { label, key, branch } = descriptor;
+        const current = mutableSeries(config, descriptor, project);
+        if (applyCurveUpdate(monthly, label, `${label}分月占比`, current, null, year)) changes.push({ key, branch, label, month: null, year });
+        for (const month of MONTHS) {
+          if (applyCurveUpdate(hourly, `${label}/${month}`, `${label}${month}月分时占比`, current, month, year)) {
+            changes.push({ key, branch, label, month, year });
+          }
+        }
+      }
+      const compatible = baseConfig?.startYear === years[0] && baseConfig?.forecastYears === years.length;
+      return { ok: true, config: !changes.length && compatible ? clone(baseConfig) : config, errors: [], changes, changedRows: changes.length };
+    } catch (error) {
+      return { ok: false, config: null, errors: [error?.message || "供需曲线模板读取失败。"], changes: [], changedRows: 0 };
+    }
+  }
+
+  async function readTemplateFile(project, file, options, parse) {
     const xlsx = options.xlsx || root.XLSX;
     try {
       if (!/\.xlsx$/i.test(String(file?.name || ""))) throw new Error("请导入 Excel 供需模板（.xlsx）。");
@@ -258,10 +414,27 @@
       const bytes = await file.arrayBuffer();
       if (bytes.byteLength > MAX_FILE_BYTES) throw new Error("供需模板请控制在 5 MB 以内。");
       const workbook = xlsx.read(bytes, { type: "array", cellNF: true, cellDates: true });
-      return parseWorkbook(project, workbook, { ...options, xlsx });
+      return parse(project, workbook, { ...options, xlsx });
     } catch (error) {
       return { ok: false, config: null, errors: [error?.message || "供需模板读取失败。"] };
     }
+  }
+
+  function readFile(project, file, options = {}) {
+    return readTemplateFile(project, file, options, parseWorkbook);
+  }
+
+  function readCurveFile(project, file, options = {}) {
+    return readTemplateFile(project, file, options, (input, workbook, settings) => {
+      if (!settings.allowLegacy || workbook.SheetNames?.includes(CURVE_SHEETS.notes) || !workbook.SheetNames?.includes(SHEETS.annual)) {
+        return parseCurveWorkbook(input, workbook, settings);
+      }
+      if (settings.year != null) return { ok: false, config: null, errors: ["旧版供需配置模板可导入默认典型年的曲线，请先切换到默认典型年。"] };
+      const legacy = parseWorkbook(input, workbook, settings);
+      if (!legacy.ok) return legacy;
+      const curves = buildCurveWorkbook(input, legacy.config, settings);
+      return { ...parseCurveWorkbook(input, curves, settings), legacy: true };
+    });
   }
 
   function download(project, config, { xlsx = root.XLSX } = {}) {
@@ -271,5 +444,13 @@
     xlsx.writeFile(workbook, filename);
   }
 
-  return Object.freeze({ buildWorkbook, parseWorkbook, readFile, download });
+  function downloadCurves(project, config, { xlsx = root.XLSX, year = null } = {}) {
+    const workbook = buildCurveWorkbook(project, config, { xlsx, year });
+    const years = periodYears(project);
+    const label = year === null ? DEFAULT_CURVE_LABEL : `${year}年`;
+    const filename = `${csvUtils.sanitizeExportFilenamePart(project.name || "项目")}_供需曲线模板_${years[0]}-${years.at(-1)}_${label}.xlsx`;
+    xlsx.writeFile(workbook, filename);
+  }
+
+  return Object.freeze({ buildWorkbook, parseWorkbook, readFile, download, buildCurveWorkbook, parseCurveWorkbook, readCurveFile, downloadCurves });
 });

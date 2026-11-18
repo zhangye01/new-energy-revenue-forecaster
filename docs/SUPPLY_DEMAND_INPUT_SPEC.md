@@ -1,4 +1,4 @@
-# 现货预测供需输入配置 V1（2026-11-13）
+# 现货预测供需输入配置（2026-11-18）
 
 ## 范围与业务口径
 
@@ -6,7 +6,7 @@
 
 首年总量MWh直接作为首年电量；后续年度=上年×(1+当年增长率/100)。增长率必须逐年明确填写，允许-100%归零，低于-100%拒绝。首年不再应用增长率。普通元素非负；联络线单向净额模式允许首年负值，增长不改变方向。同年双向时仍为一个联络线元素，分别配置正的送出量和受入量及各自增长/曲线，输出逐小时送出减受入，净年电量为0时不能抹去时段流动。
 
-每个元素配置12个月非负相对权重，以及12条24小时非负相对权重。系统自动归一化有效权重。月电量=年度电量×月权重/全年月权重和。典型小时电量=月电量/月天数×小时权重/本月24小时权重和。曲线在测算周期内跨年复用。无电量元素须显式填0，该元素曲线可留空。正电量月份须填写24个非负小时权重且合计大于0。
+每个要素配置一套默认典型年。新配置采用占比，分月12个值合计为1，每个有电量月份的典型日24小时占比也分别合计为1。月电量=年度电量×当月占比。典型小时电量=月电量÷月天数×当小时占比。各年默认继承典型年。单年可覆盖整套分月占比、任意一个或多个分时月份，按向量独立继承。无电量要素须显式填0，该要素曲线可留空。旧版按原相对权重归一化，修改时可以把等价比例带进新版草稿。
 
 沿用现系统365天/8760小时模型年，月份天数31/28/31/30/31/30/31/31/30/31/30/31，不自动切换真实闰年；界面说明该边界。每年288个典型小时记录带representedDays，展开8760小时供算法读取。校验Σ月电量=年度电量，Σ典型小时×该月天数=年度电量，Σ8760小时=年度电量。MW为相应1小时MWh除以1h，不混用总量单位。
 
@@ -14,21 +14,23 @@
 
 ## 紧凑配置契约（前后端模块共用）
 
-project.supplyDemand={version:1,draft?:Config,config?:Config,generatedAt?:ISO,inputFingerprint?:string}。仅保存紧凑配置及元数据，不将全周期8760数组反复写入localStorage。Config={version:1,startYear,forecastYears,elements:{load:Series,tieLine:SeriesWithMode,wind:Series,solar:Series,hydro:Series,nonMarket:Series}}。
-Series={baseEnergyMwh:number|null,growthRatesByYear:{[year]:number|null},monthlyWeights:(number|null)[12],hourlyWeightsByMonth:{[month1to12]:(number|null)[24]}}。
+project.supplyDemand={version:1,draft?:Config,config?:Config,generatedAt?:ISO,inputFingerprint?:string}。仅保存紧凑配置及元数据，不将全周期8760数组反复写入localStorage。Config={version:1|2,startYear,forecastYears,elements:{load:Series,tieLine:SeriesWithMode,wind:Series,solar:Series,hydro:Series,nonMarket:Series}}。配置版本1为历史的相对权重版，版本2为占比版。
+Series={baseEnergyMwh:number|null,growthRatesByYear:{[year]:number|null},monthlyWeights:(number|null)[12],hourlyWeightsByMonth:{[month1to12]:(number|null)[24]}}。配置版本2的Series可带`curveOverridesByYear`。年份条目内的`monthlyWeights`覆盖该年12个月占比，`hourlyWeightsByMonth[month]`仅覆盖该年月24小时占比。未指定的向量各自继承默认典型年。
 SeriesWithMode在单向时{mode:'net',...Series}；双向时{mode:'bidirectional',export:Series,import:Series}。保留不活动分支数据，切换不静默清空。config.startYear/forecastYears表示填写时的周期；项目周期变化须显式核对，不能把旧首年量默认为新首年量。
 
 领域模块NE_SUPPLY_DEMAND提供：
 - ELEMENTS（key/label）、MONTH_DAYS、createConfig(project)、validateConfig(project,config)返回字符串错误数组。
 - buildAnnualSummary(project,config)返回{ok,errors,annualRows}，仅计算年度摘要，供已保存预测来源核验使用，不展开典型日或8760数组。
 - fingerprint(project,config)只读稳定指纹，覆盖省份/项目ID/起始年/年限及完整配置。
-- buildDataset(project,config)返回{ok,errors,fingerprint,annualRows,typicalRows,hourlyByYear,source}。annualRows每年{year,load,tieLine,wind,solar,hydro,nonMarket,residualDemand,tieLineExport,tieLineImport}；typicalRows每年每月每小时{year,month,hour,representedDays,...六元素及residualDemand}，hour为0..23；hourlyByYear[year]={load:8760[],tieLine:...,wind:...,solar:...,hydro:...,nonMarket:...,residualDemand:...}。source包含365天模型和小时/电量单位定义。
+- buildDataset(project,config)返回{ok,errors,fingerprint,annualRows,typicalRows,hourlyByYear,source}。annualRows每年{year,load,tieLine,wind,solar,hydro,nonMarket,residualDemand,tieLineExport,tieLineImport}。typicalRows每年每月每小时{year,month,hour,representedDays,...六元素及residualDemand}，hour为0..23。hourlyByYear[year]包含各要素的8760小时序列。source记录模型日历和单位，`curveReuse`对新版占比使用`default_with_year_overrides`，历史相对权重继续使用原标识。
 - csvRows(dataset,kind)返回表头+数据行，kind=annual/typical/hourly，导出必须带year/month/hour与单位（8760另含day/hourIndex）。
 无效配置返回错误，不变更输入或历史快照，不返回伪造全零有效数据。
 
-## 模板与导入流程
+## 界面与曲线模板
 
-模板为带当前项目周期的一个 `.xlsx` 工作簿，包含《年度电量与增长率》《分月权重》《典型日分时》。下载模板时带出可用的供需输入。项目起始年变动时，首年电量须重新填写，重叠年份的增长率和已录入曲线可用于核对。导入校验工作表结构、测算周期和有效输入，校验通过后显示待保存的年度供需预览。导入失败保留已保存的数据及上一份有效预览。用户确认保存后生成年度、典型小时和逐小时数据，供预测使用。未保存的有效导入须确认或放弃后才能发起新预测。
+界面直接填写首年电量、逐年增长率和联络线方式。曲线工作簿按选中的默认典型年或一个测算年份下载，带出当前草稿的有效分月和分时占比。页面也可修改分月占比，查看选择年月的分月电量与典型日分时曲线。导入会核对工作簿结构、周期、曲线范围与各向量合计。空白单元格保留原值，填写0按零更新。导入失败保留已保存的数据及上一份有效草稿。用户确认保存后生成年度、典型小时和逐小时数据，供预测使用。可恢复指定年的默认曲线。
+
+项目起始年变动时，首年电量须重新填写。默认典型年曲线和重叠年份的调整可带入核对，重叠的后续年份可带入已有增长率。界面和工作簿共同编辑一份待保存的配置。旧的已保存配置及预测版本保留生成时输入。
 
 `NE_SUPPLY_DEMAND_TEMPLATE`负责工作簿生成和导入校验。`NE_SUPPLY_DEMAND_WORKSPACE.createController({root,getProject,onCommit,downloadCsv,onDraftChange})`返回`{render,hasUnsavedChanges}`。主控在保存时校验目标项目及供需配置，并在输入版本变化时更新预测生效状态。根节点`#supply-demand-root`位于预测表单之前。已生成结果仍可通过`downloadCsv(filename,rows)`导出。
 
@@ -42,4 +44,4 @@ SeriesWithMode在单向时{mode:'net',...Series}；双向时{mode:'bidirectional
 
 ## 验证
 
-覆盖 Excel 模板下载与导入、错误工作簿拒绝、导入预览及显式保存、相同配置回传、年度复利、月/典型小时/8760总量守恒、送出/受入符号、双向净0但小时非0、零元素、缺值/负权重/非法增长拒绝、周期变更需复核、历史配置与快照保真、CSV单位和时间顺序。正式价格模型接入按算法对接规格执行。
+覆盖界面与曲线模板合并、默认继承、指定年分月和分时分别覆盖、恢复默认、占比校验、导入预览及显式保存、相同配置回传、年度复利、月/典型小时/8760总量守恒、送出/受入符号、双向净0但小时非0、零元素、周期变更复核、历史配置与快照保真、CSV单位和时间顺序。正式价格模型接入按算法对接规格执行。

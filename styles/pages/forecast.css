@@ -198,9 +198,10 @@
 /* Supply-demand configuration */
 #supply-demand-root { min-width: 0; margin-bottom: 16px; }
 .sd-workspace { min-width: 0; display: grid; gap: 14px; }
-.sd-workspace h3, .sd-workspace h4 { margin: 0; }
+.sd-workspace h3, .sd-workspace h4, .sd-workspace h5 { margin: 0; }
 .sd-workspace h3 { font-size: 1.02rem; }
 .sd-workspace h4 { font-size: .88rem; }
+.sd-workspace h5 { font-size: .83rem; }
 .sd-section-head, .sd-saved-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
 .sd-period, .sd-preview-empty, .sd-saved-head > span, .sd-file-name { color: var(--muted); font-size: .78rem; line-height: 1.6; }
 .sd-period { display: block; margin-top: 5px; }
@@ -212,7 +213,45 @@
 .sd-alert { padding: 9px 11px; border: 1px solid var(--orange); border-radius: 6px; color: var(--orange); font-size: .8rem; line-height: 1.65; overflow-wrap: anywhere; }
 .sd-section { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); }
 .sd-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sd-curve-controls { align-items: end; }
 .sd-actions button, .sd-actions .sd-file { padding: 7px 10px; font-size: .76rem; min-height: 32px; }
+.sd-table-wrap.sd-annual-input-wrap { max-height: none; }
+.sd-annual-input input, .sd-growth-panel input, .sd-number-grid input, .sd-edit-section select { width: 100%; min-width: 0; padding: 6px 8px; }
+.sd-annual-input input { width: clamp(88px, 22vw, 160px); text-align: right; }
+.sd-table.sd-annual-input th, .sd-table.sd-annual-input td { padding: 4px 8px; }
+.sd-annual-input th:first-child { width: 36%; }
+.sd-annual-input td:last-child { width: 130px; }
+.sd-annual-input button { min-width: 82px; padding: 5px 8px; font-size: .76rem; }
+.sd-edit-label { color: var(--muted); }
+.sd-growth-panel { display: grid; gap: 10px; padding: 10px 0 0; border-top: 1px solid var(--line); }
+.sd-growth-panel label, .sd-inline-label, .sd-number-grid label, .sd-curve-controls label { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .76rem; }
+.sd-inline-label { grid-auto-flow: column; align-items: center; white-space: nowrap; }
+.sd-inline-label select { min-width: 105px; }
+.sd-curve-controls select { min-width: 96px; }
+.sd-curve-controls label:nth-child(2) select { min-width: 120px; }
+.sd-growth-panel .sd-actions { align-items: end; }
+.sd-growth-panel .sd-actions input { max-width: 100px; }
+.sd-number-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px 9px; }
+.sd-color-muted, .sd-curve-empty, .sd-month-total, .sd-curve-chart { color: var(--muted); font-size: .76rem; }
+.sd-curve-empty { margin: 0; }
+.sd-month-total { display: grid; gap: 6px; margin-bottom: 9px; }
+.sd-month-total-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+.sd-month-total-grid > span { display: grid; gap: 2px; padding: 5px 7px; border-radius: 5px; background: var(--panel); }
+.sd-month-total-grid strong { color: var(--ink); font-size: .75rem; overflow-wrap: anywhere; }
+.sd-month-total-grid .sd-month-current { background: var(--info-bg); }
+.sd-curve-chart { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 8px 10px; }
+.sd-curve-bars { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 3px; height: 88px; margin: 6px 0 2px; padding: 0; list-style: none; }
+.sd-curve-bars li { display: flex; align-items: flex-end; border-bottom: 1px solid var(--line); }
+.sd-curve-bars li i { width: 100%; height: var(--sd-bar); border-radius: 2px 2px 0 0; background: var(--blue); opacity: .72; }
+.sd-curve-bars li:hover i { opacity: 1; }
+.sd-curve-bars.sd-negative li { align-items: flex-start; border: 0; border-top: 1px solid var(--line); }
+.sd-curve-axis { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 3px; white-space: nowrap; }
+.sd-curve-axis span:first-child { grid-column: 1 / span 3; }
+.sd-curve-axis span:nth-child(2) { grid-column: 7 / span 3; }
+.sd-curve-axis span:nth-child(3) { grid-column: 13 / span 3; }
+.sd-curve-axis span:nth-child(4) { grid-column: 19 / span 3; }
+.sd-curve-axis span:last-child { grid-column: 22 / span 3; text-align: right; }
+.sd-import-preview ul { margin: -3px 0 0; padding-left: 1.35em; }
 .sd-file { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
 .sd-file input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .sd-file input::file-selector-button { cursor: pointer; }
@@ -232,6 +271,8 @@
 @media (max-width: 760px) {
   .sd-workspace { gap: 12px; }
   .sd-section { padding: 10px; }
+  .sd-number-grid, .sd-month-total-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sd-curve-bars, .sd-curve-axis { gap: 2px; }
   .sd-table th, .sd-table td { padding: 7px; }
   .sd-saved-head .sd-actions { gap: 5px; }
 }

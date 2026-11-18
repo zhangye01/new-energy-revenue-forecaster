@@ -191,6 +191,27 @@ assert.deepEqual(supplyCopy.priceRuns, suppliedProject.priceRuns);
 assert.deepEqual(supplyCopy.scenarios, suppliedProject.scenarios);
 assert.deepEqual(supplyCopy.roughPrice, suppliedProject.roughPrice);
 assert.equal(JSON.stringify(suppliedProject), suppliedBytes, '恢复副本不改原项目');
+
+const overriddenProject = JSON.parse(suppliedBytes);
+const overriddenSupply = supplyDomain.prepareShareConfig(overriddenProject, overriddenProject.supplyDemand.config);
+overriddenSupply.elements.load.curveOverridesByYear = { 2027: {
+  monthlyWeights: Array(12).fill(1 / 12), hourlyWeightsByMonth: { 7: Array(24).fill(1 / 24) }
+} };
+overriddenProject.supplyDemand.config = overriddenSupply;
+const overriddenBackup = backup.buildBackup({ payload: { projects: [overriddenProject] } }, 'demo1');
+assert.deepEqual(backup.prepareRestore(overriddenBackup, [], 'demo1', () => 'unused').projects[0], overriddenProject,
+  '新版单年曲线和原基准、原粗算、原预测同时按原值恢复');
+for (const breakStructure of [
+  (load) => { load.curveOverridesByYear = []; },
+  (load) => { load.curveOverridesByYear[2027] = "invalid"; },
+  (load) => { load.curveOverridesByYear[2027].monthlyWeights = {}; },
+  (load) => { load.curveOverridesByYear[2027].hourlyWeightsByMonth[7] = {}; }
+]) {
+  const malformed = JSON.parse(JSON.stringify(overriddenProject));
+  breakStructure(malformed.supplyDemand.config.elements.load);
+  assert.throws(() => backup.prepareRestore(JSON.stringify(envelope([malformed])), [], 'demo1', () => 'unused'), /curveOverridesByYear/);
+}
+
 let supplyInvalidations = 0;
 const hydrateSupply = supplyFlow.create({ onInvalidate: () => { supplyInvalidations++; } });
 hydrateSupply.hydrate(supplyRestore, supplyRestore);

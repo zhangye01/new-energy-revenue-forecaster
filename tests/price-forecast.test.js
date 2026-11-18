@@ -250,6 +250,25 @@ for (const [field, value] of [
     dataset: { ...grossDataset, source: { ...grossDataset.source, [field]: value } } }), /不一致/);
 }
 
+const shareConfig = supplyDemand.prepareShareConfig(project, JSON.parse(originalSupply));
+shareConfig.elements.load.curveOverridesByYear = { 2027: {
+  monthlyWeights: [0.5, 0, 0, 0, 0, 0, 0.5, 0, 0, 0, 0, 0],
+  hourlyWeightsByMonth: { 7: Array.from({ length: 24 }, (_, hour) => hour === 5 ? 1 : 0) }
+} };
+const shareDataset = supplyDemand.buildDataset(project, shareConfig);
+assert.equal(shareDataset.ok, true, shareDataset.errors.join("；"));
+assert.equal(shareDataset.source.curveReuse, "default_with_year_overrides");
+const shareProject = { ...project, supplyDemand: { config: shareConfig } };
+const shareRun = createForecastRunForModel(shareProject, ensemble, {
+  ...boundOptions, supplyDemandInput: { config: shareConfig, dataset: shareDataset }
+});
+assert.equal(validateSupplyDemandRun(shareProject, shareRun).ok, true);
+assert.equal(validateSupplyDemandRun(shareProject, boundRun).ok, false, "单年曲线调整应使旧供需指纹退出生效");
+assert.deepEqual(shareRun.supplyDemandInput.configSnapshot.elements.load.curveOverridesByYear, shareConfig.elements.load.curveOverridesByYear);
+assert.throws(() => validateSupplyDemandDataset(shareProject, { config: shareConfig, dataset: { ...shareDataset,
+  source: { ...shareDataset.source, curveReuse: grossDataset.source.curveReuse }
+} }), /曲线复用方式.*不一致/);
+
 const sourceProject = { ...project, supplyDemand: { config: JSON.parse(originalSupply) } };
 const sourceRun = JSON.parse(JSON.stringify(boundRun));
 const rejectSavedSource = (mutate) => {

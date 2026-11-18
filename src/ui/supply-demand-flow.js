@@ -46,7 +46,7 @@
 
     function inspectSupplyDemand(project) {
       if (controller?.hasUnsavedChanges?.(project) || hasPendingDraft(project)) {
-        return { ok: false, errors: ["供需输入待确认。请先保存并生成小时数据，或放弃本次导入或草稿。"] };
+        return { ok: false, errors: ["供需输入待确认。请先保存并生成小时数据，或放弃草稿。"] };
       }
       const config = project?.supplyDemand?.config;
       const errors = domain.validateConfig(project, config);

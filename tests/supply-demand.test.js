@@ -1,7 +1,8 @@
 "use strict";
 const assert = require("node:assert/strict");
 const domain = require("../src/domain/supply-demand");
-const { ELEMENTS, MONTH_DAYS, createConfig, createSeries, validateConfig, fingerprint, buildAnnualSummary, buildDataset, csvRows } = domain;
+const { ELEMENTS, MONTH_DAYS, createConfig, createSeries, prepareShareConfig, getCurve, validateShares,
+  validateConfig, fingerprint, buildAnnualSummary, buildDataset, csvRows } = domain;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 const approx = (actual, expected, tolerance = 1e-6) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} != ${expected}`);
@@ -175,7 +176,7 @@ const largeWeights = clone(raw); largeWeights.elements.load.monthlyWeights = Arr
 largeWeights.elements.load.hourlyWeightsByMonth[1] = Array(24).fill(1e308);
 assert.equal(buildDataset(project, largeWeights).ok, true);
 const invalidMode = configured(); invalidMode.elements.tieLine.mode = "unknown"; reject(invalidMode, /配置方式/);
-const invalidVersion = configured(); invalidVersion.version = 2; reject(invalidVersion, /版本/);
+const invalidVersion = configured(); invalidVersion.version = 3; reject(invalidVersion, /版本/);
 
 // Fingerprints record scope and every raw config field, independent of key order.
 assert.equal(result.fingerprint, fingerprint(project, raw));
@@ -206,4 +207,107 @@ assert.deepEqual(hourlyCsv.at(-1).slice(0, 5), [2028, 12, 31, 23, 8760]);
 approx(sum(hourlyCsv.slice(1).map((row) => row[5])), 1200);
 assert.deepEqual(csvRows({ ok: false }, "hourly"), []);
 assert.throws(() => csvRows(monthResult, "invalid"), /类型/);
+
+// A writable copy uses decimal shares without touching the recorded v1 config.
+assert.equal(result.source.curveReuse, "same_monthly_and_hourly_weights_across_years");
+const migrated = prepareShareConfig(project, raw);
+assert.equal(migrated.version, 2);
+assert.equal(migrated.elements.load.growthRatesByYear[2028], undefined);
+assert.equal(migrated.elements.load.growthRatesByYear[2029], 10);
+assert.equal(migrated.elements.load.growthRatesByYear[2030], -25);
+assert.equal(validateShares(getCurve(migrated.elements.load).monthlyWeights, 12, "分月"), "");
+assert.equal(validateShares(getCurve(migrated.elements.load).hourlyWeightsByMonth[1], 24, "分时"), "");
+assert.match(fingerprint(project, migrated), /^supply-v2-/);
+assert.equal(fingerprint(project, raw), result.fingerprint);
+assert.equal(JSON.stringify({ project, raw }), before);
+const shareBaseline = buildDataset(project, migrated);
+assert.equal(shareBaseline.ok, true, shareBaseline.errors.join(";"));
+assert.equal(shareBaseline.source.version, 1, "the dataset wire format is unchanged");
+assert.equal(shareBaseline.source.curveReuse, "default_with_year_overrides");
+assert.deepEqual(shareBaseline.annualRows, result.annualRows);
+approx(shareBaseline.hourlyByYear[2028].load[0], result.hourlyByYear[2028].load[0]);
+
+const oneHour = (hour) => Array.from({ length: 24 }, (_, index) => Number(index === hour));
+const oneMonth = (month) => Array.from({ length: 12 }, (_, index) => Number(index + 1 === month));
+const deadline = clone(migrated);
+deadline.elements.load.curveOverridesByYear = { 2029: { hourlyWeightsByMonth: { 7: oneHour(12) } } };
+const deadlineBefore = JSON.stringify(deadline);
+assert.equal(getCurve(deadline.elements.load, 2029).monthlyWeights, deadline.elements.load.monthlyWeights);
+assert.deepEqual(getCurve(deadline.elements.load, 2029).hourlyWeightsByMonth[7], oneHour(12));
+assert.equal(getCurve(deadline.elements.load, 2029).hourlyWeightsByMonth[6], deadline.elements.load.hourlyWeightsByMonth[6]);
+assert.equal(getCurve(deadline.elements.load, 2030).hourlyWeightsByMonth[7], deadline.elements.load.hourlyWeightsByMonth[7]);
+const deadlineData = buildDataset(project, deadline);
+assert.equal(deadlineData.ok, true, deadlineData.errors.join(";"));
+assert.deepEqual(buildAnnualSummary(project, deadline).annualRows, shareBaseline.annualRows);
+assert.deepEqual(deadlineData.hourlyByYear[2028], shareBaseline.hourlyByYear[2028]);
+assert.deepEqual(deadlineData.hourlyByYear[2030], shareBaseline.hourlyByYear[2030]);
+const julyStart = 181 * 24, julyEnd = 212 * 24;
+const deadlineLoad = deadlineData.hourlyByYear[2029].load;
+const baselineLoad = shareBaseline.hourlyByYear[2029].load;
+assert.deepEqual(deadlineLoad.slice(0, julyStart), baselineLoad.slice(0, julyStart));
+assert.deepEqual(deadlineLoad.slice(julyEnd), baselineLoad.slice(julyEnd));
+approx(deadlineLoad[julyStart + 12], 9636 / 365);
+assert.equal(deadlineLoad[julyStart], 0);
+approx(sum(deadlineLoad), 9636);
+assert.notEqual(fingerprint(project, deadline), fingerprint(project, migrated));
+assert.equal(JSON.stringify(deadline), deadlineBefore);
+
+const annualOverride = clone(deadline);
+annualOverride.elements.load.curveOverridesByYear[2029].monthlyWeights = oneMonth(7);
+const annualOverrideData = buildDataset(project, annualOverride);
+assert.equal(annualOverrideData.ok, true, annualOverrideData.errors.join(";"));
+approx(annualOverrideData.hourlyByYear[2029].load[julyStart + 12], 9636 / 31);
+approx(sum(annualOverrideData.hourlyByYear[2029].load.slice(julyStart, julyEnd)), 9636);
+assert.deepEqual(annualOverrideData.hourlyByYear[2030], shareBaseline.hourlyByYear[2030]);
+assert.deepEqual(annualOverrideData.hourlyByYear[2029].tieLine, shareBaseline.hourlyByYear[2029].tieLine);
+
+const revisedPeriod = { ...project, startYear: 2027, forecastYears: 3 };
+const carried = prepareShareConfig(revisedPeriod, annualOverride);
+assert.equal(carried.elements.load.baseEnergyMwh, null, "changing the first year requires a new first-year volume");
+assert.deepEqual(carried.elements.load.growthRatesByYear, { 2028: null, 2029: 10 });
+assert.deepEqual(carried.elements.load.curveOverridesByYear[2029], annualOverride.elements.load.curveOverridesByYear[2029]);
+assert.notEqual(carried.elements.load.curveOverridesByYear[2029], annualOverride.elements.load.curveOverridesByYear[2029]);
+const shorter = prepareShareConfig({ ...project, forecastYears: 1 }, annualOverride);
+assert.equal(shorter.elements.load.baseEnergyMwh, 8760);
+assert.deepEqual(shorter.elements.load.growthRatesByYear, {});
+assert.equal(shorter.elements.load.curveOverridesByYear, undefined);
+assert.notEqual(prepareShareConfig(project, annualOverride).elements.load, annualOverride.elements.load);
+const sparseShares = { version: 2, startYear: project.startYear, forecastYears: project.forecastYears,
+  elements: { tieLine: { mode: "net", baseEnergyMwh: -123 } } };
+const sparseBefore = JSON.stringify(sparseShares);
+const recoveredEditor = prepareShareConfig(project, sparseShares);
+assert.equal(JSON.stringify(sparseShares), sparseBefore, "preparing an incomplete restored version must leave the raw record intact");
+assert.equal(recoveredEditor.elements.tieLine.baseEnergyMwh, -123);
+assert.equal(recoveredEditor.elements.tieLine.import.monthlyWeights.length, 12);
+assert.equal(recoveredEditor.elements.nonMarket.baseEnergyMwh, null);
+
+const invalidDefault = clone(migrated);
+invalidDefault.elements.load.monthlyWeights.fill(0.1);
+reject(invalidDefault, /默认分月占比.*合计须为1/);
+const invalidYear = clone(migrated);
+invalidYear.elements.load.curveOverridesByYear = { 2031: { monthlyWeights: oneMonth(12) } };
+reject(invalidYear, /超出测算周期/);
+const invalidHour = clone(deadline);
+invalidHour.elements.load.curveOverridesByYear[2029].hourlyWeightsByMonth[7][12] = 0.9;
+reject(invalidHour, /2029年7月24小时占比.*合计须为1/);
+const requiresInheritedHours = clone(migrated);
+requiresInheritedHours.elements.load.monthlyWeights = oneMonth(1);
+delete requiresInheritedHours.elements.load.hourlyWeightsByMonth[7];
+requiresInheritedHours.elements.load.curveOverridesByYear = { 2029: { monthlyWeights: oneMonth(7) } };
+reject(requiresInheritedHours, /2029年7月24小时占比须填写24个/);
+requiresInheritedHours.elements.load.curveOverridesByYear[2029].hourlyWeightsByMonth = { 7: oneHour(12) };
+assert.equal(buildDataset(project, requiresInheritedHours).ok, true);
+
+const bidiShare = prepareShareConfig(project, bidirectional);
+bidiShare.elements.tieLine.import.curveOverridesByYear = { 2029: { hourlyWeightsByMonth: { 1: oneHour(22) } } };
+const bidiShareData = buildDataset(project, bidiShare);
+assert.equal(bidiShareData.ok, true, bidiShareData.errors.join(";"));
+approx(bidiShareData.hourlyByYear[2029].tieLine[22], -24);
+approx(bidiShareData.hourlyByYear[2029].tieLine[23], 0);
+approx(bidiShareData.hourlyByYear[2028].tieLine[23], -24);
+approx(sum(bidiShareData.hourlyByYear[2029].tieLine), 0);
+assert.equal(validateShares(oneMonth(1), 12, "分月"), "");
+assert.match(validateShares(Array(12).fill(0), 12, "分月"), /合计须为1/);
+assert.match(validateShares(Array(24).fill(null), 24, "分时"), /24个0至1/);
+assert.match(validateShares([1.01, ...Array(11).fill(0)], 12, "分月"), /0至1/);
 console.log("supply demand tests passed");

@@ -98,13 +98,23 @@
     }
   }
 
+  function validateSupplyCurveStructure(curve, path) {
+    validateContainer(curve, "monthlyWeights", true, path);
+    validateContainer(curve, "hourlyWeightsByMonth", false, path);
+    Object.keys(curve?.hourlyWeightsByMonth || {}).forEach((month) => {
+      validateContainer(curve.hourlyWeightsByMonth, month, true, `${path}.hourlyWeightsByMonth`);
+    });
+  }
+
   function validateSupplySeriesStructure(series, path) {
     if (!series) return;
     validateContainer(series, "growthRatesByYear", false, path);
-    validateContainer(series, "monthlyWeights", true, path);
-    validateContainer(series, "hourlyWeightsByMonth", false, path);
-    Object.keys(series.hourlyWeightsByMonth || {}).forEach((month) => {
-      validateContainer(series.hourlyWeightsByMonth, month, true, `${path}.hourlyWeightsByMonth`);
+    validateSupplyCurveStructure(series, path);
+    const overridesPath = `${path}.curveOverridesByYear`;
+    validateContainer(series, "curveOverridesByYear", false, path);
+    Object.entries(series.curveOverridesByYear || {}).forEach(([year, curve]) => {
+      validateContainer(series.curveOverridesByYear, year, false, overridesPath);
+      validateSupplyCurveStructure(curve, `${overridesPath}.${year}`);
     });
   }
 
