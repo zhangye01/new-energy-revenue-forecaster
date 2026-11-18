@@ -380,11 +380,15 @@
     }
     const snapshotErrors = supplyDemand.validateConfig(project, saved.configSnapshot);
     if (snapshotErrors.length) return { ok: false, errors: ["供需来源配置快照不完整或无效，请重新生成电价预测。"] };
-    const current = supplyDemand.fingerprint(project, config);
-    if (saved.fingerprint !== current || saved.projectId !== (project.id ?? null)
+    const copiedSourceIds = project.duplicationTargetProjectId === project.id && Array.isArray(project.duplicatedFromProjectIds)
+      ? project.duplicatedFromProjectIds.filter((id) => typeof id === "string" && id.trim()) : [];
+    const sourceProject = saved.projectId === (project.id ?? null) ? project
+      : copiedSourceIds.includes(saved.projectId) ? { ...project, id: saved.projectId } : null;
+    const current = sourceProject && supplyDemand.fingerprint(sourceProject, config);
+    if (!sourceProject || saved.fingerprint !== current
         || saved.province !== (project.province ?? null) || saved.period?.startYear !== project.startYear
         || saved.period?.forecastYears !== project.forecastYears
-        || supplyDemand.fingerprint(project, saved.configSnapshot) !== saved.fingerprint) {
+        || supplyDemand.fingerprint(sourceProject, saved.configSnapshot) !== saved.fingerprint) {
       return { ok: false, errors: ["供需输入或项目边界已变化，请重新生成电价预测。"] };
     }
     const expected = supplyDemand.buildAnnualSummary(project, saved.configSnapshot);

@@ -197,6 +197,19 @@ assert.deepEqual(supplyCopy.priceRuns, suppliedProject.priceRuns, '失效只改�
 assert.deepEqual(supplyCopy.scenarios, suppliedProject.scenarios);
 assert.deepEqual(supplyCopy.roughPrice, suppliedProject.roughPrice);
 
+const uiSupplyCopy = { ...JSON.parse(suppliedBytes), id: 'ui-supply-copy',
+  duplicationTargetProjectId: 'ui-supply-copy', duplicatedFromProjectIds: [suppliedProject.id] };
+assert.equal(forecastDomain.validateSupplyDemandRun(uiSupplyCopy, uiSupplyCopy.priceRuns.at(-1)).ok, true);
+const uiSupplyBackup = backup.buildBackup({ payload: { projects: [uiSupplyCopy] } }, 'demo1');
+const collidedUiCopy = backup.prepareRestore(uiSupplyBackup, [uiSupplyCopy], 'demo1', () => 'collision-ui-copy').projects[0];
+assert.deepEqual(collidedUiCopy.restoredFromProjectIds, [uiSupplyCopy.id, suppliedProject.id]);
+assert.equal(forecastDomain.validateSupplyDemandRun(collidedUiCopy, collidedUiCopy.priceRuns.at(-1)).ok, false,
+  '复制来源用于粗算恢复，不允许备份碰撞后的旧供需价格来源继续生效');
+const historicalRunsBytes = JSON.stringify(collidedUiCopy.priceRuns);
+supplyFlow.create({}).hydrate(collidedUiCopy, collidedUiCopy);
+assert.equal(collidedUiCopy.activeRunId, null);
+assert.equal(JSON.stringify(collidedUiCopy.priceRuns), historicalRunsBytes);
+
 // Structurally readable backups may still contain a mismatched run source.
 // Import the record losslessly, then quarantine that run during hydration.
 const supplySourceMutations = [

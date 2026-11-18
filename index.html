@@ -98,7 +98,7 @@
     <script src="./src/domain/energy-profiles.js?v=20261113c" defer></script>
     <script src="./src/domain/app-utils.js?v=20261113c" defer></script>
     <script src="./src/domain/supply-demand.js?v=20261113c" defer></script>
-    <script src="./src/domain/price-forecast.js?v=20261118b" defer></script>
+    <script src="./src/domain/price-forecast.js?v=20261118c" defer></script>
     <script src="./src/domain/revenue-rules.js?v=20261113c" defer></script>
     <script src="./src/domain/storage-dispatch.js?v=20261118b" defer></script>
     <script src="./src/domain/revenue-calculator.js?v=20261118b" defer></script>
@@ -115,7 +115,7 @@
     <script src="./src/ui/supply-demand-flow.js?v=20261118a" defer></script>
     <script src="./src/ui/forecast-page.js?v=20261118a" defer></script>
     <script src="./src/ui/forecast-run-flow.js?v=20261113c" defer></script>
-    <script src="./src/ui/project-list.js?v=20261113c" defer></script>
+    <script src="./src/ui/project-list.js?v=20261118c" defer></script>
     <script src="./src/ui/result-page.js?v=20261118b" defer></script>
     <script src="./src/ui/result-runner.js?v=20261118b" defer></script>
     <script src="./src/ui/result-print.js?v=20261113c" defer></script>
@@ -127,7 +127,7 @@
     <script src="./src/ui/compare-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/compare-page.js?v=20261113c" defer></script>
     <script src="./src/domain/compare-sensitivity.js?v=20261118b" defer></script>
-    <script src="./src/domain/compare-analysis.js?v=20261113c" defer></script>
+    <script src="./src/domain/compare-analysis.js?v=20261118c" defer></script>
     <script src="./src/domain/history-analysis.js?v=20261118b" defer></script>
     <script src="./src/ui/history-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/history-page.js?v=20261118b" defer></script>
@@ -137,17 +137,17 @@
     <script src="./src/ui/app-event-bindings.js?v=20261113c" defer></script>
     <script src="./src/domain/workflow-status.js?v=20261113c" defer></script>
     <script src="./src/domain/scenario-config.js?v=20261118b" defer></script>
-    <script src="./src/domain/rough-price.js?v=20261118b" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261118c" defer></script>
     <script src="./src/ui/rough-price-workspace.js?v=20261113c" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261118b" defer></script>
     <script src="./src/domain/project-settings.js?v=20261113c" defer></script>
-    <script src="./src/domain/project-model.js?v=20261113c" defer></script>
+    <script src="./src/domain/project-model.js?v=20261118c" defer></script>
     <script src="./src/domain/project-display.js?v=20261113c" defer></script>
     <script src="./src/domain/energy-data.js?v=20261118b" defer></script>
     <script src="./src/domain/energy-import-flow.js?v=20261113c" defer></script>
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
-    <script src="./src/ui/project-backup.js?v=20261118b" defer></script>
+    <script src="./src/ui/project-backup.js?v=20261118c" defer></script>
     <script src="./app.js?v=20261118b" defer></script>
   </head>
   <body>
@@ -1898,7 +1898,7 @@
                   <div class="help-step-index">3</div>
                   <div class="help-step-body">
                     <strong>项目创建</strong>
-                    <p>填写项目名称、省份、风/光类型、陆/海类型、容量、开始年份和预测周期，先保存基础信息。</p>
+                    <p>填写场站信息和测算周期。配储项目同时填写储能功率与时长，保存基础信息后进入结算电量配置。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
@@ -1919,20 +1919,20 @@
                   <div class="help-step-index">6</div>
                   <div class="help-step-body">
                     <strong>历史电价分析</strong>
-                    <p>系统按项目省份自动关联15分钟历史现货样本，无需另行导入；可筛选日期，查看月均价、典型日、热力图、箱线图等统计特征。</p>
+                    <p>系统按项目省份展示内置的15分钟模拟样本。可筛选日期并查看月均价、典型日、热力图和箱线图。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
                   <div class="help-step-index">7</div>
                   <div class="help-step-body">
                     <strong>电价预测工作台</strong>
-                    <p>生成预测曲线、检查质量指标并选择生效版本，再进入收益参数补充与细化，共同完成详细测算。</p>
+                    <p>在“测算周期供需配置”保存并生成小时输入，再使用“演示预测”生成价格曲线并选择生效版本。后台预测按钮在接入后可用。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
                   <div class="help-step-index">8</div>
                   <div class="help-step-body">
-                    <strong>收益参数补充与细化与结果输出</strong>
+                    <strong>收益参数补充与细化、结果输出</strong>
                     <p>自动沿用粗算已确认参数，补充默认值和未填项，必要时展开细化；保存后重算基准，再与原粗算交叉验证。</p>
                   </div>
                 </article>
@@ -1948,7 +1948,7 @@
                 </article>
                 <article class="help-card">
                   <strong>我的项目</strong>
-                  <p>上方是新建项目工作区，下方是历史项目工作区。新建项目不提供复制；历史项目可继续进入、复制项目、删除项目。</p>
+                  <p>在新建项目工作区创建项目，在历史项目工作区继续编辑或复制。复制后可查看原有粗算与基准结果的对照，调整测算输入后按页面提示重新测算。</p>
                 </article>
                 <article class="help-card">
                   <strong>项目创建</strong>
@@ -1964,15 +1964,15 @@
                 </article>
                 <article class="help-card">
                   <strong>历史电价分析</strong>
-                  <p>按当前项目省份自动关联15分钟历史现货样本，无需手动导入；可按日期筛选，辅助判断训练窗口、波动区间和典型日特征。模拟样本以页面来源标识为准。</p>
+                  <p>按项目省份加载内置的15分钟模拟现货样本。可筛选日期、查看统计图表并导出数据。</p>
                 </article>
                 <article class="help-card">
                   <strong>电价预测工作台</strong>
-                  <p>用于管理现货电价预测的算法、训练窗口、质量指标和生效曲线。与收益参数补充与细化共同构成精算，最终结果在基准结果总览展示。</p>
+                  <p>配置测算周期供需，管理演示预测版本、质量指标与生效曲线。演示预测记录供需输入来源，价格仍由模拟模型生成。</p>
                 </article>
                 <article class="help-card">
                   <strong>收益参数补充与细化</strong>
-                  <p>用于录入机制电价、交易策略损益、环境价值、综合费用、其他收入等参数。省份默认参数库已合并到本页。</p>
+                  <p>核对机制电价、策略损益、环境价值、费用及其他收入。配储项目在“配储补充收益配置”确认往返效率及独立补充收益。</p>
                 </article>
                 <article class="help-card">
                   <strong>交叉验证</strong>
@@ -2030,6 +2030,11 @@
                     <li>先完成逐年总量，再选择一种典型曲线来源；两步完成后生成各年度8760小时电量曲线。</li>
                   </ul>
                 </article>
+                <article class="help-card">
+                  <strong>供需输入</strong>
+                  <p>周期从项目创建带入。对省内负荷、联络线负荷、风电、光伏、水电、非市场化出力填写首年电量、逐年增长率、分月权重和各月典型日24小时权重。联络线净电量正值为送出，负值为受入。</p>
+                  <p>系统按权重分配年度电量，再按固定365天模型年生成每年8,760小时。点击“保存并生成供需数据”后，可导出年度、典型小时及逐小时CSV。</p>
+                </article>
               </div>
             </details>
 
@@ -2060,6 +2065,11 @@
                   <strong>其他收入项</strong>
                   <p>用于承接前述标准项以外的补充收入，保持结构开放，便于后续扩展。</p>
                 </article>
+                <article class="help-card">
+                  <strong>配储逐时充放电</strong>
+                  <p>同一条现货曲线下，按储能功率、时长、往返效率计算场站内日内充放电。套利净增等于放电收益减去充电机会成本，容量补偿、辅助服务等独立收益另计。原手工套利假设留在粗算口径。</p>
+                  <p>在“基准结果总览”查看有储和无储对照，并通过“导出8760CSV”核对首年小时明细。</p>
+                </article>
               </div>
             </details>
 
@@ -2080,8 +2090,8 @@
                   <ul class="help-list">
                     <li>项目创建：基础信息已保存。</li>
                     <li>结算电量配置：逐年总量覆盖全部预测年份，且已选择典型曲线来源并生成年度电量。</li>
-                    <li>历史电价分析：已按项目省份成功关联历史现货数据库并生成图表。</li>
-                    <li>电价预测工作台：存在通过质量门槛并已生效的电价预测版本。</li>
+                    <li>历史电价分析：已按项目省份加载模拟样本并生成图表。</li>
+                    <li>电价预测工作台：已有生效版本。供需输入生成状态在工作台单独显示。</li>
                     <li>收益参数补充与细化：当前配置已保存。</li>
                     <li>基准结果总览 / 多方案对比分析：已完成测算并生成结果。</li>
                   </ul>
@@ -2094,7 +2104,7 @@
               <div class="help-faq">
                 <details class="help-faq-item"><summary>1. 为什么导不出8760模板？</summary><p>请先进入一个项目，并完成“项目创建”页面的基础信息保存。未保存前，系统会阻止模板导出。</p></details>
                 <details class="help-faq-item"><summary>2. 为什么导入后侧边栏状态没有变绿？</summary><p>状态点按完成标准判断，不是点一下页面就完成。比如结算电量配置只有在满足页面要求后才会变为已完成。</p></details>
-                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>通常是上游环节尚未满足条件，例如逐年总量或典型曲线未完成、历史现货尚未自动关联、电价预测版本未生效，或场景还未保存。粗算版本用于交叉验证，不能替代生效的预测曲线。</p></details>
+                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>请核对测算周期的结算电量、已生效的预测曲线和已保存的方案配置。已保存的粗算版本用于交叉验证。</p></details>
                 <details class="help-faq-item"><summary>4. 为什么页面刷新后输入还在？</summary><p>当前原型默认开启输入持久化，已保存的项目数据会在页面切换和刷新后自动恢复。</p></details>
                 <details class="help-faq-item"><summary>5. 省份参数库去哪了？</summary><p>省份参数库已合并进“收益参数补充与细化”页面，现在以“省份默认参数带入”的方式提供默认值，再在同页内完成微调。</p></details>
               </div>

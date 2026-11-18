@@ -133,6 +133,22 @@ assert.equal(validateSupplyDemandRun(project, boundRun).ok, false);
 assert.equal(validateSupplyDemandRun({ ...configuredProject, province: "shanxi" }, boundRun).ok, false);
 assert.equal(validateSupplyDemandRun({ ...configuredProject, startYear: 2027 }, boundRun).ok, false);
 assert.equal(validateSupplyDemandRun({ ...configuredProject, id: "different-project" }, boundRun).ok, false);
+const duplicatedProject = { ...configuredProject, id: "copied-forecast", duplicationTargetProjectId: "copied-forecast",
+  duplicatedFromProjectIds: [project.id] };
+const preservedRunBytes = JSON.stringify(boundRun);
+assert.equal(validateSupplyDemandRun(duplicatedProject, boundRun).ok, true, "相同项目副本可沿用原现货预测来源");
+assert.equal(validateSupplyDemandRun({ ...duplicatedProject, id: "copied-twice", duplicationTargetProjectId: "copied-twice",
+  duplicatedFromProjectIds: [duplicatedProject.id, project.id] }, boundRun).ok, true);
+for (const change of [
+  { duplicatedFromProjectIds: ["unrelated"] }, { duplicationTargetProjectId: "old-copy" },
+  { id: "backup-collision", restoredFromProjectIds: [duplicatedProject.id] },
+  { province: "shanxi" }, { startYear: 2027 }, { forecastYears: 1 },
+  { supplyDemand: { config: { ...supplyConfig, extraEditedInput: true } } }
+]) {
+  assert.equal(validateSupplyDemandRun({ ...duplicatedProject, ...change }, boundRun).ok, false,
+    `复制来源验证仍拒绝真实边界/配置变化及失效身份:${JSON.stringify(change).slice(0, 120)}`);
+}
+assert.equal(JSON.stringify(boundRun), preservedRunBytes, "复制来源验证不能改写现货预测任何字段");
 const snapshotString = JSON.stringify(boundRun.supplyDemandInput);
 const changedSupply = JSON.parse(originalSupply);
 changedSupply.elements.load.monthlyWeights = changedSupply.elements.load.monthlyWeights.map((value) => value * 2);

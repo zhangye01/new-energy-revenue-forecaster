@@ -538,6 +538,13 @@ assert.equal(sanitizeProjectBase({ ...historyProject, restoredFromProjectId: "or
 assert.equal(sanitizeProjectBase({ ...historyProject, restoredFromProjectId: 123 }, 0, options).restoredFromProjectId, undefined);
 assert.deepEqual(sanitizeProjectBase({ ...historyProject, restoredFromProjectId: "origin",
   restoredFromProjectIds: ["copy", "origin", "copy", "", null, 5, historyProject.id] }, 0, options).restoredFromProjectIds, ["origin", "copy"]);
+const duplicateBase = sanitizeProjectBase({ ...historyProject, duplicationTargetProjectId: historyProject.id,
+  duplicatedFromProjectIds: ["direct-source", "origin", "origin", "", null, 5, historyProject.id] }, 0, options);
+assert.deepEqual(duplicateBase.duplicatedFromProjectIds, ["direct-source", "origin"]);
+assert.equal(duplicateBase.duplicationTargetProjectId, historyProject.id, "刷新保留复制身份绑定");
+assert.equal(sanitizeProjectBase({ ...duplicateBase, id: "backup-collision" }, 0, options).duplicationTargetProjectId,
+  historyProject.id, "恢复不把旧复制授权重写为新ID");
+assert.equal(sanitizeProjectBase({ ...historyProject, duplicationTargetProjectId: 123 }, 0, options).duplicationTargetProjectId, undefined);
 
 const runs = sanitizePriceRuns([
   null,

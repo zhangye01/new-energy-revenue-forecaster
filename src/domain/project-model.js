@@ -456,11 +456,16 @@
       rawProject.restoredFromProjectId,
       ...(Array.isArray(rawProject.restoredFromProjectIds) ? rawProject.restoredFromProjectIds : [])
     ].filter((id) => typeof id === "string" && id.trim() && id !== rawProject.id)));
+    const duplicatedFromProjectIds = Array.from(new Set((Array.isArray(rawProject.duplicatedFromProjectIds)
+      ? rawProject.duplicatedFromProjectIds : []).filter((id) => typeof id === "string" && id.trim() && id !== rawProject.id)));
     return {
       id: typeof rawProject.id === "string" && rawProject.id ? rawProject.id : makeId("proj"),
       ...(typeof rawProject.restoredFromProjectId === "string" && rawProject.restoredFromProjectId.trim()
         && rawProject.restoredFromProjectId !== rawProject.id ? { restoredFromProjectId: rawProject.restoredFromProjectId } : {}),
       ...(restoredFromProjectIds.length ? { restoredFromProjectIds } : {}),
+      ...(duplicatedFromProjectIds.length ? { duplicatedFromProjectIds } : {}),
+      ...(typeof rawProject.duplicationTargetProjectId === "string" && rawProject.duplicationTargetProjectId.trim()
+        ? { duplicationTargetProjectId: rawProject.duplicationTargetProjectId } : {}),
       ownerAccount: typeof rawProject.ownerAccount === "string"
         ? rawProject.ownerAccount.trim()
         : (typeof rawProject.account === "string" ? rawProject.account.trim() : ""),

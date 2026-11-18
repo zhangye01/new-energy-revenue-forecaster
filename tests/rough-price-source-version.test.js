@@ -100,6 +100,36 @@ assert.equal(rough.snapshotState({ ...restored, storagePowerMw: 10 }, scenario, 
 assert.equal(rough.snapshotState(restored, { ...scenario, id: "another-scenario" }, snapshot).comparable, false);
 assert.equal(rough.baselineResultState(restored, scenario, result).current, false, "restored results still need recalculation");
 
+const duplicated = { ...project, id: "ui-copy", duplicationTargetProjectId: "ui-copy", duplicatedFromProjectIds: [project.id] };
+const duplicatedTwice = { ...duplicated, id: "ui-copy-twice", duplicationTargetProjectId: "ui-copy-twice",
+  duplicatedFromProjectIds: [duplicated.id, project.id] };
+for (const candidate of [duplicated, duplicatedTwice]) {
+  assert.equal(rough.snapshotState(candidate, scenario, snapshot).comparable, true);
+  assert.equal(rough.baselineResultState(candidate, scenario, result).current, true);
+  const copiedComparison = rough.compareBaselineResult(candidate, scenario, snapshot, result);
+  assert.equal(copiedComparison.ok, true, copiedComparison.errors.join(";"));
+  assert.equal(copiedComparison.summary.weightedFine, result.avgFullRevenuePrice);
+  assert.equal(rough.compareSnapshot(candidate, scenario, snapshot, run).ok, true);
+}
+for (const change of [
+  { duplicatedFromProjectIds: [] }, { duplicationTargetProjectId: "different-copy" },
+  { id: "backup-collision", restoredFromProjectIds: [duplicated.id, project.id] },
+  { capacityMw: 200 }, { startYear: 2027 }, { forecastYears: 2 }, { province: "shandong" },
+  { storagePowerMw: 10 }, { storageDurationH: 4 },
+  { energyData: { ...project.energyData, annualInputByYear: { 2026: 900 } } }
+]) {
+  const candidate = { ...duplicated, ...change };
+  assert.equal(rough.baselineResultState(candidate, scenario, result).current, false, JSON.stringify(change));
+  assert.equal(rough.compareBaselineResult(candidate, scenario, snapshot, result).ok, false, JSON.stringify(change));
+}
+assert.equal(rough.baselineResultState(duplicated, refinedScenario, result).current, false,
+  "副本中收益参数真实变化仍使原基准结果过期");
+const intermediateSnapshot = rough.calculateRough(duplicated, scenario, draft).snapshot;
+const intermediateResult = rough.stampBaselineResult(duplicated, scenario, run, calculateScenarioResult(duplicated, scenario, run));
+assert.equal(rough.compareBaselineResult(duplicatedTwice, scenario, intermediateSnapshot, intermediateResult).ok, true);
+assert.equal(rough.compareBaselineResult({ ...duplicatedTwice, duplicatedFromProjectIds: [project.id] }, scenario,
+  intermediateSnapshot, intermediateResult).ok, false, "不能接受来源链外的中间副本记录");
+
 // Historical objects deliberately have no new metadata. Reading never backfills it.
 const legacySnapshot = copy(snapshot);
 delete legacySnapshot.sourceContext;

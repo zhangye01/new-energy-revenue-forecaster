@@ -334,6 +334,8 @@ handlers.duplicateProject("p2");
 assert.equal(handlerState.projects[0].id, "proj-copy");
 assert.equal(handlerState.projects[0].ownerAccount, "acct");
 assert.equal(handlerState.projects[0].name, "项目二-副本-2");
+assert.deepEqual(handlerState.projects[0].duplicatedFromProjectIds, ["p2"]);
+assert.equal(handlerState.projects[0].duplicationTargetProjectId, "proj-copy");
 handlers.deleteProject("p1");
 assert.equal(handlerState.projects.some((item) => item.id === "p1"), false);
 assert.deepEqual(handlerCalls, [
@@ -343,5 +345,37 @@ assert.deepEqual(handlerCalls, [
   "render",
   "render"
 ]);
+
+const copySource = {
+  id: "original-copy-case", name: "完整案例", ownerAccount: "acct", activeRunId: "saved-run",
+  energyData: { hourlyByYear: { 2026: [0.123456789012345, 0.2] } },
+  priceRuns: [{ id: "saved-run", sourceContext: { projectId: "original-copy-case" }, pricesByYear: { 2026: [-12.3, 300] } }],
+  resultsByScenario: { baseline: { sourceContext: { projectId: "original-copy-case" }, avgFullRevenuePrice: 312.1234567890123 } },
+  roughPrice: { draftsByScenario: {}, snapshots: [{ id: "rough-original", contextFingerprint: "original-fingerprint" }] }
+};
+const originalCopyBytes = JSON.stringify(copySource);
+const copyState = { auth: { account: "acct" }, projects: [copySource] };
+let copyIndex = 0;
+const copyHandlers = createProjectListActionHandlers({ appState: copyState,
+  cloneData: (value) => JSON.parse(JSON.stringify(value)), makeId: () => `copy-${++copyIndex}` });
+copyHandlers.duplicateProject(copySource.id);
+const firstCopy = copyState.projects[0];
+copyHandlers.duplicateProject(firstCopy.id);
+const secondCopy = copyState.projects[0];
+assert.deepEqual(secondCopy.duplicatedFromProjectIds, [firstCopy.id, copySource.id], "连续复制记录完整来源链");
+assert.equal(secondCopy.duplicationTargetProjectId, secondCopy.id);
+for (const candidate of [firstCopy, secondCopy]) {
+  assert.equal(candidate.activeRunId, copySource.activeRunId);
+  for (const key of ["energyData", "priceRuns", "resultsByScenario", "roughPrice"]) {
+    assert.equal(JSON.stringify(candidate[key]), JSON.stringify(copySource[key]), `${key}序列化原文不可重写`);
+    assert.notEqual(candidate[key], copySource[key], `${key}必须隔离原项目引用`);
+  }
+}
+assert.equal(JSON.stringify(copySource), originalCopyBytes);
+const restoredCopy = { ...secondCopy, id: "collision-restored", restoredFromProjectIds: [secondCopy.id] };
+copyState.projects.push(restoredCopy);
+copyHandlers.duplicateProject(restoredCopy.id);
+assert.deepEqual(copyState.projects[0].duplicatedFromProjectIds, [restoredCopy.id],
+  "备份恢复改变ID后，不把失效复制授权续接到新副本");
 
 console.log("project list tests passed");

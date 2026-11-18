@@ -212,6 +212,11 @@
         if (!source || !projectBelongsToCurrentAccount(source)) return;
         const clone = cloneData(source);
         clone.id = makeId("proj");
+        clone.duplicatedFromProjectIds = Array.from(new Set([source.id,
+          ...(source.duplicationTargetProjectId === source.id && Array.isArray(source.duplicatedFromProjectIds)
+            ? source.duplicatedFromProjectIds : [])
+        ].filter((id) => typeof id === "string" && id.trim() && id !== clone.id)));
+        clone.duplicationTargetProjectId = clone.id;
         clone.ownerAccount = String(appState.auth?.account || "").trim();
         clone.name = resolveUniqueProjectName(`${source.name}-副本`);
         clone.createdAt = new Date().toISOString();

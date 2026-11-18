@@ -306,6 +306,13 @@
       && validStorageContext(source.storageContext);
   }
 
+  function duplicatedSourceIds(project) {
+    // Bind the lineage to the actual copy. A backup collision changes its ID and
+    // must not inherit this permission to reuse saved baseline results.
+    if (project?.duplicationTargetProjectId !== project?.id || !Array.isArray(project?.duplicatedFromProjectIds)) return [];
+    return project.duplicatedFromProjectIds.filter((id) => typeof id === "string" && id.trim() && id !== project.id);
+  }
+
   function snapshotContextMatches(project, scenario, snapshot, config) {
     if (snapshot.scenarioId !== scenario?.id) return false;
     const source = snapshot.sourceContext;
@@ -319,7 +326,8 @@
       && snapshot.contextFingerprint === fingerprint(candidate, originalScenario);
     if (matches(project)) return true;
     const sourceIds = Array.from(new Set([project?.restoredFromProjectId,
-      ...(Array.isArray(project?.restoredFromProjectIds) ? project.restoredFromProjectIds : [])]));
+      ...(Array.isArray(project?.restoredFromProjectIds) ? project.restoredFromProjectIds : []),
+      ...duplicatedSourceIds(project)]));
     // Restore changes only the candidate identity; never backfill metadata or rewrite snapshots.
     return sourceIds.some((sourceId) => typeof sourceId === "string" && Boolean(sourceId.trim()) && sourceId !== project.id
       && matches({ ...project, id: sourceId }));
@@ -570,8 +578,11 @@
       return state(false, "legacy_baseline", "当前展示历史结果，缺少计算口径记录，请重新发起基准测算。");
     }
     const fingerprint = source.version === 2 ? currentContextFingerprint : contextFingerprint;
-    if (source.projectId !== project?.id || source.scenarioId !== scenario?.id ||
-        source.contextFingerprint !== fingerprint(project, scenario) ||
+    const identityMatches = (candidate) => source.projectId === candidate?.id
+      && source.contextFingerprint === fingerprint(candidate, scenario);
+    const contextMatches = identityMatches(project) || duplicatedSourceIds(project).some((id) =>
+      identityMatches({ ...project, id }));
+    if (!contextMatches || source.scenarioId !== scenario?.id ||
         (source.version === 2 && stableStringify(source.storageContext) !== stableStringify(storageContext(project)))) {
       return state(false, "stale_context", "项目、电量或收入配置已变化，当前展示历史结果，请重新发起基准测算。");
     }

@@ -87,6 +87,95 @@ for (const [label, mutate, hourlyOnly] of corruptions) {
   if (hourlyOnly) assert.equal(analysis.isResultComplete(project, base, copy), true, "年表检查与小时明细检查可独立复用");
 }
 
+// Storage arbitrage follows its actual charging/discharging hour, including
+// discharge after solar generation has stopped; it cannot be spread over generation.
+const storageProject = { ...project, id: "storage-export", hasStorage: true, storagePowerMw: 10, storageDurationH: 2,
+  energyData: { hourlyByYear: Object.fromEntries([2026, 2027].map((year) => [year,
+    Array.from({ length: 8760 }, (_, hour) => hour % 24 >= 8 && hour % 24 < 17 ? 0.2 : 0)])) } };
+const storageScenario = model.createBaselineScenario(storageProject);
+storageScenario.config.storageRoundTripEfficiency = 0.88;
+const storageRun = { id: "storage-run", pricesByYear: Object.fromEntries([2026, 2027].map((year) => [year,
+  Array.from({ length: 8760 }, (_, hour) => hour % 24 === 9 ? -20 : hour % 24 === 19 ? 500 : 100)])) };
+const storageResult = calculator.calculateScenarioResult(storageProject, storageScenario, storageRun);
+const storageOriginal = JSON.stringify(storageResult);
+assert.equal(analysis.isResultComplete(storageProject, storageScenario, storageResult), true);
+assert.equal(analysis.isResultComplete(storageProject, storageScenario, storageResult, { includeHourly: true }), true,
+  "实际逐时配储结果允许导出8760明细");
+assert.ok(storageResult.hourlyPreview.some((row) => row.energyMwh === 0 && row.fullRevenue > 0), "覆盖无发电时的储能放电收益");
+const firstDispatchHour = storageResult.hourlyPreview.findIndex((row) => row.storageDispatch.chargeMwh > 0);
+const storageCorruptions = [
+  ["旧摊平公式", (copy) => {
+    const first = copy.annualRows[0], flat = (first.fullRevenue - first.spotRevenue) / first.energyMwh;
+    copy.hourlyPreview.forEach((row) => { row.fullRevenue = row.spotRevenue + row.energyMwh * flat; });
+  }, true],
+  ["小时充电", (copy) => { copy.hourlyPreview[firstDispatchHour].storageDispatch.chargeMwh += 1; }, true],
+  ["小时放电", (copy) => { copy.hourlyPreview[firstDispatchHour].storageDispatch.dischargeMwh += 1; }, true],
+  ["小时SOC", (copy) => { copy.hourlyPreview[firstDispatchHour].storageDispatch.socMwh += 1; }, true],
+  ["小时净上网量", (copy) => { copy.hourlyPreview[firstDispatchHour].storageDispatch.netExportMwh += 1; }, true],
+  ["配储后现货收入", (copy) => { copy.hourlyPreview[firstDispatchHour].storageDispatch.withStorageSpotRevenue += 100; }, true],
+  ["小时储能增量", (copy) => { copy.hourlyPreview[firstDispatchHour].storageDispatch.incrementalRevenue += 100; }, true],
+  ["小时总收入", (copy) => { copy.hourlyPreview[firstDispatchHour].fullRevenue += 100; }, true],
+  ["小时调度缺失", (copy) => { delete copy.hourlyPreview[firstDispatchHour].storageDispatch; }, true],
+  ["损坏小时行", (copy) => { copy.hourlyPreview[firstDispatchHour] = null; }, true],
+  ["年度充电量", (copy) => { copy.annualRows[0].storageDispatch.chargeMwh += 1; }, false],
+  ["年度放电量", (copy) => { copy.annualRows[0].storageDispatch.dischargeMwh += 1; }, false],
+  ["年度机会成本", (copy) => { copy.annualRows[0].storageDispatch.chargeOpportunityCost += 100; }, false],
+  ["年度独立收益", (copy) => { copy.annualRows[0].storageDispatch.independentSupplementRevenue += 100; }, false],
+  ["第二年总额", (copy) => { copy.annualRows[1].storageDispatch.withStorageFullRevenue += 100; }, false],
+  ["调度版本", (copy) => { copy.annualRows[0].storageDispatch.version = "changed"; }, false],
+  ...["powerMw", "durationH", "capacityMwh", "roundTripEfficiency"].map((key) =>
+    [`方案${key}`, (copy) => { copy.annualRows[0].storageDispatch[key] += 0.1; }, false])
+];
+for (const [label, mutate, hourlyOnly] of storageCorruptions) {
+  const copy = JSON.parse(storageOriginal); mutate(copy);
+  assert.equal(analysis.isResultComplete(storageProject, storageScenario, copy, { includeHourly: true }), false, `${label}篡改不得通过明细验证`);
+  if (hourlyOnly) assert.equal(analysis.isResultComplete(storageProject, storageScenario, copy), true, "小时验证不会改变年度导出边界");
+}
+// Updating saved summaries consistently must not bypass independent dispatch reconstruction.
+const coherentStorageEdit = JSON.parse(storageOriginal);
+const editedAnnual = coherentStorageEdit.annualRows[0], editedDispatch = editedAnnual.storageDispatch;
+editedDispatch.incrementalRevenue += 100; editedDispatch.dischargeRevenue += 100;
+editedDispatch.withStorageSpotRevenue += 100; editedDispatch.withStorageFullRevenue += 100;
+editedAnnual.storageSupplementRevenue += 100; editedAnnual.fullRevenue += 100;
+editedAnnual.fullRevenuePrice = editedAnnual.fullRevenue / editedAnnual.energyMwh;
+coherentStorageEdit.totalFullRevenue += 100;
+coherentStorageEdit.avgFullRevenuePrice = coherentStorageEdit.totalFullRevenue / coherentStorageEdit.totalEnergy;
+assert.equal(analysis.isResultComplete(storageProject, storageScenario, coherentStorageEdit), true, "年度恒等式一致不等于调度真实一致");
+assert.equal(analysis.isResultComplete(storageProject, storageScenario, coherentStorageEdit, { includeHourly: true }), false,
+  "调度重建独立拒绝协调修改过的年度套利总额");
+const swappedHours = JSON.parse(storageOriginal);
+swappedHours.hourlyPreview[0].fullRevenue += 100; swappedHours.hourlyPreview[1].fullRevenue -= 100;
+swappedHours.hourlyPreview[0].storageDispatch.incrementalRevenue += 100;
+swappedHours.hourlyPreview[1].storageDispatch.incrementalRevenue -= 100;
+assert.equal(analysis.isResultComplete(storageProject, storageScenario, swappedHours, { includeHourly: true }), false,
+  "保持全年合计的小时金额串位也必须拒绝");
+const roundedStorage = JSON.parse(storageOriginal);
+roundedStorage.annualRows[0].storageDispatch.chargeMwh += 1e-9;
+roundedStorage.hourlyPreview[firstDispatchHour].storageDispatch.socMwh += 1e-10;
+assert.equal(analysis.isResultComplete(storageProject, storageScenario, roundedStorage, { includeHourly: true }), true,
+  "调度数量允许浮点累计尾差");
+assert.equal(JSON.stringify(storageResult), storageOriginal, "验证不改写历史结果");
+
+// Preserve old, uniformly allocated storage results that predate dispatch metadata.
+const legacyStorageRun = { id: "legacy-storage", pricesByYear: { 2026: Array(8760).fill(300), 2027: Array(8760).fill(300) } };
+const legacyStorage = calculator.calculateScenarioResult(storageProject, storageScenario, legacyStorageRun);
+for (const row of legacyStorage.annualRows) {
+  const supplement = row.energyMwh * storageScenario.config.storageArbitragePrice;
+  row.storageDispatch = null; row.storageSupplementRevenue += supplement; row.fullRevenue += supplement;
+  row.fullRevenuePrice = row.fullRevenue / row.energyMwh;
+}
+legacyStorage.totalFullRevenue = legacyStorage.annualRows.reduce((sum, row) => sum + row.fullRevenue, 0);
+legacyStorage.avgFullRevenuePrice = legacyStorage.totalFullRevenue / legacyStorage.totalEnergy;
+legacyStorage.hourlyPreview.forEach((row) => {
+  delete row.storageDispatch;
+  row.fullRevenue += row.energyMwh * storageScenario.config.storageArbitragePrice;
+});
+assert.equal(analysis.isResultComplete(storageProject, storageScenario, legacyStorage, { includeHourly: true }), true,
+  "历史无调度记录的固定度电配储结果保留原校验方式");
+const unexpectedStorage = JSON.parse(JSON.stringify(baseline.result));
+unexpectedStorage.annualRows[0].storageDispatch = storageResult.annualRows[0].storageDispatch;
+assert.equal(analysis.isResultComplete(project, base, unexpectedStorage), false, "无配储项目不能混入储能调度结果");
+
 // The existing freshness gate must protect every ranking / comparison entry.
 up.config.otherFee += 100;
 assert.equal(rough.baselineResultState(project, up, project.resultsByScenario.up).current, false);

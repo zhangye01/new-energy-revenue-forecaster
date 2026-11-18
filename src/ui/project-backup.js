@@ -151,7 +151,7 @@
     }
     ["energyData", "statuses", "energyTemplateExports", "roughPrice", "resultsByScenario"].forEach((key) => validateContainer(project, key, false, path));
     validateContainer(project, "legacyStorageResultsByScenario", false, path);
-    ["priceRuns", "activationLogs", "restoredFromProjectIds"].forEach((key) => validateContainer(project, key, true, path));
+    ["priceRuns", "activationLogs", "restoredFromProjectIds", "duplicatedFromProjectIds"].forEach((key) => validateContainer(project, key, true, path));
     project.scenarios.forEach((scenario, i) => {
       if (!isObject(scenario)) throw new Error(`备份方案结构无效：${path}.scenarios[${i}]，未恢复任何项目。`);
       ["config", "confirmedConfig", "confirmedConfigSources"].forEach((key) => validateContainer(scenario, key, false, `${path}.scenarios[${i}]`));
@@ -183,7 +183,9 @@
       if (ids.has(restored.id)) {
         restored.restoredFromProjectIds = Array.from(new Set([
           project.id, project.restoredFromProjectId,
-          ...(Array.isArray(project.restoredFromProjectIds) ? project.restoredFromProjectIds : [])
+          ...(Array.isArray(project.restoredFromProjectIds) ? project.restoredFromProjectIds : []),
+          ...(project.duplicationTargetProjectId === project.id && Array.isArray(project.duplicatedFromProjectIds)
+            ? project.duplicatedFromProjectIds : [])
         ].filter((id) => typeof id === "string" && id.trim())));
         restored.restoredFromProjectId = typeof project.restoredFromProjectId === "string" && project.restoredFromProjectId.trim()
           ? project.restoredFromProjectId : project.id;

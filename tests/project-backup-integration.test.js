@@ -28,13 +28,37 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
     { spotNodes: [{ year: 2026, value: 300 }], captureRate: 95 }, { id: "original-rough" });
   assert.equal(rough.ok, true);
   project.roughPrice = { draftsByScenario: {}, snapshots: [rough.snapshot] };
-  const run = { id: "restore-run", status: "publishable", pricesByYear: { 2026: Array(8760).fill(300) } };
+  const run = { id: "restore-run", createdAt: "2026-11-18T00:00:00Z", status: "publishable", pricesByYear: { 2026: Array(8760).fill(300) } };
   project.priceRuns = [run]; project.activeRunId = run.id;
   const calculate = (p) => sandbox.NE_ROUGH_PRICE.stampBaselineResult(p, p.scenarios[0], p.priceRuns[0],
     sandbox.NE_REVENUE_CALCULATOR.calculateScenarioResult(p, p.scenarios[0], p.priceRuns[0]));
   project.resultsByScenario[scenario.id] = calculate(project);
   const originalBytes = JSON.stringify(project);
   const roughBytes = JSON.stringify(project.roughPrice.snapshots);
+  const copyState = { auth: { account: "demo1" }, projects: [project] };
+  sandbox.NE_PROJECT_LIST_VIEW.createProjectListActionHandlers({ appState: copyState,
+    cloneData: plain, makeId: () => "ui-duplicated-project" }).duplicateProject(project.id);
+  const uiDuplicate = copyState.projects[0];
+  assert.equal(sandbox.NE_ROUGH_PRICE.compareBaselineResult(uiDuplicate, uiDuplicate.scenarios[0],
+    uiDuplicate.roughPrice.snapshots[0], uiDuplicate.resultsByScenario[scenario.id]).ok, true);
+  const restoredDuplicate = restore(uiDuplicate, [uiDuplicate], "restored-ui-duplicate");
+  assert.deepEqual(plain(restoredDuplicate.restoredFromProjectIds), [uiDuplicate.id, project.id],
+    "备份碰撞恢复保留UI副本继承的原始粗算来源");
+  assert.equal(restoredDuplicate.duplicationTargetProjectId, uiDuplicate.id,
+    "恢复过程不能把原复制授权改绑到新ID");
+  assert.equal(sandbox.NE_ROUGH_PRICE.snapshotState(restoredDuplicate, restoredDuplicate.scenarios[0],
+    restoredDuplicate.roughPrice.snapshots[0]).comparable, true);
+  assert.equal(sandbox.NE_ROUGH_PRICE.baselineResultState(restoredDuplicate, restoredDuplicate.scenarios[0],
+    restoredDuplicate.resultsByScenario[scenario.id]).current, false, "备份碰撞恢复仍要求重新测算基准");
+  assert.equal(sandbox.NE_ROUGH_PRICE.compareBaselineResult(restoredDuplicate, restoredDuplicate.scenarios[0],
+    restoredDuplicate.roughPrice.snapshots[0], calculate(restoredDuplicate)).ok, true);
+  for (const key of ["energyData", "priceRuns", "resultsByScenario", "roughPrice"]) {
+    assert.equal(JSON.stringify(restoredDuplicate[key]), JSON.stringify(uiDuplicate[key]), `${key}复制备份恢复原文不变`);
+  }
+  const staleCopyLineage = { ...uiDuplicate, duplicationTargetProjectId: "unrelated-copy" };
+  const recoveredStaleCopy = restore(staleCopyLineage, [staleCopyLineage], "restored-stale-copy");
+  assert.deepEqual(plain(recoveredStaleCopy.restoredFromProjectIds), [uiDuplicate.id],
+    "无效的复制绑定不能扩大粗算来源别名");
   const restored = restore(project, [project]);
   const restoredScenario = restored.scenarios[0];
   const restoredRough = restored.roughPrice.snapshots[0];
