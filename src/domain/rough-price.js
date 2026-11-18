@@ -66,6 +66,22 @@
     };
   }
 
+  function getDefaultEndPrice(project, spotNodes) {
+    const years = yearsForProject(project);
+    if (years.length < 2 || !Array.isArray(spotNodes)) return null;
+    const endYear = years.at(-1);
+    let latestYear = -Infinity;
+    let price = null;
+    for (const node of spotNodes) {
+      if (!isNumber(node?.year) || !isNumber(node.value)) continue;
+      const year = Number(node.year);
+      if (!Number.isInteger(year) || year < years[0] || year >= endYear || year <= latestYear) continue;
+      latestYear = year;
+      price = Number(node.value);
+    }
+    return price;
+  }
+
   function validSnapshot(snapshot) {
     if (!isObject(snapshot) || !snapshot.id || typeof snapshot.id !== "string" ||
         typeof snapshot.scenarioId !== "string" || !snapshot.scenarioId ||
@@ -483,8 +499,30 @@
     return energy > 0 ? rows.reduce((sum, row) => sum + row[priceKey] * row.energyMwh, 0) / energy : null;
   }
 
+  function hasInvalidEndPrice(draft, endYear) {
+    if (!Array.isArray(draft?.spotNodes)) return false;
+    return draft.spotNodes.some((node) => isNumber(node?.year) && Number(node.year) === endYear &&
+      node.value != null && !(typeof node.value === "string" && !node.value.trim()) && !isNumber(node.value));
+  }
+
+  function interpolateSpotPrices(years, nodes) {
+    let rightIndex = 1;
+    return years.map((year) => {
+      while (rightIndex < nodes.length - 1 && year > nodes[rightIndex].year) rightIndex += 1;
+      const left = nodes[rightIndex - 1];
+      if (year === left.year) return left.value;
+      const right = nodes[rightIndex];
+      if (year === right.year) return right.value;
+      const fraction = (year - left.year) / (right.year - left.year);
+      const difference = right.value - left.value;
+      return Number.isFinite(difference) ? left.value + fraction * difference
+        : (1 - fraction) * left.value + fraction * right.value;
+    });
+  }
+
   function calculateRough(project, scenario, draft, options = {}) {
     const years = yearsForProject(project);
+    const endYear = years.at(-1);
     const errors = years.length ? validateConfig(project, scenario?.config, years) : ["项目测算起始年份或年限无效。"];
     if (!scenario?.id) errors.push("请先选择测算方案。");
     const input = sanitizeDraft(draft, project);
@@ -497,16 +535,24 @@
       if (!Number.isInteger(node.year) || !years.includes(node.year)) errors.push("现货价格节点年份应位于项目测算周期内。");
       if (seen.has(node.year)) errors.push(`${node.year}年现货价格节点重复，请保留一项。`);
       seen.add(node.year);
-      if (!isNumber(node.value)) errors.push(`${node.year ?? "待填年份"}年现货均价不能为空且应为有效数字。`);
+      if (node.value !== null) return;
+      if (years.length > 1 && node.year === endYear) {
+        if (hasInvalidEndPrice(draft, endYear)) errors.push("末年现货均价应为有效数字。留空时沿用最近的已填写节点。");
+      } else {
+        errors.push(`${node.year ?? "待填年份"}年现货均价不能为空且应为有效数字。`);
+      }
     });
     if (!nodes.length || nodes[0].year !== years[0]) errors.push("请填写测算起始年份的现货均价，以覆盖全部测算年份。");
     if (errors.length) return { ok: false, errors: [...new Set(errors)], snapshot: null };
+    const lastNode = nodes.at(-1);
+    if (lastNode.year !== endYear) nodes.push({ year: endYear, value: lastNode.value });
+    else if (lastNode.value === null) lastNode.value = getDefaultEndPrice(project, nodes);
     const { carbonEnabled, carbonPrice, carbonRealizeRatio, ...greenValueConfig } = scenario.config;
     const config = normalizedConfig(project, greenValueConfig);
     input.spotNodes = nodes;
+    const spotPrices = interpolateSpotPrices(years, nodes);
     const rows = years.map((year, index) => {
-      const node = nodes.filter((item) => item.year <= year).slice(-1)[0];
-      const spotAvgPrice = node.value;
+      const spotAvgPrice = spotPrices[index];
       const capturePrice = spotAvgPrice * input.captureRate / 100;
       const months = config.mechanismEnabled
         ? rules.mechanismActiveMonthsForYear(year, config.mechanismStartYm, config.mechanismEndYm) : 0;
@@ -536,6 +582,7 @@
       scenarioId: scenario.id,
       scenarioName: scenario.name || "当前方案",
       createdAt: options.createdAt || new Date().toISOString(),
+      spotPriceMethod: "linear",
       draft: clone(input),
       config: clone(scenario.config),
       calculationConfig: clone(config),
@@ -768,5 +815,5 @@
     };
   }
 
-  return Object.freeze({ defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, snapshotState, contextFingerprint, currentContextFingerprint, validateConfig, validateBaselineConfig });
+  return Object.freeze({ defaultDraft, getDefaultEndPrice, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, snapshotState, contextFingerprint, currentContextFingerprint, validateConfig, validateBaselineConfig });
 });

@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { defaultDraft, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, snapshotState, contextFingerprint, currentContextFingerprint } = require("../src/domain/rough-price");
+const { defaultDraft, getDefaultEndPrice, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, snapshotState, contextFingerprint, currentContextFingerprint } = require("../src/domain/rough-price");
 const { calculateScenarioResult } = require("../src/domain/revenue-calculator");
 const { defaultScenarioConfig, sanitizeScenario } = require("../src/domain/scenario-model");
 const { normalizeTypicalCurveProfile } = require("../src/domain/energy-profiles");
@@ -67,6 +67,8 @@ assert.equal(snapshot.config.carbonPrice, 3, "原录入值完整保存在原始�
 assert.equal(Object.hasOwn(snapshot.calculationConfig, "carbonPrice"), false);
 assert.equal(snapshot.scenarioName, "基准方案");
 assert.equal(snapshot.id, "rough-1");
+assert.equal(snapshot.spotPriceMethod, "linear");
+assert.deepEqual(snapshot.draft.spotNodes, [{ year: 2026, value: 100 }, { year: 2027, value: 100 }]);
 
 const sameType = scenario(p, { mechanismReferenceMode: "same_type", sameTypeSpread: 20 });
 const sameSnapshot = calculate(p, sameType, draft(p, 100, 95));
@@ -81,12 +83,66 @@ approx(negative.rows[0].capturePrice, -95, "负现货价保留符号");
 approx(negative.rows[0].mechanismAdjustment, 97.5, "负价机制补差");
 
 const fourYears = project(4);
-const stepped = calculate(fourYears, scenario(fourYears), {
+const segmented = calculate(fourYears, scenario(fourYears), {
   spotNodes: [{ year: 2029, value: 400 }, { year: 2026, value: 100 }, { year: 2028, value: 300 }],
   captureRate: 100
 });
-assert.deepEqual(stepped.rows.map((row) => row.spotAvgPrice), [100, 100, 300, 400], "排序后阶梯覆盖年度");
-assert.deepEqual(stepped.draft.spotNodes.map((node) => node.year), [2026, 2028, 2029]);
+assert.deepEqual(segmented.rows.map((row) => row.spotAvgPrice), [100, 200, 300, 400], "排序后相邻节点线性插值");
+assert.deepEqual(segmented.draft.spotNodes.map((node) => node.year), [2026, 2028, 2029]);
+
+const sevenYears = project(7);
+const twoAnchors = [{ year: 2029, value: -20 }, { year: 2026, value: 100 }];
+const autoDraft = { spotNodes: twoAnchors, captureRate: 90 };
+const autoBefore = JSON.stringify(autoDraft);
+const automatic = calculate(sevenYears, scenario(sevenYears), autoDraft);
+assert.deepEqual(automatic.rows.map((row) => row.spotAvgPrice), [100, 60, 20, -20, -20, -20, -20]);
+assert.deepEqual(automatic.rows.map((row) => row.capturePrice), [90, 54, 18, -18, -18, -18, -18]);
+assert.deepEqual(automatic.draft.spotNodes.at(-1), { year: 2032, value: -20 });
+assert.equal(JSON.stringify(autoDraft), autoBefore, "生成版本只在新快照里补足末年节点");
+
+for (const [endPrice, expected] of [[40, [0, 20, 40]], [0, [-40 / 3, -20 / 3, 0]], [-80, [-40, -60, -80]], [null, [-20, -20, -20]]]) {
+  const calculated = calculate(sevenYears, scenario(sevenYears), {
+    ...autoDraft, spotNodes: [{ year: 2032, value: endPrice }, ...twoAnchors]
+  });
+  assert.deepEqual(calculated.rows.slice(0, 4).map((row) => row.spotAvgPrice), [100, 60, 20, -20]);
+  calculated.rows.slice(4).forEach((row, index) => approx(row.spotAvgPrice, expected[index], "手填或留空的末年价格"));
+  assert.equal(calculated.rows.at(-1).spotAvgPrice, endPrice ?? -20, "末年准确保留目标值");
+}
+assert.equal(getDefaultEndPrice(sevenYears, [
+  { year: 2032, value: 99 }, { year: 2025, value: 10 }, { year: 2031, value: "0" },
+  { year: 2030, value: -20 }, { year: 2099, value: 50 }, { year: 2026, value: 100 }
+]), 0, "默认值按年份找末年前最近的有效节点");
+assert.equal(getDefaultEndPrice(sevenYears, [{ year: 2026, value: null }]), null);
+const extended = calculate(project(8), scenario(project(8)), { ...autoDraft, spotNodes: [{ year: 2032, value: -80 }, ...twoAnchors] });
+assert.deepEqual(extended.draft.spotNodes.slice(-2), [{ year: 2032, value: -80 }, { year: 2033, value: -80 }],
+  "延长周期保留原末年设价，并自动补充新末年");
+
+const oneYear = project(1);
+const single = calculate(oneYear, scenario(oneYear), draft(oneYear, 0));
+assert.deepEqual(single.draft.spotNodes, [{ year: 2026, value: 0 }]);
+assert.deepEqual(single.rows.map((row) => row.spotAvgPrice), [0]);
+assert.equal(getDefaultEndPrice(oneYear, single.draft.spotNodes), null);
+assert.equal(calculateRough(oneYear, scenario(oneYear), defaultDraft(oneYear)).ok, false, "单年也必须填写首年价格");
+
+const threeYears = project(3);
+const extreme = calculate(threeYears, scenario(threeYears), {
+  spotNodes: [{ year: 2026, value: -Number.MAX_VALUE }, { year: 2028, value: Number.MAX_VALUE }], captureRate: 0
+});
+assert.deepEqual(extreme.rows.map((row) => row.spotAvgPrice), [-Number.MAX_VALUE, 0, Number.MAX_VALUE],
+  "节点差额超过浮点上限时，区间内有限价格仍可得到");
+
+const oldDraft = { ...draft(fourYears), spotNodes: [{ year: 2026, value: 100 }, { year: 2028, value: 300 }] };
+const oldStep = structuredClone(calculate(fourYears, scenario(fourYears), oldDraft));
+delete oldStep.spotPriceMethod;
+oldStep.draft = structuredClone(oldDraft);
+oldStep.rows[1] = structuredClone(calculate(fourYears, scenario(fourYears)).rows[1]);
+oldStep.summary.simpleAverage = oldStep.rows.reduce((sum, row) => sum + row.fullRevenuePrice, 0) / oldStep.rows.length;
+const oldStepBefore = JSON.stringify(oldStep);
+const oldHydrated = sanitizeWorkspace({ draftsByScenario: { [s.id]: oldDraft }, snapshots: [oldStep] }, fourYears);
+assert.equal(JSON.stringify(oldHydrated.snapshots[0]), oldStepBefore, "保留原阶梯快照字段和原年度价格");
+assert.deepEqual(oldHydrated.draftsByScenario[s.id].spotNodes, oldDraft.spotNodes, "读取旧草稿时不补写末年");
+assert.equal(oldHydrated.snapshots[0].rows[1].spotAvgPrice, 100);
+assert.equal(calculate(fourYears, scenario(fourYears), oldHydrated.draftsByScenario[s.id]).rows[1].spotAvgPrice, 200);
 
 const invalidDrafts = [
   { spotNodes: [] },
@@ -94,6 +150,7 @@ const invalidDrafts = [
   { spotNodes: [{ year: 2026, value: 100 }, { year: 2026, value: 120 }] },
   { spotNodes: [{ year: 2026, value: 100 }, { year: 2028, value: 120 }] },
   ...[null, "", " ", "abc", Infinity, true].map((value) => ({ spotNodes: [{ year: 2026, value }] })),
+  ...["abc", Infinity, false, []].map((value) => ({ spotNodes: [{ year: 2026, value: 100 }, { year: 2027, value }] })),
   ...[null, "", -1, 151].map((captureRate) => ({ captureRate }))
 ];
 invalidDrafts.forEach((change) => {
@@ -103,6 +160,9 @@ invalidDrafts.forEach((change) => {
   assert.ok(result.errors.length);
 });
 assert.equal(calculateRough({}, s, draft(p)).ok, false);
+assert.equal(calculateRough(fourYears, scenario(fourYears), {
+  ...draft(fourYears), spotNodes: [{ year: 2026, value: 100 }, { year: 2028, value: null }, { year: 2029, value: 150 }]
+}).ok, false, "末年可留空的规则不传递给中间年份");
 assert.equal(calculateRough(p, { ...s, config: null }, draft(p)).ok, false);
 assert.equal(calculateRough(p, scenario(p, { mechanismStartYm: "2026-13" }), draft(p)).ok, false);
 const negativeMechanism = calculateRough(p, scenario(p, { mechanismPrice: -100 }), draft(p));

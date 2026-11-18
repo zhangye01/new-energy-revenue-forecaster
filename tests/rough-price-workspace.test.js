@@ -38,12 +38,14 @@ function documentFixture() {
   };
   const controls = {
     capture: new Element(), source: new Element(), node: new Element({ roughNode: "0", nodeField: "value" }),
+    endPrice: new Element(),
     sharedPrice: new Element({ sharedKey: "mechanismPrice" }), form: new Element(),
     save: new Element(), message: new Element(), dirty: new Element(), add: new Element(),
     threshold: new Element(), comparisonSummary: new Element(), snapshot: new Element()
   };
   rough.selectors = {
     "[data-rough-capture]": controls.capture, "[data-rough-source]": controls.source,
+    "[data-rough-end-price]": controls.endPrice,
     "#rough-price-form": controls.form, "[data-rough-save-shared]": controls.save,
     "[data-rough-message]": controls.message, "[data-rough-dirty]": controls.dirty,
     "[data-rough-add]": controls.add
@@ -66,6 +68,77 @@ function projectFixture() {
   project.scenarios = [scenario]; project.activeScenarioId = scenario.id;
   return { project, scenario };
 }
+
+const priceFixture = documentFixture();
+const priceData = projectFixture();
+priceData.project.forecastYears = 4;
+const priceDraft = { spotNodes: [
+  { year: 2027, value: 200 }, { year: 2030, value: 800 }, { year: 2029, value: 350 }
+], captureRate: 95, sourceNote: "" };
+priceData.project.roughPrice = { draftsByScenario: { [priceData.scenario.id]: priceDraft }, snapshots: [] };
+const latePrice = new Element({ roughNode: "2", nodeField: "value" });
+priceFixture.rough.groups["[data-rough-node]"].push(latePrice);
+let priceChanges = 0;
+const priceOptions = { ...priceData, documentRef: priceFixture.documentRef, domain, onPersist() { priceChanges += 1; } };
+const savedPriceDraft = JSON.stringify(priceDraft);
+workspace.renderWorkspace(priceOptions);
+assert.match(priceFixture.rough.innerHTML, /data-rough-end-year value="2030" readonly/);
+assert.match(priceFixture.rough.innerHTML, /data-rough-end-price value="800" placeholder="350"/);
+assert.match(priceFixture.rough.innerHTML, /相邻节点间按年份线性插值/);
+assert.match(priceFixture.rough.innerHTML, /data-rough-remove="0"[^>]* disabled/,
+  "the required start node stays protected when the draft also has an explicit terminal price");
+assert.doesNotMatch(priceFixture.rough.innerHTML, /data-rough-remove="1"/);
+assert.equal(JSON.stringify(priceDraft), savedPriceDraft, "opening a legacy endpoint preserves saved nodes");
+const endPrice = priceFixture.controls.endPrice;
+endPrice.value = "";
+endPrice.oninput();
+endPrice.onchange();
+assert.deepEqual(priceDraft.spotNodes.map((node) => node.year), [2027, 2029]);
+latePrice.value = "360";
+latePrice.oninput();
+latePrice.onchange();
+assert.equal(endPrice.placeholder, "360", "default tracks the latest entered price without rerendering");
+assert.equal(priceDraft.spotNodes[1].value, 360, "clearing a legacy endpoint keeps the other field bindings");
+for (const value of ["0", "-42.5"]) {
+  endPrice.value = value;
+  endPrice.oninput();
+  endPrice.onchange();
+  assert.deepEqual(priceDraft.spotNodes.filter((node) => node.year === 2030), [{ year: 2030, value: Number(value) }]);
+}
+priceFixture.controls.add.onclick();
+assert.equal(priceChanges, 5);
+assert.deepEqual(priceDraft.spotNodes.map((node) => node.year), [2027, 2029, 2030, 2028]);
+assert.deepEqual(Array.from(priceFixture.rough.innerHTML.matchAll(/data-node-field="year" value="(\d+)"/g),
+  (match) => Number(match[1])), [2027, 2028, 2029], "the rendered order follows the years without reordering saved nodes");
+assert.equal(priceFixture.controls.add.disabled, true, "only years before the fixed endpoint can be added");
+assert.match(priceFixture.rough.innerHTML, /data-rough-end-price value="-42.5" placeholder="360"/);
+
+const intermediateYear = new Element({ roughNode: "3", nodeField: "year" });
+const duplicateStart = { year: 2027, value: 210 };
+const duplicateEnd = { year: 2030, value: 10 };
+priceDraft.spotNodes.push(duplicateStart, duplicateEnd);
+priceFixture.rough.groups["[data-rough-node]"].push(intermediateYear);
+priceFixture.rough.groups['[data-rough-node][data-node-field="year"]'] = [intermediateYear];
+workspace.renderWorkspace(priceOptions);
+assert.match(priceFixture.rough.innerHTML, /data-rough-remove="4" aria-label="删除第 2 个价格节点">删除/);
+assert.match(priceFixture.rough.innerHTML, /data-rough-remove="5" aria-label="删除第 5 个价格节点">删除/);
+intermediateYear.value = "2030";
+intermediateYear.oninput();
+priceFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.match(priceFixture.controls.message.textContent, /末年价格请填写在自动生成的末年节点/);
+assert.equal(priceData.project.roughPrice.snapshots.length, 0);
+
+const oneYearFixture = documentFixture();
+const oneYearData = projectFixture();
+oneYearData.project.forecastYears = 1;
+workspace.renderWorkspace({ ...oneYearData, documentRef: oneYearFixture.documentRef, domain });
+const oneYearDraft = oneYearData.project.roughPrice.draftsByScenario[oneYearData.scenario.id];
+assert.match(oneYearFixture.rough.innerHTML, /起止年份<input type="number" data-rough-end-year value="2027" readonly/);
+assert.doesNotMatch(oneYearFixture.rough.innerHTML, /data-rough-node=/, "a one-year project has only one price field");
+assert.equal(oneYearFixture.controls.add.disabled, true);
+oneYearFixture.controls.endPrice.value = "205";
+oneYearFixture.controls.endPrice.oninput();
+assert.deepEqual(oneYearDraft.spotNodes, [{ year: 2027, value: 205 }]);
 
 const empty = documentFixture();
 workspace.renderWorkspace({ documentRef: empty.documentRef });

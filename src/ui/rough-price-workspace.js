@@ -184,13 +184,42 @@
       </section>`;
   }
 
-  function roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, inputState) {
+  function availablePriceNodeYear(years, nodes) {
+    const used = new Set(nodes.map((node) => node.year));
+    return years.slice(0, -1).find((year) => !used.has(year));
+  }
+
+  function endPricePlaceholder(years, defaultPrice) {
+    if (years.length === 1) return "请输入预期价格";
+    return defaultPrice === null || defaultPrice === undefined ? "沿用最近节点" : String(defaultPrice);
+  }
+
+  function isRequiredStartNode(nodes, node, startYear) {
+    return node !== undefined && nodes.find((item) => item.year === startYear) === node;
+  }
+
+  function priceNodesHtml(years, nodes, defaultEndPrice) {
+    const startYear = years[0];
+    const endYear = years.at(-1);
+    const endIndex = nodes.findIndex((node) => node.year === endYear);
+    const editableNodes = nodes.map((node, index) => ({ node, index }))
+      .filter(({ index }) => index !== endIndex)
+      .sort((left, right) => (left.node.year ?? Infinity) - (right.node.year ?? Infinity));
+    const rows = editableNodes.map(({ node, index }, position) => {
+      const canRemove = !isRequiredStartNode(nodes, node, startYear);
+      return `<div class="rough-node"><label>节点年份<input type="number" min="${startYear}" max="${endYear - 1}" step="1" data-rough-node="${index}" data-node-field="year" value="${escapeHtml(node.year)}"></label><label>现货均价<input type="number" step="any" data-rough-node="${index}" data-node-field="value" value="${escapeHtml(node.value)}" placeholder="请输入预期价格"></label><button type="button" class="ghost-button" data-rough-remove="${index}" aria-label="删除第 ${position + 1} 个价格节点"${canRemove ? "" : " disabled"}>删除</button></div>`;
+    }).join("");
+    const endPrice = nodes[endIndex]?.value;
+    return `${rows}<div class="rough-node"><label>${years.length === 1 ? "起止年份" : "末年节点"}<input type="number" data-rough-end-year value="${endYear}" readonly></label><label>${years.length === 1 ? "现货均价" : "末年现货均价"}<input type="number" step="any" data-rough-end-price value="${escapeHtml(endPrice)}" placeholder="${escapeHtml(endPricePlaceholder(years, defaultEndPrice))}"></label></div>`;
+  }
+
+  function roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, inputState, getDefaultEndPrice) {
     const years = yearsFor(project);
     const savedEnergyYears = years.filter((year) => project.energyData?.annualSummary?.[year]?.energyMwh !== undefined ||
       Array.isArray(project.energyData?.hourlyByYear?.[year])).length;
     const energyStatus = savedEnergyYears < years.length ? `<span class="rough-badge">结算电量 ${savedEnergyYears}/${years.length} 年</span>` : "";
     return `<form id="rough-price-form" class="rough-card" novalidate><div class="rough-section-head"><div><h3 id="rough-assumptions-heading">粗算价格假设</h3><p data-help="粗算价格假设" data-help-anchor="#rough-assumptions-heading">已有项目、周期、电量与已确认结算参数自动带入；未确认参数在下方填写，用于与后续基准结果对照。缺少电量时，仍可计算年度价格；补齐电量后生成新版，查看全周期加权均价。</p></div><span class="rough-badge">元/MWh</span>${energyStatus}</div>
-      <div class="rough-draft-grid"><fieldset class="rough-fieldset"><legend>年度现货均价预期</legend><p class="rough-note" data-help="价格节点">填写起始年及关键变化年份。节点值沿用至下一个节点前一年，采用阶梯填充。</p><div class="rough-nodes">${draft.spotNodes.map((node, index) => `<div class="rough-node"><label>节点年份<input type="number" min="${project.startYear}" max="${Number(project.startYear) + Number(project.forecastYears) - 1}" step="1" data-rough-node="${index}" data-node-field="year" value="${escapeHtml(node.year)}"></label><label>现货均价<input type="number" step="any" data-rough-node="${index}" data-node-field="value" value="${escapeHtml(node.value)}" placeholder="请输入预期价格"></label><button type="button" class="ghost-button" data-rough-remove="${index}" aria-label="删除第 ${index + 1} 个价格节点"${draft.spotNodes.length <= 1 ? " disabled" : ""}>删除</button></div>`).join("")}</div><button type="button" class="ghost-button" data-rough-add>＋ 增加价格节点</button></fieldset>
+      <div class="rough-draft-grid"><fieldset class="rough-fieldset"><legend>年度现货均价预期</legend><p class="rough-note" data-help="价格节点">相邻节点间按年份线性插值。末年年份自动带入，价格可手动填写，留空时沿用此前最近的已填价格。仅测算一年时，填写该年价格。</p><div class="rough-nodes">${priceNodesHtml(years, draft.spotNodes, getDefaultEndPrice?.(project, draft.spotNodes))}</div><button type="button" class="ghost-button" data-rough-add${availablePriceNodeYear(years, draft.spotNodes) === undefined ? " disabled" : ""}>＋ 增加价格节点</button></fieldset>
       <fieldset class="rough-fieldset"><legend>捕获率与假设来源</legend><label>预期捕获率（%）<input type="number" min="0" max="150" step="any" id="rough-capture-input" data-rough-capture value="${escapeHtml(draft.captureRate)}"></label><p class="rough-note" data-help="捕获率" data-help-for="rough-capture-input">粗算捕获电价＝现货均价×捕获率。初始建议值 95%，请结合项目确认。</p><label>假设来源 / 判断依据（选填）<textarea rows="3" data-rough-source placeholder="如历史价格、同类项目经验或客户判断">${escapeHtml(draft.sourceNote)}</textarea></label></fieldset></div>
       ${sharedConfigHtml(project, scenario, entry, inputState)}<div class="rough-actions"><button type="submit" class="primary-button">生成并保存粗算版本</button></div><div data-rough-message role="status" class="rough-message ${entry.tone === "error" ? "rough-alert" : ""}">${escapeHtml(entry.message)}</div></form>${roughResultsHtml(snapshot, snapshots, entry, snapshotState)}`;
   }
@@ -320,6 +349,65 @@
     });
   }
 
+  function bindPriceNodes(root, draft, options, redraw, message) {
+    const { project, domain, onPersist = () => {} } = options;
+    const years = yearsFor(project);
+    const endYear = years.at(-1);
+    const endPrice = root.querySelector("[data-rough-end-price]");
+    const add = root.querySelector("[data-rough-add]");
+    const removals = Array.from(root.querySelectorAll("[data-rough-remove]"),
+      (button) => ({ button, node: draft.spotNodes[Number(button.dataset.roughRemove)] }));
+    let endNode = draft.spotNodes.find((node) => node.year === endYear);
+    const refresh = () => {
+      if (endPrice) endPrice.placeholder = endPricePlaceholder(years, domain.getDefaultEndPrice?.(project, draft.spotNodes));
+      if (add) add.disabled = availablePriceNodeYear(years, draft.spotNodes) === undefined;
+      removals.forEach(({ button, node }) => { button.disabled = isRequiredStartNode(draft.spotNodes, node, years[0]); });
+    };
+    root.querySelectorAll("[data-rough-node]").forEach((field) => {
+      const node = draft.spotNodes[Number(field.dataset.roughNode)];
+      if (!node) return;
+      field.oninput = () => {
+        node[field.dataset.nodeField] = field.value === "" ? null : Number(field.value);
+        refresh();
+      };
+      field.onchange = () => onPersist();
+    });
+    if (endPrice) {
+      endPrice.oninput = () => {
+        if (endPrice.validity?.badInput) return;
+        const value = endPrice.value === "" ? null : Number(endPrice.value);
+        if (endNode && value === null && years.length > 1) {
+          draft.spotNodes.splice(draft.spotNodes.indexOf(endNode), 1);
+          endNode = undefined;
+        } else if (endNode) {
+          endNode.value = value;
+        } else if (value !== null) {
+          endNode = { year: endYear, value };
+          draft.spotNodes.push(endNode);
+        }
+      };
+      endPrice.onchange = () => { if (!endPrice.validity?.badInput) onPersist(); };
+    }
+    removals.forEach(({ button, node }) => {
+      button.onclick = () => {
+        if (button.disabled) return;
+        const index = draft.spotNodes.indexOf(node);
+        if (index < 0) return;
+        draft.spotNodes.splice(index, 1);
+        onPersist();
+        redraw();
+      };
+    });
+    if (add) add.onclick = () => {
+      const year = availablePriceNodeYear(years, draft.spotNodes);
+      if (year === undefined) return message("可填写的节点年份已用完。", "warn");
+      draft.spotNodes.push({ year, value: null });
+      onPersist();
+      redraw();
+    };
+    refresh();
+  }
+
   function bindWorkspace(options, refs, state, entry, draft, snapshot, comparison) {
     const { documentRef, project, scenario, domain, onChange = () => {}, onPersist = () => {}, onMessage = () => {} } = options;
     const redraw = () => renderWorkspace(options);
@@ -348,10 +436,7 @@
       entry.groupOpen = {};
       return changed;
     };
-    refs.rough.querySelectorAll("[data-rough-node]").forEach((field) => {
-      field.oninput = () => { draft.spotNodes[Number(field.dataset.roughNode)][field.dataset.nodeField] = field.value === "" ? null : Number(field.value); };
-      field.onchange = () => onPersist();
-    });
+    bindPriceNodes(refs.rough, draft, options, redraw, message);
     const capture = refs.rough.querySelector("[data-rough-capture]");
     if (capture) { capture.oninput = () => { draft.captureRate = capture.value === "" ? null : Number(capture.value); }; capture.onchange = () => onPersist(); }
     const source = refs.rough.querySelector("[data-rough-source]");
@@ -390,16 +475,6 @@
     refs.rough.querySelectorAll("[data-rough-group]").forEach((details) => {
       details.ontoggle = () => { entry.groupOpen[details.dataset.roughGroup] = details.open; };
     });
-    refs.rough.querySelectorAll("[data-rough-remove]").forEach((button) => {
-      button.onclick = () => { if (draft.spotNodes.length > 1) draft.spotNodes.splice(Number(button.dataset.roughRemove), 1); onPersist(); redraw(); };
-    });
-    const add = refs.rough.querySelector("[data-rough-add]");
-    if (add) add.onclick = () => {
-      const used = new Set(draft.spotNodes.map((node) => node.year));
-      const year = yearsFor(project).find((value) => !used.has(value));
-      if (year === undefined) return message("测算周期内各年份已有节点。", "warn");
-      draft.spotNodes.push({ year, value: null }); onPersist(); redraw();
-    };
     const save = refs.rough.querySelector("[data-rough-save-shared]");
     if (save) save.onclick = () => {
       if (scenario.locked) return message("当前方案已锁定。", "error");
@@ -412,6 +487,13 @@
     const form = refs.rough.querySelector("#rough-price-form");
     if (form) form.onsubmit = (event) => {
       event.preventDefault();
+      if (refs.rough.querySelector("[data-rough-end-price]")?.validity?.badInput) {
+        return message("请填写有效的末年现货均价。", "error");
+      }
+      const endYear = yearsFor(project).at(-1);
+      const repeatedEnd = Array.from(refs.rough.querySelectorAll('[data-rough-node][data-node-field="year"]'))
+        .some((field) => Number(field.value) === endYear);
+      if (repeatedEnd) return message("末年价格请填写在自动生成的末年节点，其他节点请选择不同年份。", "error");
       const config = scenario.locked ? scenario.config : entry.config;
       const errors = validateShared(project, scenario, config, domain);
       if (errors.length) return message(errors.join(" "), "error");
@@ -485,7 +567,7 @@
       comparison.resultTrace = versions.describeResult(result, run);
     }
     target.innerHTML = mode === "rough"
-      ? roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, options.inputState)
+      ? roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, options.inputState, domain.getDefaultEndPrice)
       : compareHtml(project, snapshots, snapshot, entry, comparison, scenario, result);
     bindWorkspace(options, refs, state, entry, draft, snapshot, comparison);
   }
