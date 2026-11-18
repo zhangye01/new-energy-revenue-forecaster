@@ -20,6 +20,16 @@
     "spotAvgPrice", "capturePrice", "mechanismRatio", "mechanismAdjustment",
     "ltPnlPrice", "envValue", "fee", "otherIncome", "storageSupplement", "fullRevenuePrice"
   ]);
+  const COMPACT_METHOD = "compact-v1";
+  const COMPACT_FIELDS = Object.freeze([
+    ["ltYear1Pnl", "首年交易策略损益"], ["ltTargetPnl", "目标交易策略损益"],
+    ["ltConvergeSpeed", "交易策略损益收敛步长", 0], ["environmentPrice", "环境价值", 0],
+    ["feesNetPrice", "费用及其他净收入"], ["storagePrice", "配储补充收益"]
+  ]);
+  const STRATEGY_KEYS = ["ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed"];
+  const ENV_KEYS = ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"];
+  const FEE_KEYS = ["marketOpFee", "gridAssessFee", "ancillaryFee"];
+  const STORAGE_KEYS = ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"];
 
   function isObject(value) {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -53,6 +63,57 @@
     return { spotNodes: [{ year: project?.startYear ?? null, value: null }], captureRate: 95, sourceNote: "" };
   }
 
+  function sanitizeCompactSettlement(raw) {
+    return Object.fromEntries(COMPACT_FIELDS.filter(([key]) => Object.hasOwn(raw, key))
+      .map(([key]) => [key, isNumber(raw[key]) ? Number(raw[key]) : null]));
+  }
+
+  function effectiveMechanismRatio(config, year) {
+    if (!config.mechanismEnabled) return 0;
+    const months = rules.mechanismActiveMonthsForYear(year, config.mechanismStartYm, config.mechanismEndYm);
+    return Number(config.mechanismRatio) * months / 12;
+  }
+
+  function carriedEnvironmentPrice(project, config, confirmed) {
+    if (scenarioConfig.getEnvValueMode(config) !== "global" || !ENV_KEYS.every((key) => confirmed(key))
+        || !scenarioConfig.validAnnualEntry(config, project, "environment")) return null;
+    const unitValue = rules.getEnvValueAllocation(project, config).unitValuePerMarketMwh;
+    if (unitValue === 0) return 0;
+    if (!confirmed("mechanismEnabled") || validateRoughMechanism(config).length ||
+        (config.mechanismEnabled && !["mechanismRatio", "mechanismStartYm", "mechanismEndYm"].every((key) => confirmed(key)))) return null;
+    const shares = yearsForProject(project).map((year) => effectiveMechanismRatio(config, year));
+    if (!shares.length || shares.some((value) => value !== shares[0])) return null;
+    return (1 - shares[0]) * unitValue;
+  }
+
+  function getCompactSettlementDraft(project, scenario, saved, inputState) {
+    const stored = isObject(saved) ? sanitizeCompactSettlement(saved) : {};
+    const fields = COMPACT_FIELDS.filter(([key]) => key !== "storagePrice" || project?.hasStorage);
+    const config = scenario?.config || {};
+    const confirmed = (key, value = config[key]) => Boolean(inputState?.isConfigConfirmed?.(scenario, key, value));
+    const knownNonnegative = (keys) => keys.every((key) => confirmed(key) && isNumber(config[key]) && Number(config[key]) >= 0);
+    const carried = {};
+    if (scenarioConfig.getLtPricingMode(config) === "auto") {
+      STRATEGY_KEYS.forEach((key) => {
+        if (!confirmed(key) || !isNumber(config[key])) return;
+        if (key !== "ltConvergeSpeed" || config.ltConvergeSpeedUnit === "fixed_step" && Number(config[key]) >= 0) {
+          carried[key] = Number(config[key]);
+        }
+      });
+    }
+    const otherNet = scenarioConfig.getOtherNetIncome(config);
+    if (scenarioConfig.getFeeConfigMode(config) === "global" && otherNet !== null &&
+        confirmed("otherNetIncome", otherNet) && knownNonnegative(FEE_KEYS)) {
+      carried.feesNetPrice = otherNet - FEE_KEYS.reduce((sum, key) => sum + Number(config[key]), 0);
+    }
+    if (project?.hasStorage && knownNonnegative(STORAGE_KEYS)) {
+      carried.storagePrice = STORAGE_KEYS.reduce((sum, key) => sum + Number(config[key]), 0);
+    }
+    carried.environmentPrice = carriedEnvironmentPrice(project, config, confirmed);
+    return Object.fromEntries(fields.map(([key]) => [key, Object.hasOwn(stored, key) ? stored[key]
+      : Number.isFinite(carried[key]) ? carried[key] : null]));
+  }
+
   function sanitizeDraft(raw, project) {
     if (!isObject(raw)) return defaultDraft(project);
     const defaults = defaultDraft(project);
@@ -62,7 +123,8 @@
         value: isNumber(node.value) ? Number(node.value) : null
       })) : defaults.spotNodes,
       captureRate: isNumber(raw.captureRate) ? Number(raw.captureRate) : null,
-      sourceNote: typeof raw.sourceNote === "string" ? raw.sourceNote : ""
+      sourceNote: typeof raw.sourceNote === "string" ? raw.sourceNote : "",
+      ...(isObject(raw.settlement) ? { settlement: sanitizeCompactSettlement(raw.settlement) } : {})
     };
   }
 
@@ -93,10 +155,13 @@
       typeof snapshot.summary[key] === "number" && Number.isFinite(snapshot.summary[key])) ||
         !(snapshot.summary.weightedPrice === null ||
           (typeof snapshot.summary.weightedPrice === "number" && Number.isFinite(snapshot.summary.weightedPrice)))) return false;
+    const compact = snapshot.settlementMethod === COMPACT_METHOD;
+    if (compact && validateCompactSettlement(snapshot.draft.settlement, Boolean(snapshot.sourceContext?.storageContext?.hasStorage)).length) return false;
     const years = new Set();
     return snapshot.rows.every((row) => {
       if (!isObject(row) || !Number.isInteger(row.year) || years.has(row.year) ||
           !ROW_PRICE_KEYS.every((key) => typeof row[key] === "number" && Number.isFinite(row[key])) ||
+          (compact && !Number.isFinite(row.feesNetPrice)) ||
           !(row.energyMwh === null || (typeof row.energyMwh === "number" && Number.isFinite(row.energyMwh) && row.energyMwh >= 0))) return false;
       years.add(row.year);
       return true;
@@ -370,6 +435,45 @@
     return { comparable: true, refined, reason: "", message: refined ? "收益参数已细化，保留原粗算与基准结果对照。" : "" };
   }
 
+  function invalidNumber(source, key, label, min = -Infinity, max = Infinity) {
+    if (!isNumber(source?.[key])) return `${label}不能为空且应为有效数字。`;
+    if (Number(source[key]) < min || Number(source[key]) > max) {
+      return max === 1 ? `${label}应在0%至100%之间。` : `${label}不能为负数。`;
+    }
+    return "";
+  }
+
+  function validateRoughMechanism(config, requireChoice = true) {
+    if (!isObject(config)) return ["当前方案缺少共用结算参数。"];
+    const errors = [];
+    if ((requireChoice || Object.hasOwn(config, "mechanismEnabled")) && typeof config.mechanismEnabled !== "boolean") {
+      errors.push("是否启用机制电价需要明确选择。");
+    }
+    if (!config.mechanismEnabled) return errors;
+    if (Object.hasOwn(config, "mechanismReferenceMode") && !["project_capture", "same_type"].includes(config.mechanismReferenceMode)) {
+      errors.push("机制补差参照口径无效，请明确选择。");
+    }
+    const priceError = invalidNumber(config, "mechanismPrice", "机制电价", 0);
+    if (priceError) errors.push(priceError);
+    if (!isNumber(config.mechanismRatio) || Number(config.mechanismRatio) < 0 || Number(config.mechanismRatio) > 1) {
+      errors.push("机制占比应在0%至100%之间。");
+    }
+    const ymValid = (value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value));
+    if (!ymValid(config.mechanismStartYm) || !ymValid(config.mechanismEndYm) ||
+        rules.monthSerial(config.mechanismStartYm) > rules.monthSerial(config.mechanismEndYm)) {
+      errors.push("请先检查机制执行起止年月。");
+    }
+    if (config.mechanismReferenceMode === "same_type" && !isNumber(config.sameTypeSpread)) {
+      errors.push("同类型机组价差不能为空且应为有效数字。");
+    }
+    return errors;
+  }
+
+  function validateCompactSettlement(settlement, hasStorage) {
+    return COMPACT_FIELDS.filter(([key]) => key !== "storagePrice" || hasStorage)
+      .map(([key, label, minimum]) => invalidNumber(settlement, key, label, minimum)).filter(Boolean);
+  }
+
   function validateConfig(project, config, years = yearsForProject(project), forBaseline = false) {
     const errors = [];
     if (!isObject(config)) return ["当前方案缺少共用结算参数。"];
@@ -380,35 +484,16 @@
     modes.forEach(([key, allowed, label]) => {
       if (Object.hasOwn(config, key) && !allowed.includes(config[key])) errors.push(`${label}无效，请明确选择。`);
     });
-    if (Object.hasOwn(config, "mechanismEnabled") && typeof config.mechanismEnabled !== "boolean") errors.push("是否启用机制电价需要明确选择。");
-    if (config.mechanismEnabled && Object.hasOwn(config, "mechanismReferenceMode")
-        && !["project_capture", "same_type"].includes(config.mechanismReferenceMode)) errors.push("机制补差参照口径无效，请明确选择。");
+    errors.push(...validateRoughMechanism(config, false));
     if (scenarioConfig.getLtPricingMode(config) === "auto" && config.ltConvergeSpeedUnit === "legacy_ratio"
         && Number(config.ltConvergeSpeed) > 1) errors.push("历史收敛比例应在0至1之间。");
     if (project?.hasStorage && !validStorageContext(storageContext(project))) {
       errors.push("配储功率和时长须为大于0的有效数字，请先核对项目基础信息。");
     }
-    const validateNumber = (source, key, label, min = -Infinity, max = Infinity) => {
-      if (!isNumber(source?.[key])) {
-        errors.push(`${label}不能为空且应为有效数字。`);
-      } else if (Number(source[key]) < min || Number(source[key]) > max) {
-        errors.push(max === 1 ? `${label}应在0%至100%之间。` : `${label}不能为负数。`);
-      }
+    const validateNumber = (source, key, label, min, max) => {
+      const error = invalidNumber(source, key, label, min, max);
+      if (error) errors.push(error);
     };
-    if (config.mechanismEnabled) {
-      validateNumber(config, "mechanismPrice", "机制电价", 0);
-      if (!isNumber(config.mechanismRatio) || Number(config.mechanismRatio) < 0 || Number(config.mechanismRatio) > 1) {
-        errors.push("机制占比应在0%至100%之间。");
-      }
-      const ymValid = (value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value));
-      if (!ymValid(config.mechanismStartYm) || !ymValid(config.mechanismEndYm) ||
-          rules.monthSerial(config.mechanismStartYm) > rules.monthSerial(config.mechanismEndYm)) {
-        errors.push("请先检查机制执行起止年月。");
-      }
-    }
-    if (config.mechanismEnabled && config.mechanismReferenceMode === "same_type" && !isNumber(config.sameTypeSpread)) {
-      errors.push("同类型机组价差不能为空且应为有效数字。");
-    }
     if (scenarioConfig.getLtPricingMode(config) === "auto") {
       validateNumber(config, "ltYear1Pnl", "首年交易策略损益");
       validateNumber(config, "ltTargetPnl", "目标交易策略损益");
@@ -520,12 +605,49 @@
     });
   }
 
-  function calculateRough(project, scenario, draft, options = {}) {
+  function compactCalculationConfig(config, settlement) {
+    const { mechanismEnabled, mechanismPrice, mechanismRatio, mechanismStartYm, mechanismEndYm } = config;
+    return {
+      mechanismEnabled, mechanismPrice, mechanismRatio, mechanismStartYm, mechanismEndYm,
+      mechanismReferenceMode: config.mechanismReferenceMode === "same_type" ? "same_type" : "project_capture",
+      sameTypeSpread: Number(config.sameTypeSpread) || 0,
+      ltPricingMode: "auto", ltConvergeSpeedUnit: "fixed_step", ...settlement
+    };
+  }
+
+  function legacySettlementComponents(project, config, year, mechanismRatio) {
+    const fees = rules.getFeeConfigForYear(project, config, year);
+    return {
+      envValue: (1 - mechanismRatio) * rules.getEnvValueAllocation(project, config, year).unitValuePerMarketMwh,
+      fee: fees.marketOpFee + fees.gridAssessFee + fees.ancillaryFee + fees.otherFee,
+      otherIncome: fees.otherIncome,
+      storageSupplement: project.hasStorage ? STORAGE_KEYS.reduce((sum, key) => sum + (Number(config[key]) || 0), 0) : 0
+    };
+  }
+
+  function compactSettlementComponents(project, config) {
+    // The signed net is the actual compact input. Retain fee and otherIncome only
+    // as compatible row fields so existing readers still reconcile the same total.
+    return {
+      envValue: config.environmentPrice,
+      fee: Math.max(0, -config.feesNetPrice),
+      otherIncome: Math.max(0, config.feesNetPrice),
+      storageSupplement: project.hasStorage ? config.storagePrice : 0,
+      feesNetPrice: config.feesNetPrice
+    };
+  }
+
+  function calculateRoughVersion(project, scenario, draft, options, compact) {
     const years = yearsForProject(project);
     const endYear = years.at(-1);
-    const errors = years.length ? validateConfig(project, scenario?.config, years) : ["项目测算起始年份或年限无效。"];
-    if (!scenario?.id) errors.push("请先选择测算方案。");
     const input = sanitizeDraft(draft, project);
+    const errors = !years.length ? ["项目测算起始年份或年限无效。"]
+      : compact ? [...validateRoughMechanism(scenario?.config), ...validateCompactSettlement(input.settlement, project.hasStorage)]
+        : validateConfig(project, scenario?.config, years);
+    if (compact && project?.hasStorage && !validStorageContext(storageContext(project))) {
+      errors.push("配储功率和时长须为大于0的有效数字，请先核对项目基础信息。");
+    }
+    if (!scenario?.id) errors.push("请先选择测算方案。");
     if (!isNumber(input.captureRate) || input.captureRate < 0 || input.captureRate > 150) {
       errors.push("预期捕获率应在0%至150%之间。");
     }
@@ -548,29 +670,21 @@
     if (lastNode.year !== endYear) nodes.push({ year: endYear, value: lastNode.value });
     else if (lastNode.value === null) lastNode.value = getDefaultEndPrice(project, nodes);
     const { carbonEnabled, carbonPrice, carbonRealizeRatio, ...greenValueConfig } = scenario.config;
-    const config = normalizedConfig(project, greenValueConfig);
+    if (compact && !project.hasStorage) delete input.settlement.storagePrice;
+    const config = compact ? compactCalculationConfig(scenario.config, input.settlement) : normalizedConfig(project, greenValueConfig);
     input.spotNodes = nodes;
     const spotPrices = interpolateSpotPrices(years, nodes);
     const rows = years.map((year, index) => {
       const spotAvgPrice = spotPrices[index];
       const capturePrice = spotAvgPrice * input.captureRate / 100;
-      const months = config.mechanismEnabled
-        ? rules.mechanismActiveMonthsForYear(year, config.mechanismStartYm, config.mechanismEndYm) : 0;
-      const mechanismRatio = config.mechanismEnabled ? Number(config.mechanismRatio) * months / 12 : 0;
+      const mechanismRatio = effectiveMechanismRatio(config, year);
       const mechanismAdjustment = mechanismRatio * ((Number(config.mechanismPrice) || 0) - rules.mechanismReferencePrice(config, capturePrice));
       const ltPnlPrice = rules.tradeStrategyPnlPriceForYear(config, index + 1, year);
-      const envValue = (1 - mechanismRatio) * rules.getEnvValueAllocation(project, config, year).unitValuePerMarketMwh;
-      const fees = rules.getFeeConfigForYear(project, config, year);
-      const fee = fees.marketOpFee + fees.gridAssessFee + fees.ancillaryFee + fees.otherFee;
-      const storageSupplement = project.hasStorage ? [
-        config.storageArbitragePrice, config.storageCapacityCompPrice,
-        config.storageAncillaryRevenuePrice, config.storageOtherRevenuePrice
-      ].reduce((sum, value) => sum + (Number(value) || 0), 0) : 0;
+      const components = compact ? compactSettlementComponents(project, config) : legacySettlementComponents(project, config, year, mechanismRatio);
+      const { envValue, fee, otherIncome, storageSupplement } = components;
       return {
-        year, spotAvgPrice, capturePrice, mechanismRatio, mechanismAdjustment, ltPnlPrice,
-        envValue, fee, otherIncome: fees.otherIncome, storageSupplement,
-        fullRevenuePrice: capturePrice + mechanismAdjustment + (1 - mechanismRatio) * ltPnlPrice +
-          envValue + storageSupplement - fee + fees.otherIncome,
+        year, spotAvgPrice, capturePrice, mechanismRatio, mechanismAdjustment, ltPnlPrice, ...components,
+        fullRevenuePrice: capturePrice + mechanismAdjustment + (1 - mechanismRatio) * ltPnlPrice + envValue + storageSupplement - fee + otherIncome,
         energyMwh: storedEnergyMwh(project, year)
       };
     });
@@ -583,6 +697,7 @@
       scenarioName: scenario.name || "当前方案",
       createdAt: options.createdAt || new Date().toISOString(),
       spotPriceMethod: "linear",
+      ...(compact ? { settlementMethod: COMPACT_METHOD } : {}),
       draft: clone(input),
       config: clone(scenario.config),
       calculationConfig: clone(config),
@@ -597,6 +712,14 @@
       }
     });
     return { ok: true, errors: [], snapshot };
+  }
+
+  function calculateRough(project, scenario, draft, options = {}) {
+    return calculateRoughVersion(project, scenario, draft, options, false);
+  }
+
+  function calculateCompactRough(project, scenario, draft, options = {}) {
+    return calculateRoughVersion(project, scenario, draft, options, true);
   }
 
   function failedComparison(errors, stale = false) {
@@ -815,5 +938,7 @@
     };
   }
 
-  return Object.freeze({ defaultDraft, getDefaultEndPrice, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, snapshotState, contextFingerprint, currentContextFingerprint, validateConfig, validateBaselineConfig });
+  return Object.freeze({ defaultDraft, getDefaultEndPrice, getCompactSettlementDraft, sanitizeWorkspace, calculateRough, calculateCompactRough,
+    compareSnapshot, compareBaselineResult, stampBaselineResult, baselineResultState, snapshotState, contextFingerprint, currentContextFingerprint,
+    validateRoughMechanism, validateConfig, validateBaselineConfig });
 });

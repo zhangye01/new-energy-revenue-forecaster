@@ -112,6 +112,36 @@ const { createBrowserSandbox } = require("../scripts/module-load-smoke");
   assert.equal(workflow.roughCompleted, true);
   assert.equal(workflow.validationCompleted, true);
 
+  const compactProject = sandbox.sanitizeProject(JSON.parse(JSON.stringify(reloaded)), 4);
+  const compactScenario = compactProject.scenarios.find((item) => item.id === compactProject.activeScenarioId);
+  const compactBaseline = compactProject.resultsByScenario[compactScenario.id];
+  const compactSourceBefore = JSON.stringify({ scenario: compactScenario, baseline: compactBaseline,
+    legacy: compactProject.roughPrice.snapshots[0] });
+  const compactDraft = { ...draft, settlement: { ltYear1Pnl: 8, ltTargetPnl: 2, ltConvergeSpeed: 3,
+    environmentPrice: 7, feesNetPrice: -11 } };
+  const compact = sandbox.NE_ROUGH_PRICE.calculateCompactRough(compactProject, compactScenario, compactDraft,
+    { id: "compact-rough-integration" });
+  assert.equal(compact.ok, true, compact.errors.join("；"));
+  assert.equal(compact.snapshot.rows[0].ltPnlPrice, 8);
+  assert.equal(compact.snapshot.rows[1].ltPnlPrice, 5);
+  for (const row of compact.snapshot.rows) {
+    assert.equal(row.envValue, 7);
+    assert.equal(row.feesNetPrice, -11);
+    const expected = row.capturePrice + row.mechanismAdjustment + (1 - row.mechanismRatio) * row.ltPnlPrice + 7 - 11;
+    assert.ok(Math.abs(row.fullRevenuePrice - expected) < 1e-9);
+  }
+  const compactCompare = sandbox.NE_ROUGH_PRICE.compareBaselineResult(compactProject, compactScenario, compact.snapshot, compactBaseline);
+  assert.equal(compactCompare.ok, true, compactCompare.errors.join("；"));
+  assert.equal(compactCompare.summary.weightedRough, compact.snapshot.summary.weightedPrice);
+  assert.equal(compactCompare.summary.weightedFine, compactBaseline.avgFullRevenuePrice);
+  assert.equal(JSON.stringify({ scenario: compactScenario, baseline: compactBaseline,
+    legacy: compactProject.roughPrice.snapshots[0] }), compactSourceBefore);
+  compactProject.roughPrice.snapshots.unshift(compact.snapshot);
+  compactProject.roughPrice.draftsByScenario[compactScenario.id] = compactDraft;
+  const compactReloaded = sandbox.sanitizeProject(JSON.parse(JSON.stringify(compactProject)), 4);
+  assert.deepEqual(JSON.stringify(compactReloaded.roughPrice.snapshots), JSON.stringify(compactProject.roughPrice.snapshots));
+  assert.equal(compactReloaded.roughPrice.draftsByScenario[compactScenario.id].settlement.feesNetPrice, -11);
+
   state.projects = [reloaded]; state.activeProjectId = reloaded.id;
   const activeScenario = reloaded.scenarios.find((item) => item.id === reloaded.activeScenarioId);
   const savedBaseline = reloaded.resultsByScenario[activeScenario.id];

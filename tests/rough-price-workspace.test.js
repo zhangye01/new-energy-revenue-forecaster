@@ -43,6 +43,7 @@ function documentFixture() {
     save: new Element(), message: new Element(), dirty: new Element(), add: new Element(),
     threshold: new Element(), comparisonSummary: new Element(), snapshot: new Element()
   };
+  controls.settlement = Object.fromEntries(Object.keys(compactInputs).map((key) => [key, new Element({ roughSettlement: key })]));
   rough.selectors = {
     "[data-rough-capture]": controls.capture, "[data-rough-source]": controls.source,
     "[data-rough-end-price]": controls.endPrice,
@@ -50,10 +51,21 @@ function documentFixture() {
     "[data-rough-message]": controls.message, "[data-rough-dirty]": controls.dirty,
     "[data-rough-add]": controls.add
   };
-  rough.groups = { "[data-rough-node]": [controls.node], "[data-shared-key]": [controls.sharedPrice] };
+  rough.groups = { "[data-rough-node]": [controls.node], "[data-shared-key]": [controls.sharedPrice],
+    "[data-rough-settlement]": Object.values(controls.settlement) };
   compare.selectors = { "[data-rough-threshold]": controls.threshold, "[data-rough-comparison-summary]": controls.comparisonSummary };
   compare.groups = { "[data-rough-snapshot]": [controls.snapshot] };
   return { documentRef, rough, compare, ids, buttons, controls };
+}
+
+const compactInputs = { ltYear1Pnl: 8, ltTargetPnl: 2, ltConvergeSpeed: 2, environmentPrice: 11, feesNetPrice: -15, storagePrice: 4 };
+
+function fillSettlement(fixture, values = compactInputs) {
+  for (const [key, value] of Object.entries(values)) {
+    const field = fixture.controls.settlement[key];
+    field.value = value === null ? "" : String(value);
+    field.oninput();
+  }
 }
 
 function projectFixture() {
@@ -213,15 +225,13 @@ assert.doesNotMatch(fixture.rough.innerHTML, /粗算.*当前项目|class="rough-
   "project identity is presented once in the shared workflow context");
 assert.match(fixture.rough.innerHTML, /机制电价/);
 assert.match(fixture.rough.innerHTML, /data-shared-key="mechanismPrice"[^>]* min="0"/);
-assert.match(fixture.rough.innerHTML, /未确认参数保留填写/);
 assert.match(fixture.rough.innerHTML, /data-rough-group="mechanism" open/);
-assert.match(fixture.rough.innerHTML, /data-rough-group="environment" open/);
-assert.doesNotMatch(fixture.rough.innerHTML, /data-shared-key="carbon(?:Enabled|Price|RealizeRatio)"/,
-  "onshore projects do not show inapplicable carbon fields as pending input");
-assert.match(fixture.rough.innerHTML, /data-rough-group="storage" open/);
-assert.match(fixture.rough.innerHTML, /data-shared-key="otherNetIncome"[^>]*step="any"(?![^>]* min=)/);
-assert.match(fixture.rough.innerHTML, /data-shared-key="marketOpFee"[^>]* min="0"/);
-assert.doesNotMatch(fixture.rough.innerHTML, /data-shared-key="other(Fee|Income)"/);
+assert.deepEqual(Array.from(fixture.rough.innerHTML.matchAll(/data-rough-settlement="([^"]+)"/g), (match) => match[1]), Object.keys(compactInputs));
+assert.match(fixture.rough.innerHTML, /每年收敛步长（元\/MWh\/年）/);
+assert.match(fixture.rough.innerHTML, /data-rough-settlement="environmentPrice" value="" min="0"/);
+assert.match(fixture.rough.innerHTML, /data-rough-settlement="feesNetPrice" value="">/);
+assert.match(fixture.rough.innerHTML, /data-rough-settlement="storagePrice" value="">/);
+assert.doesNotMatch(fixture.rough.innerHTML, /逐年分项|配置方式|绿证|绿电|碳收益|市场运营费|配储套利/);
 assert.doesNotMatch(fixture.rough.innerHTML, /is-confirmed/);
 assert.equal(comparisons, 0);
 assert.equal(project.roughPrice.draftsByScenario[scenario.id].spotNodes[0].value, null);
@@ -238,6 +248,10 @@ fixture.controls.source.onchange();
 assert.equal(persistence, 3);
 assert.equal(changes, 0, "draft changes persist without replacing focused controls");
 assert.equal(project.roughPrice.draftsByScenario[scenario.id].captureRate, 90);
+fillSettlement(fixture);
+fixture.controls.settlement.feesNetPrice.onchange();
+assert.equal(persistence, 4);
+assert.deepEqual(project.roughPrice.draftsByScenario[scenario.id].settlement, compactInputs);
 
 const originalPrice = scenario.config.mechanismPrice;
 fixture.controls.sharedPrice.value = "400";
@@ -264,19 +278,17 @@ assert.equal(project.roughPrice.snapshots.length, 1);
 const snapshot = project.roughPrice.snapshots[0];
 assert.equal(snapshot.config.mechanismPrice, 400);
 assert.equal(snapshot.draft.captureRate, 90);
+assert.equal(snapshot.settlementMethod, "compact-v1");
+assert.deepEqual(snapshot.draft.settlement, compactInputs);
 assert.equal(snapshot.rows[0].capturePrice, 270);
 assert.equal(comparisons, 0, "rough calculations do not run full precision comparisons");
 assert.match(fixture.rough.innerHTML, /年度粗算结果/);
 assert.match(fixture.rough.innerHTML, /导出粗算 CSV/);
-assert.match(fixture.rough.innerHTML, /<th scope="col">三项费用<\/th><th scope="col">其他净收入<\/th>/);
-assert.doesNotMatch(fixture.rough.innerHTML, /<th scope="col">(?:综合扣费|其他费用|其他收入)<\/th>/);
+assert.match(fixture.rough.innerHTML, /年度粗算电价趋势/);
+assert.doesNotMatch(fixture.rough.innerHTML, /年度价格及结算贡献|<table|下方年度明细/);
 assert.ok(inputState.isConfigConfirmed(scenario, "mechanismPrice"));
 assert.match(fixture.rough.innerHTML, /data-rough-group="mechanism" open/,
   "only the edited mechanism price is confirmed; unchanged defaults remain visible");
-assert.match(fixture.rough.innerHTML, /data-rough-group="environment" open/,
-  "generating rough results does not confirm untouched environmental defaults");
-assert.match(fixture.rough.innerHTML, /data-rough-group="storage" open/,
-  "storage defaults remain pending until explicitly confirmed");
 for (const key of ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"]) {
   assert.equal(inputState.isConfigConfirmed(scenario, key), false, `${key} is not confirmed merely by generating rough results`);
 }
@@ -333,35 +345,27 @@ workspace.renderWorkspace(defaultsOptions);
 defaultsFixture.controls.node.value = "320";
 defaultsFixture.controls.node.oninput();
 defaultsFixture.controls.form.onsubmit({ preventDefault() {} });
-assert.deepEqual(defaultsData.scenario.confirmedConfig, {});
+assert.match(defaultsFixture.controls.message.textContent, /首年交易策略损益/);
+assert.equal(defaultsFixture.controls.settlement.ltYear1Pnl.focused, true);
+assert.equal(defaultsData.project.roughPrice.snapshots.length, 0, "blank rough inputs do not silently become zero");
+const originalScenario = JSON.stringify(defaultsData.scenario);
+fillSettlement(defaultsFixture, Object.fromEntries(Object.keys(compactInputs).map((key) => [key, 0])));
+defaultsFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.equal(defaultsData.project.roughPrice.snapshots.length, 1, "explicit zeros are valid rough assumptions");
+assert.equal(JSON.stringify(defaultsData.scenario), originalScenario, "editing compact assumptions does not change formal values or confirmations");
 workspace.renderWorkspace(defaultsOptions);
 defaultsFixture.controls.form.onsubmit({ preventDefault() {} });
 assert.equal(require("../src/ui/scenario-form").buildRefinementState(defaultsData).confirmed, 0);
 const snapshotBeforeConfirmation = JSON.stringify(defaultsData.project.roughPrice.snapshots);
 defaultsFixture.controls.save.onclick();
-assert.ok(inputState.isConfigConfirmed(defaultsData.scenario, "otherNetIncome"), "explicit whole-page confirmation accepts even unchanged defaults");
+assert.ok(inputState.isConfigConfirmed(defaultsData.scenario, "mechanismPrice"), "explicit mechanism confirmation accepts unchanged mechanism defaults");
+assert.equal(inputState.isConfigConfirmed(defaultsData.scenario, "otherNetIncome"), false, "mechanism confirmation never approves formal adjustments");
 assert.equal(JSON.stringify(defaultsData.project.roughPrice.snapshots), snapshotBeforeConfirmation, "confirmation never rewrites existing rough snapshots");
 const restoredDefaults = inputState.sanitizeScenario(defaultsData.project, defaultsData.scenario);
-assert.ok(inputState.isConfigConfirmed(restoredDefaults, "otherNetIncome"), "explicit default confirmation survives hydration");
+assert.ok(inputState.isConfigConfirmed(restoredDefaults, "mechanismPrice"), "explicit mechanism confirmation survives hydration");
 workspace.renderWorkspace(defaultsOptions);
 defaultsFixture.controls.form.onsubmit({ preventDefault() {} });
-assert.ok(inputState.isConfigConfirmed(defaultsData.scenario, "otherNetIncome"), "subsequent generation preserves prior confirmation");
-
-// Switching to yearly inputs auto-fills suggested values; one annual edit cannot approve all years.
-const annualFixture = documentFixture();
-const annualData = projectFixture();
-const annualMode = new Element({ sharedKey: "ltPricingMode" }); annualMode.type = "select-one";
-const annualValue = new Element({ sharedKey: "value", sharedGroup: "ltManualPricesByYear", sharedYear: "2027" });
-annualFixture.rough.groups["[data-shared-key]"].push(annualMode, annualValue);
-const annualOptions = { documentRef: annualFixture.documentRef, ...annualData, domain, inputState };
-workspace.renderWorkspace(annualOptions);
-annualMode.value = "manual"; annualMode.onchange();
-annualFixture.controls.node.value = "320"; annualFixture.controls.node.oninput();
-annualValue.value = "12"; annualValue.oninput();
-annualFixture.controls.form.onsubmit({ preventDefault() {} });
-assert.ok(inputState.isConfigConfirmed(annualData.scenario, "ltPricingMode"));
-assert.equal(inputState.isConfigConfirmed(annualData.scenario, "ltManualPricesByYear"), false);
-assert.equal(require("../src/ui/scenario-form").buildRefinementState(annualData).fields.ltManualPricesByYear, "pending");
+assert.ok(inputState.isConfigConfirmed(defaultsData.scenario, "mechanismPrice"), "subsequent generation preserves prior confirmation");
 
 const thresholdFixture = documentFixture();
 const thresholdData = projectFixture();
@@ -424,6 +428,8 @@ lockedFixture.controls.save.onclick();
 assert.match(lockedFixture.controls.message.textContent, /已锁定/);
 lockedFixture.controls.node.value = "320";
 lockedFixture.controls.node.oninput();
+assert.doesNotMatch(lockedFixture.rough.innerHTML, /data-rough-settlement="[^"]+"[^>]* disabled/);
+fillSettlement(lockedFixture);
 lockedFixture.controls.form.onsubmit({ preventDefault() {} });
 assert.equal(lockedData.project.roughPrice.snapshots.length, 1, "locked scenarios still allow independent rough assumptions");
 
@@ -443,6 +449,7 @@ assert.match(lockTransitionFixture.rough.innerHTML,
 assert.match(lockTransitionFixture.rough.innerHTML, /未保存的共用参数调整已撤销/);
 lockTransitionFixture.controls.node.value = "300";
 lockTransitionFixture.controls.node.oninput();
+fillSettlement(lockTransitionFixture);
 lockTransitionFixture.controls.form.onsubmit({ preventDefault() {} });
 assert.equal(lockTransitionData.project.roughPrice.snapshots[0].config.mechanismPrice, savedMechanismPrice,
   "the generated locked snapshot matches the read-only parameter value");
@@ -453,194 +460,114 @@ assert.equal(lockTransitionData.scenario.config.mechanismPrice, savedMechanismPr
   "unlocking does not revive discarded shared edits");
 
 const manualData = projectFixture();
-Object.assign(manualData.scenario.config, { envValueMode: "manual", feeConfigMode: "manual", ltPricingMode: "manual",
-  ltManualPricesByYear: { 2027: 11, 2028: 8 }, envManualValuesByYear: {
-    2027: { greenCertPrice: 20, greenCertRealizeRatio: 0.6, greenPremiumPrice: 12, greenPremiumRealizeRatio: 0.3, carbonEnabled: false, carbonPrice: 0, carbonRealizeRatio: 0 },
-    2028: { greenCertPrice: 23, greenCertRealizeRatio: 0.7, greenPremiumPrice: 13, greenPremiumRealizeRatio: 0.2, carbonEnabled: false, carbonPrice: 0, carbonRealizeRatio: 0 }
-  }, feeManualValuesByYear: { 2027: { marketOpFee: 1, gridAssessFee: 2, ancillaryFee: 3, otherFee: 4, otherIncome: 5 },
-    2028: { marketOpFee: 2, gridAssessFee: 3, ancillaryFee: 4, otherFee: 5, otherIncome: 6 } } });
-const manualFixture = documentFixture();
-const manualBefore = JSON.stringify(manualData.scenario.config);
-workspace.renderWorkspace({ documentRef: manualFixture.documentRef, ...manualData, domain });
-assert.match(manualFixture.rough.innerHTML, /data-shared-group="envManualValuesByYear"/);
-assert.match(manualFixture.rough.innerHTML, /data-shared-key="greenCertRealizeRatio"[^>]*value="60"/);
-assert.match(manualFixture.rough.innerHTML, /data-shared-group="feeManualValuesByYear"/);
-assert.match(manualFixture.rough.innerHTML, /data-shared-key="otherNetIncome"[^>]*data-shared-year="2027"[^>]*value="1"/);
-assert.doesNotMatch(manualFixture.rough.innerHTML, /data-shared-key="other(Fee|Income)"/);
-assert.doesNotMatch(manualFixture.rough.innerHTML, /data-shared-key="carbon(?:Enabled|Price|RealizeRatio)"/,
-  "manual onshore years also omit inapplicable carbon fields");
-assert.equal(JSON.stringify(manualData.scenario.config), manualBefore, "rendering preserves independent manual components");
-assert.deepEqual(workspace.validateShared(manualData.project, manualData.scenario, manualData.scenario.config, domain), []);
-manualData.scenario.config.envManualValuesByYear[2027].greenPremiumRealizeRatio = 0.8;
-assert.match(workspace.validateShared(manualData.project, manualData.scenario, manualData.scenario.config, domain).join(" "), /比例合计不能超过100%|配置不完整/);
-
-for (const mode of ["global", "manual"]) {
-  const offshoreFixture = documentFixture();
-  const offshoreData = projectFixture();
-  offshoreData.project.siteType = "offshore";
-  offshoreData.scenario.config.envValueMode = mode;
-  Object.assign(offshoreData.scenario.config, { carbonEnabled: true, carbonPrice: 8, carbonRealizeRatio: 0.1 });
-  workspace.renderWorkspace({ documentRef: offshoreFixture.documentRef, ...offshoreData, domain });
-  assert.doesNotMatch(offshoreFixture.rough.innerHTML, /碳收益|data-shared-key="carbon(?:Enabled|Price|RealizeRatio)"/,
-    `rough offshore ${mode} removes carbon controls and help`);
-  for (const key of ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"]) {
-    assert.match(offshoreFixture.rough.innerHTML, new RegExp(`data-shared-key="${key}"`));
+Object.assign(manualData.scenario.config, {
+  envValueMode: "manual", feeConfigMode: "manual", ltPricingMode: "manual",
+  ltManualPricesByYear: { 2027: 11, 2028: 8 },
+  envManualValuesByYear: {
+    2027: { greenCertPrice: 20, greenCertRealizeRatio: 0.6, greenPremiumPrice: 12, greenPremiumRealizeRatio: 0.3,
+      carbonEnabled: true, carbonPrice: 8, carbonRealizeRatio: 0.1 },
+    2028: { greenCertPrice: 23, greenCertRealizeRatio: 0.7, greenPremiumPrice: 13, greenPremiumRealizeRatio: 0.2 }
+  },
+  feeManualValuesByYear: {
+    2027: { marketOpFee: 1, gridAssessFee: 2, ancillaryFee: 3, otherFee: 4, otherIncome: 5 },
+    2028: { marketOpFee: 2, gridAssessFee: 3, ancillaryFee: 4, otherFee: 5, otherIncome: 6 }
   }
-}
+});
+inputState.confirmConfig(manualData.scenario, ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]);
+const manualFixture = documentFixture();
+const manualBefore = JSON.stringify(manualData.scenario);
+const manualOptions = { documentRef: manualFixture.documentRef, ...manualData, domain, inputState };
+workspace.renderWorkspace(manualOptions);
+assert.deepEqual(Array.from(manualFixture.rough.innerHTML.matchAll(/data-rough-settlement="([^"]+)"/g), (match) => match[1]), Object.keys(compactInputs));
+assert.match(manualFixture.rough.innerHTML, /data-rough-settlement="ltYear1Pnl" value=""/);
+assert.match(manualFixture.rough.innerHTML, /data-rough-settlement="environmentPrice" value=""/);
+assert.match(manualFixture.rough.innerHTML, /data-rough-settlement="feesNetPrice" value=""/);
+assert.doesNotMatch(manualFixture.rough.innerHTML, /data-shared-year=|年度分项|绿证|绿电|碳收益|市场运营费|容量补偿/);
+manualFixture.controls.node.value = "300";
+manualFixture.controls.node.oninput();
+fillSettlement(manualFixture, { ...compactInputs, environmentPrice: -1 });
+manualFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.match(manualFixture.controls.message.textContent, /环境价值/);
+assert.equal(manualData.project.roughPrice.snapshots.length, 0);
+fillSettlement(manualFixture, { environmentPrice: 12 });
+manualFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.equal(manualData.project.roughPrice.snapshots.length, 1);
+assert.equal(JSON.stringify(manualData.scenario), manualBefore, "compact values leave manual plan details and confirmation metadata untouched");
 
-const retiredFixture = documentFixture();
-const retired = projectFixture();
-retired.project.siteType = "offshore";
-const legacyCarbon = { carbonEnabled: true, carbonPrice: 8, carbonRealizeRatio: 0.1 };
-const legacyRow = { greenCertPrice: 20, greenCertRealizeRatio: 0.6, greenPremiumPrice: 12,
-  greenPremiumRealizeRatio: 0.3, ...legacyCarbon };
-Object.assign(retired.scenario.config, legacyRow, { envManualValuesByYear: { 2027: legacyRow } });
-const archivedSnapshot = domain.calculateRough(retired.project, retired.scenario, {
+const legacyFixture = documentFixture();
+const legacyData = projectFixture();
+const legacyConfig = legacyData.scenario.config;
+delete legacyConfig.otherNetIncome;
+Object.assign(legacyConfig, {
+  marketOpFee: 7, gridAssessFee: 8, ancillaryFee: 18, otherFee: 7.25, otherIncome: 3.25,
+  carbonEnabled: true, carbonPrice: 8, carbonRealizeRatio: 0.1
+});
+const legacySnapshot = domain.calculateRough(legacyData.project, legacyData.scenario, {
   spotNodes: [{ year: 2027, value: 300 }], captureRate: 95
 }).snapshot;
-assert.ok(archivedSnapshot);
-retired.project.roughPrice = domain.sanitizeWorkspace({ snapshots: [archivedSnapshot] }, retired.project);
-const retiredSnapshotBefore = JSON.stringify(retired.project.roughPrice.snapshots[0]);
-const envMode = new Element({ sharedKey: "envValueMode" });
-envMode.type = "select-one";
-const greenCert = new Element({ sharedKey: "greenCertPrice", sharedGroup: "envManualValuesByYear", sharedYear: "2027" });
-retiredFixture.rough.groups["[data-shared-key]"].push(envMode, greenCert);
-workspace.renderWorkspace({ documentRef: retiredFixture.documentRef, ...retired, domain, inputState });
-envMode.value = "manual";
-envMode.onchange();
-greenCert.value = "24";
-greenCert.oninput();
-retiredFixture.controls.save.onclick();
-assert.equal(retired.scenario.config.envValueMode, "manual");
-assert.deepEqual(retired.scenario.config.envManualValuesByYear[2027], { ...legacyRow, greenCertPrice: 24 });
-assert.deepEqual(Object.keys(retired.scenario.config.envManualValuesByYear[2028]).sort(),
-  ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"].sort());
-for (const [key, value] of Object.entries(legacyCarbon)) assert.equal(retired.scenario.config[key], value);
-assert.equal(JSON.stringify(retired.project.roughPrice.snapshots[0]), retiredSnapshotBefore, "green value edits preserve the original rough snapshot");
-
-const netIncomeFixture = documentFixture();
-const netIncomeData = projectFixture();
-const netConfig = netIncomeData.scenario.config;
-delete netConfig.otherNetIncome;
-Object.assign(netConfig, { marketOpFee: 7, gridAssessFee: 8, ancillaryFee: 18, otherFee: 7.25, otherIncome: 3.25,
-  feeManualValuesByYear: { 2027: { marketOpFee: 4, gridAssessFee: 1, ancillaryFee: 2, otherFee: 6.5, otherIncome: 2 } } });
-const netSnapshot = domain.calculateRough(netIncomeData.project, netIncomeData.scenario, {
-  spotNodes: [{ year: 2027, value: 300 }], captureRate: 95
-}).snapshot;
-assert.ok(netSnapshot);
-netIncomeData.project.roughPrice = domain.sanitizeWorkspace({ snapshots: [netSnapshot] }, netIncomeData.project);
-const beforeNetSnapshot = JSON.stringify(netIncomeData.project.roughPrice.snapshots[0]);
-const netMode = new Element({ sharedKey: "feeConfigMode" }); netMode.type = "select-one";
-const netScalar = new Element({ sharedKey: "otherNetIncome" });
-const netYear = new Element({ sharedKey: "otherNetIncome", sharedGroup: "feeManualValuesByYear", sharedYear: "2027" });
-netIncomeFixture.rough.groups["[data-shared-key]"].push(netMode, netScalar, netYear);
-const netOptions = { documentRef: netIncomeFixture.documentRef, ...netIncomeData, domain, inputState };
-workspace.renderWorkspace(netOptions);
-assert.match(netIncomeFixture.rough.innerHTML, /data-shared-key="otherNetIncome"[^>]*value="-4"/);
-assert.match(netIncomeFixture.rough.innerHTML, /为正计入收入，为负计入费用/);
-netScalar.value = "6"; netScalar.oninput();
-assert.equal(workspace.hasUnsubmittedChanges(netIncomeFixture.documentRef, [netIncomeData.project]), true);
-netScalar.value = "-4"; netScalar.oninput();
-assert.equal(workspace.hasUnsubmittedChanges(netIncomeFixture.documentRef, [netIncomeData.project]), false);
-netIncomeFixture.controls.save.onclick();
-assert.equal(Object.hasOwn(netIncomeData.scenario.config, "otherNetIncome"), false, "confirming a derived value keeps the old scalar fields");
-assert.equal(inputState.isConfigConfirmed(netIncomeData.scenario, "otherNetIncome"), true);
-netScalar.value = "-7"; netScalar.oninput();
-netIncomeFixture.controls.save.onclick();
-assert.deepEqual([netIncomeData.scenario.config.otherNetIncome, netIncomeData.scenario.config.otherFee, netIncomeData.scenario.config.otherIncome], [-7, 7.25, 3.25]);
-netMode.value = "manual"; netMode.onchange();
-assert.match(netIncomeFixture.rough.innerHTML, /data-shared-key="otherNetIncome"[^>]*data-shared-year="2027"[^>]*value="-4.5"/);
-assert.match(netIncomeFixture.rough.innerHTML, /data-shared-key="otherNetIncome"[^>]*data-shared-year="2028"[^>]*value="-7"/);
-netYear.value = "1"; netYear.oninput();
-netIncomeFixture.controls.save.onclick();
-assert.deepEqual(netIncomeData.scenario.config.feeManualValuesByYear[2027],
-  { marketOpFee: 4, gridAssessFee: 1, ancillaryFee: 2, otherFee: 6.5, otherIncome: 2, otherNetIncome: 1 });
-assert.equal(netIncomeData.scenario.config.feeManualValuesByYear[2028].otherNetIncome, -7);
-workspace.renderWorkspace(netOptions);
-assert.match(netIncomeFixture.rough.innerHTML, /<td>33\.00<\/td><td>-4\.00<\/td><td><strong>/,
-  "旧粗算展示按原版本参数计算的净额，不读取现场编辑的净额");
-const historicNetCsv = workspace.buildRoughCsv(netIncomeData.project.roughPrice.snapshots[0]);
-for (const row of netSnapshot.rows) {
-  assert.equal(row.fee - row.otherIncome, 33 - (-4), "合并后的费用净额应与保存结果对平");
-  assert.ok(historicNetCsv.includes(`"33","-4","${row.fullRevenuePrice}","${row.energyMwh}"`));
+assert.ok(legacySnapshot);
+legacyData.project.roughPrice = domain.sanitizeWorkspace({ snapshots: [legacySnapshot] }, legacyData.project);
+const expectedLegacy = JSON.stringify(legacySnapshot);
+const legacyCsv = workspace.buildRoughCsv(legacySnapshot);
+assert.match(legacyCsv, /"三项费用\(元\/MWh\)","其他净收入\(元\/MWh\)"/);
+for (const row of legacySnapshot.rows) {
+  assert.equal(row.fee - row.otherIncome, 37);
+  assert.ok(legacyCsv.includes('"33","-4","' + row.fullRevenuePrice + '","' + row.energyMwh + '"'));
 }
-assert.equal(JSON.stringify(netIncomeData.project.roughPrice.snapshots[0]), beforeNetSnapshot, "signed inputs preserve the original rough snapshot");
+workspace.renderWorkspace({ documentRef: legacyFixture.documentRef, ...legacyData, domain, inputState });
+assert.match(legacyFixture.rough.innerHTML, /年度粗算电价趋势/);
+assert.doesNotMatch(legacyFixture.rough.innerHTML, /年度价格及结算贡献|<table/);
+assert.equal(JSON.stringify(legacyData.project.roughPrice.snapshots[0]), expectedLegacy);
+assert.equal(workspace.buildRoughCsv(legacyData.project.roughPrice.snapshots[0]), legacyCsv, "legacy export retains its original fields and values");
 
-// Switching presentation modes must not silently turn a missing assumption into a zero.
-for (const [modeKey, missingKey, manualField] of [
-  ["envValueMode", "greenCertPrice", "greenCertPrice"],
-  ["feeConfigMode", "otherNetIncome", "otherNetIncome"],
-  ["ltPricingMode", "ltYear1Pnl", "value"]
-]) {
-  const missingFixture = documentFixture();
-  const missingData = projectFixture();
-  missingData.scenario.config[missingKey] = null;
-  const modeControl = new Element({ sharedKey: modeKey });
-  modeControl.type = "select-one";
-  missingFixture.rough.groups["[data-shared-key]"].push(modeControl);
-  workspace.renderWorkspace({ documentRef: missingFixture.documentRef, ...missingData, domain, inputState });
-  modeControl.value = "manual";
-  modeControl.onchange();
-  assert.match(missingFixture.rough.innerHTML,
-    new RegExp(`data-shared-key="${manualField}"[^>]*data-shared-year="2027"[^>]*value=""`),
-    `${modeKey} keeps an unfilled field visible rather than replacing it with zero`);
-  missingFixture.controls.node.value = "300";
-  missingFixture.controls.node.oninput();
-  missingFixture.controls.form.onsubmit({ preventDefault() {} });
-  assert.equal(missingData.project.roughPrice.snapshots.length, 0, "incomplete assumptions prevent generation");
-  assert.equal(inputState.isConfigConfirmed(missingData.scenario, missingKey), false,
-    "failed generation does not confirm incomplete assumptions");
-}
-
-for (const storageKey of ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"]) {
-  const storageData = projectFixture();
-  storageData.scenario.config[storageKey] = null;
-  assert.ok(workspace.validateShared(storageData.project, storageData.scenario, storageData.scenario.config, domain).length,
-    `${storageKey} cannot be omitted for a storage project`);
-  storageData.project.hasStorage = false;
-  assert.deepEqual(workspace.validateShared(storageData.project, storageData.scenario, storageData.scenario.config, domain), [],
-    "a project without storage does not require storage assumptions");
-}
+const conditionalFixture = documentFixture();
+const conditionalData = projectFixture();
+conditionalData.project.hasStorage = false;
+Object.assign(conditionalData.scenario.config, {
+  mechanismEnabled: false, ltYear1Pnl: 10, ltTargetPnl: 4, ltConvergeSpeed: 3, ltConvergeSpeedUnit: "fixed_step",
+  greenCertPrice: 20, greenCertRealizeRatio: 0.5, greenPremiumPrice: 0, greenPremiumRealizeRatio: 0,
+  marketOpFee: 7, gridAssessFee: 8, ancillaryFee: 18, otherNetIncome: 3
+});
+inputState.confirmConfig(conditionalData.scenario, [
+  "mechanismEnabled", "ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed", "envValueMode", "greenCertPrice",
+  "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio", "marketOpFee", "gridAssessFee", "ancillaryFee", "otherNetIncome"
+]);
+const conditionalOptions = { documentRef: conditionalFixture.documentRef, ...conditionalData, domain, inputState };
+workspace.renderWorkspace(conditionalOptions);
+assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-group="mechanism" open/);
+assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-settlement="storagePrice"/);
+assert.match(conditionalFixture.rough.innerHTML, /data-rough-settlement="ltYear1Pnl" value="10"/);
+assert.match(conditionalFixture.rough.innerHTML, /data-rough-settlement="environmentPrice" value="10"/);
+assert.match(conditionalFixture.rough.innerHTML, /data-rough-settlement="feesNetPrice" value="-30"/);
+assert.equal(conditionalData.project.roughPrice.draftsByScenario[conditionalData.scenario.id].settlement, undefined,
+  "rendering confirmed values leaves the historical draft alone");
+conditionalFixture.controls.node.value = "300";
+conditionalFixture.controls.node.oninput();
+conditionalFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.equal(conditionalData.project.roughPrice.snapshots.length, 1, "a non-storage project can calculate with the confirmed inputs");
+fillSettlement(conditionalFixture, { feesNetPrice: null });
+workspace.renderWorkspace(conditionalOptions);
+assert.match(conditionalFixture.rough.innerHTML, /data-rough-settlement="feesNetPrice" value=""/, "clearing an assumption stays blank after render");
+conditionalFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.equal(conditionalData.project.roughPrice.snapshots.length, 1);
+conditionalData.project.hasStorage = true;
+workspace.renderWorkspace(conditionalOptions);
+assert.match(conditionalFixture.rough.innerHTML, /data-rough-settlement="storagePrice" value=""/,
+  "newly applicable storage is a single blank assumption");
+fillSettlement(conditionalFixture, { feesNetPrice: 0, storagePrice: -5 });
+conditionalFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.equal(conditionalData.project.roughPrice.snapshots[0].rows[0].storageSupplement, -5,
+  "a storage correction can carry a signed net amount");
 
 const csv = workspace.buildRoughCsv(snapshot);
 assert.match(csv, /^\ufeff/);
 assert.match(csv, /"历史参考, ""来源"" <script>alert\(1\)<\/script>"/);
 assert.match(csv, /策略贡献/);
-assert.match(csv, /"三项费用\(元\/MWh\)","其他净收入\(元\/MWh\)"/);
-assert.doesNotMatch(csv, /"(?:综合扣费|其他费用|其他收入)\(元\/MWh\)"/);
-// Export helper accepts already computed data and performs proper CSV quoting.
-const conditionalFixture = documentFixture();
-const conditionalData = projectFixture();
-conditionalData.project.siteType = "offshore";
-conditionalData.project.hasStorage = false;
-conditionalData.scenario.config.mechanismEnabled = false;
-Object.assign(conditionalData.scenario.config, legacyCarbon);
-inputState.confirmConfig(conditionalData.scenario, ["mechanismEnabled", "envValueMode", "greenCertPrice",
-  "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"]);
-const conditionalOptions = { documentRef: conditionalFixture.documentRef, ...conditionalData, domain, inputState };
-workspace.renderWorkspace(conditionalOptions);
-assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-group="mechanism" open/,
-  "disabled mechanism parameters do not force duplicate confirmation");
-assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-group="environment" open/,
-  "legacy carbon values do not require any confirmation");
-assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-group="storage"/);
-conditionalData.project.hasStorage = true;
-workspace.renderWorkspace(conditionalOptions);
-assert.match(conditionalFixture.rough.innerHTML, /data-rough-group="storage" open/,
-  "newly applicable storage parameters remain visible until explicitly confirmed");
-conditionalData.scenario.config.ltPricingMode = "manual";
-conditionalData.scenario.config.ltManualPricesByYear = { 2027: 8, 2028: 6 };
-inputState.confirmConfig(conditionalData.scenario, ["ltPricingMode", "ltManualPricesByYear"]);
-const manualGroup = new Element({ roughGroup: "strategy" });
-manualGroup.open = false;
-conditionalFixture.rough.groups["[data-rough-group]"] = [manualGroup];
-workspace.renderWorkspace(conditionalOptions);
-manualGroup.ontoggle();
-require("../src/domain/project-model").applyCreateProjectInput(conditionalData.project, { ...conditionalData.project, forecastYears: 3 });
-workspace.renderWorkspace(conditionalOptions);
-assert.match(conditionalFixture.rough.innerHTML, /data-rough-group="strategy" open/,
-  "expanding the period reveals missing annual inputs even if the group was previously collapsed");
-assert.match(conditionalFixture.rough.innerHTML, /data-shared-year="2029"[^>]*value=""/);
+assert.match(csv, /"费用及其他净收入\(元\/MWh\)"/);
+assert.doesNotMatch(csv, /"(?:三项费用|其他净收入|综合扣费|其他费用|其他收入)\(元\/MWh\)"/);
+for (const row of snapshot.rows) {
+  assert.ok(csv.includes('"' + compactInputs.feesNetPrice + '","' + row.fullRevenuePrice + '","' + row.energyMwh + '"'));
+}
 
 const compareCsv = workspace.buildComparisonCsv(snapshot, { runId: 'run,"quoted"', generatedAt: "2026-10-19T03:00:00Z" }, {
   rows: [{ year: 2027, roughSpot: 300, fineSpot: 301, roughCapture: 270, fineCapture: 271,

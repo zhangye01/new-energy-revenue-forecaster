@@ -3,23 +3,13 @@
 (function (root, factory) {
   const isCommonJs = typeof module !== "undefined" && module.exports;
   const api = factory(isCommonJs ? require("../domain/result-versions") : root.NE_RESULT_VERSIONS,
-    isCommonJs ? require("../domain/scenario-config") : root.NE_SCENARIO_CONFIG,
     isCommonJs ? require("../domain/revenue-rules") : root.NE_REVENUE_RULES,
     isCommonJs ? require("./rough-trend-chart") : root.NE_ROUGH_TREND_CHART);
   if (isCommonJs) module.exports = api;
   root.NE_ROUGH_PRICE_WORKSPACE = api;
   if (root.window && root.window !== root) root.window.NE_ROUGH_PRICE_WORKSPACE = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (versions, scenarioConfig, revenueRules, trendChart) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (versions, revenueRules, trendChart) {
   const states = new WeakMap();
-  const ENV_FIELDS = [
-    ["greenCertPrice", "绿证价格"], ["greenCertRealizeRatio", "绿证兑现比例", "ratio"],
-    ["greenPremiumPrice", "绿电溢价"], ["greenPremiumRealizeRatio", "绿电兑现比例", "ratio"]
-  ];
-  const FEE_FIELDS = [["marketOpFee", "市场运营费"], ["gridAssessFee", "电网考核费"],
-    ["ancillaryFee", "辅助服务费"], ["otherNetIncome", "其他净收入", "signed"]];
-  const STORAGE_FIELDS = [["storageArbitragePrice", "配储套利收益"],
-    ["storageCapacityCompPrice", "配储容量补偿"], ["storageAncillaryRevenuePrice", "配储辅助服务收益"],
-    ["storageOtherRevenuePrice", "配储其他收益"]];
 
   function escapeHtml(value) {
     return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -63,13 +53,13 @@
   }
 
   function inputField(key, label, value, options = {}) {
-    const { type = "number", ratio = false, disabled = false, year = "", group = "", min, max } = options;
-    const attributes = `data-shared-key="${escapeHtml(key)}" data-shared-group="${escapeHtml(group)}" data-shared-year="${escapeHtml(year)}"${ratio ? ' data-shared-ratio="true"' : ""}`;
+    const { type = "number", ratio = false, disabled = false, min, max } = options;
+    const attributes = `data-shared-key="${escapeHtml(key)}"${ratio ? ' data-shared-ratio="true"' : ""}`;
     const display = ratio && value !== null && value !== undefined && value !== "" ? Number((Number(value) * 100).toFixed(6)) : value;
     const control = type === "checkbox"
       ? `<input type="checkbox" ${attributes}${value ? " checked" : ""}${disabled ? " disabled" : ""}>`
       : `<input type="${type}" ${attributes} value="${escapeHtml(display)}"${type === "number" ? ' step="any"' : ""}${min !== undefined ? ` min="${min}"` : ""}${max !== undefined ? ` max="${max}"` : ""}${disabled ? " disabled" : ""}>`;
-    return `<label${type === "checkbox" ? ' class="rough-checkbox"' : ""}>${escapeHtml(label)}${ratio ? "（%）" : type === "number" && options.unit !== "" ? "（元/MWh）" : ""}${control}</label>`;
+    return `<label${type === "checkbox" ? ' class="rough-checkbox"' : ""}>${escapeHtml(label)}${ratio ? "（%）" : type === "number" ? "（元/MWh）" : ""}${control}</label>`;
   }
 
   function selectField(key, label, value, choices, disabled) {
@@ -77,53 +67,27 @@
       `<option value="${id}"${id === value ? " selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></label>`;
   }
 
-  function fieldValue(config, key) {
-    return key === "otherNetIncome" ? scenarioConfig.getOtherNetIncome(config) : config?.[key];
-  }
-
-  function fieldsHtml(fields, config, disabled, group = "", year = "") {
-    return fields.map(([key, label, type]) => inputField(key, label, fieldValue(config, key), {
-      ratio: type === "ratio", group, year,
-      disabled,
-      min: type === "signed" ? undefined : 0, max: type === "ratio" ? 100 : undefined
-    })).join("");
-  }
-
-  function manualFieldsHtml(group, fields, config, project, disabled, confirmed) {
-    const rows = config[group] || {};
-    return `<div class="rough-manual-years">${yearsFor(project).map((year) => `<details class="rough-year-fields"${confirmed ? "" : " open"}><summary>${year} 年${rows[year] ? "" : " · 待补齐"}</summary><div class="rough-fields">${fieldsHtml(fields, rows[year] || {}, disabled, group, year)}</div></details>`).join("")}</div>`;
-  }
-
-  function sharedGroups(project, config) {
-    const mechanism = ["mechanismEnabled", ...(config.mechanismEnabled
+  function mechanismFields(config) {
+    return ["mechanismEnabled", ...(config.mechanismEnabled
       ? ["mechanismPrice", "mechanismRatio", "mechanismStartYm", "mechanismEndYm", "mechanismReferenceMode",
         ...(config.mechanismReferenceMode === "same_type" ? ["sameTypeSpread"] : [])] : [])];
-    const strategy = config.ltPricingMode === "manual" ? ["ltPricingMode", "ltManualPricesByYear"] : ["ltPricingMode", "ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed"];
-    const environment = config.envValueMode === "manual" ? ["envValueMode", "envManualValuesByYear"] : ["envValueMode", ...ENV_FIELDS.map(([key]) => key)];
-    const fees = config.feeConfigMode === "manual" ? ["feeConfigMode", "feeManualValuesByYear"] : ["feeConfigMode", ...FEE_FIELDS.map(([key]) => key)];
-    return { mechanism, strategy, environment, fees, ...(project.hasStorage ? { storage: STORAGE_FIELDS.map(([key]) => key) } : {}) };
   }
 
-  function sharedConfigHtml(project, scenario, entry, inputState) {
+  function sharedConfigHtml(scenario, entry, inputState) {
     const config = entry.config;
     const locked = Boolean(scenario.locked);
-    const groups = sharedGroups(project, config);
-    const confirmed = (key) => Boolean(inputState?.isConfigConfirmed?.(scenario, key, fieldValue(config, key)));
+    const keys = mechanismFields(config);
+    const confirmed = (key) => Boolean(inputState?.isConfigConfirmed?.(scenario, key, config[key]));
     const fieldStates = (html) => html.replace(/(<label[^>]*>)([\s\S]*?)(<\/label>)/g, (match, open, body, close) => {
       const field = body.match(/data-shared-key="([^"]+)"/);
       if (!field) return match;
-      const group = body.match(/data-shared-group="([^"]+)"/);
-      const isConfirmed = confirmed(group?.[1] || field[1]);
+      const isConfirmed = confirmed(field[1]);
       return `${open}${body.replace(/<(input|select)\b/, `<span class="rough-field-state${isConfirmed ? " is-confirmed" : ""}">${isConfirmed ? "已带入" : "待确认"}</span><$1`)}${close}`;
     });
-    const groupHtml = (key, title, body) => {
-      const keys = groups[key];
-      const count = keys.filter(confirmed).length;
-      const complete = count === keys.length;
-      const open = entry.groupOpen[key] ?? !complete;
-      const status = complete ? "已带入，可展开修改" : count ? `已带入 ${count} 项 · 其余待确认` : "请填写或确认";
-      return `<details class="rough-parameter-group" data-rough-group="${key}"${open ? " open" : ""}><summary><strong id="rough-group-${key}-title">${title}</strong><span>${status}</span></summary><div class="rough-fieldset">${fieldStates(body)}</div></details>`;
-    };
+    const count = keys.filter(confirmed).length;
+    const complete = count === keys.length;
+    const open = entry.groupOpen.mechanism ?? !complete;
+    const status = complete ? "已带入，可展开核对" : count ? `已带入 ${count} 项 · 其余待确认` : "请填写或确认";
     const referenceMode = config.mechanismReferenceMode === "same_type" ? "same_type" : "project_capture";
     const mechanism = inputField("mechanismEnabled", "启用机制电价", config.mechanismEnabled, { type: "checkbox", disabled: locked }) +
       inputField("mechanismPrice", "机制电价", config.mechanismPrice, { disabled: locked, min: 0 }) +
@@ -133,22 +97,21 @@
       selectField("mechanismReferenceMode", "机制补差参照口径", referenceMode,
         [["project_capture", "项目捕获电价（现有口径）"], ["same_type", "同类型机组均价（九步口径）"]], locked) +
       inputField("sameTypeSpread", "同类型机组价差", config.sameTypeSpread ?? 0, { disabled: locked });
-    const ltFields = config.ltPricingMode === "manual"
-      ? `<div class="rough-fields">${yearsFor(project).map((year) => inputField("value", `${year} 年策略损益`, config.ltManualPricesByYear?.[year], { disabled: locked, group: "ltManualPricesByYear", year })).join("")}</div>`
-      : `<div class="rough-fields">${[["ltYear1Pnl", "首年策略损益"], ["ltTargetPnl", "目标策略损益"], ["ltConvergeSpeed", "每年收敛步长"]].map(([key, label]) => {
-        const legacy = key === "ltConvergeSpeed" && config.ltConvergeSpeedUnit === "legacy_ratio";
-        return inputField(key, legacy ? "历史收敛比例（小数，保留原值）" : label, config[key],
-          { disabled: locked, min: key === "ltConvergeSpeed" ? 0 : undefined, max: legacy ? 1 : undefined, unit: legacy ? "" : undefined });
-      }).join("")}</div>`;
-    return `<section class="rough-shared"><div class="rough-section-head"><h3 id="rough-shared-heading">结算参数</h3>${locked ? '<span class="rough-badge">方案已锁定，只读</span>' : ""}</div>
-      <p class="rough-note" data-help="结算参数" data-help-anchor="#rough-shared-heading">已确认参数自动带入，未确认参数保留填写。生成粗算不会批量确认参数；实际调整的单项参数自动带入，未修改的默认值仍待确认。逐年表需明确确认；核对本页适用参数后，可点击“确认并保存本页结算参数”。</p>
-      ${groupHtml("mechanism", "机制电价与补差口径", `<div class="rough-fields">${mechanism}</div><p class="rough-note" data-help="机制补差口径" data-help-anchor="#rough-group-mechanism-title">同类型机组均价＝项目捕获电价＋同类型机组价差；年度有效机制占比按执行月份折算。</p>`)}
-      ${groupHtml("strategy", "交易策略损益", selectField("ltPricingMode", "配置方式", config.ltPricingMode || "auto", [["auto", "按首年与目标逐年收敛"], ["manual", "保留 / 设置逐年值"]], locked) + ltFields)}
-      ${groupHtml("environment", "环境价值", selectField("envValueMode", "配置方式", config.envValueMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + '<p class="rough-note" data-help="环境价值" data-help-anchor="#rough-group-environment-title">分别配置绿证和绿电溢价的价格与兑现比例，两项兑现比例合计不得超过 100%。</p>' + (config.envValueMode === "manual" ? manualFieldsHtml("envManualValuesByYear", ENV_FIELDS, config, project, locked, confirmed("envManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(ENV_FIELDS, config, locked)}</div>`))}
-      ${groupHtml("fees", "费用与其他净收入", selectField("feeConfigMode", "配置方式", config.feeConfigMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + '<p class="rough-note" data-help="其他净收入" data-help-anchor="#rough-group-fees-title">其他净收入为正计入收入，为负计入费用。</p>' + (config.feeConfigMode === "manual" ? manualFieldsHtml("feeManualValuesByYear", FEE_FIELDS, config, project, locked, confirmed("feeManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(FEE_FIELDS, config, locked)}</div>`))}
-      ${project.hasStorage ? groupHtml("storage", "配储补充收益", `<div class="rough-fields">${fieldsHtml(STORAGE_FIELDS, config, locked)}</div>`) : ""}
-      <div class="rough-actions"><button type="button" class="ghost-button" data-rough-save-shared${locked ? " disabled" : ""}>确认并保存本页结算参数</button><span data-rough-dirty>${entry.dirty ? "有未保存调整，生成粗算时一并保存。" : ""}</span></div>
-    </section>`;
+    return `<details class="rough-parameter-group" data-rough-group="mechanism"${open ? " open" : ""}>
+      <summary><strong id="rough-group-mechanism-title">机制电价与补差口径</strong><span>${locked ? "方案已锁定，只读" : status}</span></summary>
+      <div class="rough-fieldset"><div class="rough-fields">${fieldStates(mechanism)}</div>
+      <p class="rough-note" data-help="机制补差口径" data-help-anchor="#rough-group-mechanism-title">已确认机制参数自动带入。年度有效机制占比按执行月份折算，同类型机组均价等于项目捕获电价加同类型机组价差。</p>
+      <div class="rough-actions"><button type="button" class="ghost-button" data-rough-save-shared${locked ? " disabled" : ""}>确认并保存机制参数</button><span data-rough-dirty>${entry.dirty ? "有未保存调整，生成粗算时一并保存。" : ""}</span></div></div></details>`;
+  }
+
+  function settlementHtml(project, settlement = {}) {
+    const field = (key, label, min, unit = "元/MWh") => `<label>${label}（${unit}）<input type="number" step="any" required data-rough-settlement="${key}" value="${escapeHtml(settlement[key])}"${min === undefined ? "" : ` min="${min}"`}></label>`;
+    return `<fieldset class="rough-fieldset"><legend id="rough-strategy-heading">交易策略损益</legend>
+      <p class="rough-note" data-help="交易策略损益" data-help-anchor="#rough-strategy-heading">从首年假设按设定步长逐年向目标值收敛，达到目标后沿用目标值。策略损益按非机制电量计入。</p>
+      <div class="rough-fields">${field("ltYear1Pnl", "首年策略损益")}${field("ltTargetPnl", "目标策略损益")}${field("ltConvergeSpeed", "每年收敛步长", 0, "元/MWh/年")}</div></fieldset>
+      <fieldset class="rough-fieldset"><legend id="rough-adjustments-heading">其他度电调整</legend>
+      <p class="rough-note" data-help="度电调整" data-help-anchor="#rough-adjustments-heading">按全部项目结算电量填写，全周期采用同一个度电值。收入填正数，净扣费填负数。没有该项时填 0。</p>
+      <div class="rough-fields">${field("environmentPrice", "环境价值", 0)}${field("feesNetPrice", "费用及其他净收入")}${project.hasStorage ? field("storagePrice", "配储补充收益") : ""}</div></fieldset>`;
   }
 
   function snapshotSelectorHtml(snapshots, selected, key) {
@@ -174,8 +137,8 @@
       <figcaption><div class="rough-annual-trend-title"><strong id="rough-annual-trend-title">年度粗算电价趋势</strong><span class="rough-trend-unit">元/MWh</span></div>
         <div class="rough-trend-controls" data-rough-trend-controls role="group" aria-label="显示的电价曲线" hidden>${buttons}</div></figcaption>
       <p data-help="粗算趋势图" data-help-anchor="#rough-annual-trend-title">点图例显示或隐藏曲线，至少保留一条。小圆点对应各年，悬停查看同年价格。现货线上的空心圆标记价格节点，菱形标记测算末年。</p>
-      <div class="rough-annual-plot" id="rough-annual-trend-plot" data-rough-trend-plot role="img" aria-label="年度粗算电价趋势，详细数值见下方年度明细" hidden></div>
-      <p class="rough-trend-fallback" data-rough-trend-fallback>图表暂不可用，可查看下方年度明细。</p>
+      <div class="rough-annual-plot" id="rough-annual-trend-plot" data-rough-trend-plot role="img" aria-label="年度粗算电价趋势，可导出 CSV 查看详细数值" hidden></div>
+      <p class="rough-trend-fallback" data-rough-trend-fallback>图表暂不可用，可导出粗算 CSV 查看年度数值。</p>
     </figure>`;
   }
 
@@ -255,17 +218,16 @@
   }
 
   function roughResultsHtml(snapshot, snapshots, entry, snapshotState) {
-    if (!snapshot) return `<section class="rough-card rough-empty"><h3>暂无粗算结果</h3><p>填写现货均价节点和捕获率，生成首版粗算。</p></section>`;
+    if (!snapshot) return "";
     const summary = snapshot.summary;
-    return `<section class="rough-card"><div class="rough-section-head"><div><h3 id="rough-results-heading">年度粗算结果</h3><p data-help="粗算结果与计算口径" data-help-anchor="#rough-results-heading">每次生成保存独立参数快照，可选择历史版本追溯。综合结算价＝捕获电价＋机制补差＋非机制电量策略贡献＋环境价值贡献＋配储收益－三项费用＋其他净收入。三项费用包括市场运营费、电网考核费和辅助服务费。历史明细无法核对时，费用分项留空，仍显示原结算价。</p></div><button type="button" class="ghost-button" data-rough-export>导出粗算 CSV</button></div>${snapshotSelectorHtml(snapshots, snapshot.id, "rough")}
+    const formula = snapshot.settlementMethod === "compact-v1"
+      ? "综合结算价＝捕获电价＋机制补差＋非机制电量策略贡献＋环境价值＋配储补充收益＋费用及其他净收入。费用及其他净收入按带符号净额计入。"
+      : "综合结算价＝捕获电价＋机制补差＋非机制电量策略贡献＋环境价值贡献＋配储收益－三项费用＋其他净收入。三项费用包括市场运营费、电网考核费和辅助服务费。历史明细无法核对时，费用分项留空，仍显示原结算价。";
+    return `<section class="rough-card"><div class="rough-section-head"><div><h3 id="rough-results-heading">年度粗算结果</h3><p data-help="粗算结果与计算口径" data-help-anchor="#rough-results-heading">每次生成保存独立参数快照，可选择历史版本追溯。${formula}</p></div><button type="button" class="ghost-button" data-rough-export>导出粗算 CSV</button></div>${snapshotSelectorHtml(snapshots, snapshot.id, "rough")}
       ${snapshotState && !snapshotState.comparable ? `<p class="rough-alert">${escapeHtml(snapshotState.message)}</p>` : snapshotState?.refined ? '<span class="rough-badge">已保留原粗算 · 收益参数已细化</span>' : ""}
       <div class="rough-metrics"><div><span>全周期电量加权均价</span><strong>${number(summary.weightedPrice)}<small> 元/MWh</small></strong>${summary.weightedPrice === null ? "<small>电量未完整录入，暂不展示</small>" : ""}</div><div><span>年度算术均价（参考）</span><strong>${number(summary.simpleAverage)}<small> 元/MWh</small></strong></div><div><span>首年 / 末年综合结算价</span><strong>${number(summary.firstPrice)} / ${number(summary.lastPrice)}</strong></div></div>
       <div class="rough-assumptions"><span>捕获率 ${number(snapshot.draft.captureRate)}%</span><span>${snapshot.config.mechanismReferenceMode === "same_type" ? `同类型补差 · 价差 ${number(snapshot.config.sameTypeSpread)} 元/MWh` : "项目捕获价补差"}</span><span id="rough-source-summary">${snapshot.draft.sourceNote ? "已记录假设来源" : "未填写假设来源"}</span>${snapshot.draft.sourceNote ? `<p data-help="假设来源" data-help-anchor="#rough-source-summary">${escapeHtml(snapshot.draft.sourceNote)}</p>` : ""}</div>
       ${annualTrendHtml(entry.trendVisibility || {})}
-      <div class="rough-table-wrap"><table class="rough-table"><caption>年度价格及结算贡献（元/MWh；电量为 MWh）</caption><thead><tr>${["年份", "现货均价", "捕获电价", "有效机制占比", "机制补差", "策略贡献", "环境价值贡献", "配储收益", "三项费用", "其他净收入", "综合结算价", "电量"].map((label) => `<th scope="col">${label}</th>`).join("")}</tr></thead><tbody>${snapshot.rows.map((row) => {
-        const { primaryFees, otherNetIncome } = roughFeeBreakdown(snapshot, row);
-        return `<tr><th scope="row">${row.year}</th><td>${number(row.spotAvgPrice)}</td><td>${number(row.capturePrice)}</td><td>${number(row.mechanismRatio * 100)}%</td><td>${number(row.mechanismAdjustment)}</td><td>${number((1 - row.mechanismRatio) * row.ltPnlPrice)}</td><td>${number(row.envValue)}</td><td>${number(row.storageSupplement)}</td><td>${number(primaryFees)}</td><td>${number(otherNetIncome)}</td><td><strong>${number(row.fullRevenuePrice)}</strong></td><td>${number(row.energyMwh)}</td></tr>`;
-      }).join("")}</tbody></table></div>
       </section>`;
   }
 
@@ -298,15 +260,15 @@
     return `${rows}<div class="rough-node"><label>${years.length === 1 ? "起止年份" : "末年节点"}<input type="number" data-rough-end-year value="${endYear}" readonly></label><label>${years.length === 1 ? "现货均价" : "末年现货均价"}<input type="number" step="any" data-rough-end-price value="${escapeHtml(endPrice)}" placeholder="${escapeHtml(endPricePlaceholder(years, defaultEndPrice))}"></label></div>`;
   }
 
-  function roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, inputState, getDefaultEndPrice) {
+  function roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, inputState, getDefaultEndPrice, settlement = draft.settlement) {
     const years = yearsFor(project);
     const savedEnergyYears = years.filter((year) => project.energyData?.annualSummary?.[year]?.energyMwh !== undefined ||
       Array.isArray(project.energyData?.hourlyByYear?.[year])).length;
     const energyStatus = savedEnergyYears < years.length ? `<span class="rough-badge">结算电量 ${savedEnergyYears}/${years.length} 年</span>` : "";
-    return `<form id="rough-price-form" class="rough-card" novalidate><div class="rough-section-head"><div><h3 id="rough-assumptions-heading">粗算价格假设</h3><p data-help="粗算价格假设" data-help-anchor="#rough-assumptions-heading">已有项目、周期、电量与已确认结算参数自动带入；未确认参数在下方填写，用于与后续基准结果对照。缺少电量时，仍可计算年度价格；补齐电量后生成新版，查看全周期加权均价。</p></div><span class="rough-badge">元/MWh</span>${energyStatus}</div>
+    return `<form id="rough-price-form" class="rough-card" novalidate><div class="rough-section-head"><div><h3 id="rough-assumptions-heading">粗算价格假设</h3><p data-help="粗算价格假设" data-help-anchor="#rough-assumptions-heading">自动带入项目周期、结算电量和已确认机制参数。度电调整和策略损益保存为独立粗算假设。缺少电量时可先计算年度价格，补齐后生成新版即可查看全周期加权均价。</p></div><span class="rough-badge">元/MWh</span>${energyStatus}</div>
       <div class="rough-draft-grid"><fieldset class="rough-fieldset"><legend>年度现货均价预期</legend><p class="rough-note" data-help="价格节点">相邻节点间按年份线性插值。末年年份自动带入，价格可手动填写，留空时沿用此前最近的已填价格。仅测算一年时，填写该年价格。</p><div class="rough-nodes">${priceNodesHtml(years, draft.spotNodes, getDefaultEndPrice?.(project, draft.spotNodes))}</div><button type="button" class="ghost-button" data-rough-add${availablePriceNodeYear(years, draft.spotNodes) === undefined ? " disabled" : ""}>＋ 增加价格节点</button></fieldset>
       <fieldset class="rough-fieldset"><legend>捕获率与假设来源</legend><label>预期捕获率（%）<input type="number" min="0" max="150" step="any" id="rough-capture-input" data-rough-capture value="${escapeHtml(draft.captureRate)}"></label><p class="rough-note" data-help="捕获率" data-help-for="rough-capture-input">粗算捕获电价＝现货均价×捕获率。初始建议值 95%，请结合项目确认。</p><label>假设来源 / 判断依据（选填）<textarea rows="3" data-rough-source placeholder="如历史价格、同类项目经验或客户判断">${escapeHtml(draft.sourceNote)}</textarea></label></fieldset></div>
-      ${sharedConfigHtml(project, scenario, entry, inputState)}<div class="rough-actions"><button type="submit" class="primary-button">生成并保存粗算版本</button></div><div data-rough-message role="status" class="rough-message ${entry.tone === "error" ? "rough-alert" : ""}">${escapeHtml(entry.message)}</div></form>${roughResultsHtml(snapshot, snapshots, entry, snapshotState)}`;
+      ${sharedConfigHtml(scenario, entry, inputState)}${settlementHtml(project, settlement)}<div class="rough-actions"><button type="submit" class="primary-button">生成并保存粗算版本</button></div><div data-rough-message role="status" class="rough-message ${entry.tone === "error" ? "rough-alert" : ""}">${escapeHtml(entry.message)}</div></form>${roughResultsHtml(snapshot, snapshots, entry, snapshotState)}`;
   }
 
   function comparisonReviewHtml(relativeDelta, threshold) {
@@ -358,14 +320,17 @@
     }).join(",")).join("\r\n");
   }
   function buildRoughCsv(snapshot) {
+    const compact = snapshot.settlementMethod === "compact-v1";
+    const feeHeaders = compact ? ["费用及其他净收入(元/MWh)"] : ["三项费用(元/MWh)", "其他净收入(元/MWh)"];
     return csvText([["粗算版本", snapshot.id], ["生成时间", snapshot.createdAt], ["方案", snapshot.scenarioName],
       ["预期捕获率(%)", snapshot.draft.captureRate], ["假设来源", snapshot.draft.sourceNote],
-      ["年份", "现货均价(元/MWh)", "捕获电价(元/MWh)", "有效机制占比", "机制补差(元/MWh)", "策略贡献(元/MWh)", "环境价值贡献(元/MWh)", "配储收益(元/MWh)", "三项费用(元/MWh)", "其他净收入(元/MWh)", "综合结算价(元/MWh)", "电量(MWh)"],
+      ["年份", "现货均价(元/MWh)", "捕获电价(元/MWh)", "有效机制占比", "机制补差(元/MWh)", "策略贡献(元/MWh)", "环境价值贡献(元/MWh)", "配储收益(元/MWh)", ...feeHeaders, "综合结算价(元/MWh)", "电量(MWh)"],
       ...snapshot.rows.map((row) => {
-        const { primaryFees, otherNetIncome } = roughFeeBreakdown(snapshot, row);
+        const legacy = compact ? null : roughFeeBreakdown(snapshot, row);
+        const feeCells = compact ? [row.feesNetPrice] : [legacy.primaryFees, legacy.otherNetIncome];
         return [row.year, row.spotAvgPrice, row.capturePrice, row.mechanismRatio,
           row.mechanismAdjustment, (1 - row.mechanismRatio) * row.ltPnlPrice, row.envValue,
-          row.storageSupplement, primaryFees, otherNetIncome, row.fullRevenuePrice, row.energyMwh];
+          row.storageSupplement, ...feeCells, row.fullRevenuePrice, row.energyMwh];
       })]);
   }
   function buildComparisonCsv(snapshot, source, comparison) {
@@ -374,7 +339,8 @@
       ["基准结果生成时间", source.generatedAt || ""], ["基准预测曲线版本", source.runId || ""],
       ["基准结果状态", comparison.baselineState?.current === false ? `历史版。${comparison.baselineState.message}` : "与当前基准结果对照"],
       ["测算版本", trace.versionId || "旧版未编号"], ["价格来源", trace.priceSourceLabel], ["价格内容指纹", trace.priceContentFingerprint],
-      ["收益参数状态", comparison.snapshotState?.refined ? "已细化；保留原粗算预期" : "沿用粗算参数"],
+      ["收益参数状态", snapshot.settlementMethod === "compact-v1" ? "独立粗算假设与基准收益参数对照"
+        : comparison.snapshotState?.refined ? "已细化；保留原粗算预期" : "沿用粗算参数"],
       ["粗算电量加权均价", comparison.summary?.weightedRough], ["基准电量加权均价", comparison.summary?.weightedFine],
       ["年份", "粗算现货均价", "基准现货均价", "粗算捕获价", "基准捕获价", "粗算综合结算价", "基准综合结算价", "综合价差额(基准-粗算)", "综合价差异率", "基准捕获率(%)"],
       ...comparison.rows.map((row) => [row.year, row.roughSpot, row.fineSpot, row.roughCapture,
@@ -390,48 +356,6 @@
     anchor.download = filename.replace(/[\\/:*?"<>|]/g, "_");
     anchor.click();
     windowRef.setTimeout(() => URLRef.revokeObjectURL(url), 1000);
-  }
-
-  function validateShared(project, scenario, config, domain) {
-    const check = domain.calculateRough(project, { ...scenario, config }, {
-      spotNodes: [{ year: project.startYear, value: 0 }], captureRate: 95, sourceNote: ""
-    });
-    const errors = check.ok ? [] : check.errors.slice();
-    const checkNumber = (value, label, min = -Infinity) => {
-      if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value)) || Number(value) < min) errors.push(`${label}应为有效数字${min === 0 ? "且不小于零" : ""}。`);
-    };
-    if (config.ltPricingMode !== "manual") [["ltYear1Pnl", "首年策略损益"], ["ltTargetPnl", "目标策略损益"], ["ltConvergeSpeed", "收敛步长"]].forEach(([key, label]) => checkNumber(config[key], label, key === "ltConvergeSpeed" ? 0 : -Infinity));
-    const groups = [[ENV_FIELDS, config.envValueMode === "manual" ? Object.values(config.envManualValuesByYear || {}) : [config]],
-      [FEE_FIELDS, config.feeConfigMode === "manual" ? Object.values(config.feeManualValuesByYear || {}) : [config]]];
-    if (project.hasStorage) groups.push([STORAGE_FIELDS, [config]]);
-    groups.forEach(([fields, entries]) => entries.forEach((item) => fields.forEach(([key, label, type]) => {
-      const value = fieldValue(item, key);
-      checkNumber(value, label, type === "signed" ? -Infinity : 0);
-      if (type === "ratio" && Number(value) > 1) errors.push(`${label}不得超过100%。`);
-    })));
-    return [...new Set(errors)];
-  }
-
-  function initializeManual(config, key, project) {
-    if (config[key] !== "manual") return;
-    const group = key === "ltPricingMode" ? "ltManualPricesByYear" : key === "envValueMode" ? "envManualValuesByYear" : "feeManualValuesByYear";
-    config[group] = config[group] || {};
-    const finiteValue = (value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
-    yearsFor(project).forEach((year, index) => {
-      if (Object.hasOwn(config[group], year)) return;
-      if (key === "ltPricingMode") {
-        if ([config.ltYear1Pnl, config.ltTargetPnl, config.ltConvergeSpeed].every(finiteValue)) {
-          const first = Number(config.ltYear1Pnl), target = Number(config.ltTargetPnl);
-          const step = config.ltConvergeSpeedUnit === "legacy_ratio"
-            ? Number((Math.abs(target - first) * Number(config.ltConvergeSpeed)).toFixed(4)) : Number(config.ltConvergeSpeed);
-          const delta = Math.min(Math.abs(target - first), index * Math.max(0, step));
-          config[group][year] = first + Math.sign(target - first) * delta;
-        } else config[group][year] = null;
-      } else config[group][year] = Object.fromEntries((key === "envValueMode" ? ENV_FIELDS : FEE_FIELDS).map(([field]) => {
-        const value = fieldValue(config, field);
-        return [field, finiteValue(value) ? Number(value) : null];
-      }));
-    });
   }
 
   function bindPriceNodes(root, draft, options, redraw, message) {
@@ -493,7 +417,7 @@
     refresh();
   }
 
-  function bindWorkspace(options, refs, state, entry, draft, snapshot, comparison) {
+  function bindWorkspace(options, refs, entry, draft, settlement, snapshot, comparison) {
     const { documentRef, project, scenario, domain, onChange = () => {}, onPersist = () => {}, onMessage = () => {} } = options;
     const redraw = () => renderWorkspace(options);
     [refs.rough, refs.compare].forEach((container) => container.querySelectorAll("[data-jump]").forEach((button) => {
@@ -506,13 +430,12 @@
       onMessage(text, tone);
     };
     const commitShared = (confirmAll = false) => {
-      if (scenario.locked) return false;
+      if (scenario.locked || !confirmAll && !entry.dirty) return false;
       const changed = entry.dirty;
-      const applicableKeys = Object.values(sharedGroups(project, entry.config)).flat();
-      // A rough snapshot does not approve suggested values. Annual maps can contain
-      // auto-filled years, so new annual assumptions need explicit confirmation.
+      const applicableKeys = mechanismFields(entry.config);
+      // Approve only individually edited mechanism inputs when saving a rough snapshot.
       const confirmedKeys = confirmAll ? applicableKeys : applicableKeys.filter((key) =>
-        !key.endsWith("ByYear") && JSON.stringify(entry.config[key]) !== JSON.stringify(scenario.config[key]));
+        JSON.stringify(entry.config[key]) !== JSON.stringify(scenario.config?.[key]));
       options.inputState?.invalidateInactiveConfirmations?.(project, scenario);
       scenario.config = clone(entry.config);
       scenario.updatedAt = typeof options.nowIso === "function" ? options.nowIso() : options.nowIso || new Date().toISOString();
@@ -526,36 +449,29 @@
     if (capture) { capture.oninput = () => { draft.captureRate = capture.value === "" ? null : Number(capture.value); }; capture.onchange = () => onPersist(); }
     const source = refs.rough.querySelector("[data-rough-source]");
     if (source) { source.oninput = () => { draft.sourceNote = source.value; }; source.onchange = () => onPersist(); }
+    const settlementFields = Array.from(refs.rough.querySelectorAll("[data-rough-settlement]"));
+    settlementFields.forEach((field) => {
+      field.oninput = () => {
+        const key = field.dataset.roughSettlement;
+        const value = field.value === "" ? null : Number(field.value);
+        settlement[key] = value;
+        (draft.settlement ||= {})[key] = value;
+      };
+      field.onchange = () => onPersist();
+    });
     refs.rough.querySelectorAll("[data-shared-key]").forEach((field) => {
       const update = () => {
         if (scenario.locked) return;
-        const { sharedKey: key, sharedGroup: group, sharedYear: year } = field.dataset;
+        const { sharedKey: key } = field.dataset;
         const value = field.type === "checkbox" ? field.checked : field.type === "number" ?
           field.value === "" ? null : Number(field.value) / (field.dataset.sharedRatio ? 100 : 1) : field.value;
-        if (group === "ltManualPricesByYear") {
-          entry.config[group] = entry.config[group] || {}; entry.config[group][year] = value;
-        } else {
-          const original = group ? scenario.config?.[group]?.[year] : scenario.config;
-          let target = entry.config;
-          if (group) {
-            entry.config[group] ||= {};
-            target = entry.config[group][year] ||= {};
-          }
-          if (key === "otherNetIncome" && original && !Object.hasOwn(original, key) && value === fieldValue(original, key)) {
-            delete target[key];
-          } else target[key] = value;
-        }
+        entry.config[key] = value;
         entry.dirty = JSON.stringify(entry.config) !== entry.source;
         const dirtyLabel = refs.rough.querySelector("[data-rough-dirty]");
         if (dirtyLabel) dirtyLabel.textContent = entry.dirty ? "有未保存调整，生成粗算时一并保存。" : "";
       };
       field.oninput = update;
-      field.onchange = () => {
-        update();
-        if (["ltPricingMode", "envValueMode", "feeConfigMode"].includes(field.dataset.sharedKey)) {
-          initializeManual(entry.config, field.dataset.sharedKey, project); redraw();
-        }
-      };
+      field.onchange = update;
     });
     refs.rough.querySelectorAll("[data-rough-group]").forEach((details) => {
       details.ontoggle = () => { entry.groupOpen[details.dataset.roughGroup] = details.open; };
@@ -563,10 +479,10 @@
     const save = refs.rough.querySelector("[data-rough-save-shared]");
     if (save) save.onclick = () => {
       if (scenario.locked) return message("当前方案已锁定。", "error");
-      const errors = validateShared(project, scenario, entry.config, domain);
+      const errors = domain.validateRoughMechanism(entry.config);
       if (errors.length) return message(errors.join(" "), "error");
       const changed = commitShared(true);
-      message(changed ? "结算参数已保存，原粗算快照保留。更新基准结果后即可交叉验证。" : "结算参数已确认，后续自动带入。", "success");
+      message(changed ? "机制参数已保存。更新基准结果后即可交叉验证。" : "机制参数已确认，后续自动带入。", "success");
       onChange({ sharedChanged: changed });
     };
     const form = refs.rough.querySelector("#rough-price-form");
@@ -580,16 +496,18 @@
         .some((field) => Number(field.value) === endYear);
       if (repeatedEnd) return message("末年价格请填写在自动生成的末年节点，其他节点请选择不同年份。", "error");
       const config = scenario.locked ? scenario.config : entry.config;
-      const errors = validateShared(project, scenario, config, domain);
-      if (errors.length) return message(errors.join(" "), "error");
-      const result = domain.calculateRough(project, { ...scenario, config }, draft, {
+      const result = domain.calculateCompactRough(project, { ...scenario, config }, { ...draft, settlement }, {
         id: typeof options.makeId === "function" ? options.makeId("rough") : undefined,
         createdAt: typeof options.nowIso === "function" ? options.nowIso() : options.nowIso
       });
-      if (!result.ok) return message(result.errors.join(" "), "error");
+      if (!result.ok) {
+        settlementFields.find((field) => field.value === "" || field.validity?.valid === false)?.focus?.();
+        return message(result.errors.join(" "), "error");
+      }
       const changed = commitShared();
+      draft.settlement = { ...draft.settlement, ...result.snapshot.draft.settlement };
       project.roughPrice.snapshots.unshift(result.snapshot); entry.snapshotId = result.snapshot.id;
-      message("粗算版本已保存。未确认参数请在收益参数补充与细化中复核，再对照基准结果。", "success");
+      message("粗算版本已保存。明细参数可在收益参数补充与细化中核对。", "success");
       onChange({ sharedChanged: changed });
     };
     [refs.rough, refs.compare].forEach((container) => container.querySelectorAll("[data-rough-snapshot]").forEach((select) => {
@@ -642,6 +560,7 @@
     if (!project.roughPrice.draftsByScenario || !Array.isArray(project.roughPrice.snapshots)) project.roughPrice = domain.sanitizeWorkspace(project.roughPrice, project);
     if (!project.roughPrice.draftsByScenario[scenario.id]) project.roughPrice.draftsByScenario[scenario.id] = domain.defaultDraft(project);
     const draft = project.roughPrice.draftsByScenario[scenario.id];
+    const settlement = mode === "rough" ? domain.getCompactSettlementDraft(project, scenario, draft.settlement, options.inputState) : null;
     const entry = getEntry(state, project, scenario);
     const snapshots = project.roughPrice.snapshots.filter((item) => item.scenarioId === scenario.id);
     const snapshot = snapshots.find((item) => item.id === entry.snapshotId) || snapshots[0] || null;
@@ -654,14 +573,14 @@
       comparison.resultTrace = versions.describeResult(result, run);
     }
     target.innerHTML = mode === "rough"
-      ? roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, options.inputState, domain.getDefaultEndPrice)
+      ? roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, options.inputState, domain.getDefaultEndPrice, settlement)
       : compareHtml(project, snapshots, snapshot, entry, comparison, scenario, result);
     if (mode === "rough" && snapshot) state.disposeTrend = bindAnnualTrend(documentRef, target, snapshot, entry.trendVisibility);
-    bindWorkspace(options, refs, state, entry, draft, snapshot, comparison);
+    bindWorkspace(options, refs, entry, draft, settlement, snapshot, comparison);
   }
 
   return Object.freeze({ renderWorkspace, escapeHtml, csvText, buildRoughCsv, buildComparisonCsv,
-    roughHtml, compareHtml, comparisonSummaryHtml, validateShared,
+    roughHtml, compareHtml, comparisonSummaryHtml,
     hasUnsubmittedChanges: (documentRef, projects = []) => projects.some((project) =>
       project.scenarios?.some((scenario) => states.get(documentRef)?.entries.get(`${project.id}:${scenario.id}`)?.dirty)) });
 });

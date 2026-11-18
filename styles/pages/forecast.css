@@ -31,12 +31,9 @@
 .rough-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: start; }
 .rough-fields .rough-checkbox { min-height: 59px; display: flex; align-items: center; gap: 8px; flex-direction: row-reverse; justify-content: flex-end; }
 .rough-fields .rough-checkbox input { width: 18px; min-height: 18px; height: 18px; }
-.rough-shared { border: 1px solid var(--line); border-radius: 6px; padding: 12px; background: var(--panel-soft); }
 .rough-parameter-group > summary, .rough-breakdown > summary { cursor: pointer; font-size: 0.88rem; font-weight: 750; color: var(--blue); }
 .rough-parameter-group > summary > span:not([data-context-help]) { margin-left: 8px; color: var(--muted); font-size: 0.76rem; font-weight: 500; }
 .rough-parameter-group[open] > :not(summary) { margin-top: 12px; }
-.rough-shared .rough-fieldset { background: var(--panel); }
-.rough-shared { display: grid; gap: 10px; }
 .rough-parameter-group { border-top: 1px solid var(--line); padding-top: 10px; }
 .rough-parameter-group .rough-fieldset { border: 0; padding: 10px; }
 .rough-field-state { display: block; font-size: 0.67rem; color: var(--muted); font-weight: 400; }
@@ -133,10 +130,6 @@
 .rough-review { color: var(--orange); font-weight: 700; }
 .rough-breakdown { border-top: 1px solid var(--line); padding-top: 12px; }
 .rough-breakdown > p { margin-top: 8px; }
-.rough-manual-years { display: grid; gap: 5px; max-height: 440px; overflow-y: auto; padding-right: 3px; }
-.rough-year-fields { padding: 8px; border: 1px solid var(--line); border-radius: 5px; margin-top: 6px; }
-.rough-year-fields > summary { cursor: pointer; font-size: 0.78rem; color: var(--muted); }
-.rough-year-fields[open] > :not(summary) { margin-top: 10px; }
 @media (max-width: 1200px) {
   .rough-comparison-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rough-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }

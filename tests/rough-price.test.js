@@ -1,9 +1,12 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { defaultDraft, getDefaultEndPrice, sanitizeWorkspace, calculateRough, compareSnapshot, compareBaselineResult, stampBaselineResult, snapshotState, contextFingerprint, currentContextFingerprint } = require("../src/domain/rough-price");
+const { defaultDraft, getDefaultEndPrice, getCompactSettlementDraft, sanitizeWorkspace, calculateRough, calculateCompactRough,
+  compareSnapshot, compareBaselineResult, stampBaselineResult, snapshotState, contextFingerprint, currentContextFingerprint,
+  validateRoughMechanism } = require("../src/domain/rough-price");
 const { calculateScenarioResult } = require("../src/domain/revenue-calculator");
-const { defaultScenarioConfig, sanitizeScenario } = require("../src/domain/scenario-model");
+const scenarioModel = require("../src/domain/scenario-model");
+const { defaultScenarioConfig, sanitizeScenario } = scenarioModel;
 const { normalizeTypicalCurveProfile } = require("../src/domain/energy-profiles");
 
 function approx(actual, expected, message) {
@@ -130,6 +133,75 @@ const extreme = calculate(threeYears, scenario(threeYears), {
 });
 assert.deepEqual(extreme.rows.map((row) => row.spotAvgPrice), [-Number.MAX_VALUE, 0, Number.MAX_VALUE],
   "节点差额超过浮点上限时，区间内有限价格仍可得到");
+
+const compactProject = { ...project(3), hasStorage: true, storagePowerMw: 2, storageDurationH: 3 };
+compactProject.energyData.annualSummary = { 2026: { energyMwh: 100 }, 2027: { energyMwh: 200 }, 2028: { energyMwh: 300 } };
+const compactScenario = scenario(compactProject, {
+  ltPricingMode: "manual", ltManualPricesByYear: { 2026: 999 },
+  envValueMode: "manual", envManualValuesByYear: {}, feeConfigMode: "manual", feeManualValuesByYear: {},
+  storageArbitragePrice: 500, storageCapacityCompPrice: 600, storageAncillaryRevenuePrice: 700, storageOtherRevenuePrice: 800
+});
+const compactSettlement = { ltYear1Pnl: 8, ltTargetPnl: 2, ltConvergeSpeed: 3, environmentPrice: 7, feesNetPrice: -4, storagePrice: -2 };
+const compactDraft = { ...draft(compactProject), settlement: compactSettlement };
+const compactScenarioBefore = JSON.stringify(compactScenario);
+const compactDraftBefore = JSON.stringify(compactDraft);
+const compactCalculation = calculateCompactRough(compactProject, compactScenario, compactDraft, { id: "compact-test" });
+assert.equal(compactCalculation.ok, true, compactCalculation.errors.join("；"));
+const compactSnapshot = compactCalculation.snapshot;
+assert.equal(compactSnapshot.settlementMethod, "compact-v1");
+assert.deepEqual(compactSnapshot.draft.settlement, compactSettlement);
+assert.deepEqual(compactSnapshot.rows.map((row) => row.mechanismRatio), [0.5, 0.5, 0]);
+assert.deepEqual(compactSnapshot.rows.map((row) => row.ltPnlPrice), [8, 5, 2]);
+assert.deepEqual(compactSnapshot.rows.map((row) => [row.envValue, row.feesNetPrice, row.storageSupplement]),
+  [[7, -4, -2], [7, -4, -2], [7, -4, -2]], "环境、净费用、配储按总电量单位固定计入");
+assert.deepEqual(compactSnapshot.rows.map((row) => row.fullRevenuePrice), [115, 113.5, 103]);
+approx(compactSnapshot.summary.weightedPrice, 108.5, "粗算仍按已有年度电量加权");
+assert.deepEqual(compactSnapshot.rows.map((row) => [row.fee, row.otherIncome]), [[4, 0], [4, 0], [4, 0]]);
+assert.equal(JSON.stringify(compactScenario), compactScenarioBefore, "生成粗算不会回写逐年或详细参数");
+assert.equal(JSON.stringify(compactDraft), compactDraftBefore, "生成后原草稿及其价格起点不变");
+assert.equal(Object.hasOwn(compactSnapshot.calculationConfig, "envManualValuesByYear"), false);
+assert.equal(snapshotState(compactProject, compactScenario, compactSnapshot).comparable, true);
+assert.equal(snapshotState(compactProject, { ...compactScenario, config: { ...compactScenario.config, storageArbitragePrice: 990 } },
+  compactSnapshot).refined, true);
+
+const compactRestored = sanitizeWorkspace({ draftsByScenario: { [compactScenario.id]: compactDraft }, snapshots: [snapshot, compactSnapshot] }, compactProject);
+assert.equal(JSON.stringify(compactRestored.snapshots[0]), JSON.stringify(snapshot), "恢复时保留旧粗算记录原文");
+assert.equal(JSON.stringify(compactRestored.snapshots[1]), JSON.stringify(compactSnapshot));
+assert.deepEqual(compactRestored.draftsByScenario[compactScenario.id].settlement, compactSettlement);
+const positiveNet = calculateCompactRough(p, s, { ...compactDraft, settlement: { ...compactSettlement, feesNetPrice: 4 } });
+assert.equal(positiveNet.ok, true);
+assert.equal(Object.hasOwn(positiveNet.snapshot.draft.settlement, "storagePrice"), false);
+assert.deepEqual(positiveNet.snapshot.rows.map((row) => [row.fee, row.otherIncome, row.storageSupplement]), [[0, 4, 0], [0, 4, 0]]);
+const explicitZeros = Object.fromEntries(Object.keys(compactSettlement).map((key) => [key, 0]));
+assert.equal(calculateCompactRough(compactProject, compactScenario, { ...compactDraft, settlement: explicitZeros }).ok, true);
+for (const [key, value] of [["feesNetPrice", null], ["storagePrice", ""], ["environmentPrice", -1], ["ltConvergeSpeed", -0.5],
+  ["ltYear1Pnl", Infinity], ["ltTargetPnl", "应确认"]]) {
+  assert.equal(calculateCompactRough(compactProject, compactScenario, { ...compactDraft, settlement: { ...compactSettlement, [key]: value } }).ok,
+    false, `${key} 不可漏填或填无效值`);
+}
+assert.match(validateRoughMechanism({})[0], /是否启用机制电价/);
+assert.deepEqual(validateRoughMechanism({ mechanismEnabled: false }), []);
+
+const carryProject = { ...p, hasStorage: true };
+const carryScenario = scenario(carryProject, { mechanismStartYm: "2026-01", mechanismEndYm: "2027-12", storageArbitragePrice: 5,
+  storageCapacityCompPrice: 4, storageAncillaryRevenuePrice: 2, storageOtherRevenuePrice: 1, otherNetIncome: 6 });
+const unknown = getCompactSettlementDraft(carryProject, carryScenario, undefined, scenarioModel);
+assert.deepEqual(unknown, { ltYear1Pnl: null, ltTargetPnl: null, ltConvergeSpeed: null, environmentPrice: null, feesNetPrice: null, storagePrice: null });
+assert.equal(scenarioModel.confirmConfig(carryScenario, undefined, { project: carryProject }), true);
+const carried = getCompactSettlementDraft(carryProject, carryScenario, { ltYear1Pnl: null, storagePrice: 0 }, scenarioModel);
+assert.equal(carried.ltYear1Pnl, null, "用户清空值后保留待填状态");
+assert.equal(carried.ltTargetPnl, carryScenario.config.ltTargetPnl);
+assert.equal(carried.ltConvergeSpeed, carryScenario.config.ltConvergeSpeed);
+approx(carried.environmentPrice, 1.1, "能等价换算时带入全周期度电环境价值");
+assert.equal(carried.feesNetPrice, 0);
+assert.equal(carried.storagePrice, 0, "用户明确录入0优先于历史等价汇总");
+assert.equal(getCompactSettlementDraft(carryProject, carryScenario, undefined, scenarioModel).storagePrice, 12);
+carryScenario.config.mechanismEndYm = "2027-06";
+carryScenario.config.ltConvergeSpeedUnit = "legacy_ratio";
+scenarioModel.confirmConfig(carryScenario, undefined, { project: carryProject });
+const incompatibleCarry = getCompactSettlementDraft(carryProject, carryScenario, undefined, scenarioModel);
+assert.equal(incompatibleCarry.environmentPrice, null, "机制年度占比不同导致原环境值不能等价带入固定值");
+assert.equal(incompatibleCarry.ltConvergeSpeed, null, "历史比例不能带入绝对步长");
 
 const oldDraft = { ...draft(fourYears), spotNodes: [{ year: 2026, value: 100 }, { year: 2028, value: 300 }] };
 const oldStep = structuredClone(calculate(fourYears, scenario(fourYears), oldDraft));

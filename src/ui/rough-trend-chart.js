@@ -68,16 +68,18 @@
     });
   }
 
-  function feeItems(config, row) {
+  function feeItems(snapshot, row) {
+    if (snapshot.settlementMethod === "compact-v1") return { "费用及其他净收入": row.feesNetPrice };
+    const config = snapshot.calculationConfig || snapshot.config;
     const fees = revenueRules.getOtherNetBreakdown(config, row.year, row.fee, row.otherIncome);
     return fees.primaryFees === null
       ? { "费用及其他净收入合计": row.otherIncome - row.fee }
       : { "三项费用": -fees.primaryFees, "其他净收入": fees.otherNetIncome };
   }
 
-  function settlementParts(config, row) {
+  function settlementParts(snapshot, row) {
     return { "机制补差": row.mechanismAdjustment, "交易策略": (1 - row.mechanismRatio) * row.ltPnlPrice,
-      "环境价值": row.envValue, "配储补充": row.storageSupplement, ...feeItems(config, row) };
+      "环境价值": row.envValue, "配储补充": row.storageSupplement, ...feeItems(snapshot, row) };
   }
 
   function mechanismEnds(config, previous, current) {
@@ -95,8 +97,8 @@
     const direction = Math.sign(change);
     if (Math.abs(change) < Math.max(10, Math.abs(previous.fullRevenuePrice) * 0.05) || residual * direction < 10) return null;
     const config = snapshot.calculationConfig || snapshot.config;
-    const before = settlementParts(config, previous);
-    const after = settlementParts(config, current);
+    const before = settlementParts(snapshot, previous);
+    const after = settlementParts(snapshot, current);
     const driver = Object.entries(after).map(([label, value]) => ({ label, delta: value - before[label] }))
       .filter(({ delta }) => Number.isFinite(delta) && delta * direction > 0)
       .sort((first, second) => (second.delta - first.delta) * direction)[0];

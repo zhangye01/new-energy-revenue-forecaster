@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261118m">
-    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118o">
+    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118p">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261118m">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
@@ -140,9 +140,9 @@
     <script src="./src/ui/app-event-bindings.js?v=20261113c" defer></script>
     <script src="./src/domain/workflow-status.js?v=20261118e" defer></script>
     <script src="./src/domain/scenario-config.js?v=20261118h" defer></script>
-    <script src="./src/domain/rough-price.js?v=20261118j" defer></script>
-    <script src="./src/ui/rough-trend-chart.js?v=20261118l" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261118l" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261118p" defer></script>
+    <script src="./src/ui/rough-trend-chart.js?v=20261118p" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261118p" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261118h" defer></script>
     <script src="./src/domain/project-settings.js?v=20261118n" defer></script>
     <script src="./src/domain/project-model.js?v=20261118h" defer></script>
@@ -1322,7 +1322,7 @@
                       </label>
                       <label><span data-help-label>原手工套利假设 元/MWh</span>
                         <input id="storage-arbitrage-price" type="number" value="0" step="any" readonly aria-describedby="storage-arbitrage-note">
-                        <span id="storage-arbitrage-note" data-help="原手工套利假设">保留原值供粗算使用；基准结果使用逐时计算的套利收入，不叠加本项。若需调整新的粗算假设，请到项目电价粗算填写，已保存快照不变。</span>
+                        <span id="storage-arbitrage-note" data-help="原手工套利假设">此处可查历史手工假设。新的项目电价粗算采用一项配储补充收益估值；基准结果采用逐时套利及独立补充收益。</span>
                       </label>
                       <label>容量补偿收益 元/MWh
                         <input id="storage-capacity-comp-price" type="number" min="0" value="0" step="any">
@@ -1881,7 +1881,7 @@
                   <div class="help-step-index">5</div>
                   <div class="help-step-body">
                     <strong>项目电价粗算</strong>
-                    <p>沿用已填信息，补充未确认参数与价格预期，保存独立粗算版本。</p>
+                    <p>带入项目和电量，填写价格预期及简化结算假设，保存独立粗算版本。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
@@ -1929,7 +1929,7 @@
                 </article>
                 <article class="help-card">
                   <strong>项目电价粗算</strong>
-                  <p>自动带入项目、电量和已确认参数，补充未填写参数与价格预期后保存粗算版本，供后续交叉验证。</p>
+                  <p>交易策略采用逐年收敛。环境价值、费用及其他净收入、配储补充收益各用一个全周期度电值。生成后的趋势图和加权价可用于复核，交叉验证读取对应粗算版本。</p>
                 </article>
                 <article class="help-card">
                   <strong>历史电价分析</strong>
