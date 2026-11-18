@@ -154,7 +154,7 @@
     const lastMonth = Number(end.slice(5, 7)) - 1;
     const monthValues = Array.from({ length: 12 }, () => []);
     const monthSpreads = Array.from({ length: 12 }, () => []);
-    const heat = { weekday: createHourBuckets(), weekend: createHourBuckets() };
+    const heat = createHourBuckets();
     const values = [];
     let expectedPoints = 0;
 
@@ -163,8 +163,7 @@
       const date = makeIsoDate(year, month, day);
       if (date < start || date > end) continue;
       const monthIndex = month - 1;
-      const weekday = new Date(Date.UTC(year, monthIndex, day)).getUTCDay();
-      const hours = (weekday === 0 || weekday === 6 ? heat.weekend : heat.weekday)[monthIndex];
+      const hours = heat[monthIndex];
       const dayValues = [];
       expectedPoints += QUARTERS_PER_DAY;
       for (let quarter = 0; quarter < QUARTERS_PER_DAY; quarter += 1) {
@@ -237,32 +236,21 @@
   }
 
   function mergeHeatBuckets(heat, source) {
-    for (const dayType of ["weekday", "weekend"]) {
-      source[dayType].forEach((month, monthIndex) => month.forEach((hour, hourIndex) => {
-        const cell = heat[dayType][monthIndex][hourIndex];
-        cell.sum += hour.sum;
-        cell.count += hour.count;
-        cell.negative += hour.negative;
-      }));
-    }
+    source.forEach((month, monthIndex) => month.forEach((hour, hourIndex) => {
+      const cell = heat[monthIndex][hourIndex];
+      cell.sum += hour.sum;
+      cell.count += hour.count;
+      cell.negative += hour.negative;
+    }));
   }
 
-  function buildHeatAnalysis(heat, mode) {
+  function buildHeatAnalysis(heat) {
     const heatData = [];
     const heatReference = [];
-    heat.weekday.forEach((month, monthIndex) => month.forEach((weekday, hour) => {
-      const weekend = heat.weekend[monthIndex][hour];
-      const all = {
-        sum: weekday.sum + weekend.sum,
-        count: weekday.count + weekend.count,
-        negative: weekday.negative + weekend.negative
-      };
-      const chosen = mode === "weekend" ? weekend : mode === "weekday" ? weekday : all;
-      heatData.push([hour, monthIndex, chosen.count ? chosen.sum / chosen.count : null,
-        chosen.count ? chosen.negative * 100 / chosen.count : null, chosen.count]);
-      [weekday, weekend, all].forEach((cell) => {
-        if (cell.count) heatReference.push(cell.sum / cell.count);
-      });
+    heat.forEach((month, monthIndex) => month.forEach(({ sum, count, negative }, hour) => {
+      const average = count ? sum / count : null;
+      heatData.push([hour, monthIndex, average, count ? negative * 100 / count : null, count]);
+      if (average !== null) heatReference.push(average);
     }));
     return {
       heatData,
@@ -271,9 +259,8 @@
     };
   }
 
-  function buildHistorySelectedAnalysis(selectedYears, options = {}) {
-    const heatMode = options.heatMode === "weekday" || options.heatMode === "weekend" ? options.heatMode : "all";
-    const heat = { weekday: createHourBuckets(), weekend: createHourBuckets() };
+  function buildHistorySelectedAnalysis(selectedYears) {
+    const heat = createHourBuckets();
     const allValues = [];
     const monthly = [];
     const intraday = [];
@@ -295,7 +282,7 @@
     });
 
     const { duration, durationRows } = buildPriceDuration([...allValues].sort((a, b) => a - b));
-    const { heatData, heatMin, heatMax } = buildHeatAnalysis(heat, heatMode);
+    const { heatData, heatMin, heatMax } = buildHeatAnalysis(heat);
     const valueAvg = allValues.length ? allValues.reduce((sum, price) => sum + price, 0) / allValues.length : null;
     return {
       allValues,
@@ -305,7 +292,6 @@
       negativeRatio: duration.negativeRatio,
       coverage: { expectedPoints, samplePoints: allValues.length },
       monthly,
-      heatMode,
       heatData,
       heatMin,
       heatMax,
@@ -317,8 +303,8 @@
           ...monthly.map(({ month, avg, p10, p50, p90, count }) => [month, avg, p10, p50, p90, count])
         ],
         heatmap: [
-          ["month", "hour_label", "day_mode", "avg_price_yuan_per_mwh", "negative_ratio_pct", "sample_count"],
-          ...heatData.map(([hour, month, avg, negativeRatio, count]) => [month + 1, HISTORY_HEAT_HOUR_LABELS[hour], heatMode, avg, negativeRatio, count])
+          ["month", "hour_label", "avg_price_yuan_per_mwh", "negative_ratio_pct", "sample_count"],
+          ...heatData.map(([hour, month, avg, negativeRatio, count]) => [month + 1, HISTORY_HEAT_HOUR_LABELS[hour], avg, negativeRatio, count])
         ],
         duration: [
           ["price_yuan_per_mwh", "sample_count", "cumulative_pct", "strictly_above_pct"],

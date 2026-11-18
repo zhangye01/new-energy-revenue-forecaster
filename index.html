@@ -88,7 +88,7 @@
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
     <script src="./config.js?v=20261118h" defer></script>
-    <script src="./runtime.js?v=20261118m" defer></script>
+    <script src="./runtime.js?v=20261118n" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
@@ -130,10 +130,10 @@
     <script src="./src/domain/compare-sensitivity.js?v=20261118i" defer></script>
     <script src="./src/domain/compare-analysis.js?v=20261118i" defer></script>
     <script src="./src/ui/result-history.js?v=20261118f" defer></script>
-    <script src="./src/domain/history-analysis.js?v=20261118m" defer></script>
+    <script src="./src/domain/history-analysis.js?v=20261118n" defer></script>
     <script src="./src/ui/history-charts.js?v=20261118m" defer></script>
-    <script src="./src/ui/history-page.js?v=20261118m" defer></script>
-    <script src="./src/ui/history-renderer.js?v=20261118m" defer></script>
+    <script src="./src/ui/history-page.js?v=20261118n" defer></script>
+    <script src="./src/ui/history-renderer.js?v=20261118n" defer></script>
     <script src="./src/ui/theme-controller.js?v=20261113c" defer></script>
     <script src="./src/ui/shell-events.js?v=20261113c" defer></script>
     <script src="./src/ui/app-event-bindings.js?v=20261113c" defer></script>
@@ -143,7 +143,7 @@
     <script src="./src/ui/rough-trend-chart.js?v=20261118l" defer></script>
     <script src="./src/ui/rough-price-workspace.js?v=20261118l" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261118h" defer></script>
-    <script src="./src/domain/project-settings.js?v=20261118m" defer></script>
+    <script src="./src/domain/project-settings.js?v=20261118n" defer></script>
     <script src="./src/domain/project-model.js?v=20261118h" defer></script>
     <script src="./src/domain/project-display.js?v=20261113c" defer></script>
     <script src="./src/domain/energy-data.js?v=20261118b" defer></script>
@@ -901,16 +901,9 @@
               <article class="history-card">
                 <div class="history-card-head">
                   <h4 class="history-card-title" id="history-heatmap-title"><img class="history-card-icon" src="./assets/history-icon-heatmap.svg" alt="" aria-hidden="true">月份×小时热力图</h4>
-                  <div class="history-card-controls">
-                    <select class="history-card-select" id="history-heat-mode" aria-label="热力图日期类型">
-                      <option value="all">全部日期</option>
-                      <option value="weekday">周一至周五</option>
-                      <option value="weekend">周末</option>
-                    </select>
-                    <button type="button" class="history-card-export" id="history-export-heatmap" disabled>导出数据</button>
-                  </div>
+                  <button type="button" class="history-card-export" id="history-export-heatmap" disabled>导出数据</button>
                 </div>
-                <p data-help="月份与小时" data-help-anchor="#history-heatmap-title">汇总所选日期内同月同小时的 15 分钟样本。悬停查看均价、负价占比和有效样本数。周一至周五按自然星期筛选。</p>
+                <p data-help="月份与小时" data-help-anchor="#history-heatmap-title">按所选日期汇总同月同小时的 15 分钟样本。悬停查看均价、负价占比和有效样本数。</p>
                 <div class="history-chart" id="history-heatmap-chart" role="img" aria-labelledby="history-heatmap-title"></div>
               </article>
               <article class="history-card">

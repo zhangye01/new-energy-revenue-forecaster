@@ -76,11 +76,10 @@ assert.equal(isIsoDateString("2026-6-9"), false);
 assert.deepEqual(sanitizeHistoryAnalysis({ startDate: "2026-06-09", endDate: "bad" }), {
   startDate: "2026-06-09",
   endDate: "",
-  trendMode: "chronological",
-  heatMode: "all"
+  trendMode: "chronological"
 });
 assert.deepEqual(sanitizeHistoryAnalysis({ trendMode: "yoy", heatMode: "weekday" }), {
-  startDate: "", endDate: "", trendMode: "yoy", heatMode: "weekday"
+  startDate: "", endDate: "", trendMode: "yoy"
 });
 
 assert.deepEqual(sanitizeBenchmarkMap({

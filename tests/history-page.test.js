@@ -32,7 +32,6 @@ const historyEventRefs = {
   historyEndDate: new FakeTarget("2026-12-31"),
   historyExportMonthTrendButton: new FakeTarget(),
   historyTrendMode: new FakeTarget("yoy"),
-  historyHeatMode: new FakeTarget("weekend"),
   historyExportHeatmapButton: new FakeTarget(),
   historyExportDurationButton: new FakeTarget(),
   historyExportIntradaySpreadButton: new FakeTarget()
@@ -45,7 +44,6 @@ bindPolicyHistoryEvents({
     changeHistoryStartDate: (value) => historyEventCalls.push(`start:${value}`),
     changeHistoryEndDate: (value) => historyEventCalls.push(`end:${value}`),
     changeHistoryTrendMode: (value) => historyEventCalls.push(`trend:${value}`),
-    changeHistoryHeatMode: (value) => historyEventCalls.push(`heat:${value}`),
     exportHistoryChart: (type) => historyEventCalls.push(`export:${type}`)
   }
 });
@@ -54,7 +52,6 @@ historyEventRefs.policyFilterRegion.dispatch("change");
 historyEventRefs.historyStartDate.dispatch("change");
 historyEventRefs.historyEndDate.dispatch("change");
 historyEventRefs.historyTrendMode.dispatch("change");
-historyEventRefs.historyHeatMode.dispatch("change");
 historyEventRefs.historyExportMonthTrendButton.dispatch("click");
 historyEventRefs.historyExportHeatmapButton.dispatch("click");
 historyEventRefs.historyExportDurationButton.dispatch("click");
@@ -65,7 +62,6 @@ assert.deepEqual(historyEventCalls, [
   "start:2026-01-01",
   "end:2026-12-31",
   "trend:yoy",
-  "heat:weekend",
   "export:monthTrend",
   "export:heatmap",
   "export:duration",
@@ -98,14 +94,12 @@ historyHandlers.changePolicyRegion("south");
 historyHandlers.changeHistoryStartDate("2027-01-01");
 historyHandlers.changeHistoryEndDate("2027-12-31");
 historyHandlers.changeHistoryTrendMode("yoy");
-historyHandlers.changeHistoryHeatMode("weekday");
 historyHandlers.exportHistoryChart("monthTrend");
 assert.deepEqual(policyFilters, { provinceKey: "zhejiang", regionKey: "south" });
 assert.deepEqual(historyAnalysisState, {
   startDate: "2027-01-01",
   endDate: "2027-12-31",
   trendMode: "yoy",
-  heatMode: "weekday",
   sanitized: true
 });
 assert.deepEqual(historyHandlerCalls, [
@@ -119,15 +113,12 @@ assert.deepEqual(historyHandlerCalls, [
   "persist",
   "render-history",
   "persist",
-  "render-history",
-  "persist",
   "export:monthTrend"
 ]);
 
 const exportPlan = buildHistoryExportPlan({
   provinceLabel: "江苏",
   yearsRangeText: "2024-01-01 至 2025-12-31",
-  heatMode: "weekday",
   exportRows: {
     monthTrend: [["month"], ["2024-01"]],
     heatmap: [["slot"]],
@@ -140,7 +131,7 @@ assert.deepEqual(exportPlan.map(([name]) => name), ["monthTrend", "heatmap", "du
 assert.deepEqual(exportPlan[0], ["monthTrend", "江苏-省级模拟样本-20240101 至 20251231-月度电价趋势.csv", [
   ["month", "sample_source", "price_basis"], ["2024-01", "省级模拟样本", "省级现货模拟价"]
 ]]);
-assert.match(exportPlan[1][1], /周一至周五\.csv$/);
+assert.match(exportPlan[1][1], /月份与小时热力图\.csv$/);
 
 const kpis = buildHistoryKpis({
   pointCount: 12345,

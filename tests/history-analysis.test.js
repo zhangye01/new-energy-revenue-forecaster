@@ -37,8 +37,7 @@ assert.equal(marchFirstSlice.year, 2026);
 assert.equal(marchFirstSlice.values.length, 96);
 assert.equal(marchFirstSlice.values[0], 59 * 96);
 assert.equal(marchFirstSlice.monthValues[2].length, 96);
-assert.equal(marchFirstSlice.heat.weekend[2][0].count, 4);
-assert.equal(marchFirstSlice.heat.weekday[2][0].count, 0);
+assert.deepEqual(marchFirstSlice.heat[2][0], { sum: 4 * 59 * 96 + 6, count: 4, negative: 0 });
 const selectedByRange = selectHistoryYearsByDateRange({
   startYear: 2025,
   endYear: 2026,
@@ -100,18 +99,11 @@ assert.deepEqual(analysis.exportRows.intradaySpread[1], ["2025-03", 5, 10, 15, 2
 const marchIndex = 2 * 24;
 assert.deepEqual(analysis.heatData[marchIndex], [0, 2, 80 / 11, 400 / 11, 11]);
 assert.deepEqual(analysis.heatData[0], [0, 0, null, null, 0]);
-assert.deepEqual(analysis.exportRows.heatmap[marchIndex + 1], [3, "00时", "all", 80 / 11, 400 / 11, 11]);
-
-const weekdays = buildHistorySelectedAnalysis(sliced, { heatMode: "weekday" });
-const weekends = buildHistorySelectedAnalysis(sliced, { heatMode: "weekend" });
-assert.deepEqual(weekdays.heatData[marchIndex], [0, 2, 40, 0, 3]);
-assert.deepEqual(weekends.heatData[marchIndex], [0, 2, -5, 50, 8]);
-assert.deepEqual(weekdays.exportRows.heatmap[marchIndex + 1], [3, "00时", "weekday", 40, 0, 3]);
-assert.deepEqual(weekdays.monthly, weekends.monthly);
-assert.deepEqual(weekdays.intraday, weekends.intraday);
-assert.deepEqual(weekdays.duration, weekends.duration);
-assert.equal(weekdays.heatMin, weekends.heatMin);
-assert.equal(weekdays.heatMax, weekends.heatMax);
+assert.deepEqual(analysis.exportRows.heatmap[0],
+  ["month", "hour_label", "avg_price_yuan_per_mwh", "negative_ratio_pct", "sample_count"]);
+assert.deepEqual(analysis.exportRows.heatmap[marchIndex + 1], [3, "00时", 80 / 11, 400 / 11, 11]);
+assert.equal(analysis.heatMin, 80 / 11, "heat legend starts at the lowest displayed hourly average");
+assert.equal(analysis.heatMax, 200 / 12, "heat legend ends at the highest displayed hourly average");
 
 const gapAnalysis = buildHistorySelectedAnalysis(selectHistoryYearsByDateRange({ years: [source2025] }, {
   startDate: "2025-01-31",
@@ -126,6 +118,7 @@ assert.deepEqual(gapAnalysis.coverage, { expectedPoints: 30 * 96, samplePoints: 
 assert.deepEqual(gapAnalysis.exportRows.monthTrend[1], ["2025-01", null, null, null, null, 0]);
 const multiYear = buildHistorySelectedAnalysis([marchFirstSlice, ...sliced]);
 assert.deepEqual(multiYear.monthly.map(({ month }) => month), ["2025-03", "2026-03"]);
+assert.deepEqual(multiYear.heatData[marchIndex], [0, 2, (4 * 59 * 96 + 86) / 15, 400 / 15, 15]);
 
 const noData = buildHistorySelectedAnalysis(selectHistoryYearsByDateRange({ years: [source2025] }, {
   startDate: "2025-01-31",

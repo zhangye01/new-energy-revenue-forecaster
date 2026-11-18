@@ -16,7 +16,6 @@
     ["duration", "historyExportDurationButton", "价格持续曲线"],
     ["intradaySpread", "historyExportIntradaySpreadButton", "月度日内价差"]
   ]);
-  const HEAT_MODE_LABELS = Object.freeze({ all: "全部日期", weekday: "周一至周五", weekend: "周末" });
 
   function buildHistoryKpis(data = {}) {
     return {
@@ -54,7 +53,6 @@
       });
     }
     refs.historyTrendMode?.addEventListener("change", () => handlers.changeHistoryTrendMode?.(refs.historyTrendMode.value));
-    refs.historyHeatMode?.addEventListener("change", () => handlers.changeHistoryHeatMode?.(refs.historyHeatMode.value));
     CHART_EXPORTS.forEach(([exportType, refKey]) => {
       refs[refKey]?.addEventListener("click", () => {
         handlers.exportHistoryChart?.(exportType);
@@ -99,7 +97,6 @@
       changeHistoryStartDate: (startDate) => updateHistoryAnalysis({ startDate }),
       changeHistoryEndDate: (endDate) => updateHistoryAnalysis({ endDate }),
       changeHistoryTrendMode: (trendMode) => updateHistoryAnalysis({ trendMode }),
-      changeHistoryHeatMode: (heatMode) => updateHistoryAnalysis({ heatMode }),
       exportHistoryChart
     };
   }
@@ -107,20 +104,19 @@
   function buildHistoryExportPlan(input = {}) {
     const {
       provinceLabel = "-", sourceKind = "省级模拟样本", basisLabel = "省级现货模拟价",
-      yearsRangeText = "", heatMode = "all", exportRows = {}, sanitizePart = (value) => value
+      yearsRangeText = "", exportRows = {}, sanitizePart = (value) => value
     } = input;
     const exportPrefix = [provinceLabel, sourceKind, yearsRangeText].map(sanitizePart).join("-");
     return CHART_EXPORTS.map(([key, , name]) => {
-      const suffix = key === "heatmap" ? `-${HEAT_MODE_LABELS[heatMode] || HEAT_MODE_LABELS.all}` : "";
       const rows = exportRows[key] || [];
       const withSource = rows.map((row, index) => [...row, ...(index === 0
         ? ["sample_source", "price_basis"] : [sourceKind, basisLabel])]);
-      return [key, `${exportPrefix}-${name}${suffix}.csv`, withSource];
+      return [key, `${exportPrefix}-${name}.csv`, withSource];
     });
   }
 
   function buildHistoryReadyViewModel(input = {}) {
-    const { historyData = {}, range = {}, dataset = {}, provinceLabel = "-", heatMode = "all",
+    const { historyData = {}, range = {}, dataset = {}, provinceLabel = "-",
       sanitizePart = (value) => value } = input;
     const yearsRangeText = `${range.startDate || ""} 至 ${range.endDate || ""}`;
     const sourceKind = dataset.mock ? "省级模拟样本" : "省级历史样本";
@@ -132,7 +128,7 @@
       basisLabel,
       coverage: expectedPoints > 0 ? (samplePoints / expectedPoints * 100).toFixed(1) + "%" : "—",
       exportPlan: buildHistoryExportPlan({
-        provinceLabel, sourceKind, basisLabel, yearsRangeText, heatMode,
+        provinceLabel, sourceKind, basisLabel, yearsRangeText,
         exportRows: historyData.exportRows, sanitizePart
       }),
       kpis: buildHistoryKpis({

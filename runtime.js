@@ -23,8 +23,7 @@ const appState = {
   historyAnalysis: {
     startDate: "",
     endDate: "",
-    trendMode: "chronological",
-    heatMode: "all"
+    trendMode: "chronological"
   },
   benchmarkMap: {
     level: "nation",
@@ -163,7 +162,6 @@ const refs = {
   historySourceBasis: document.querySelector("#history-source-basis"),
   historySourceCoverage: document.querySelector("#history-source-coverage"),
   historyTrendMode: document.querySelector("#history-trend-mode"),
-  historyHeatMode: document.querySelector("#history-heat-mode"),
   historyMonthTrendChart: document.querySelector("#history-month-trend-chart"),
   historyHeatmapChart: document.querySelector("#history-heatmap-chart"),
   historyDurationChart: document.querySelector("#history-duration-chart"),

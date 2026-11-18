@@ -120,15 +120,13 @@
     const defaults = {
       startDate: "",
       endDate: "",
-      trendMode: "chronological",
-      heatMode: "all"
+      trendMode: "chronological"
     };
     if (!isPlainObject(raw)) return defaults;
     return {
       startDate: isIsoDateString(raw.startDate) ? raw.startDate : "",
       endDate: isIsoDateString(raw.endDate) ? raw.endDate : "",
-      trendMode: raw.trendMode === "yoy" ? "yoy" : defaults.trendMode,
-      heatMode: ["weekday", "weekend"].includes(raw.heatMode) ? raw.heatMode : defaults.heatMode
+      trendMode: raw.trendMode === "yoy" ? "yoy" : defaults.trendMode
     };
   }
 

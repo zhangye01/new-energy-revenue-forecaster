@@ -90,7 +90,6 @@
     const controls = sanitizeHistoryAnalysis(appState.historyAnalysis);
     appState.historyAnalysis = controls;
     if (refs.historyTrendMode) refs.historyTrendMode.value = controls.trendMode || "chronological";
-    if (refs.historyHeatMode) refs.historyHeatMode.value = controls.heatMode || "all";
     if (!windowRef?.echarts) {
       renderUnavailable(input, "图表引擎未加载完成，请稍后重试。", "图表引擎未加载完成，请稍后重试。");
       return;
@@ -139,10 +138,10 @@
       refs.historyEndDate.value = range.endDate;
     }
     const selectedYears = historyAnalysis.selectHistoryYearsByDateRange(dataset, range);
-    const historyData = historyAnalysis.buildHistorySelectedAnalysis(selectedYears, { heatMode: controls.heatMode });
+    const historyData = historyAnalysis.buildHistorySelectedAnalysis(selectedYears);
     const provinceLabel = getProvinceName(project.province) || project.provinceLabel || "—";
     const historyView = historyPage.buildHistoryReadyViewModel({
-      historyData, range, dataset, provinceLabel, heatMode: controls.heatMode,
+      historyData, range, dataset, provinceLabel,
       sanitizePart: sanitizeExportFilenamePart
     });
     if (!historyData.allValues.length) {

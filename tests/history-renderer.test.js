@@ -8,13 +8,13 @@ const {
 } = require("../src/ui/history-renderer");
 const historyAnalysis = require("../src/domain/history-analysis");
 const historyPage = require("../src/ui/history-page");
+const { sanitizeHistoryAnalysis } = require("../src/domain/project-settings");
 
 const refs = {
   historySourceProvince: { textContent: "" },
   historySourceKind: { textContent: "" },
   historySourceCoverage: { textContent: "" },
   historyTrendMode: {},
-  historyHeatMode: {},
   historyKpiPoints: { textContent: "1" },
   historyKpiAvg: { textContent: "2" },
   historyKpiP50: { textContent: "3" },
@@ -85,7 +85,7 @@ const exportKeys = [];
 const dates = { startDate: "2024-01-01", endDate: "2024-01-03", trendMode: "yoy", heatMode: "weekend" };
 renderHistoryPrices({
   refs, appState: { activePage: "history-page", historyAnalysis: dates }, windowRef: { echarts: {} },
-  getActiveProject: () => project, getProvinceName: () => "江苏", isProjectCreateCompleted: () => true,
+  getActiveProject: () => project, getProvinceName: () => "江苏", isProjectCreateCompleted: () => true, sanitizeHistoryAnalysis,
   buildHistorySpotAnalysisDataset: () => testDataset, historyAnalysis, historyPage,
   setHistoryExportPayload: (key) => exportKeys.push(key),
   ensureHistoryCharts: () => Object.fromEntries(chartKeys.map((key) => [key, {
@@ -93,14 +93,13 @@ renderHistoryPrices({
   }])),
   historyCharts: { buildHistoryChartOptions(data, tokens, options) {
     assert.equal(options.trendMode, "yoy");
-    assert.equal(data.heatMode, "weekend");
+    assert.deepEqual(data.heatData[0], [0, 0, 300, 0, 12], "原有周末选项忽略，按所选三天汇总");
     return Object.fromEntries(chartKeys.map((key) => [key, {}]));
   } }
 });
 assert.deepEqual(renderedKeys, chartKeys);
 assert.deepEqual(exportKeys, chartKeys);
 assert.equal(refs.historyTrendMode.value, "yoy");
-assert.equal(refs.historyHeatMode.value, "weekend");
 assert.equal(refs.historyKpiAvg.textContent, "300.0 元/MWh");
 assert.equal(refs.historySourceKind.textContent, "省级模拟样本");
 assert.equal(refs.historySourceCoverage.textContent, "样本覆盖率 100.0%");
