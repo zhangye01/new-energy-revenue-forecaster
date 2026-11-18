@@ -1,0 +1,209 @@
+"use strict";
+const assert = require("node:assert/strict");
+const domain = require("../src/domain/supply-demand");
+const { ELEMENTS, MONTH_DAYS, createConfig, createSeries, validateConfig, fingerprint, buildAnnualSummary, buildDataset, csvRows } = domain;
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const sum = (values) => values.reduce((total, value) => total + value, 0);
+const approx = (actual, expected, tolerance = 1e-6) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} != ${expected}`);
+const project = { id: "supply-project", province: "jiangsu", startYear: 2028, forecastYears: 3 };
+function configured(projectInput = project) {
+  const config = createConfig(projectInput);
+  for (const { key } of ELEMENTS) {
+    const series = config.elements[key];
+    series.baseEnergyMwh = 0;
+    for (let index = 1; index < projectInput.forecastYears; index += 1) series.growthRatesByYear[projectInput.startYear + index] = 0;
+  }
+  return config;
+}
+function shape(series, base, months = MONTH_DAYS, hours = Array(24).fill(1)) {
+  series.baseEnergyMwh = base;
+  series.monthlyWeights = [...months];
+  series.hourlyWeightsByMonth = Object.fromEntries(MONTH_DAYS.map((_, index) => [index + 1, [...hours]]));
+  return series;
+}
+function reject(config, pattern, inputProject = project) {
+  const before = JSON.stringify(config);
+  const errors = validateConfig(inputProject, config);
+  assert.ok(errors.length);
+  if (pattern) assert.ok(errors.some((error) => pattern.test(error)), errors.join(";"));
+  const data = buildDataset(inputProject, config);
+  assert.equal(data.ok, false);
+  assert.deepEqual(data.annualRows, []);
+  assert.deepEqual(data.hourlyByYear, {});
+  assert.equal(JSON.stringify(config), before);
+}
+
+assert.equal(ELEMENTS.length, 6);
+assert.deepEqual(ELEMENTS.map((element) => element.key), ["load", "tieLine", "wind", "solar", "hydro", "nonMarket"]);
+const empty = createConfig(project);
+assert.equal(empty.startYear, 2028);
+assert.equal(empty.forecastYears, 3);
+assert.equal(empty.elements.load.baseEnergyMwh, null);
+assert.equal(empty.elements.load.growthRatesByYear[2029], null);
+assert.equal(empty.elements.load.growthRatesByYear[2028], undefined);
+assert.notEqual(empty.elements.load.hourlyWeightsByMonth[1], empty.elements.load.hourlyWeightsByMonth[2]);
+assert.notEqual(empty.elements.tieLine.export, empty.elements.tieLine.import);
+reject(empty, /首年电量/);
+reject(configured(), /周期/, { ...project, forecastYears: 31 });
+reject(configured(), /周期/, { ...project, forecastYears: 1000000 });
+reject(configured(), /周期/, { ...project, startYear: 2029 });
+reject(configured(), /周期/, { ...project, forecastYears: 2 });
+reject(configured(), /周期/, { ...project, startYear: 2028.5 });
+assert.deepEqual(createConfig({ ...project, forecastYears: 1000000 }).elements.load.growthRatesByYear, {});
+assert.deepEqual(validateConfig({ ...project, forecastYears: 30 }, configured({ ...project, forecastYears: 30 })), []);
+
+const raw = configured();
+shape(raw.elements.load, 8760);
+raw.elements.load.growthRatesByYear = { 2028: 500, 2029: 10, 2030: -25 };
+shape(raw.elements.tieLine, -365);
+shape(raw.elements.wind, 17520);
+const before = JSON.stringify({ project, raw });
+const result = buildDataset(project, raw);
+assert.equal(result.ok, true, result.errors.join(";"));
+assert.deepEqual(result.annualRows.map((row) => row.load), [8760, 9636, 7227]);
+assert.equal(result.typicalRows.length, 3 * 288);
+for (const annual of result.annualRows) {
+  const hourly = result.hourlyByYear[annual.year];
+  assert.equal(hourly.load.length, 8760);
+  assert.equal(hourly.tieLine.length, 8760);
+  assert.equal(hourly.tieLineExport.length, 8760);
+  assert.ok(hourly.tieLine.every((value) => value < 0));
+  approx(annual.tieLine, -365);
+  approx(annual.tieLineExport, 0);
+  approx(annual.tieLineImport, 365);
+  approx(sum(hourly.load), annual.load);
+  approx(sum(hourly.tieLine), annual.tieLine);
+  const typical = result.typicalRows.filter((row) => row.year === annual.year);
+  approx(sum(typical.map((row) => row.load * row.representedDays)), annual.load);
+  for (const row of typical) {
+    assert.equal(row.residualDemand, row.load + row.tieLine - row.wind - row.solar - row.hydro - row.nonMarket);
+  }
+  assert.ok(hourly.residualDemand.every((value) => value < 0), "negative residual demand is not clamped");
+}
+approx(result.hourlyByYear[2028].load[0], 1);
+assert.equal(result.source.calendar, "fixed_365_days");
+assert.equal(result.source.monthDays[1], 28, "2028 follows a model year, not an inferred real leap calendar");
+assert.equal(result.source.energyUnit, "MWh");
+assert.equal(result.source.averagePowerUnit, "MW");
+assert.equal(JSON.stringify({ project, raw }), before, "build and validate do not normalize stored inputs");
+assert.deepEqual(buildAnnualSummary(project, raw), { ok: true, errors: [], annualRows: result.annualRows });
+assert.equal(JSON.stringify({ project, raw }), before, "annual-only validation does not alter inputs");
+assert.equal(buildAnnualSummary(project, empty).ok, false);
+assert.deepEqual(buildAnnualSummary(project, empty).annualRows, []);
+assert.equal(buildAnnualSummary(project, raw).hourlyByYear, undefined, "annual-only helper must not allocate hourly arrays");
+
+// Independent monthly/typical-day reference: 1200 MWh, 10% January and 90% February;
+// hour 0 gets 1/4, hour 12 gets 3/4. All other month/hour input can remain unused.
+const monthly = configured({ ...project, forecastYears: 1 });
+monthly.elements.load.baseEnergyMwh = 1200;
+monthly.elements.load.monthlyWeights = [1, 9, ...Array(10).fill(0)];
+monthly.elements.load.hourlyWeightsByMonth = {
+  1: Array.from({ length: 24 }, (_, h) => h === 0 ? 1 : h === 12 ? 3 : 0),
+  2: Array.from({ length: 24 }, (_, h) => h === 0 ? 1 : h === 12 ? 3 : 0)
+};
+const monthResult = buildDataset({ ...project, forecastYears: 1 }, monthly);
+assert.equal(monthResult.ok, true, monthResult.errors.join(";"));
+approx(monthResult.typicalRows.find((row) => row.month === 1 && row.hour === 0).load, 120 / 31 / 4);
+approx(monthResult.typicalRows.find((row) => row.month === 2 && row.hour === 12).load, 1080 / 28 * .75);
+approx(sum(monthResult.hourlyByYear[2028].load.slice(0, 31 * 24)), 120);
+approx(sum(monthResult.hourlyByYear[2028].load.slice(31 * 24, 59 * 24)), 1080);
+assert.ok(monthResult.typicalRows.filter((row) => row.month > 2).every((row) => row.load === 0));
+
+// Zero annual net exchange still has genuine hourly export and import.
+const bidirectional = configured();
+const tie = bidirectional.elements.tieLine;
+tie.mode = "bidirectional";
+tie.export = shape(createSeries(project), 8760, MONTH_DAYS, Array.from({ length: 24 }, (_, h) => h === 0 ? 1 : 0));
+tie.import = shape(createSeries(project), 8760, MONTH_DAYS, Array.from({ length: 24 }, (_, h) => h === 23 ? 1 : 0));
+for (const series of [tie.export, tie.import]) series.growthRatesByYear = { 2029: 0, 2030: 0 };
+// An inactive net branch can be incomplete without corrupting/confirming it.
+tie.baseEnergyMwh = null;
+const bidiBefore = JSON.stringify(bidirectional), bidiData = buildDataset(project, bidirectional);
+assert.equal(bidiData.ok, true, bidiData.errors.join(";"));
+assert.equal(bidiData.annualRows[0].tieLine, 0);
+assert.equal(bidiData.annualRows[0].tieLineExport, 8760);
+assert.equal(bidiData.annualRows[0].tieLineImport, 8760);
+assert.deepEqual(buildAnnualSummary(project, bidirectional).annualRows, bidiData.annualRows);
+approx(bidiData.hourlyByYear[2028].tieLine[0], 24);
+approx(bidiData.hourlyByYear[2028].tieLine[23], -24);
+approx(sum(bidiData.hourlyByYear[2028].tieLine), 0);
+assert.equal(JSON.stringify(bidirectional), bidiBefore);
+const imbalance = clone(bidirectional); imbalance.elements.tieLine.import.baseEnergyMwh = 4380;
+approx(buildDataset(project, imbalance).annualRows[0].tieLine, 4380);
+const negativeExport = clone(bidirectional); negativeExport.elements.tieLine.export.baseEnergyMwh = -1;
+reject(negativeExport, /送出首年电量/);
+// Large gross flows with unlike shapes can have a zero annual net. Floating point
+// cancellation must not cause a false validation error or erase their hour data.
+const largeExchange = clone(bidirectional);
+for (const direction of ["export", "import"]) {
+  const outgoing = direction === "export";
+  shape(largeExchange.elements.tieLine[direction], 1e12,
+    Array.from({ length: 12 }, (_, i) => outgoing ? i + 1 : 12 - i),
+    Array.from({ length: 24 }, (_, h) => outgoing ? h + 1 : 24 - h));
+}
+const largeExchangeData = buildDataset(project, largeExchange);
+assert.equal(largeExchangeData.ok, true, largeExchangeData.errors.join(";"));
+assert.deepEqual(buildAnnualSummary(project, largeExchange).annualRows, largeExchangeData.annualRows);
+assert.equal(largeExchangeData.annualRows[0].tieLine, 0);
+assert.ok(largeExchangeData.hourlyByYear[2028].tieLine.some((value) => value > 0));
+assert.ok(largeExchangeData.hourlyByYear[2028].tieLine.some((value) => value < 0));
+approx(sum(largeExchangeData.hourlyByYear[2028].tieLine), 0, 0.1);
+
+// Explicit zero is legal with no unused curve. It is never inferred from blank.
+const zero = configured();
+assert.equal(buildDataset(project, zero).ok, true);
+const decline = configured(); shape(decline.elements.load, 100); decline.elements.load.growthRatesByYear[2029] = -100;
+assert.deepEqual(buildDataset(project, decline).annualRows.map((row) => row.load), [100, 0, 0]);
+for (const base of [null, "", "0", false, NaN, Infinity, -1]) {
+  const invalid = configured(); invalid.elements.load.baseEnergyMwh = base; reject(invalid, /首年电量/);
+}
+for (const growth of [null, "", "1", true, NaN, Infinity, -100.001]) {
+  const invalid = clone(raw); invalid.elements.load.growthRatesByYear[2029] = growth; reject(invalid, /增长率/);
+}
+for (const curve of [undefined, {}, [], Array(12), Array(12).fill(null), Array(12).fill(0), Array(12).fill(-1), Array(12).fill(Infinity)]) {
+  const invalid = clone(raw); invalid.elements.load.monthlyWeights = curve; reject(invalid, /分月权重/);
+}
+for (const curve of [undefined, {}, [], Array(24), Array(24).fill(null), Array(24).fill(0), Array(24).fill(-1), Array(24).fill(Infinity)]) {
+  const invalid = clone(raw); invalid.elements.load.hourlyWeightsByMonth[1] = curve; reject(invalid, /24小时权重/);
+}
+const overflow = clone(raw); overflow.elements.load.baseEnergyMwh = 1e308; overflow.elements.load.growthRatesByYear[2029] = 10000;
+reject(overflow, /超出/);
+const aggregateOverflow = clone(raw); shape(aggregateOverflow.elements.load, 1e308); shape(aggregateOverflow.elements.wind, 1e308);
+reject(aggregateOverflow, /超出/);
+// Safe normalization avoids overflow merely because weights use a large scale.
+const largeWeights = clone(raw); largeWeights.elements.load.monthlyWeights = Array(12).fill(1e308);
+largeWeights.elements.load.hourlyWeightsByMonth[1] = Array(24).fill(1e308);
+assert.equal(buildDataset(project, largeWeights).ok, true);
+const invalidMode = configured(); invalidMode.elements.tieLine.mode = "unknown"; reject(invalidMode, /配置方式/);
+const invalidVersion = configured(); invalidVersion.version = 2; reject(invalidVersion, /版本/);
+
+// Fingerprints record scope and every raw config field, independent of key order.
+assert.equal(result.fingerprint, fingerprint(project, raw));
+assert.equal(fingerprint(project, raw), fingerprint({ forecastYears: 3, province: "jiangsu", startYear: 2028, id: "supply-project" }, raw));
+const reordered = Object.fromEntries(Object.entries(raw).reverse());
+assert.equal(fingerprint(project, raw), fingerprint(project, reordered));
+for (const field of ["province", "id", "startYear", "forecastYears"]) {
+  const changed = { ...project, [field]: typeof project[field] === "number" ? project[field] + 1 : "changed" };
+  assert.notEqual(fingerprint(project, raw), fingerprint(changed, raw));
+}
+const inputChange = clone(raw); inputChange.elements.wind.hourlyWeightsByMonth[1][3] = 9;
+assert.notEqual(fingerprint(project, inputChange), fingerprint(project, raw));
+
+const annualCsv = csvRows(monthResult, "annual");
+assert.equal(annualCsv.length, 2); assert.equal(annualCsv[0][0], "year");
+assert.ok(annualCsv[0].includes("tie_line_net_mwh"));
+const typicalCsv = csvRows(monthResult, "typical");
+assert.equal(typicalCsv.length, 289);
+assert.deepEqual(typicalCsv[0].slice(0, 4), ["year", "month", "hour", "represented_days"]);
+assert.deepEqual(typicalCsv[1].slice(0, 4), [2028, 1, 0, 31]);
+assert.deepEqual(typicalCsv.at(-1).slice(0, 4), [2028, 12, 23, 31]);
+const hourlyCsv = csvRows(monthResult, "hourly");
+assert.equal(hourlyCsv.length, 8761);
+assert.deepEqual(hourlyCsv[0].slice(0, 5), ["year", "month", "day", "hour", "hour_index"]);
+assert.deepEqual(hourlyCsv[1].slice(0, 5), [2028, 1, 1, 0, 1]);
+assert.deepEqual(hourlyCsv[31 * 24 + 1].slice(0, 5), [2028, 2, 1, 0, 745]);
+assert.deepEqual(hourlyCsv.at(-1).slice(0, 5), [2028, 12, 31, 23, 8760]);
+approx(sum(hourlyCsv.slice(1).map((row) => row[5])), 1200);
+assert.deepEqual(csvRows({ ok: false }, "hourly"), []);
+assert.throws(() => csvRows(monthResult, "invalid"), /类型/);
+console.log("supply demand tests passed");

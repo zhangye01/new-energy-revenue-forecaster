@@ -6,12 +6,12 @@
     <title>新能源全口径收入预测工作台</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="./styles/theme.css?v=20260714d">
-    <link rel="stylesheet" href="./styles/base.css?v=20261019t">
+    <link rel="stylesheet" href="./styles/base.css?v=20261113c">
     <link rel="stylesheet" href="./styles/components/data-display.css?v=20260714d">
     <link rel="stylesheet" href="./styles/components/forms.css?v=20260714d">
     <link rel="stylesheet" href="./styles/components/buttons.css?v=20260714d">
     <link rel="stylesheet" href="./styles/components/workflow.css?v=20260714d">
-    <link rel="stylesheet" href="./styles/components/auth.css?v=20261019t">
+    <link rel="stylesheet" href="./styles/components/auth.css?v=20261113c">
     <link rel="stylesheet" href="./styles/components/context-help.css?v=20261019e">
     <link rel="stylesheet" href="./styles/pages/home.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/projects.css?v=20260714d">
@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261019n">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20260714d">
-    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261019l">
+    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118a">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261019e">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
@@ -87,64 +87,67 @@
     </script>
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
-    <script src="./config.js?v=20261019t" defer></script>
+    <script src="./config.js?v=20261113c" defer></script>
     <script src="./runtime.js?v=20260515t" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
-    <script src="./src/domain/csv-utils.js?v=20261019t" defer></script>
-    <script src="./src/domain/export-builders.js?v=20261019t" defer></script>
-    <script src="./src/ui/file-import-utils.js?v=20261019t" defer></script>
-    <script src="./src/ui/script-loader.js?v=20261019t" defer></script>
-    <script src="./src/ui/context-help.js?v=20261019t" defer></script>
-    <script src="./src/domain/energy-profiles.js?v=20261019t" defer></script>
-    <script src="./src/domain/app-utils.js?v=20261019t" defer></script>
-    <script src="./src/domain/price-forecast.js?v=20261019t" defer></script>
-    <script src="./src/domain/revenue-rules.js?v=20261019t" defer></script>
-    <script src="./src/domain/revenue-calculator.js?v=20261019t" defer></script>
-    <script src="./src/domain/result-calculation.js?v=20261019t" defer></script>
-    <script src="./src/domain/result-report.js?v=20261019t" defer></script>
-    <script src="./src/ui/policy-panel.js?v=20261019t" defer></script>
-    <script src="./src/ui/province-defaults.js?v=20261019t" defer></script>
-    <script src="./src/ui/energy-workspace.js?v=20261019t" defer></script>
-    <script src="./src/ui/create-project-flow.js?v=20261019t" defer></script>
-    <script src="./src/ui/energy-template-flow.js?v=20261019t" defer></script>
-    <script src="./src/ui/chart-lifecycle.js?v=20261019t" defer></script>
-    <script src="./src/ui/energy-charts.js?v=20261019t" defer></script>
-    <script src="./src/ui/forecast-page.js?v=20261019t" defer></script>
-    <script src="./src/ui/forecast-run-flow.js?v=20261019t" defer></script>
-    <script src="./src/ui/project-list.js?v=20261019t" defer></script>
-    <script src="./src/ui/result-page.js?v=20261019t" defer></script>
-    <script src="./src/ui/result-runner.js?v=20261019t" defer></script>
-    <script src="./src/ui/result-print.js?v=20261019t" defer></script>
-    <script src="./src/ui/result-charts.js?v=20261019t" defer></script>
-    <script src="./src/ui/scenario-charts.js?v=20261019t" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20261019t" defer></script>
-    <script src="./src/ui/scenario-visual-data.js?v=20261019t" defer></script>
-    <script src="./src/ui/manual-scenario-flow.js?v=20261019t" defer></script>
-    <script src="./src/ui/compare-charts.js?v=20261019t" defer></script>
-    <script src="./src/ui/compare-page.js?v=20261019t" defer></script>
-    <script src="./src/domain/compare-sensitivity.js?v=20261019t" defer></script>
-    <script src="./src/domain/compare-analysis.js?v=20261019t" defer></script>
-    <script src="./src/domain/history-analysis.js?v=20261019t" defer></script>
-    <script src="./src/ui/history-charts.js?v=20261019t" defer></script>
-    <script src="./src/ui/history-page.js?v=20261019t" defer></script>
-    <script src="./src/ui/history-renderer.js?v=20261019t" defer></script>
-    <script src="./src/ui/theme-controller.js?v=20261019t" defer></script>
-    <script src="./src/ui/shell-events.js?v=20261019t" defer></script>
-    <script src="./src/ui/app-event-bindings.js?v=20261019t" defer></script>
-    <script src="./src/domain/workflow-status.js?v=20261019t" defer></script>
-    <script src="./src/domain/scenario-config.js?v=20261019t" defer></script>
-    <script src="./src/domain/rough-price.js?v=20261019t" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261019t" defer></script>
-    <script src="./src/domain/scenario-model.js?v=20261019t" defer></script>
-    <script src="./src/domain/project-settings.js?v=20261019t" defer></script>
-    <script src="./src/domain/project-model.js?v=20261019t" defer></script>
-    <script src="./src/domain/project-display.js?v=20261019t" defer></script>
-    <script src="./src/domain/energy-data.js?v=20261019t" defer></script>
-    <script src="./src/domain/energy-import-flow.js?v=20261019t" defer></script>
-    <script src="./src/domain/app-storage.js?v=20261019t" defer></script>
-    <script src="./src/ui/app-persistence.js?v=20261019t" defer></script>
-    <script src="./src/ui/project-backup.js?v=20261019t" defer></script>
-    <script src="./app.js?v=20261019t" defer></script>
+    <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
+    <script src="./src/domain/export-builders.js?v=20261113c" defer></script>
+    <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
+    <script src="./src/ui/script-loader.js?v=20261113c" defer></script>
+    <script src="./src/ui/context-help.js?v=20261113c" defer></script>
+    <script src="./src/domain/energy-profiles.js?v=20261113c" defer></script>
+    <script src="./src/domain/app-utils.js?v=20261113c" defer></script>
+    <script src="./src/domain/supply-demand.js?v=20261113c" defer></script>
+    <script src="./src/domain/price-forecast.js?v=20261113c" defer></script>
+    <script src="./src/domain/revenue-rules.js?v=20261113c" defer></script>
+    <script src="./src/domain/revenue-calculator.js?v=20261113c" defer></script>
+    <script src="./src/domain/result-calculation.js?v=20261113c" defer></script>
+    <script src="./src/domain/result-report.js?v=20261113c" defer></script>
+    <script src="./src/ui/policy-panel.js?v=20261113c" defer></script>
+    <script src="./src/ui/province-defaults.js?v=20261113c" defer></script>
+    <script src="./src/ui/energy-workspace.js?v=20261113c" defer></script>
+    <script src="./src/ui/create-project-flow.js?v=20261113c" defer></script>
+    <script src="./src/ui/energy-template-flow.js?v=20261113c" defer></script>
+    <script src="./src/ui/chart-lifecycle.js?v=20261113c" defer></script>
+    <script src="./src/ui/energy-charts.js?v=20261113c" defer></script>
+    <script src="./src/ui/supply-demand-workspace.js?v=20261113c" defer></script>
+    <script src="./src/ui/supply-demand-flow.js?v=20261118a" defer></script>
+    <script src="./src/ui/forecast-page.js?v=20261118a" defer></script>
+    <script src="./src/ui/forecast-run-flow.js?v=20261113c" defer></script>
+    <script src="./src/ui/project-list.js?v=20261113c" defer></script>
+    <script src="./src/ui/result-page.js?v=20261113c" defer></script>
+    <script src="./src/ui/result-runner.js?v=20261113c" defer></script>
+    <script src="./src/ui/result-print.js?v=20261113c" defer></script>
+    <script src="./src/ui/result-charts.js?v=20261113c" defer></script>
+    <script src="./src/ui/scenario-charts.js?v=20261113c" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261113c" defer></script>
+    <script src="./src/ui/scenario-visual-data.js?v=20261113c" defer></script>
+    <script src="./src/ui/manual-scenario-flow.js?v=20261113c" defer></script>
+    <script src="./src/ui/compare-charts.js?v=20261113c" defer></script>
+    <script src="./src/ui/compare-page.js?v=20261113c" defer></script>
+    <script src="./src/domain/compare-sensitivity.js?v=20261113c" defer></script>
+    <script src="./src/domain/compare-analysis.js?v=20261113c" defer></script>
+    <script src="./src/domain/history-analysis.js?v=20261113c" defer></script>
+    <script src="./src/ui/history-charts.js?v=20261113c" defer></script>
+    <script src="./src/ui/history-page.js?v=20261113c" defer></script>
+    <script src="./src/ui/history-renderer.js?v=20261113c" defer></script>
+    <script src="./src/ui/theme-controller.js?v=20261113c" defer></script>
+    <script src="./src/ui/shell-events.js?v=20261113c" defer></script>
+    <script src="./src/ui/app-event-bindings.js?v=20261113c" defer></script>
+    <script src="./src/domain/workflow-status.js?v=20261113c" defer></script>
+    <script src="./src/domain/scenario-config.js?v=20261113c" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261113c" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261113c" defer></script>
+    <script src="./src/domain/scenario-model.js?v=20261113c" defer></script>
+    <script src="./src/domain/project-settings.js?v=20261113c" defer></script>
+    <script src="./src/domain/project-model.js?v=20261113c" defer></script>
+    <script src="./src/domain/project-display.js?v=20261113c" defer></script>
+    <script src="./src/domain/energy-data.js?v=20261113c" defer></script>
+    <script src="./src/domain/energy-import-flow.js?v=20261113c" defer></script>
+    <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
+    <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
+    <script src="./src/ui/project-backup.js?v=20261113c" defer></script>
+    <script src="./app.js?v=20261118a" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -929,8 +932,25 @@
         </section>
 
         <section class="page" id="forecast-page">
-          <section class="panel">
-            <div class="panel-head"><strong id="forecast-model-scope">模拟曲线</strong><span data-help="电价预测口径" data-help-anchor="#forecast-model-scope">当前曲线含模拟逻辑，用于流程与口径演示。现货电价预测与收益参数补充与细化共同形成基准结果，可在结果输出阶段与粗算预期对照。</span></div>
+          <div id="supply-demand-root"></div>
+          <section class="panel backend-forecast-panel" aria-labelledby="backend-forecast-heading">
+            <div class="panel-head backend-forecast-head">
+              <div class="backend-forecast-title">
+                <strong id="backend-forecast-heading">后台电价预测</strong>
+                <span data-help="后台预测流程" data-help-anchor="#backend-forecast-heading">保存供需配置后，将本次小时数据提交后台算法。返回结果通过周期、单位和完整性核对后，可设为生效版本，再进入收益参数补充与细化。任务与结果始终对应提交时的供需版本。</span>
+              </div>
+              <span id="backend-forecast-status" class="backend-forecast-status" role="status" aria-live="polite" aria-atomic="true">后台算法待接入</span>
+            </div>
+            <div class="backend-forecast-actions">
+              <button type="button" class="primary-button" id="backend-forecast-submit" disabled>提交后台预测</button>
+              <button type="button" class="ghost-button" id="backend-forecast-refresh" disabled>刷新任务状态</button>
+              <button type="button" class="ghost-button" id="backend-forecast-activate" disabled>设为生效</button>
+              <button type="button" class="primary-button next-step-button" id="backend-forecast-next" data-jump="scenario-page" disabled>进入收益参数补充与细化</button>
+            </div>
+            <small id="backend-forecast-note" class="backend-forecast-note">完成供需配置后提交，结果返回并生效后继续。</small>
+          </section>
+          <section class="panel forecast-demo-panel">
+            <div class="panel-head"><strong id="forecast-model-scope">演示预测</strong><span data-help="演示预测口径" data-help-anchor="#forecast-model-scope">沿用本地模拟曲线验证流程与计算口径；供需配置仅保存来源，尚未参与该演示模型定价。演示结果与后台算法结果分别标识。</span></div>
             <form id="forecast-run-form" class="form-grid">
               <label>算法类型
                 <select id="algo-family">
@@ -959,7 +979,7 @@
                 <input id="algo-growth" type="number" min="-99.9" step="0.1" value="0.5">
               </label>
               <div class="actions-row">
-                <button type="submit" class="primary-button">生成三种模型电价曲线</button>
+                <button type="submit" class="primary-button">生成演示预测</button>
               </div>
             </form>
             <div class="info-box forecast-quality">

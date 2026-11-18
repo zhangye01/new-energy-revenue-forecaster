@@ -150,6 +150,109 @@ const safeRestore = backup.prepareRestore(JSON.stringify(envelope([preserved])),
 assert.equal(JSON.stringify(safeRestore.projects[0]), preservedBytes, 'safe validation preserves every original value and snapshot without cleaning or truncating arrays');
 console.log('project backup safety and atomicity tests passed');
 
+// Supply inputs, saved drafts and run provenance are losslessly included in the
+// same backup; restoring a copy must retain evidence tied to its original ID.
+const supplyDomain = require('../src/domain/supply-demand');
+const forecastDomain = require('../src/domain/price-forecast');
+const supplyFlow = require('../src/ui/supply-demand-flow');
+const suppliedProject = JSON.parse(JSON.stringify(preserved));
+suppliedProject.province = 'hebei';
+const suppliedConfig = supplyDomain.createConfig(suppliedProject);
+for (const { key } of supplyDomain.ELEMENTS) {
+  const element = suppliedConfig.elements[key];
+  element.baseEnergyMwh = key === 'load' ? 8760.123456789 : key === 'tieLine' ? -220.123456789 : 0;
+  element.growthRatesByYear = { 2027: key === 'load' ? 2.125 : 0, 2028: -1.75 };
+  element.monthlyWeights = [...supplyDomain.MONTH_DAYS];
+  Object.values(element.hourlyWeightsByMonth).forEach((weights) => weights.fill(1));
+}
+const suppliedDataset = supplyDomain.buildDataset(suppliedProject, suppliedConfig);
+assert.equal(suppliedDataset.ok, true);
+suppliedProject.supplyDemand = {
+  version: 1, config: suppliedConfig, draft: JSON.parse(JSON.stringify(suppliedConfig)),
+  generatedAt: '2026-11-13T01:02:03.000Z', inputFingerprint: suppliedDataset.fingerprint
+};
+suppliedProject.supplyDemand.draft.elements.nonMarket.baseEnergyMwh = null;
+suppliedProject.priceRuns.push({ id: 'bound-supply', status: 'publishable',
+  supplyDemandInput: forecastDomain.snapshotSupplyDemandInput(suppliedProject, { config: suppliedConfig, dataset: suppliedDataset }),
+  pricesByYear: { 2026: [0, -5.123456789, 300.75] } });
+suppliedProject.activeRunId = 'bound-supply';
+const suppliedBytes = JSON.stringify(suppliedProject);
+const suppliedBackup = backup.buildBackup({ payload: { projects: [suppliedProject] } }, 'demo1');
+const supplyRestore = backup.prepareRestore(suppliedBackup, [], 'demo1', () => 'unused').projects[0];
+assert.equal(JSON.stringify(supplyRestore), suppliedBytes, '供需原件、未完成草稿、预测来源和既有费用/粗算均按原值恢复');
+const supplyCopy = backup.prepareRestore(suppliedBackup, [suppliedProject], 'demo1', () => 'supply-restored-copy').projects[0];
+assert.deepEqual(supplyCopy.supplyDemand, suppliedProject.supplyDemand);
+assert.deepEqual(supplyCopy.priceRuns, suppliedProject.priceRuns);
+assert.deepEqual(supplyCopy.scenarios, suppliedProject.scenarios);
+assert.deepEqual(supplyCopy.roughPrice, suppliedProject.roughPrice);
+assert.equal(JSON.stringify(suppliedProject), suppliedBytes, '恢复副本不改原项目');
+let supplyInvalidations = 0;
+const hydrateSupply = supplyFlow.create({ onInvalidate: () => { supplyInvalidations++; } });
+hydrateSupply.hydrate(supplyRestore, supplyRestore);
+assert.equal(supplyRestore.activeRunId, 'bound-supply', '同项目恢复保留仍匹配的供需预测来源');
+hydrateSupply.hydrate(supplyCopy, supplyCopy);
+assert.equal(supplyCopy.activeRunId, null, '恢复副本项目ID改变，应保留历史记录但取消旧来源生效');
+assert.equal(supplyInvalidations, 1);
+assert.deepEqual(supplyCopy.priceRuns, suppliedProject.priceRuns, '失效只改当前引用，不改原价格数组或来源快照');
+assert.deepEqual(supplyCopy.scenarios, suppliedProject.scenarios);
+assert.deepEqual(supplyCopy.roughPrice, suppliedProject.roughPrice);
+
+// Structurally readable backups may still contain a mismatched run source.
+// Import the record losslessly, then quarantine that run during hydration.
+const supplySourceMutations = [
+  (source) => { source.version = 2; },
+  (source) => { source.calendar = 'actual_366_days'; },
+  (source) => { source.hoursPerYear = 8784; },
+  (source) => { source.units.energy = 'kWh'; },
+  (source) => { source.units.intervalHours = 0.25; },
+  (source) => { source.featureConsumption = 'used_by_model'; },
+  (source) => { source.annualSummary[0].load += 100; },
+  (source) => { source.annualSummary[1].year += 10; }
+];
+for (const mutateSource of supplySourceMutations) {
+  const damagedSourceProject = JSON.parse(suppliedBytes);
+  mutateSource(damagedSourceProject.priceRuns[1].supplyDemandInput);
+  const damagedBytes = JSON.stringify(damagedSourceProject);
+  const file = backup.buildBackup({ payload: { projects: [damagedSourceProject] } }, 'demo1');
+  const recoveredSourceProject = backup.prepareRestore(file, [], 'demo1', () => 'unused').projects[0];
+  assert.equal(JSON.stringify(recoveredSourceProject), damagedBytes, '可读但来源不匹配的备份应原样保留记录，不静默修复数值');
+  hydrateSupply.hydrate(recoveredSourceProject, recoveredSourceProject);
+  assert.equal(recoveredSourceProject.activeRunId, null, '恢复后的损坏来源必须取消生效');
+  assert.deepEqual(recoveredSourceProject.priceRuns, damagedSourceProject.priceRuns, '隔离来源不得改写价格数组及原来源摘要');
+  assert.deepEqual(recoveredSourceProject.roughPrice, damagedSourceProject.roughPrice, '原粗算快照保留');
+  assert.deepEqual(recoveredSourceProject.scenarios, damagedSourceProject.scenarios, '原费用与确认记录保留');
+  assert.deepEqual(recoveredSourceProject.supplyDemand, damagedSourceProject.supplyDemand, '有效配置及未完成草稿均保留');
+  assert.equal(JSON.stringify(damagedSourceProject), damagedBytes, '输入备份对象始终只读');
+}
+
+const supplyMutations = [
+  (p) => { p.supplyDemand = []; },
+  (p) => { p.supplyDemand.config = []; },
+  (p) => { p.supplyDemand.draft = 'invalid'; },
+  (p) => { p.supplyDemand.config.elements = []; },
+  (p) => { p.supplyDemand.config.elements.load = []; },
+  (p) => { p.supplyDemand.config.elements.load.growthRatesByYear = []; },
+  (p) => { p.supplyDemand.config.elements.load.monthlyWeights = {}; },
+  (p) => { p.supplyDemand.config.elements.load.hourlyWeightsByMonth = []; },
+  (p) => { p.supplyDemand.config.elements.load.hourlyWeightsByMonth[1] = {}; },
+  (p) => { p.supplyDemand.draft.elements.tieLine.export = []; },
+  (p) => { p.priceRuns[1].supplyDemandInput = 'invalid'; },
+  (p) => { p.priceRuns[1].supplyDemandInput.configSnapshot = []; },
+  (p) => { p.priceRuns[1].supplyDemandInput.configSnapshot.elements.wind.monthlyWeights = {}; },
+  (p) => { p.priceRuns[1].supplyDemandInput.period = []; },
+  (p) => { p.priceRuns[1].supplyDemandInput.units = []; },
+  (p) => { p.priceRuns[1].supplyDemandInput.annualSummary = {}; },
+  (p) => { p.priceRuns[1].supplyDemandInput.annualSummary[0] = null; }
+];
+for (const mutate of supplyMutations) {
+  const malformed = JSON.parse(suppliedBytes);
+  mutate(malformed);
+  assertAtomicRejection(envelope([project, malformed]), /备份结构无效/);
+  assertAtomicRejection(envelope([project], [{ label: '供需结构损坏分支', projects: [malformed] }]), /备份结构无效/);
+}
+assert.equal(JSON.stringify(suppliedProject), suppliedBytes);
+console.log('project backup supply-demand preservation and structural checks passed');
+
 (async () => {
   const importHandlers = {}, importMessages = [];
   const unsafeText = JSON.stringify(envelope([project])).replace('"confirmedFields"', '"__proto__"');

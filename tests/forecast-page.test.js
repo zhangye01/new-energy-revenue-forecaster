@@ -5,7 +5,8 @@ const {
   DEFAULT_GATE_MESSAGE,
   applyForecastRunsView,
   bindForecastRunActions,
-  buildForecastRunsView
+  buildForecastRunsView,
+  createBackendForecastPanel
 } = require("../src/ui/forecast-page");
 
 class FakeButton {
@@ -148,4 +149,108 @@ activeButton.click();
 forceButton.click();
 assert.deepEqual(calls, ["active:run-1", "force:run-2"]);
 
-console.log("forecast page tests passed");
+const supplyRuns = {
+  activeRunId: "stale",
+  priceRuns: [{ id: "stale", status: "publishable", featureVersion: "f1", supplyDemandInput: {
+    fingerprint: '<supply-"v1">', period: { startYear: 2026, forecastYears: 2 }, featureConsumption: "not_used_by_demo_model"
+  } }]
+};
+const sourceView = buildForecastRunsView({ project: supplyRuns, statusLabel: () => "可发布", canActivateRun: () => true,
+  validateSupplyDemandRun: () => ({ ok: true, errors: [] }) });
+assert.match(sourceView.runBodyHtml, /供需已绑定/);
+assert.match(sourceView.runBodyHtml, /模拟 · 未使用供需/);
+assert.match(sourceView.runBodyHtml, /&lt;supply-&quot;v1&quot;&gt;/);
+assert.match(sourceView.runBodyHtml, /2026-2027/);
+assert.match(sourceView.runBodyHtml, /data-help="供需输入来源"/);
+const oldState = JSON.stringify(supplyRuns);
+const staleView = buildForecastRunsView({ project: supplyRuns, statusLabel: () => "可发布", canActivateRun: () => true,
+  validateSupplyDemandRun: () => ({ ok: false, errors: ["输入已变化，请<重新生成>。"] }) });
+assert.match(staleView.gateMessage, /供需输入待更新/);
+assert.match(staleView.runBodyHtml, /供需已过期/);
+assert.match(staleView.runBodyHtml, /需重新生成/);
+assert.match(staleView.runBodyHtml, /请&lt;重新生成&gt;/);
+assert.doesNotMatch(staleView.runBodyHtml, /data-active-run|data-force-run|生效中/);
+assert.equal(JSON.stringify(supplyRuns), oldState, "查看过期提示不得改写历史版本");
+const unboundView = buildForecastRunsView({ project: { priceRuns: [{ id: "legacy" }] },
+  validateSupplyDemandRun: () => ({ ok: false, errors: ["未绑定"] }) });
+assert.match(unboundView.runBodyHtml, /未绑定供需/);
+assert.doesNotThrow(() => buildForecastRunsView({ project: supplyRuns, validateSupplyDemandRun: () => { throw new Error("载入失败"); } }));
+
+async function testBackendForecastPanel() {
+  const nodes = Object.fromEntries(["status", "note", "submit", "refresh", "activate", "next"]
+    .map((key) => [`#backend-forecast-${key}`, new FakeButton()]));
+  const el = (key) => nodes[`#backend-forecast-${key}`];
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  let project = { id: "project-1", activeRunId: null };
+  let input = { ok: false, errors: ["请先保存供需"] };
+  let service;
+  let activeId;
+  let requests = 0;
+  let response = { id: "task-1", projectId: project.id, inputFingerprint: "supply-1", status: "running" };
+  const panel = createBackendForecastPanel({
+    documentRef: { querySelector: (selector) => nodes[selector] },
+    getProject: () => project,
+    getService: () => service,
+    inspectInput: () => input,
+    prepareInput: () => ({ ok: true, config: {}, dataset: { source: { energyUnit: "MWh" },
+      hourlyByYear: { 2028: { load: [100], tieLine: [-10], wind: [8], solar: [6], hydro: [2], nonMarket: [3] } } } }),
+    isRunActive: (selectedProject, runId) => selectedProject.id === "project-1" && activeId === runId
+  });
+  panel.render();
+  assert.equal(el("status").textContent, "后台算法待接入");
+  assert.equal(el("submit").disabled, true);
+  el("submit").click();
+  assert.equal(requests, 0);
+
+  service = {
+    async submit(request) {
+      requests += 1;
+      assert.equal(request.projectId, project.id);
+      assert.equal(request.inputFingerprint, "supply-1");
+      assert.deepEqual(request.supply.hourlyByYear[2028].tieLine, [-10]);
+      return response;
+    },
+    async refresh() { return response; },
+    async activate(request) { assert.equal(request.runId, "run-1"); return response; }
+  };
+  panel.render();
+  assert.equal(el("submit").disabled, true);
+  input = { ok: true, fingerprint: "supply-1" };
+  panel.render();
+  el("submit").click();
+  el("submit").click();
+  await settle();
+  assert.equal(requests, 1, "排队处理时重复提交不得调用后台");
+  assert.equal(el("status").textContent, "后台计算中");
+  assert.equal(el("next").disabled, true);
+
+  response = { ...response, status: "succeeded", runId: "run-1", canActivate: false };
+  el("refresh").click();
+  await settle();
+  assert.equal(el("activate").disabled, true, "成功回传但尚未准入的结果不得采用");
+  response = { ...response, canActivate: true };
+  el("refresh").click();
+  await settle();
+  assert.equal(el("activate").disabled, false);
+  el("activate").click();
+  await settle();
+  assert.equal(el("next").disabled, true, "被收益端识别为生效版本之前，前台不可继续");
+  activeId = "run-1";
+  panel.render();
+  assert.equal(el("status").textContent, "后台电价已生效");
+  assert.equal(el("next").disabled, false);
+
+  input = { ok: true, fingerprint: "supply-2" };
+  panel.render();
+  assert.equal(el("next").disabled, true, "改供需后不能继续使用旧任务");
+  assert.equal(el("activate").disabled, true);
+  el("refresh").click();
+  project = { id: "project-2", activeRunId: null };
+  await settle();
+  assert.equal(el("status").textContent, "等待提交预测", "晚到响应不能串到另一项目");
+}
+
+testBackendForecastPanel().then(() => console.log("forecast page tests passed")).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

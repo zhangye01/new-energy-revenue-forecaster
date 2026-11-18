@@ -28,7 +28,8 @@
 | `energy-import-flow.js` | 结算电量导入后的状态更新、提示文案和下游置脏流程 |
 | `app-utils.js` | 页面主控共用的格式化、转义、日期裁剪、对象判断和基础工具函数 |
 | `rough-price.js` | 独立年度粗算、不可变快照、共用参数指纹、同口径交叉对照 |
-| `price-forecast.js` | 三模型模拟现货电价、预测质量校核 |
+| `supply-demand.js` | 六类供需总量、年度增长、分月与典型日权重、双向联络线、8760展开和守恒校验 |
+| `price-forecast.js` | 三模型模拟现货电价、预测质量校核及供需输入来源留存 |
 | `revenue-rules.js` | 机制月份、交易策略收敛、环境价值、综合费用规则 |
 | `revenue-calculator.js` | 场景全口径收入主计算 |
 | `result-report.js` | 基准结果总览的数据摘要和图表数据 |
@@ -59,6 +60,8 @@
 | `chart-lifecycle.js` | ECharts 实例存活判断、批量 resize、窗口 resize 绑定和双帧延迟刷新 |
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
 | `rough-price-workspace.js` | 独立粗算页面、共用参数编辑、粗算快照与结果阶段交叉验证 |
+| `supply-demand-workspace.js` | 供需元素编辑、草稿、曲线粘贴、生成预览和CSV导出 |
+| `supply-demand-flow.js` | 供需保存/水合、预测输入准备、来源有效性及旧运行失效编排 |
 | `forecast-page.js` | 电价预测版本列表、质量门槛和激活日志 HTML 构造 |
 | `forecast-run-flow.js` | 电价预测运行生成、自动激活、手动切换和强制发布流程 |
 | `result-page.js` | 基准结果总览报告文案、指标卡、假设说明、明细表 HTML 和渲染状态构造 |

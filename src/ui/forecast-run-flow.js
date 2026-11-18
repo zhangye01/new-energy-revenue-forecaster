@@ -52,8 +52,19 @@
     return runs.find((run) => run.id === project?.activeRunId) || null;
   }
 
-  function hasActiveActivatableRun(project) {
-    return canActivateRun(getActiveRun(project));
+  function hasActiveActivatableRun(project, services = {}) {
+    const run = getActiveRun(project);
+    return canActivateRun(run) && !supplyDemandRunError(project, run, services);
+  }
+
+  function supplyDemandRunError(project, run, services = {}) {
+    if (!services.validateSupplyDemandRun) return "";
+    try {
+      const validation = services.validateSupplyDemandRun(project, run);
+      return validation?.ok ? "" : (validation?.errors?.join("；") || "请先核对供需输入并重新生成预测。");
+    } catch (error) {
+      return error.message || "供需输入版本校验失败。";
+    }
   }
 
   function addActivationLog(input = {}) {
@@ -108,7 +119,7 @@
 
   function markForecastReady(project, services = {}) {
     if (!project.statuses || typeof project.statuses !== "object") project.statuses = {};
-    project.statuses["forecast-page"] = hasActiveActivatableRun(project) ? "completed" : "in_progress";
+    project.statuses["forecast-page"] = hasActiveActivatableRun(project, services) ? "completed" : "in_progress";
     if (project.statuses["scenario-page"] === "not_started") {
       project.statuses["scenario-page"] = "in_progress";
     }
@@ -139,8 +150,24 @@
       actions.setTopMeta?.(parameterError);
       return false;
     }
-    const generatedRuns = modelDefinitions.map((model) => services.createForecastRunForModel?.(project, model, options));
-    const validRuns = generatedRuns.filter(Boolean);
+    let validRuns;
+    try {
+      if (services.prepareSupplyDemand) {
+        const prepared = services.prepareSupplyDemand(project);
+        if (!prepared?.ok || !prepared.dataset || !prepared.config) {
+          actions.setTopMeta?.(prepared?.errors?.join("；") || "请先完整填写并保存供需输入。");
+          return false;
+        }
+        options.supplyDemandInput = { config: prepared.config, dataset: prepared.dataset };
+      }
+      validRuns = modelDefinitions.map((model) => services.createForecastRunForModel?.(project, model, options));
+      if (!validRuns.length || validRuns.some((run) => !run)) throw new Error("预测版本未完整生成，请重试。");
+      const inputError = validRuns.map((run) => supplyDemandRunError(project, run, services)).find(Boolean);
+      if (inputError) throw new Error(inputError);
+    } catch (error) {
+      actions.setTopMeta?.(error.message || "电价预测生成失败，请核对输入。");
+      return false;
+    }
     if (!Array.isArray(project.priceRuns)) project.priceRuns = [];
     project.priceRuns.unshift(...validRuns.slice().reverse());
 
@@ -173,6 +200,8 @@
     if (!project) return false;
     const target = Array.isArray(project.priceRuns) ? project.priceRuns.find((run) => run.id === runId) : null;
     if (!target) return false;
+    const supplyError = supplyDemandRunError(project, target, services);
+    if (supplyError) { actions.setTopMeta?.(supplyError); return false; }
     const parameterError = forecastParameterError(target, true);
     if (parameterError) {
       actions.setTopMeta?.(`该版本参数无效，不能生效：${parameterError}`);
@@ -206,6 +235,8 @@
     if (!project) return false;
     const target = Array.isArray(project.priceRuns) ? project.priceRuns.find((run) => run.id === runId) : null;
     if (!target) return false;
+    const supplyError = supplyDemandRunError(project, target, services);
+    if (supplyError) { actions.setTopMeta?.(supplyError); return false; }
     const parameterError = forecastParameterError(target, true);
     if (parameterError) {
       actions.setTopMeta?.(`该版本参数无效，不能强制生效：${parameterError}`);

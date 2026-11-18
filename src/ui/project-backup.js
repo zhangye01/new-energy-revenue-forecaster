@@ -98,6 +98,47 @@
     }
   }
 
+  function validateSupplySeriesStructure(series, path) {
+    if (!series) return;
+    validateContainer(series, "growthRatesByYear", false, path);
+    validateContainer(series, "monthlyWeights", true, path);
+    validateContainer(series, "hourlyWeightsByMonth", false, path);
+    Object.keys(series.hourlyWeightsByMonth || {}).forEach((month) => {
+      validateContainer(series.hourlyWeightsByMonth, month, true, `${path}.hourlyWeightsByMonth`);
+    });
+  }
+
+  function validateSupplyConfigStructure(config, path) {
+    if (!config) return;
+    validateContainer(config, "elements", false, path);
+    ["load", "tieLine", "wind", "solar", "hydro", "nonMarket"].forEach((key) => {
+      validateContainer(config.elements, key, false, `${path}.elements`);
+      validateSupplySeriesStructure(config.elements?.[key], `${path}.elements.${key}`);
+    });
+    ["export", "import"].forEach((key) => {
+      validateContainer(config.elements?.tieLine, key, false, `${path}.elements.tieLine`);
+      validateSupplySeriesStructure(config.elements?.tieLine?.[key], `${path}.elements.tieLine.${key}`);
+    });
+  }
+
+  function validateSupplyDemandStructure(project, path) {
+    validateContainer(project, "supplyDemand", false, path);
+    ["draft", "config"].forEach((key) => {
+      validateContainer(project.supplyDemand, key, false, `${path}.supplyDemand`);
+      validateSupplyConfigStructure(project.supplyDemand?.[key], `${path}.supplyDemand.${key}`);
+    });
+    (project.priceRuns || []).forEach((run, index) => {
+      const sourcePath = `${path}.priceRuns[${index}].supplyDemandInput`;
+      validateContainer(run, "supplyDemandInput", false, `${path}.priceRuns[${index}]`);
+      ["configSnapshot", "period", "units"].forEach((key) => validateContainer(run?.supplyDemandInput, key, false, sourcePath));
+      validateContainer(run?.supplyDemandInput, "annualSummary", true, sourcePath);
+      (run?.supplyDemandInput?.annualSummary || []).forEach((row, rowIndex) => {
+        if (!isObject(row)) throw new Error(`备份结构无效：${sourcePath}.annualSummary[${rowIndex}]应为对象，未恢复任何项目。`);
+      });
+      validateSupplyConfigStructure(run?.supplyDemandInput?.configSnapshot, `${sourcePath}.configSnapshot`);
+    });
+  }
+
   function validateProjectStructure(project, index) {
     const path = `projects[${index}]`;
     const draft = project?.workspaceBucket === "new";
@@ -116,6 +157,7 @@
     });
     validateContainer(project.roughPrice, "draftsByScenario", false, `${path}.roughPrice`);
     validateContainer(project.roughPrice, "snapshots", true, `${path}.roughPrice`);
+    validateSupplyDemandStructure(project, path);
   }
 
   function prepareRestore(text, existingProjects, account, makeId) {

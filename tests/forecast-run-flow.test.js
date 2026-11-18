@@ -237,4 +237,59 @@ for (const badParameters of [{ trainStart: 2030, trainEnd: 2025 }, { growth: -1 
   }
 }
 
+const protectedProject = {
+  id: "protected", startYear: 2026, forecastYears: 1, activeRunId: "historical",
+  priceRuns: [{ id: "historical", status: "publishable", pricesByYear: { 2026: [10, 20] } }],
+  roughSnapshot: { annualRows: [{ year: 2026, price: 300 }] }, activationLogs: [], statuses: {}
+};
+for (const preparation of [
+  () => ({ ok: false, errors: ["供需配置尚未保存。"] }),
+  () => ({ ok: false, errors: ["存在未保存的供需编辑，请先保存。"] }),
+  () => { throw new Error("供需时序不完整。"); }
+]) {
+  const original = JSON.stringify(protectedProject), calls = [];
+  assert.equal(generateForecastRun({ project: protectedProject, documentRef: createDocument(), modelDefinitions: [{ family: "ensemble" }],
+    services: createServices(calls, { prepareSupplyDemand: preparation }), actions: createActions(calls) }), false);
+  assert.equal(JSON.stringify(protectedProject), original, "无效供需不能修改历史数值、粗算快照、状态或日志");
+  assert.equal(calls.length, 1);
+  assert.doesNotMatch(calls[0], /^create:/);
+}
+
+const supplied = { config: { version: 1 }, dataset: { ok: true, hourlyByYear: { 2026: { load: [1] } } } };
+const boundProject = JSON.parse(JSON.stringify(protectedProject));
+const originalOldRun = JSON.stringify(boundProject.priceRuns[0]);
+const originalRough = JSON.stringify(boundProject.roughSnapshot);
+const boundCalls = [];
+assert.equal(generateForecastRun({ project: boundProject, documentRef: createDocument(), modelDefinitions: [{ family: "ensemble" }],
+  services: createServices(boundCalls, {
+    prepareSupplyDemand: (received) => { assert.equal(received, boundProject); return { ok: true, ...supplied }; },
+    createForecastRunForModel(received, model, options) {
+      assert.equal(received, boundProject);
+      assert.equal(options.supplyDemandInput.config, supplied.config);
+      assert.equal(options.supplyDemandInput.dataset, supplied.dataset, "模型适配器应收到完整小时输入接口");
+      return { id: "bound", status: "publishable", algorithmFamily: model.family, supplyDemandInput: { fingerprint: "fingerprint" } };
+    },
+    validateSupplyDemandRun: (_, run) => ({ ok: run.supplyDemandInput?.fingerprint === "fingerprint", errors: ["供需已过期。"] })
+  }), actions: createActions(boundCalls) }), true);
+assert.equal(boundProject.activeRunId, "bound");
+assert.equal(JSON.stringify(boundProject.priceRuns.find((run) => run.id === "historical")), originalOldRun);
+assert.equal(JSON.stringify(boundProject.roughSnapshot), originalRough);
+
+for (const activate of [setActiveRun, forceActivateRun]) {
+  const original = JSON.stringify(boundProject), calls = [];
+  assert.equal(activate({ project: boundProject, runId: "historical",
+    services: createServices(calls, { validateSupplyDemandRun: () => ({ ok: false, errors: ["该版本未绑定当前供需。"] }) }),
+    actions: createActions(calls, { promptForceReason: () => { throw new Error("过期版本不应进入人工放行提示"); } }) }), false);
+  assert.equal(JSON.stringify(boundProject), original, "过期版本不能通过普通或强制激活绕过供需校验");
+  assert.deepEqual(calls, ["top:该版本未绑定当前供需。"]);
+}
+const failCalls = [], beforeFailure = JSON.stringify(boundProject);
+assert.equal(generateForecastRun({ project: boundProject, documentRef: createDocument(), modelDefinitions: [{ family: "lstm" }, { family: "ensemble" }],
+  services: createServices(failCalls, { prepareSupplyDemand: () => ({ ok: true, ...supplied }),
+    createForecastRunForModel: (_, model) => { if (model.family === "ensemble") throw new Error("小时数据无效"); return { id: "partial" }; } }),
+  actions: createActions(failCalls) }), false);
+assert.equal(JSON.stringify(boundProject), beforeFailure, "批量生成任一模型失败不得保存部分版本");
+assert.deepEqual(failCalls, ["top:小时数据无效"]);
+assert.equal(hasActiveActivatableRun(boundProject, { validateSupplyDemandRun: () => ({ ok: false, errors: [] }) }), false);
+
 console.log("forecast run flow tests passed");
