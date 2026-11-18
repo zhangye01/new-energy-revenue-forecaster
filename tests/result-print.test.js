@@ -36,7 +36,7 @@ const ok = printScenarioReport({
   appState: { activePage: "compare-page" },
   refs: { resultReportPanes: [pane] },
   resultChartInstances: {
-    chart: { isDisposed: () => false, resize: () => {} }
+    chart: { isDisposed: () => false, resize: () => assert.equal(bodyClassList.contains("print-report-mode"), true) }
   },
   documentRef: {
     body: { classList: bodyClassList },

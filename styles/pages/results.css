@@ -402,6 +402,26 @@
 }
 
 /* Results print report */
+body.print-report-mode #results-page .results-report-panel {
+  box-sizing: border-box;
+  width: min(190mm, 100%);
+  margin-inline: auto;
+}
+
+body.print-report-mode #results-page .result-chart-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.print-report-mode #results-page .result-chart {
+  min-height: 240px;
+  height: 240px;
+}
+
+body.print-report-mode #results-page .result-chart-tall {
+  min-height: 280px;
+  height: 280px;
+}
+
 @page {
   size: A4 portrait;
   margin: 10mm;
@@ -508,20 +528,18 @@
     gap: 8px;
   }
 
-  body.print-report-mode #results-page .result-chart-grid,
   body.print-report-mode #results-page .result-insight-list,
   body.print-report-mode #results-page .result-assumption-list {
     grid-template-columns: 1fr;
   }
 
-  body.print-report-mode #results-page .result-chart {
-    min-height: 240px;
-    height: 240px;
+  body.print-report-mode #results-page .result-chart-card,
+  body.print-report-mode #results-page .result-drill:has(.result-chart) {
+    break-inside: avoid;
   }
 
-  body.print-report-mode #results-page .result-chart-tall {
-    min-height: 280px;
-    height: 280px;
+  body.print-report-mode #results-page .result-disclosure summary::after {
+    display: none;
   }
 
   body.print-report-mode #results-page .table-scroll {
@@ -537,6 +555,17 @@
   body.print-report-mode #results-page td {
     padding: 5px 4px;
     white-space: normal;
+  }
+
+  body.print-report-mode #results-page [data-result-pane="detail"] table {
+    table-layout: fixed;
+    width: 100%;
+    font-size: 9px;
+  }
+
+  body.print-report-mode #results-page [data-result-pane="detail"] :is(th, td) {
+    padding: 4px 2px;
+    overflow-wrap: anywhere;
   }
 
   body.print-report-mode #results-page #hourly-result-body tr:nth-child(n+49) {

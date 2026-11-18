@@ -71,10 +71,12 @@
         node.open = true;
       }
     });
-    Object.values(resultChartInstances).forEach((chart) => {
-      if (chart && !chart.isDisposed()) chart.resize();
-    });
     documentRef.body.classList.add("print-report-mode");
+    Object.values(resultChartInstances).forEach((chart) => {
+      if (!chart || chart.isDisposed()) return;
+      chart.resize({ animation: { duration: 0 } });
+      chart.getZr?.()?.flush?.();
+    });
 
     const cleanup = () => {
       documentRef.body.classList.remove("print-report-mode");
