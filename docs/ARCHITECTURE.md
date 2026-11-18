@@ -61,7 +61,8 @@
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
 | `rough-price-workspace.js` | 独立粗算页面、共用参数编辑、粗算快照与结果阶段交叉验证 |
 | `rough-trend-chart.js` | 读取粗算快照构建年度趋势图，统一坐标轴、价格节点与年度悬停提示 |
-| `supply-demand-workspace.js` | 供需元素编辑、草稿、曲线粘贴、生成预览和CSV导出 |
+| `supply-demand-template.js` | 供需 Excel 模板生成、周期和表结构核验、导入后生成配置 |
+| `supply-demand-workspace.js` | 供需模板导入、年度预览、保存生成及 CSV 导出 |
 | `supply-demand-flow.js` | 供需保存/水合、预测输入准备、来源有效性及旧运行失效编排 |
 | `forecast-page.js` | 电价预测版本列表、质量门槛和激活日志 HTML 构造 |
 | `forecast-run-flow.js` | 电价预测运行生成、自动激活、手动切换和强制发布流程 |

@@ -5,339 +5,295 @@ const workspace = require("../src/ui/supply-demand-workspace");
 const domain = require("../src/domain/supply-demand");
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const keys = domain.ELEMENTS.map((element) => element.key);
+const generatedAt = "2026-11-13T12:00:00.000Z";
 
 class Root {
-  constructor() { this.innerHTML = ""; this.events = {}; this.state = {}; }
+  constructor() { this.innerHTML = ""; this.events = {}; }
   addEventListener(name, listener) { this.events[name] = listener; }
   contains(target) { return !target.detached; }
-  querySelector(selector) { return this.state[selector] || null; }
-  fire(name, dataset, value, extra = {}) {
-    const target = { dataset, value, ...extra, closest() { return this.dataset.sdAction ? this : null; } };
-    this.events[name]?.({ target, preventDefault() {} });
-    return target;
+  fire(name, dataset, extra = {}) {
+    const target = { dataset, closest() { return this.dataset.sdAction ? this : null; }, ...extra };
+    return this.events[name]?.({ target, preventDefault() {} });
   }
 }
 
 function project(id = "p1") {
-  return { id, name: '供需<测试>', province: "shandong", startYear: 2027, forecastYears: 2,
-    roughPrice: { snapshots: [{ id: "frozen-rough", value: 327 }] }, scenarios: [{ id: "s1", config: { managementFee: 12.5 } }] };
+  return { id, name: "供需测试", province: "shandong", startYear: 2027, forecastYears: 2,
+    roughPrice: { snapshots: [{ id: "frozen-rough", value: 327 }] },
+    forecastSettlement: { history: [{ year: 2027, price: 329 }] },
+    scenarios: [{ id: "s1", config: { managementFee: 12.5 } }] };
 }
-function completeConfig(p) {
+
+function completeConfig(p, load = 120000) {
   const config = domain.createConfig(p);
   for (const key of keys) {
     const series = config.elements[key];
-    series.baseEnergyMwh = key === "load" ? 120000 : 0;
-    Object.keys(series.growthRatesByYear).forEach((year) => { series.growthRatesByYear[year] = 0; });
-    if (key === "load") {
+    series.baseEnergyMwh = key === "load" ? load : key === "tieLine" ? -600 : 0;
+    Object.keys(series.growthRatesByYear).forEach((year) => { series.growthRatesByYear[year] = key === "load" ? 5 : 0; });
+    if (series.baseEnergyMwh) {
       series.monthlyWeights = Array(12).fill(1);
       series.hourlyWeightsByMonth = Object.fromEntries(Array.from({ length: 12 }, (_, index) => [index + 1, Array(24).fill(1)]));
     }
   }
   return config;
 }
+
+function savedState(p, config = completeConfig(p)) {
+  return { version: 1, config, inputFingerprint: domain.fingerprint(p, config), generatedAt: "2026-11-01T00:00:00.000Z" };
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
 function fixture(p = project(), behavior = {}) {
-  const root = new Root(), commits = [], exports = [];
-  let active = p, controller;
-  controller = workspace.createController({ root, getProject: () => active, domain,
-    now: () => "2026-11-13T12:00:00.000Z",
+  const root = new Root(), commits = [], exports = [], downloads = [], reads = [], statuses = [];
+  let active = p;
+  const xlsx = {};
+  const template = {
+    download(target, config, options) { downloads.push({ target, config, options }); },
+    readFile(target, file, options) {
+      reads.push({ target, file, options });
+      return file.result;
+    }
+  };
+  const controller = workspace.createController({ root, getProject: () => active, domain, template, xlsx,
+    now: () => generatedAt,
     onCommit(target, next, flags) {
       if (behavior.fail) return false;
       if (behavior.throw) throw new Error("模拟保存失败");
       assert.equal(target, active);
-      assert.equal(controller.hasUnsavedChanges(target), false, "dirty is cleared before synchronous adapter render");
-      target.supplyDemand = next; commits.push({ next: clone(next), flags });
+      assert.equal(controller.hasUnsavedChanges(target), false, "draft clears before the synchronous workflow render");
+      target.supplyDemand = next;
+      commits.push({ next: clone(next), flags });
       controller.render();
       return true;
+    },
+    onDraftChange() {
+      statuses.push(controller.hasUnsavedChanges());
+      controller.render();
     },
     downloadCsv(filename, rows) { exports.push({ filename, rows }); }
   });
   controller.render();
-  return { root, controller, commits, exports, setActive(value) { active = value; },
-    input(field, value, extra) { return root.fire("input", { sdField: field, ...extra }, String(value)); },
-    select(field, value) { return root.fire("change", { sdSelect: field }, String(value)); },
-    click(action, extra) { return root.fire("click", { sdAction: action, ...extra }); }
+  return { root, controller, commits, exports, downloads, reads, statuses, xlsx,
+    setActive(value) { active = value; controller.render(); },
+    upload(name, result) { return root.fire("change", { sdTemplateFile: "" }, { files: [{ name, result }] }); },
+    click(action) { return root.fire("click", { sdAction: action }); },
+    select(key, value) { return root.fire("change", { sdSelect: key }, { value: String(value) }); },
+    openSavedPreview() {
+      const markup = [];
+      root.fire("toggle", {}, {
+        open: true, hasAttribute: () => true, querySelector: () => null,
+        insertAdjacentHTML(_position, html) { markup.push(html); }
+      });
+      return markup.join("");
+    }
   };
 }
 
-// Parsing accepts spreadsheet/CSV weights, rejects ambiguous blanks and commits atomically.
-const matrix = Array.from({ length: 12 }, (_, month) => Array.from({ length: 24 }, (_, hour) => month + hour + 1).join("\t")).join("\n");
-assert.equal(workspace.parseCurveMatrix(matrix).ok, true);
-assert.deepEqual(workspace.parseCurveMatrix(matrix).rows[11].slice(-2), [34, 35]);
-assert.equal(workspace.parseCurveMatrix(matrix.replace("1\t2", "1\t")).ok, false);
-assert.equal(workspace.parseCurveMatrix(matrix.replace("1\t2", "-1\t2")).ok, false);
-assert.equal(workspace.parseCurveMatrix(matrix.split("\n").slice(1).join("\n")).ok, false);
-assert.equal(workspace.parseCurveMatrix(Array(12).fill(Array(24).fill(0).join(",")).join("\n")).ok, true, "zero rows are valid for months without energy; domain validation checks active months");
-assert.equal(workspace.parseCurveMatrix("").ok, false);
+async function main() {
+  const fresh = project(), initial = fixture(fresh), original = clone(fresh);
+  assert.equal(initial.controller.hasUnsavedChanges(), false);
+  assert.match(initial.root.innerHTML, /2027—2028年/);
+  assert.match(initial.root.innerHTML, /data-sd-action="download-template"/);
+  assert.match(initial.root.innerHTML, /<input type="file" data-sd-template-file accept="\.xlsx/);
+  assert.doesNotMatch(initial.root.innerHTML, /data-sd-field|data-sd-action="generate"|<textarea/);
+  initial.click("download-template");
+  assert.deepEqual(initial.downloads[0], { target: fresh, config: undefined, options: { xlsx: initial.xlsx } });
 
-const previewProject = { startYear: 2027, forecastYears: 3 };
-assert.deepEqual(workspace.annualPreview({ baseEnergyMwh: 100, growthRatesByYear: { 2028: 10, 2029: -10 } }, previewProject).map((row) => row.energyMwh), [100, 110.00000000000001, 99.00000000000001]);
-assert.deepEqual(workspace.annualPreview({ baseEnergyMwh: "", growthRatesByYear: { 2028: 0, 2029: 0 } }, previewProject).map((row) => row.energyMwh), [null, null, null]);
-assert.deepEqual(workspace.annualPreview({ baseEnergyMwh: -100, growthRatesByYear: { 2028: -100, 2029: 0 } }, previewProject).map((row) => row.energyMwh), [-100, -0, -0]);
-assert.equal(workspace.annualPreview({ baseEnergyMwh: 100, growthRatesByYear: { 2028: -101 } }, previewProject)[1].energyMwh, null);
+  const pending = deferred();
+  const valid = completeConfig(fresh);
+  const firstUpload = initial.upload("假设<&>.xlsx", pending.promise);
+  assert.equal(initial.controller.hasUnsavedChanges(), true);
+  assert.match(initial.root.innerHTML, /读取模板中/);
+  assert.doesNotMatch(initial.root.innerHTML, /data-sd-import-preview/);
+  assert.deepEqual(fresh, original);
+  pending.resolve({ ok: true, config: valid });
+  await firstUpload;
+  assert.equal(initial.controller.hasUnsavedChanges(), true);
+  assert.deepEqual(initial.statuses, [true, true]);
+  assert.match(initial.root.innerHTML, /data-sd-import-preview/);
+  assert.match(initial.root.innerHTML, /假设&lt;&amp;&gt;\.xlsx/);
+  assert.match(initial.root.innerHTML, /126,000\.00/);
+  assert.match(initial.root.innerHTML, /-600\.00/);
+  assert.doesNotMatch(initial.root.innerHTML, /联络线送出|联络线受入/, "net-mode review stays compact");
+  assert.deepEqual(fresh, original, "validation and preview leave the project untouched");
 
-// No generated defaults, no mutation of revenue inputs or the original rough snapshot.
-const fresh = project(), original = JSON.stringify(fresh), initial = fixture(fresh);
-assert.equal(JSON.stringify(fresh), original);
-assert.match(initial.root.innerHTML, /2027—2028年/);
-assert.match(initial.root.innerHTML, /data-sd-field="base" value=""/);
-assert.match(initial.root.innerHTML, /data-sd-field="growth"[^>]*value=""/);
-assert.match(initial.root.innerHTML, /data-help="供需输入口径"/);
-assert.match(initial.root.innerHTML, /data-sd-action="discard"/);
-assert.equal((initial.root.innerHTML.match(/<small[^>]*>待补齐<\/small>/g) || []).length, 6);
-assert.equal(initial.controller.hasUnsavedChanges(), false);
-initial.click("generate");
-assert.equal(initial.commits.length, 0);
-assert.match(initial.root.innerHTML, /首年电量须填写/);
-assert.equal(JSON.stringify(fresh), original);
+  await initial.upload("坏模板.xlsx", { ok: false, errors: ["年度总量单元格 E2 缺失"] });
+  assert.match(initial.root.innerHTML, /年度总量单元格 E2 缺失/);
+  assert.match(initial.root.innerHTML, /126,000\.00/, "invalid replacement keeps the prior staged preview");
+  assert.deepEqual(initial.reads.at(-1).options.baseConfig, valid);
+  assert.notEqual(initial.reads.at(-1).options.baseConfig, valid, "the codec receives an isolated basis");
+  assert.equal(initial.controller.hasUnsavedChanges(), true);
+  assert.deepEqual(fresh, original);
 
-initial.input("base", 1000);
-assert.equal(initial.controller.hasUnsavedChanges(), true);
-assert.equal(fresh.supplyDemand, undefined);
-const beforeBlur = initial.root.innerHTML;
-initial.root.fire("change", { sdField: "base" }, "1000");
-assert.equal(initial.root.innerHTML, beforeBlur, "numeric blur never removes a save button before its click");
-initial.input("batchGrowth", 5);
-initial.click("growth-fill");
-initial.click("monthly-equal");
-initial.click("hourly-equal");
-initial.click("hourly-copy");
-initial.click("save-draft");
-assert.equal(initial.controller.hasUnsavedChanges(), false);
-assert.equal(fresh.supplyDemand.config, undefined);
-assert.equal(fresh.supplyDemand.draft.elements.load.baseEnergyMwh, 1000);
-assert.equal(fresh.supplyDemand.draft.elements.load.growthRatesByYear[2028], 5);
-assert.deepEqual(fresh.supplyDemand.draft.elements.load.monthlyWeights, Array(12).fill(1));
-assert.deepEqual(fresh.supplyDemand.draft.elements.load.hourlyWeightsByMonth[12], Array(24).fill(1));
-assert.notEqual(fresh.supplyDemand.draft.elements.load.hourlyWeightsByMonth[1], fresh.supplyDemand.draft.elements.load.hourlyWeightsByMonth[2]);
-assert.deepEqual(initial.commits.at(-1).flags, { changed: false, generated: false });
-assert.deepEqual(fresh.roughPrice, JSON.parse(original).roughPrice);
-assert.deepEqual(fresh.scenarios, JSON.parse(original).scenarios);
-initial.input("base", 9000);
-assert.equal(fresh.supplyDemand.draft.elements.load.baseEnergyMwh, 1000, "unsaved edits remain isolated from saved draft");
-initial.click("discard");
-assert.equal(fresh.supplyDemand.draft, undefined);
-assert.equal(initial.controller.hasUnsavedChanges(), false);
-assert.match(initial.root.innerHTML, /data-sd-field="base" value=""/);
+  initial.click("generate");
+  assert.equal(initial.controller.hasUnsavedChanges(), false);
+  assert.deepEqual(initial.commits[0].flags, { changed: true, generated: true });
+  assert.equal(fresh.supplyDemand.generatedAt, generatedAt);
+  assert.equal(fresh.supplyDemand.inputFingerprint, domain.fingerprint(fresh, valid));
+  assert.deepEqual(fresh.supplyDemand.config, valid);
+  assert.notEqual(fresh.supplyDemand.config, valid);
+  const { supplyDemand, ...projectWithoutSupply } = fresh;
+  assert.deepEqual(projectWithoutSupply, original, "rough, history and other scenario input stay intact");
+  assert.match(initial.openSavedPreview(), /典型日24小时/);
+  initial.select("previewYear", 2028);
+  initial.select("previewMonth", 2);
+  assert.match(initial.root.innerHTML, /<option value="2028" selected/);
+  assert.match(initial.root.innerHTML, /<option value="2" selected/);
 
-// Two-way tie-line editing keeps both branches and the original net series.
-const two = fixture(project("two"));
-two.click("element", { sdElement: "tieLine" });
-two.input("base", -200);
-two.select("mode", "bidirectional");
-two.input("base", 300);
-two.select("branch", "import");
-two.input("base", 500);
-two.select("mode", "net");
-assert.match(two.root.innerHTML, /data-sd-field="base" value="-200"/);
-two.select("mode", "bidirectional");
-assert.match(two.root.innerHTML, /data-sd-field="base" value="500"/);
-two.click("save-draft");
-const tie = two.commits.at(-1).next.draft.elements.tieLine;
-assert.equal(tie.baseEnergyMwh, -200);
-assert.equal(tie.export.baseEnergyMwh, 300);
-assert.equal(tie.import.baseEnergyMwh, 500);
-assert.equal(tie.mode, "bidirectional");
-assert.match(two.root.innerHTML, /联络线负荷<small[^>]*>待补齐/);
+  await initial.upload("替换.xlsx", { ok: true, config: completeConfig(fresh, 90000) });
+  initial.click("export-annual"); initial.click("export-typical"); initial.click("export-hourly");
+  assert.equal(initial.exports.length, 3);
+  assert.equal(initial.exports[0].rows[1][1], 120000, "exports use the committed config during a new preview");
+  assert.equal(initial.exports[1].rows.length, 2 * 288 + 1);
+  assert.equal(initial.exports[2].rows.length, 2 * 8760 + 1);
+  assert.match(initial.exports[2].filename, /8760小时_2027-2028\.csv$/);
+  initial.click("discard");
+  assert.equal(initial.controller.hasUnsavedChanges(), false);
+  assert.equal(fresh.supplyDemand, supplyDemand);
+  assert.equal(initial.commits.length, 1);
 
-// Invalid bulk paste never replaces any of the old monthly curves.
-const pasteProject = project("paste");
-pasteProject.supplyDemand = { version: 1, draft: completeConfig(pasteProject) };
-const paste = fixture(pasteProject), oldCurves = clone(pasteProject.supplyDemand.draft.elements.load.hourlyWeightsByMonth);
-paste.input("matrix", matrix.replace("1\t2", "bad\t2"));
-paste.click("matrix-apply");
-assert.match(paste.root.innerHTML, /第1行需要24个非负有效数字/);
-paste.click("save-draft");
-assert.deepEqual(pasteProject.supplyDemand.draft.elements.load.hourlyWeightsByMonth, oldCurves);
-paste.input("matrix", matrix);
-paste.click("matrix-apply");
-paste.click("save-draft");
-assert.equal(pasteProject.supplyDemand.draft.elements.load.hourlyWeightsByMonth[12][23], 35);
+  const history = project("history");
+  history.supplyDemand = savedState(history);
+  history.activeRunId = "original-backend-run";
+  const historyBefore = JSON.stringify(history), historical = fixture(history);
+  await historical.upload("原配置.xlsx", { ok: true, config: clone(history.supplyDemand.config) });
+  assert.equal(historical.controller.hasUnsavedChanges(), true, "equal reimports still require explicit review");
+  assert.match(historical.root.innerHTML, /配置与已保存版本一致/);
+  historical.click("generate");
+  assert.deepEqual(historical.statuses, [true, true, false]);
+  assert.equal(historical.commits.length, 0, "exact no-op save skips persistence and forecast invalidation");
+  assert.equal(JSON.stringify(history), historyBefore);
 
-// Unapplied helpers are editing state, never a silent save of the old assumptions.
-const helperProject = project("helpers");
-helperProject.supplyDemand = { version: 1, config: completeConfig(helperProject) };
-const helpers = fixture(helperProject), beforeHelpers = JSON.stringify(helperProject);
-helpers.input("matrix", matrix);
-assert.equal(helpers.controller.hasUnsavedChanges(), true, "pending paste participates in navigation/forecast guards");
-helpers.click("generate"); helpers.click("save-draft");
-assert.equal(helpers.commits.length, 0, "save/generate cannot claim success while ignoring a pending matrix");
-assert.equal(JSON.stringify(helperProject), beforeHelpers);
-helpers.click("element", { sdElement: "wind" });
-helpers.select("month", 2);
-assert.ok(helpers.root.innerHTML.includes(matrix), "context switches must not clear a user's unapplied paste");
-assert.match(helpers.root.innerHTML, /省内负荷<\/h4>/);
-helpers.click("clear-bulk");
-assert.equal(helpers.controller.hasUnsavedChanges(), false);
-assert.equal(JSON.stringify(helperProject), beforeHelpers, "clearing unapplied input leaves saved configuration untouched");
-helpers.click("element", { sdElement: "wind" });
-helpers.input("batchGrowth", 25);
-assert.equal(helpers.controller.hasUnsavedChanges(), true);
-helpers.click("save-draft"); helpers.click("generate");
-assert.equal(helpers.commits.length, 0);
-helpers.click("element", { sdElement: "tieLine" });
-assert.match(helpers.root.innerHTML, /风电出力<\/h4>/, "unapplied growth cannot silently follow another element");
-helpers.click("growth-fill"); helpers.click("save-draft");
-assert.equal(helperProject.supplyDemand.draft.elements.wind.growthRatesByYear[2028], 25);
-assert.equal(helperProject.supplyDemand.draft.elements.load.growthRatesByYear[2028], 0);
-assert.equal(helpers.controller.hasUnsavedChanges(), false);
-helpers.click("element", { sdElement: "tieLine" });
-helpers.input("matrix", matrix);
-helpers.select("mode", "bidirectional");
-assert.match(helpers.root.innerHTML, /option value="net" selected/, "mode switch is guarded before clearing a pending paste");
-helpers.click("discard");
-assert.equal(helpers.controller.hasUnsavedChanges(), false);
-assert.equal(JSON.stringify(helperProject), beforeHelpers, "discard restores the saved source and clears helpers together");
-assert.ok(!helpers.root.innerHTML.includes(matrix));
-helpers.select("mode", "bidirectional");
-helpers.input("matrix", matrix);
-helpers.select("branch", "import");
-assert.match(helpers.root.innerHTML, /option value="export" selected/, "pending paste stays with its original tie-line direction");
-helpers.click("clear-bulk"); helpers.select("branch", "import");
-assert.match(helpers.root.innerHTML, /option value="import" selected/);
+  const directional = project("directions"), directions = fixture(directional);
+  const directionalConfig = completeConfig(directional);
+  const tieLine = directionalConfig.elements.tieLine, netSeries = clone(tieLine);
+  const { growthRatesByYear, monthlyWeights, hourlyWeightsByMonth } = netSeries;
+  tieLine.mode = "bidirectional";
+  tieLine.export = { baseEnergyMwh: 800, growthRatesByYear, monthlyWeights, hourlyWeightsByMonth };
+  tieLine.import = { baseEnergyMwh: 1200, growthRatesByYear, monthlyWeights, hourlyWeightsByMonth };
+  await directions.upload("双向.xlsx", { ok: true, config: directionalConfig });
+  assert.match(directions.root.innerHTML, /联络线净电量.*联络线送出.*联络线受入/);
+  assert.match(directions.root.innerHTML, /<td>-400\.00<\/td><td>800\.00<\/td><td>1,200\.00<\/td>/);
+  directions.click("generate");
+  const savedDirections = directions.openSavedPreview();
+  assert.equal((savedDirections.match(/联络线送出/g) || []).length, 2, "both annual and typical saved views show direction");
+  assert.match(savedDirections, /<td>-400\.00<\/td><td>800\.00<\/td><td>1,200\.00<\/td>/);
 
-// A failed explicit discard keeps unapplied input available for retry.
-const pendingFailureProject = project("pending-failure");
-pendingFailureProject.supplyDemand = { version: 1, config: completeConfig(pendingFailureProject) };
-const pendingFailure = fixture(pendingFailureProject, { fail: true });
-pendingFailure.input("matrix", matrix); pendingFailure.input("batchGrowth", 12);
-pendingFailure.click("discard");
-assert.equal(pendingFailure.controller.hasUnsavedChanges(), true);
-assert.ok(pendingFailure.root.innerHTML.includes(matrix));
-assert.match(pendingFailure.root.innerHTML, /data-sd-field="batchGrowth" value="12"/);
+  const legacy = project("legacy");
+  legacy.supplyDemand = { ...savedState(legacy), draft: completeConfig(legacy, 350000) };
+  const legacyBefore = JSON.stringify(legacy), old = fixture(legacy);
+  assert.match(old.root.innerHTML, /已保存草稿预览/);
+  assert.match(old.root.innerHTML, /350,000\.00/);
+  assert.equal(JSON.stringify(legacy), legacyBefore, "opening preserves pre-existing drafts");
+  old.click("download-template");
+  assert.equal(old.downloads.at(-1).config, legacy.supplyDemand.draft);
+  await old.upload("新的.xlsx", { ok: true, config: completeConfig(legacy, 15000) });
+  old.click("discard");
+  assert.equal(JSON.stringify(legacy), legacyBefore, "discarding a preview preserves previous saved draft");
+  old.click("generate");
+  assert.equal(legacy.supplyDemand.draft, undefined);
+  assert.equal(legacy.supplyDemand.config.elements.load.baseEnergyMwh, 350000);
 
-// Matrix structure validation does not reject zero-energy months, while generation
-// still requires a positive hourly shape for every month that carries energy.
-const zeroJanuary = [Array(24).fill(0), ...Array.from({ length: 11 }, () => Array(24).fill(1))].map((row) => row.join("\t")).join("\n");
-for (const januaryWeight of [0, 1]) {
-  const zeroMonthProject = project(`zero-month-${januaryWeight}`), zeroMonthConfig = completeConfig(zeroMonthProject);
-  zeroMonthConfig.elements.load.monthlyWeights[0] = januaryWeight;
-  zeroMonthProject.supplyDemand = { version: 1, config: zeroMonthConfig };
-  const zeroMonth = fixture(zeroMonthProject);
-  zeroMonth.input("matrix", zeroJanuary); zeroMonth.click("matrix-apply"); zeroMonth.click("generate");
-  assert.equal(zeroMonth.commits.length, januaryWeight === 0 ? 1 : 0);
-  if (januaryWeight === 0) assert.deepEqual(zeroMonthProject.supplyDemand.config.elements.load.hourlyWeightsByMonth[1], Array(24).fill(0));
-  else assert.match(zeroMonth.root.innerHTML, /1月24小时权重合计必须大于0/);
-}
+  legacy.supplyDemand.draft = clone(legacy.supplyDemand.config);
+  const legacySavedAt = legacy.supplyDemand.generatedAt;
+  old.controller.render();
+  old.click("generate");
+  assert.deepEqual(old.commits.at(-1).flags, { changed: false, generated: false });
+  assert.equal(legacy.supplyDemand.generatedAt, legacySavedAt);
+  assert.equal(legacy.supplyDemand.draft, undefined);
 
-// Generate, inspect and export saved input, preserving independent project fields.
-const generatedProject = project("generated"), protectedOriginal = clone(generatedProject);
-generatedProject.supplyDemand = { version: 1, draft: completeConfig(generatedProject) };
-const generated = fixture(generatedProject);
-generated.click("generate");
-assert.equal(generated.commits.length, 1);
-assert.deepEqual(generated.commits[0].flags, { changed: true, generated: true });
-assert.equal(generatedProject.supplyDemand.draft, undefined);
-assert.equal(generatedProject.supplyDemand.generatedAt, "2026-11-13T12:00:00.000Z");
-assert.equal(generatedProject.supplyDemand.inputFingerprint, domain.fingerprint(generatedProject, generatedProject.supplyDemand.config));
-assert.deepEqual(generatedProject.roughPrice, protectedOriginal.roughPrice);
-assert.deepEqual(generatedProject.scenarios, protectedOriginal.scenarios);
-assert.match(generated.root.innerHTML, /每年288个典型小时 \/ 8760小时/);
-assert.match(generated.root.innerHTML, /data-sd-action="export-hourly"/);
-assert.match(generated.root.innerHTML, /查看已保存数据（MWh）/);
-generated.click("generate");
-assert.deepEqual(generated.commits.at(-1).flags, { changed: false, generated: true });
-const savedBeforeEditing = JSON.stringify(generatedProject.supplyDemand.config);
-generated.input("base", 999999);
-generated.click("export-annual");
-assert.equal(generated.exports[0].rows[1][1], 120000, "export uses saved config even when local edits exist");
-assert.match(generated.exports[0].filename, /供需年度_2027-2028\.csv$/);
-assert.equal(JSON.stringify(generatedProject.supplyDemand.config), savedBeforeEditing);
-generated.click("save-draft");
-assert.equal(generatedProject.supplyDemand.draft.elements.load.baseEnergyMwh, 999999);
-assert.equal(generatedProject.supplyDemand.config.elements.load.baseEnergyMwh, 120000);
-generated.click("discard");
-assert.equal(generatedProject.supplyDemand.draft, undefined);
-assert.equal(JSON.stringify(generatedProject.supplyDemand.config), savedBeforeEditing);
-assert.match(generated.root.innerHTML, /data-sd-field="base" value="120000"/);
+  const conflictProject = project("conflict");
+  conflictProject.supplyDemand = { ...savedState(conflictProject), draft: { startYear: 2025, forecastYears: 1 } };
+  const conflict = fixture(conflictProject);
+  assert.match(conflict.root.innerHTML, /草稿待核对/);
+  assert.match(conflict.root.innerHTML, /data-sd-action="generate" disabled/);
+  conflict.click("generate");
+  assert.equal(conflict.commits.length, 0);
+  conflict.click("discard");
+  assert.deepEqual(conflictProject.supplyDemand, savedState(conflictProject));
 
-// A changed project period must be explicitly reviewed; old saved config stays frozen.
-generatedProject.startYear = 2028;
-generatedProject.forecastYears = 3;
-generated.controller.render();
-assert.match(generated.root.innerHTML, /项目周期已变化/);
-assert.match(generated.root.innerHTML, /data-sd-action="generate" disabled/);
-const countBeforeMismatch = generated.commits.length;
-generated.click("generate");
-assert.equal(generated.commits.length, countBeforeMismatch);
-generated.click("rebase");
-generated.click("save-draft");
-assert.equal(generatedProject.supplyDemand.draft.startYear, 2028);
-assert.equal(generatedProject.supplyDemand.draft.elements.load.baseEnergyMwh, 120000);
-assert.equal(generatedProject.supplyDemand.draft.elements.load.growthRatesByYear[2030], undefined, "new years are not silently assigned growth assumptions");
-assert.equal(JSON.stringify(generatedProject.supplyDemand.config), savedBeforeEditing);
-generated.click("reset-period");
-generated.click("save-draft");
-assert.equal(generatedProject.supplyDemand.draft.elements.load.baseEnergyMwh, null);
-assert.equal(JSON.stringify(generatedProject.supplyDemand.config), savedBeforeEditing);
+  await conflict.upload("待保存.xlsx", { ok: true, config: completeConfig(conflictProject, 9000) });
+  conflictProject.supplyDemand = savedState(conflictProject, completeConfig(conflictProject, 30000));
+  conflict.controller.render();
+  assert.match(conflict.root.innerHTML, /已保存供需配置已更新/);
+  conflict.click("generate");
+  assert.equal(conflictProject.supplyDemand.config.elements.load.baseEnergyMwh, 30000);
+  conflict.click("discard");
+  conflict.click("download-template");
+  assert.equal(conflict.downloads.at(-1).config.elements.load.baseEnergyMwh, 30000);
+  conflictProject.startYear += 1;
+  conflict.controller.render();
+  assert.match(conflict.root.innerHTML, /data-sd-dirty>待核对/);
 
-// Switching projects, even to a replacement object with the same ID, cannot cross-write edits.
-const one = project("same"), other = project("same"), switching = fixture(one);
-switching.input("base", 111);
-switching.setActive(other);
-switching.click("save-draft");
-assert.equal(switching.commits.length, 0);
-assert.equal(other.supplyDemand, undefined);
-switching.input("base", 222);
-switching.click("save-draft");
-assert.equal(other.supplyDemand.draft.elements.load.baseEnergyMwh, 222);
-assert.equal(one.supplyDemand, undefined);
-switching.setActive(one);
-switching.controller.render();
-assert.match(switching.root.innerHTML, /data-sd-field="base" value="111"/);
-switching.click("save-draft");
-assert.equal(one.supplyDemand.draft.elements.load.baseEnergyMwh, 111);
+  const a = project("a"), b = project("b"), races = fixture(a);
+  const oldPromise = deferred(), newPromise = deferred();
+  const oldUpload = races.upload("旧.xlsx", oldPromise.promise);
+  const newUpload = races.upload("新.xlsx", newPromise.promise);
+  newPromise.resolve({ ok: true, config: completeConfig(a, 7000) });
+  await newUpload;
+  oldPromise.resolve({ ok: true, config: completeConfig(a, 3000) });
+  await oldUpload;
+  assert.match(races.root.innerHTML, /7,000\.00/);
+  assert.doesNotMatch(races.root.innerHTML, /旧\.xlsx/);
+  races.click("discard");
 
-// External saved-state changes are never overwritten by a stale editing session.
-const conflictProject = project("conflict"), conflict = fixture(conflictProject);
-conflict.input("base", 123);
-conflictProject.supplyDemand = { version: 1, draft: completeConfig(conflictProject) };
-conflict.controller.render();
-assert.match(conflict.root.innerHTML, /当前未保存编辑不能覆盖最新数据/);
-conflict.click("save-draft");
-assert.equal(conflict.commits.length, 0);
-conflict.click("load-latest");
-assert.equal(conflict.controller.hasUnsavedChanges(), false);
-assert.match(conflict.root.innerHTML, /data-sd-field="base" value="120000"/);
+  const wrongType = deferred();
+  const superseded = races.upload("待处理.xlsx", wrongType.promise);
+  await races.upload("非模板.csv", null);
+  assert.match(races.root.innerHTML, /请选择 \.xlsx/);
+  assert.equal(races.controller.hasUnsavedChanges(), false);
+  wrongType.resolve({ ok: true, config: completeConfig(a) });
+  await superseded;
+  assert.doesNotMatch(races.root.innerHTML, /data-sd-import-preview/);
 
-// Storage rejections and exceptions retain unsaved user edits for retry.
-for (const behavior of [{ fail: true }, { throw: true }]) {
-  const failedProject = project("failed"), failed = fixture(failedProject, behavior);
-  failed.input("base", 456);
-  failed.click("save-draft");
+  const projectSwap = deferred();
+  const swapped = races.upload("属于原项目.xlsx", projectSwap.promise);
+  races.setActive(b);
+  races.setActive(a);
+  projectSwap.resolve({ ok: true, config: completeConfig(a) });
+  await swapped;
+  assert.equal(races.controller.hasUnsavedChanges(), false);
+  assert.doesNotMatch(races.root.innerHTML, /data-sd-import-preview/);
+
+  const periodSwap = deferred();
+  const changed = races.upload("上一周期.xlsx", periodSwap.promise);
+  a.startYear += 1;
+  periodSwap.resolve({ ok: true, config: completeConfig(a) });
+  await changed;
+  assert.match(races.root.innerHTML, /2028—2029年/);
+  assert.equal(races.controller.hasUnsavedChanges(), false);
+
+  const cancelRead = deferred();
+  const cancelled = races.upload("正读取.xlsx", cancelRead.promise);
+  races.click("discard");
+  cancelRead.resolve({ ok: true, config: completeConfig(a) });
+  await cancelled;
+  assert.equal(races.controller.hasUnsavedChanges(), false);
+  assert.doesNotMatch(races.root.innerHTML, /data-sd-import-preview/);
+  assert.equal(races.commits.length, 0);
+
+  const failure = project("failed"), behavior = { fail: true }, failed = fixture(failure, behavior);
+  await failed.upload("有效.xlsx", { ok: true, config: completeConfig(failure) });
+  failed.click("generate");
+  assert.match(failed.root.innerHTML, /供需配置保存失败/);
+  assert.equal(failure.supplyDemand, undefined);
   assert.equal(failed.controller.hasUnsavedChanges(), true);
-  assert.equal(failedProject.supplyDemand, undefined);
-  assert.match(failed.root.innerHTML, /data-sd-field="base" value="456"/);
-  assert.match(failed.root.innerHTML, /保存/);
+  behavior.fail = false;
+  behavior.throw = true;
+  failed.click("generate");
+  assert.match(failed.root.innerHTML, /模拟保存失败/);
+  assert.equal(failed.controller.hasUnsavedChanges(), true);
+  behavior.throw = false;
+  failed.click("generate");
+  assert.equal(failed.controller.hasUnsavedChanges(), false);
+  assert.equal(failure.supplyDemand.config.elements.load.baseEnergyMwh, 120000);
+
+  console.log("supply-demand-workspace: ok");
 }
 
-const absent = fixture(null);
-assert.match(absent.root.innerHTML, /请先完成项目创建/);
-assert.equal(absent.controller.hasUnsavedChanges(), false);
-absent.setActive(project("later"));
-absent.controller.render();
-absent.click("zero");
-absent.click("save-draft");
-assert.equal(absent.commits[0].next.draft.elements.load.baseEnergyMwh, 0);
-assert.equal(absent.commits[0].next.draft.elements.load.growthRatesByYear[2028], 0);
-assert.equal(absent.commits[0].next.draft.elements.load.monthlyWeights[0], null);
-
-// Malformed imported draft is recoverable without rewriting the raw saved record.
-const malformedProject = project("malformed");
-malformedProject.supplyDemand = { version: 1, draft: { version: 1, startYear: 2027, forecastYears: 2 } };
-const malformedBefore = JSON.stringify(malformedProject.supplyDemand), malformed = fixture(malformedProject);
-assert.match(malformed.root.innerHTML, /输入结构不完整/);
-assert.equal(JSON.stringify(malformedProject.supplyDemand), malformedBefore);
-malformed.click("reset-period");
-assert.equal(JSON.stringify(malformedProject.supplyDemand), malformedBefore);
-malformed.click("save-draft");
-assert.equal(malformedProject.supplyDemand.draft.elements.load.baseEnergyMwh, null);
-
-// Large but finite relative weights remain readable after stable normalization.
-const largeProject = project("large"), largeConfig = completeConfig(largeProject);
-largeConfig.elements.load.monthlyWeights = Array(12).fill(1e308);
-largeProject.supplyDemand = { version: 1, draft: largeConfig };
-const large = fixture(largeProject);
-assert.match(large.root.innerHTML, /最高 8\.3%/);
-assert.doesNotMatch(large.root.innerHTML, /NaN|Infinity/);
-
-console.log("Supply-demand workspace tests passed");
+main().catch((error) => { console.error(error); process.exitCode = 1; });

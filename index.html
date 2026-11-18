@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261118m">
-    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118k">
+    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118o">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261118m">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
@@ -112,8 +112,9 @@
     <script src="./src/ui/energy-template-flow.js?v=20261113c" defer></script>
     <script src="./src/ui/chart-lifecycle.js?v=20261113c" defer></script>
     <script src="./src/ui/energy-charts.js?v=20261113c" defer></script>
-    <script src="./src/ui/supply-demand-workspace.js?v=20261113c" defer></script>
-    <script src="./src/ui/supply-demand-flow.js?v=20261118a" defer></script>
+    <script src="./src/ui/supply-demand-template.js?v=20261118o" defer></script>
+    <script src="./src/ui/supply-demand-workspace.js?v=20261118o" defer></script>
+    <script src="./src/ui/supply-demand-flow.js?v=20261118o" defer></script>
     <script src="./src/ui/forecast-page.js?v=20261118e" defer></script>
     <script src="./src/ui/forecast-run-flow.js?v=20261118e" defer></script>
     <script src="./src/ui/project-list.js?v=20261118d" defer></script>
@@ -151,7 +152,7 @@
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261118f" defer></script>
-    <script src="./app.js?v=20261118m" defer></script>
+    <script src="./app.js?v=20261118o" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -1894,7 +1895,7 @@
                   <div class="help-step-index">7</div>
                   <div class="help-step-body">
                     <strong>电价预测工作台</strong>
-                    <p>在“测算周期供需配置”保存并生成小时输入，再使用“演示预测”生成价格曲线并选择生效版本。后台预测按钮在接入后可用。</p>
+                    <p>在“测算周期供需配置”下载并填写 Excel 模板。导入后核对年度预览，保存并生成小时输入，再选择后台预测或演示预测。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
@@ -2000,7 +2001,7 @@
                 </article>
                 <article class="help-card">
                   <strong>供需输入</strong>
-                  <p>周期从项目创建带入。对省内负荷、联络线负荷、风电、光伏、水电、非市场化出力填写首年电量、逐年增长率、分月权重和各月典型日24小时权重。联络线净电量正值为送出，负值为受入。</p>
+                  <p>Excel 模板从项目带入测算周期，填写六类供需要素的首年电量、逐年增长率、分月权重和各月典型日 24 小时权重。联络线净电量正值为送出，负值为受入。</p>
                   <p>系统按权重分配年度电量，再按固定365天模型年生成每年8,760小时。点击“保存并生成供需数据”后，可导出年度、典型小时及逐小时CSV。</p>
                 </article>
               </div>

@@ -50,6 +50,7 @@ const CRITICAL_IDS = [
   "history-heatmap-chart",
   "history-duration-chart",
   "history-intraday-spread-chart",
+  "supply-demand-root",
   "forecast-run-form",
   "forecast-run-body",
   "scenario-selector",

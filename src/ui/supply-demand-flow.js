@@ -45,8 +45,8 @@
     }
 
     function inspectSupplyDemand(project) {
-      if (controller?.hasUnsavedChanges?.() || hasPendingDraft(project)) {
-        return { ok: false, errors: ["供需输入仍有草稿或未保存的修改，请先保存并生成小时数据，或放弃修改。"] };
+      if (controller?.hasUnsavedChanges?.(project) || hasPendingDraft(project)) {
+        return { ok: false, errors: ["供需输入待确认。请先保存并生成小时数据，或放弃本次导入或草稿。"] };
       }
       const config = project?.supplyDemand?.config;
       const errors = domain.validateConfig(project, config);
@@ -89,7 +89,7 @@
       if (!controller) {
         const workspace = options.workspace || getWorkspace();
         controller = workspace.createController({ root, getProject: options.getProject,
-          onCommit: commit, downloadCsv: options.downloadCsv });
+          onCommit: commit, downloadCsv: options.downloadCsv, onDraftChange: options.onDraftChange });
       }
       controller.render();
     }

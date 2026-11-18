@@ -117,7 +117,8 @@ const {
 const supplyDemandFlow = supplyDemandFlowModule.create({
   documentRef: document, getProject: getActiveProject, downloadCsv,
   onInvalidate: (project) => markDownstreamStale(project, "forecast-page"),
-  onPersist: schedulePersistAppData, onRender: renderAll, onMessage: setTopMeta
+  onPersist: schedulePersistAppData, onRender: renderAll, onMessage: setTopMeta,
+  onDraftChange: () => backendForecastPanel.render()
 });
 const backendForecastPanel = forecastPage.createBackendForecastPanel({
   documentRef: document, getProject: getActiveProject,
