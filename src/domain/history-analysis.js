@@ -25,48 +25,12 @@
 
   const HISTORY_MONTH_LABELS = Object.freeze(["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]);
   const HISTORY_HEAT_HOUR_LABELS = Object.freeze(Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}时`));
-  const HISTORY_QUARTER_LABELS = Object.freeze(Array.from({ length: 96 }, (_, index) => {
-    const hour = Math.floor(index / 4);
-    const minute = (index % 4) * 15;
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  }));
-  const {
-    makeIsoDate,
-    compareIsoDate,
-    clampIsoDate
-  } = appUtils;
-
-  function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  }
-
-  function createHistoryTypicalAccumulator() {
-    return {
-      workdaySum: Array(96).fill(0),
-      workdayCount: Array(96).fill(0),
-      weekendSum: Array(96).fill(0),
-      weekendCount: Array(96).fill(0)
-    };
-  }
-
-  function pushHistoryTypical(acc, isWeekend, quarterIndex, price) {
-    if (isWeekend) {
-      acc.weekendSum[quarterIndex] += price;
-      acc.weekendCount[quarterIndex] += 1;
-    } else {
-      acc.workdaySum[quarterIndex] += price;
-      acc.workdayCount[quarterIndex] += 1;
-    }
-  }
-
-  function mergeHistoryTypical(target, source) {
-    for (let i = 0; i < 96; i += 1) {
-      target.workdaySum[i] += source.workdaySum[i];
-      target.workdayCount[i] += source.workdayCount[i];
-      target.weekendSum[i] += source.weekendSum[i];
-      target.weekendCount[i] += source.weekendCount[i];
-    }
-  }
+  const MOCK_START_YEAR = 2018;
+  const MOCK_END_YEAR = 2025;
+  const HISTORY_MARKET_PRICE_BASIS = "province_spot_mock_v1";
+  const MODEL_DAYS = 365;
+  const QUARTERS_PER_DAY = 96;
+  const { makeIsoDate, compareIsoDate, clampIsoDate } = appUtils;
 
   function percentileSorted(sortedValues, p) {
     if (!sortedValues.length) return null;
@@ -78,141 +42,81 @@
     return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
   }
 
-  function stddev(values) {
-    if (!values.length) return 0;
-    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-    const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length;
-    return Math.sqrt(Math.max(variance, 0));
+  function provinceKey(project) {
+    return String(project?.province || "").trim().toLowerCase();
   }
 
-  function dayModeMatchesMonth(mode, month) {
-    if (mode === "summer") return month >= 6 && month <= 8;
-    if (mode === "winter") return month === 12 || month <= 2;
-    return true;
+  function provinceDemoBase(province, options) {
+    const price = Number(priceForecast.getPriceBaseForProvince(province, options.provinceBenchmarks || {}));
+    return Number.isFinite(price) ? price : 360;
   }
 
-  function historyCacheKey(project) {
-    return [
-      project.id,
-      project.province,
-      project.capacityMw,
-      project.startYear,
-      project.assetType,
-      project.siteType,
-      priceForecast.MARKET_PRICE_BASIS
-    ].join("|");
+  function historyCacheKey(project, options = {}) {
+    const province = provinceKey(project);
+    return `${province}|${HISTORY_MARKET_PRICE_BASIS}|${provinceDemoBase(province, options)}`;
   }
 
   function trimHistoryCache(cache, maxSize = 24) {
-    if (!cache || typeof cache.size !== "number" || cache.size <= maxSize) return;
-    const firstKey = cache.keys().next().value;
-    if (firstKey) cache.delete(firstKey);
+    while (cache.size > maxSize && cache.size > 0) {
+      cache.delete(cache.keys().next().value);
+    }
   }
 
   function buildMockHistorySpotAnalysisDataset(project, options = {}) {
+    const province = provinceKey(project);
     const cache = options.cache;
-    const cacheKey = historyCacheKey(project);
-    if (cache?.has(cacheKey)) {
-      return cache.get(cacheKey);
-    }
-    const factors = priceForecast.getHistoryMockShapeFactors(project);
-    const base = priceForecast.getPriceBaseForProvince(project.province, options.provinceBenchmarks || {}) + factors.baseShift;
-    const endYear = project.startYear - 1;
-    const startYear = endYear - 7;
-    const seedBase = Math.round((project.capacityMw || 0) * 10)
-      + project.startYear * 7
-      + (project.siteType === "offshore" ? 211 : 109)
-      + (project.assetType === "photovoltaic" ? 307 : 173);
+    const cacheKey = historyCacheKey(project, options);
+    if (cache?.has(cacheKey)) return cache.get(cacheKey);
+
+    // Reuse the base simulated curve shape with a fixed input. Only the province
+    // changes its level and time series seed. Project attributes never enter this source.
+    const factors = priceForecast.getHistoryMockShapeFactors({});
+    const base = provinceDemoBase(province, options) + factors.baseShift;
+    const seedBase = Array.from(province).reduce((seed, letter) => (seed * 31 + letter.codePointAt(0)) % 65521, 17);
+    const diurnal = Array.from({ length: QUARTERS_PER_DAY }, (_, quarter) => {
+      const hour = quarter / 4;
+      return 0.9
+        + factors.morningPeakWeight * Math.exp(-Math.pow((hour - 8.5) / 2.2, 2))
+        + factors.eveningPeakWeight * 1.22 * Math.exp(-Math.pow((hour - 18.4) / 2.9, 2))
+        - factors.noonValleyWeight * 0.13 * Math.exp(-Math.pow((hour - 13.2) / 2.4, 2))
+        - factors.nightValleyWeight * 0.07 * Math.exp(-Math.pow((hour - 3.2) / 2.8, 2));
+    });
     const years = [];
 
-    for (let year = startYear; year <= endYear; year += 1) {
-      const monthlySums = Array(12).fill(0);
-      const monthlyCounts = Array(12).fill(0);
-      const monthValues = Array.from({ length: 12 }, () => []);
-      const hourlySumsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
-      const hourlyCountsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
-      const typical = {
-        annual: createHistoryTypicalAccumulator(),
-        summer: createHistoryTypicalAccumulator(),
-        winter: createHistoryTypicalAccumulator()
-      };
+    for (let year = MOCK_START_YEAR; year <= MOCK_END_YEAR; year += 1) {
       const values = [];
-
-      for (let day = 1; day <= 365; day += 1) {
-        const { month, day: dayOfMonth } = energyProfiles.dayOfYearToMonthDay(day);
-        const monthIndex = month - 1;
-        const dayIndex = day - 1;
-        const dayOfWeek = new Date(Date.UTC(year, monthIndex, dayOfMonth)).getUTCDay();
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        const winterLoad = 0.18 * Math.cos(((dayIndex - 12) / 365) * 2 * Math.PI) * factors.winterScale;
-        const summerLoad = 0.16 * Math.cos(((dayIndex - 196) / 365) * 2 * Math.PI) * factors.summerScale;
-        const seasonal = 1 + winterLoad + summerLoad;
-        const yearFactor = 0.92 + ((year - startYear) / 7) * (0.16 * factors.yearVolatility);
-
-        for (let quarter = 0; quarter < 96; quarter += 1) {
-          const hour = quarter / 4;
-          const morningPeak = Math.exp(-Math.pow((hour - 8.5) / 2.2, 2));
-          const eveningPeak = 1.22 * Math.exp(-Math.pow((hour - 18.4) / 2.9, 2));
-          const noonValley = 0.13 * Math.exp(-Math.pow((hour - 13.2) / 2.4, 2));
-          const nightValley = 0.07 * Math.exp(-Math.pow((hour - 3.2) / 2.8, 2));
-          const diurnal = 0.9
-            + factors.morningPeakWeight * morningPeak
-            + factors.eveningPeakWeight * eveningPeak
-            - factors.noonValleyWeight * noonValley
-            - factors.nightValleyWeight * nightValley;
-          const weekendFactor = isWeekend ? factors.weekendLevel : 1;
-          const randomFactor = 1 + (energyProfiles.pseudoNoise(dayIndex * 97 + quarter, seedBase + year) - 0.5) * factors.noiseAmplitude;
-          let price = base * yearFactor * seasonal * diurnal * weekendFactor * randomFactor;
-
-          const spikeSeed = energyProfiles.pseudoNoise(dayIndex * 53 + quarter, seedBase + year + 37);
-          if (spikeSeed > factors.spikeThreshold) {
-            price *= 1.38 + (spikeSeed - factors.spikeThreshold) * 26 * factors.spikeScale;
-          }
-          const negativeSeed = energyProfiles.pseudoNoise(dayIndex * 31 + quarter, seedBase + year + 73);
-          if (
-            hour >= 10.5 && hour <= 15.5
-            && (month === 4 || month === 5 || month === 10 || (project.assetType === "photovoltaic" && month === 9))
-            && negativeSeed > factors.negativeThreshold
-          ) {
+      const yearFactor = 0.92 + ((year - MOCK_START_YEAR) / (MOCK_END_YEAR - MOCK_START_YEAR)) * 0.16 * factors.yearVolatility;
+      for (let dayIndex = 0; dayIndex < MODEL_DAYS; dayIndex += 1) {
+        const { month, day } = energyProfiles.dayOfYearToMonthDay(dayIndex + 1);
+        const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+        const weekendFactor = dayOfWeek === 0 || dayOfWeek === 6 ? factors.weekendLevel : 1;
+        const winterLoad = 0.18 * Math.cos(((dayIndex - 12) / MODEL_DAYS) * 2 * Math.PI) * factors.winterScale;
+        const summerLoad = 0.16 * Math.cos(((dayIndex - 196) / MODEL_DAYS) * 2 * Math.PI) * factors.summerScale;
+        const dayLevel = base * yearFactor * (1 + winterLoad + summerLoad) * weekendFactor;
+        for (let quarter = 0; quarter < QUARTERS_PER_DAY; quarter += 1) {
+          const noise = energyProfiles.pseudoNoise(dayIndex * 97 + quarter, seedBase + year);
+          let price = dayLevel * diurnal[quarter] * (1 + (noise - 0.5) * factors.noiseAmplitude);
+          const spike = energyProfiles.pseudoNoise(dayIndex * 53 + quarter, seedBase + year + 37);
+          if (spike > factors.spikeThreshold) price *= 1.38 + (spike - factors.spikeThreshold) * 26 * factors.spikeScale;
+          const negative = energyProfiles.pseudoNoise(dayIndex * 31 + quarter, seedBase + year + 73);
+          if (quarter >= 42 && quarter <= 62 && (month === 4 || month === 5 || month === 10) && negative > factors.negativeThreshold) {
             price = -5 - 85 * energyProfiles.pseudoNoise(dayIndex * 43 + quarter, seedBase + year + 91) * factors.negativeScale;
           }
-          price = clamp(price, -120, 880);
-
-          const hourSlot = Math.floor(quarter / 4);
-          values.push(price);
-          monthlySums[monthIndex] += price;
-          monthlyCounts[monthIndex] += 1;
-          monthValues[monthIndex].push(price);
-          hourlySumsByMonth[monthIndex][hourSlot] += price;
-          hourlyCountsByMonth[monthIndex][hourSlot] += 1;
-
-          pushHistoryTypical(typical.annual, isWeekend, quarter, price);
-          if (dayModeMatchesMonth("summer", month)) {
-            pushHistoryTypical(typical.summer, isWeekend, quarter, price);
-          }
-          if (dayModeMatchesMonth("winter", month)) {
-            pushHistoryTypical(typical.winter, isWeekend, quarter, price);
-          }
+          values.push(Math.round(Math.max(-120, Math.min(880, price)) * 100) / 100);
         }
       }
-
-      years.push({
-        year,
-        values,
-        monthValues,
-        monthlyAvg: monthlySums.map((sum, idx) => (monthlyCounts[idx] ? sum / monthlyCounts[idx] : null)),
-        hourlySumsByMonth,
-        hourlyCountsByMonth,
-        typical
-      });
+      years.push({ year, values });
     }
 
     const payload = {
-      sourceType: "database",
+      sourceType: "mock",
       mock: true,
-      marketPriceBasis: priceForecast.MARKET_PRICE_BASIS,
-      startYear,
-      endYear,
+      marketPriceBasis: HISTORY_MARKET_PRICE_BASIS,
+      marketPriceLabel: "省级现货模拟价",
+      intervalMinutes: 15,
+      modelDays: MODEL_DAYS,
+      startYear: MOCK_START_YEAR,
+      endYear: MOCK_END_YEAR,
       years
     };
     if (cache) {
@@ -229,248 +133,200 @@
     const defaultStartDate = makeIsoDate(defaultStartYear, 1, 1);
     let startDate = clampIsoDate(controls.startDate || defaultStartDate, minDate, maxDate) || defaultStartDate;
     let endDate = clampIsoDate(controls.endDate || maxDate, minDate, maxDate) || maxDate;
-    if (compareIsoDate(startDate, endDate) > 0) {
-      [startDate, endDate] = [endDate, startDate];
-    }
-    return {
-      startDate,
-      endDate,
-      minDate,
-      maxDate
-    };
+    if (compareIsoDate(startDate, endDate) > 0) [startDate, endDate] = [endDate, startDate];
+    return { startDate, endDate, minDate, maxDate };
+  }
+
+  function createHourBuckets() {
+    return Array.from({ length: 12 }, () => Array.from({ length: 24 }, () => ({
+      sum: 0, count: 0, negative: 0
+    })));
   }
 
   function buildHistoryYearSlice(yearData, range) {
-    const yearStartDate = makeIsoDate(yearData.year, 1, 1);
-    const yearEndDate = makeIsoDate(yearData.year, 12, 31);
-    if (compareIsoDate(yearEndDate, range.startDate) < 0 || compareIsoDate(yearStartDate, range.endDate) > 0) {
-      return null;
-    }
+    const { year } = yearData;
+    const yearStart = makeIsoDate(year, 1, 1);
+    const yearEnd = makeIsoDate(year, 12, 31);
+    if (yearEnd < range.startDate || yearStart > range.endDate) return null;
+    const start = range.startDate > yearStart ? range.startDate : yearStart;
+    const end = range.endDate < yearEnd ? range.endDate : yearEnd;
+    const firstMonth = Number(start.slice(5, 7)) - 1;
+    const lastMonth = Number(end.slice(5, 7)) - 1;
     const monthValues = Array.from({ length: 12 }, () => []);
-    const hourlySumsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
-    const hourlyCountsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
-    const monthlySums = Array(12).fill(0);
-    const monthlyCounts = Array(12).fill(0);
-    const typical = createHistoryTypicalAccumulator();
+    const monthSpreads = Array.from({ length: 12 }, () => []);
+    const heat = { weekday: createHourBuckets(), weekend: createHourBuckets() };
     const values = [];
+    let expectedPoints = 0;
 
-    for (let day = 1; day <= 365; day += 1) {
-      const { month, day: dayOfMonth } = energyProfiles.dayOfYearToMonthDay(day);
-      const date = makeIsoDate(yearData.year, month, dayOfMonth);
-      if (compareIsoDate(date, range.startDate) < 0 || compareIsoDate(date, range.endDate) > 0) continue;
+    for (let dayIndex = 0; dayIndex < MODEL_DAYS; dayIndex += 1) {
+      const { month, day } = energyProfiles.dayOfYearToMonthDay(dayIndex + 1);
+      const date = makeIsoDate(year, month, day);
+      if (date < start || date > end) continue;
       const monthIndex = month - 1;
-      const dayOfWeek = new Date(Date.UTC(yearData.year, monthIndex, dayOfMonth)).getUTCDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      for (let quarter = 0; quarter < 96; quarter += 1) {
-        const value = yearData.values[(day - 1) * 96 + quarter];
+      const weekday = new Date(Date.UTC(year, monthIndex, day)).getUTCDay();
+      const hours = (weekday === 0 || weekday === 6 ? heat.weekend : heat.weekday)[monthIndex];
+      const dayValues = [];
+      expectedPoints += QUARTERS_PER_DAY;
+      for (let quarter = 0; quarter < QUARTERS_PER_DAY; quarter += 1) {
+        const value = yearData.values?.[dayIndex * QUARTERS_PER_DAY + quarter];
         if (!Number.isFinite(value)) continue;
-        const hourSlot = Math.floor(quarter / 4);
         values.push(value);
-        monthlySums[monthIndex] += value;
-        monthlyCounts[monthIndex] += 1;
         monthValues[monthIndex].push(value);
-        hourlySumsByMonth[monthIndex][hourSlot] += value;
-        hourlyCountsByMonth[monthIndex][hourSlot] += 1;
-        pushHistoryTypical(typical, isWeekend, quarter, value);
+        dayValues.push(value);
+        const hour = hours[Math.floor(quarter / 4)];
+        hour.sum += value;
+        hour.count += 1;
+        if (value < 0) hour.negative += 1;
+      }
+      if (dayValues.length === QUARTERS_PER_DAY) {
+        dayValues.sort((a, b) => a - b);
+        monthSpreads[monthIndex].push(percentileSorted(dayValues, 0.9) - percentileSorted(dayValues, 0.1));
       }
     }
-
-    return {
-      year: yearData.year,
-      values,
-      monthValues,
-      monthlyAvg: monthlySums.map((sum, idx) => (monthlyCounts[idx] ? sum / monthlyCounts[idx] : null)),
-      hourlySumsByMonth,
-      hourlyCountsByMonth,
-      typical
-    };
+    return { year, firstMonth, lastMonth, values, monthValues, monthSpreads, heat, expectedPoints };
   }
 
   function selectHistoryYearsByDateRange(dataset, range) {
     return dataset.years
       .map((yearData) => buildHistoryYearSlice(yearData, range))
-      .filter((yearData) => yearData && yearData.values.length);
+      .filter((yearData) => yearData && yearData.expectedPoints > 0);
+  }
+
+  function buildPriceDuration(sortedValues) {
+    const sampleCount = sortedValues.length;
+    const rows = [];
+    let above = 0;
+    let negativeCount = 0;
+    let zeroCount = 0;
+    for (let current = sampleCount - 1; current >= 0;) {
+      const price = sortedValues[current];
+      let start = current;
+      while (start > 0 && sortedValues[start - 1] === price) start -= 1;
+      const count = current - start + 1;
+      rows.push([price, count, 100 * (above + count) / sampleCount, 100 * above / sampleCount]);
+      above += count;
+      if (price < 0) negativeCount += count;
+      if (price === 0) zeroCount += count;
+      current = start - 1;
+    }
+
+    // Keep the first and last values and both sides of zero or a sign change.
+    // The CSV retains all observed prices and exact tied-sample counts.
+    const points = rows.length ? [[0, rows[0][0], 0]] : [];
+    let previousBucket = -1;
+    rows.forEach(([price, , cumulative, abovePct], index) => {
+      const bucket = Math.floor(cumulative * 8);
+      const hasSignBoundary = Math.sign(price) !== Math.sign(rows[index - 1]?.[0] ?? price)
+        || Math.sign(price) !== Math.sign(rows[index + 1]?.[0] ?? price);
+      if (index === rows.length - 1 || bucket !== previousBucket || hasSignBoundary) points.push([cumulative, price, abovePct]);
+      previousBucket = bucket;
+    });
+
+    return {
+      duration: {
+        points,
+        p10: percentileSorted(sortedValues, 0.1),
+        p50: percentileSorted(sortedValues, 0.5),
+        p90: percentileSorted(sortedValues, 0.9),
+        negativeRatio: sampleCount ? negativeCount * 100 / sampleCount : null,
+        zeroRatio: sampleCount ? zeroCount * 100 / sampleCount : null,
+        sampleCount
+      },
+      durationRows: rows
+    };
+  }
+
+  function mergeHeatBuckets(heat, source) {
+    for (const dayType of ["weekday", "weekend"]) {
+      source[dayType].forEach((month, monthIndex) => month.forEach((hour, hourIndex) => {
+        const cell = heat[dayType][monthIndex][hourIndex];
+        cell.sum += hour.sum;
+        cell.count += hour.count;
+        cell.negative += hour.negative;
+      }));
+    }
+  }
+
+  function buildHeatAnalysis(heat, mode) {
+    const heatData = [];
+    const heatReference = [];
+    heat.weekday.forEach((month, monthIndex) => month.forEach((weekday, hour) => {
+      const weekend = heat.weekend[monthIndex][hour];
+      const all = {
+        sum: weekday.sum + weekend.sum,
+        count: weekday.count + weekend.count,
+        negative: weekday.negative + weekend.negative
+      };
+      const chosen = mode === "weekend" ? weekend : mode === "weekday" ? weekday : all;
+      heatData.push([hour, monthIndex, chosen.count ? chosen.sum / chosen.count : null,
+        chosen.count ? chosen.negative * 100 / chosen.count : null, chosen.count]);
+      [weekday, weekend, all].forEach((cell) => {
+        if (cell.count) heatReference.push(cell.sum / cell.count);
+      });
+    }));
+    return {
+      heatData,
+      heatMin: heatReference.length ? Math.min(...heatReference) : null,
+      heatMax: heatReference.length ? Math.max(...heatReference) : null
+    };
   }
 
   function buildHistorySelectedAnalysis(selectedYears, options = {}) {
-    const lineColors = Array.isArray(options.lineColors) && options.lineColors.length
-      ? options.lineColors
-      : ["#2f78e8", "#6cb34f", "#ff8a1f", "#8b5cf6", "#0ea5a3"];
+    const heatMode = options.heatMode === "weekday" || options.heatMode === "weekend" ? options.heatMode : "all";
+    const heat = { weekday: createHourBuckets(), weekend: createHourBuckets() };
     const allValues = [];
-    const monthMerged = Array.from({ length: 12 }, () => []);
-    const monthlyStd = [];
-    const heatSums = Array.from({ length: 12 }, () => Array(24).fill(0));
-    const heatCounts = Array.from({ length: 12 }, () => Array(24).fill(0));
-    const typicalMerged = createHistoryTypicalAccumulator();
-    const trendSeries = selectedYears.map((yearData, idx) => {
-      allValues.push(...yearData.values);
-      for (let m = 0; m < 12; m += 1) {
-        monthMerged[m].push(...yearData.monthValues[m]);
-        for (let h = 0; h < 24; h += 1) {
-          heatSums[m][h] += yearData.hourlySumsByMonth[m][h];
-          heatCounts[m][h] += yearData.hourlyCountsByMonth[m][h];
-        }
+    const monthly = [];
+    const intraday = [];
+    let expectedPoints = 0;
+    const chronological = [...selectedYears].sort((first, second) => first.year - second.year);
+    chronological.forEach((year) => {
+      allValues.push(...year.values);
+      expectedPoints += year.expectedPoints;
+      mergeHeatBuckets(heat, year.heat);
+      for (let month = year.firstMonth; month <= year.lastMonth; month += 1) {
+        const label = `${year.year}-${String(month + 1).padStart(2, "0")}`;
+        const sorted = [...year.monthValues[month]].sort((a, b) => a - b);
+        const spreads = [...year.monthSpreads[month]].sort((a, b) => a - b);
+        monthly.push({ month: label, avg: sorted.length ? sorted.reduce((sum, price) => sum + price, 0) / sorted.length : null,
+          p10: percentileSorted(sorted, 0.1), p50: percentileSorted(sorted, 0.5), p90: percentileSorted(sorted, 0.9), count: sorted.length });
+        intraday.push({ month: label, p25: percentileSorted(spreads, 0.25), p50: percentileSorted(spreads, 0.5),
+          p75: percentileSorted(spreads, 0.75), count: spreads.length });
       }
-      mergeHistoryTypical(typicalMerged, yearData.typical);
-      return {
-        name: `${yearData.year}年`,
-        type: "line",
-        smooth: true,
-        symbol: "none",
-        lineStyle: { width: 2 },
-        data: yearData.monthlyAvg.map((value) => (Number.isFinite(value) ? Number(value.toFixed(1)) : null)),
-        color: lineColors[idx % lineColors.length]
-      };
     });
 
-    const sortedValues = [...allValues].sort((a, b) => a - b);
-    let valueMin = Number.POSITIVE_INFINITY;
-    let valueMax = Number.NEGATIVE_INFINITY;
-    let valueSum = 0;
-    let negativeCount = 0;
-    allValues.forEach((value) => {
-      valueMin = Math.min(valueMin, value);
-      valueMax = Math.max(valueMax, value);
-      valueSum += value;
-      if (value < 0) negativeCount += 1;
-    });
-    const valueAvg = allValues.length ? valueSum / allValues.length : 0;
-    const p50 = percentileSorted(sortedValues, 0.5) ?? 0;
-    const p90 = percentileSorted(sortedValues, 0.9) ?? 0;
-    const negativeRatio = allValues.length ? (negativeCount / allValues.length) * 100 : 0;
-
-    const histogramBins = 12;
-    const histMin = Math.floor(valueMin / 20) * 20;
-    const histMax = Math.ceil(valueMax / 20) * 20;
-    const histStep = Math.max(10, (histMax - histMin) / histogramBins);
-    const histogramCounts = Array(histogramBins).fill(0);
-    allValues.forEach((value) => {
-      const idx = clamp(Math.floor((value - histMin) / histStep), 0, histogramBins - 1);
-      histogramCounts[idx] += 1;
-    });
-    const histogramLabels = Array.from({ length: histogramBins }, (_, idx) => {
-      const start = Math.round(histMin + idx * histStep);
-      const end = Math.round(histMin + (idx + 1) * histStep);
-      return `${start}-${end}`;
-    });
-
-    const typicalWorkday = [];
-    const typicalWeekend = [];
-    for (let i = 0; i < 96; i += 1) {
-      const workValue = typicalMerged.workdayCount[i]
-        ? typicalMerged.workdaySum[i] / typicalMerged.workdayCount[i]
-        : null;
-      const weekendValue = typicalMerged.weekendCount[i]
-        ? typicalMerged.weekendSum[i] / typicalMerged.weekendCount[i]
-        : null;
-      typicalWorkday.push(Number.isFinite(workValue) ? Number(workValue.toFixed(1)) : null);
-      typicalWeekend.push(Number.isFinite(weekendValue) ? Number(weekendValue.toFixed(1)) : null);
-    }
-
-    const heatData = [];
-    let heatMin = Number.POSITIVE_INFINITY;
-    let heatMax = Number.NEGATIVE_INFINITY;
-    for (let month = 0; month < 12; month += 1) {
-      for (let hour = 0; hour < 24; hour += 1) {
-        const count = heatCounts[month][hour];
-        const avg = count ? heatSums[month][hour] / count : null;
-        const value = Number.isFinite(avg) ? Number(avg.toFixed(1)) : null;
-        if (Number.isFinite(value)) {
-          heatMin = Math.min(heatMin, value);
-          heatMax = Math.max(heatMax, value);
-        }
-        heatData.push([hour, month, value]);
-      }
-    }
-
-    const boxplotData = monthMerged.map((values) => {
-      if (!values.length) return [null, null, null, null, null];
-      const sorted = [...values].sort((a, b) => a - b);
-      return [
-        Number(sorted[0].toFixed(1)),
-        Number((percentileSorted(sorted, 0.25) ?? 0).toFixed(1)),
-        Number((percentileSorted(sorted, 0.5) ?? 0).toFixed(1)),
-        Number((percentileSorted(sorted, 0.75) ?? 0).toFixed(1)),
-        Number(sorted[sorted.length - 1].toFixed(1))
-      ];
-    });
-    for (let i = 0; i < 12; i += 1) {
-      monthlyStd.push(monthMerged[i].length ? stddev(monthMerged[i]) : null);
-    }
-    let maxStdMonth = -1;
-    let maxStd = 0;
-    for (let i = 0; i < 12; i += 1) {
-      if (Number.isFinite(monthlyStd[i]) && (maxStdMonth < 0 || monthlyStd[i] > maxStd)) {
-        maxStd = monthlyStd[i];
-        maxStdMonth = i;
-      }
-    }
-
+    const { duration, durationRows } = buildPriceDuration([...allValues].sort((a, b) => a - b));
+    const { heatData, heatMin, heatMax } = buildHeatAnalysis(heat, heatMode);
+    const valueAvg = allValues.length ? allValues.reduce((sum, price) => sum + price, 0) / allValues.length : null;
     return {
-      lineColors,
       allValues,
-      trendSeries,
       valueAvg,
-      p50,
-      p90,
-      negativeRatio,
-      histogramBins,
-      histogramLabels,
-      histogramCounts,
-      typicalWorkday,
-      typicalWeekend,
+      p50: duration.p50,
+      p90: duration.p90,
+      negativeRatio: duration.negativeRatio,
+      coverage: { expectedPoints, samplePoints: allValues.length },
+      monthly,
+      heatMode,
       heatData,
       heatMin,
       heatMax,
-      boxplotData,
-      monthlyStd,
-      maxStdMonth,
-      maxStd,
+      duration,
+      intraday,
       exportRows: {
         monthTrend: [
-          ["month", ...selectedYears.map((yearData) => `${yearData.year}年均价_元每MWh`)],
-          ...HISTORY_MONTH_LABELS.map((monthLabel, monthIndex) => [
-            monthLabel,
-            ...trendSeries.map((series) => {
-              const value = series.data?.[monthIndex];
-              return Number.isFinite(value) ? value.toFixed(1) : "";
-            })
-          ])
-        ],
-        typicalDay: [
-          ["time_label", "workday_price_yuan_per_mwh", "weekend_price_yuan_per_mwh"],
-          ...HISTORY_QUARTER_LABELS.map((label, index) => [
-            label,
-            Number.isFinite(typicalWorkday[index]) ? typicalWorkday[index].toFixed(1) : "",
-            Number.isFinite(typicalWeekend[index]) ? typicalWeekend[index].toFixed(1) : ""
-          ])
-        ],
-        distribution: [
-          ["price_bin_yuan_per_mwh", "sample_count"],
-          ...histogramLabels.map((label, index) => [label, histogramCounts[index]])
+          ["month", "avg_price_yuan_per_mwh", "p10_price_yuan_per_mwh", "p50_price_yuan_per_mwh", "p90_price_yuan_per_mwh", "sample_count"],
+          ...monthly.map(({ month, avg, p10, p50, p90, count }) => [month, avg, p10, p50, p90, count])
         ],
         heatmap: [
-          ["month", "hour_index_1_24", "hour_label", "avg_price_yuan_per_mwh"],
-          ...heatData
-            .filter((item) => Number.isFinite(item[2]))
-            .map(([hourIndex, monthIndex, value]) => [
-              HISTORY_MONTH_LABELS[monthIndex],
-              hourIndex + 1,
-              HISTORY_HEAT_HOUR_LABELS[hourIndex],
-              Number(value).toFixed(1)
-            ])
+          ["month", "hour_label", "day_mode", "avg_price_yuan_per_mwh", "negative_ratio_pct", "sample_count"],
+          ...heatData.map(([hour, month, avg, negativeRatio, count]) => [month + 1, HISTORY_HEAT_HOUR_LABELS[hour], heatMode, avg, negativeRatio, count])
         ],
-        boxplot: [
-          ["month", "min", "p25", "p50", "p75", "max", "stddev"],
-          ...HISTORY_MONTH_LABELS.map((monthLabel, monthIndex) => [
-            monthLabel,
-            Number.isFinite(boxplotData[monthIndex]?.[0]) ? boxplotData[monthIndex][0].toFixed(1) : "",
-            Number.isFinite(boxplotData[monthIndex]?.[1]) ? boxplotData[monthIndex][1].toFixed(1) : "",
-            Number.isFinite(boxplotData[monthIndex]?.[2]) ? boxplotData[monthIndex][2].toFixed(1) : "",
-            Number.isFinite(boxplotData[monthIndex]?.[3]) ? boxplotData[monthIndex][3].toFixed(1) : "",
-            Number.isFinite(boxplotData[monthIndex]?.[4]) ? boxplotData[monthIndex][4].toFixed(1) : "",
-            Number.isFinite(monthlyStd[monthIndex]) ? monthlyStd[monthIndex].toFixed(1) : ""
-          ])
+        duration: [
+          ["price_yuan_per_mwh", "sample_count", "cumulative_pct", "strictly_above_pct"],
+          ...durationRows
+        ],
+        intradaySpread: [
+          ["month", "p25_spread_yuan_per_mwh", "p50_spread_yuan_per_mwh", "p75_spread_yuan_per_mwh", "complete_day_count"],
+          ...intraday.map(({ month, p25, p50, p75, count }) => [month, p25, p50, p75, count])
         ]
       }
     };
@@ -478,14 +334,8 @@
 
   return Object.freeze({
     HISTORY_MONTH_LABELS,
-    HISTORY_HEAT_HOUR_LABELS,
-    HISTORY_QUARTER_LABELS,
-    createHistoryTypicalAccumulator,
-    pushHistoryTypical,
-    mergeHistoryTypical,
+    HISTORY_MARKET_PRICE_BASIS,
     percentileSorted,
-    stddev,
-    dayModeMatchesMonth,
     historyCacheKey,
     buildMockHistorySpotAnalysisDataset,
     resolveHistoryDateRange,

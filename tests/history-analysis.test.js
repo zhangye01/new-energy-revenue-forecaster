@@ -2,106 +2,23 @@
 
 const assert = require("node:assert/strict");
 const {
+  HISTORY_MARKET_PRICE_BASIS,
   buildHistorySelectedAnalysis,
   buildHistoryYearSlice,
   buildMockHistorySpotAnalysisDataset,
-  createHistoryTypicalAccumulator,
-  dayModeMatchesMonth,
   historyCacheKey,
   percentileSorted,
-  pushHistoryTypical,
   resolveHistoryDateRange,
-  selectHistoryYearsByDateRange,
-  stddev
+  selectHistoryYearsByDateRange
 } = require("../src/domain/history-analysis");
 
 function approx(actual, expected, message, tolerance = 1e-8) {
-  assert.ok(
-    Math.abs(actual - expected) <= tolerance,
-    `${message}: expected ${expected}, received ${actual}`
-  );
-}
-
-function createYearData(year, values, monthlyValuesByIndex, typicalEntries = []) {
-  const monthValues = Array.from({ length: 12 }, (_, monthIndex) => monthlyValuesByIndex[monthIndex] || []);
-  const hourlySumsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
-  const hourlyCountsByMonth = Array.from({ length: 12 }, () => Array(24).fill(0));
-  monthValues.forEach((monthValuesList, monthIndex) => {
-    monthValuesList.forEach((value, index) => {
-      const hour = index % 24;
-      hourlySumsByMonth[monthIndex][hour] += value;
-      hourlyCountsByMonth[monthIndex][hour] += 1;
-    });
-  });
-  const typical = createHistoryTypicalAccumulator();
-  typicalEntries.forEach((entry) => {
-    pushHistoryTypical(typical, entry.isWeekend, entry.quarterIndex, entry.price);
-  });
-  return {
-    year,
-    values,
-    monthValues,
-    monthlyAvg: monthValues.map((items) => (
-      items.length ? items.reduce((sum, value) => sum + value, 0) / items.length : null
-    )),
-    hourlySumsByMonth,
-    hourlyCountsByMonth,
-    typical
-  };
+  assert.ok(Math.abs(actual - expected) <= tolerance, `${message}: expected ${expected}, received ${actual}`);
 }
 
 assert.equal(percentileSorted([], 0.5), null);
 assert.equal(percentileSorted([10, 20, 30], 0.5), 20);
 assert.equal(percentileSorted([10, 20], 0.5), 15);
-approx(stddev([10, 20, 30]), 8.16496580927726, "标准差计算");
-
-const selectedYears = [
-  createYearData(
-    2024,
-    [100, 200, -50, 400],
-    {
-      0: [100, 200],
-      1: [-50, 400]
-    },
-    [
-      { isWeekend: false, quarterIndex: 32, price: 200 },
-      { isWeekend: true, quarterIndex: 40, price: 100 }
-    ]
-  ),
-  createYearData(
-    2025,
-    [300],
-    {
-      0: [300]
-    },
-    [
-      { isWeekend: false, quarterIndex: 32, price: 260 }
-    ]
-  )
-];
-
-const analysis = buildHistorySelectedAnalysis(selectedYears, {
-  lineColors: ["#111111", "#222222"]
-});
-
-assert.equal(analysis.allValues.length, 5);
-assert.equal(analysis.valueAvg, 190);
-assert.equal(analysis.p50, 200);
-assert.equal(analysis.p90, 360);
-assert.equal(analysis.negativeRatio, 20);
-assert.deepEqual(analysis.trendSeries.map((series) => series.name), ["2024年", "2025年"]);
-assert.equal(analysis.trendSeries[0].color, "#111111");
-assert.deepEqual(analysis.trendSeries[0].data.slice(0, 3), [150, 175, null]);
-assert.equal(analysis.histogramCounts.reduce((sum, value) => sum + value, 0), 5);
-assert.equal(analysis.typicalWorkday[32], 230);
-assert.equal(analysis.typicalWeekend[40], 100);
-assert.deepEqual(analysis.heatData[0], [0, 0, 200]);
-assert.deepEqual(analysis.boxplotData[0], [100, 150, 200, 250, 300]);
-assert.equal(analysis.maxStdMonth, 1);
-assert.equal(analysis.exportRows.monthTrend[0][1], "2024年均价_元每MWh");
-assert.equal(analysis.exportRows.typicalDay[33][1], "230.0");
-assert.deepEqual(analysis.exportRows.distribution[0], ["price_bin_yuan_per_mwh", "sample_count"]);
-assert.deepEqual(analysis.exportRows.boxplot[1].slice(0, 6), ["1月", "100.0", "150.0", "200.0", "250.0", "300.0"]);
 
 const fullYearValues = Array.from({ length: 365 * 96 }, (_, index) => index);
 const fullYearData = { year: 2026, values: fullYearValues };
@@ -120,88 +37,142 @@ assert.equal(marchFirstSlice.year, 2026);
 assert.equal(marchFirstSlice.values.length, 96);
 assert.equal(marchFirstSlice.values[0], 59 * 96);
 assert.equal(marchFirstSlice.monthValues[2].length, 96);
-assert.equal(marchFirstSlice.monthlyAvg[2], marchFirstSlice.values.reduce((sum, value) => sum + value, 0) / 96);
-assert.equal(marchFirstSlice.hourlyCountsByMonth[2][0], 4);
-assert.equal(marchFirstSlice.typical.weekendCount[0], 1);
-
+assert.equal(marchFirstSlice.heat.weekend[2][0].count, 4);
+assert.equal(marchFirstSlice.heat.weekday[2][0].count, 0);
 const selectedByRange = selectHistoryYearsByDateRange({
   startYear: 2025,
   endYear: 2026,
-  years: [
-    { year: 2025, values: fullYearValues.map(() => 1) },
-    fullYearData
-  ]
+  years: [{ year: 2025, values: fullYearValues }, fullYearData]
 }, range);
 assert.deepEqual(selectedByRange.map((item) => item.year), [2026]);
 
 const leapYearData = { year: 2024, values: fullYearValues };
 const leapDataset = { startYear: 2024, endYear: 2024, years: [leapYearData] };
 const leapOnly = { startDate: "2024-02-29", endDate: "2024-02-29" };
-assert.equal(buildHistoryYearSlice(leapYearData, leapOnly).values.length, 0);
+assert.equal(buildHistoryYearSlice(leapYearData, leapOnly).expectedPoints, 0);
 assert.deepEqual(selectHistoryYearsByDateRange(leapDataset, leapOnly), []);
 const leapToMarch = buildHistoryYearSlice(leapYearData, { startDate: "2024-02-29", endDate: "2024-03-01" });
 assert.equal(leapToMarch.values.length, 96);
-assert.equal(leapToMarch.values[0], 59 * 96, "Feb 29 must not introduce Feb 28 data");
+assert.equal(leapToMarch.values[0], 59 * 96, "Feb 29 does not introduce Feb 28 data");
 const februaryEnd = buildHistoryYearSlice(leapYearData, { startDate: "2024-02-28", endDate: "2024-02-29" });
 assert.equal(februaryEnd.values.length, 96);
 assert.equal(februaryEnd.values[0], 58 * 96);
+assert.deepEqual(buildHistorySelectedAnalysis([leapToMarch]).monthly[0], {
+  month: "2024-02", avg: null, p10: null, p50: null, p90: null, count: 0
+});
 
-const zeroPriceAnalysis = buildHistorySelectedAnalysis([
-  createYearData(2024, [0, 0], { 2: [0, 0] }, [
-    { isWeekend: false, quarterIndex: 0, price: 0 },
-    { isWeekend: true, quarterIndex: 0, price: 0 }
-  ])
+const prices = [];
+const modelDayPrices = [
+  Array.from({ length: 96 }, (_, quarter) => quarter < 48 ? -10 : 10),
+  Array(96).fill(0),
+  [undefined, ...Array(95).fill(40)]
+];
+for (const [day, dayValues] of modelDayPrices.entries()) {
+  for (const [quarter, price] of dayValues.entries()) prices[(59 + day) * 96 + quarter] = price;
+}
+const source2025 = { year: 2025, values: prices };
+const range2025 = { startDate: "2025-03-01", endDate: "2025-03-03" };
+const sliced = selectHistoryYearsByDateRange({ years: [source2025] }, range2025);
+const analysis = buildHistorySelectedAnalysis(sliced);
+assert.deepEqual(analysis.coverage, { expectedPoints: 288, samplePoints: 287 });
+assert.deepEqual(analysis.monthly, [{
+  month: "2025-03", avg: 3800 / 287, p10: -10, p50: 0, p90: 40, count: 287
+}]);
+assert.deepEqual(analysis.intraday, [{
+  month: "2025-03", p25: 5, p50: 10, p75: 15, count: 2
+}], "daily quantiles use full model days; 95 data points cannot create a daily spread");
+assert.equal(analysis.valueAvg, 3800 / 287);
+assert.equal(analysis.p50, 0);
+assert.equal(analysis.p90, 40);
+approx(analysis.negativeRatio, 4800 / 287, "negative ratio excludes zero");
+approx(analysis.duration.zeroRatio, 9600 / 287, "zero ratio");
+assert.deepEqual(analysis.duration.points[0], [0, 40, 0]);
+assert.deepEqual(analysis.duration.points.at(-1), [100, -10, 23900 / 287]);
+assert.deepEqual(analysis.exportRows.duration, [
+  ["price_yuan_per_mwh", "sample_count", "cumulative_pct", "strictly_above_pct"],
+  [40, 95, 9500 / 287, 0],
+  [10, 48, 14300 / 287, 9500 / 287],
+  [0, 96, 23900 / 287, 14300 / 287],
+  [-10, 48, 100, 23900 / 287]
 ]);
-assert.equal(zeroPriceAnalysis.typicalWorkday[0], 0);
-assert.equal(zeroPriceAnalysis.typicalWeekend[0], 0);
-assert.equal(zeroPriceAnalysis.typicalWorkday[1], null);
-assert.deepEqual(zeroPriceAnalysis.boxplotData[2], [0, 0, 0, 0, 0]);
-assert.deepEqual(zeroPriceAnalysis.boxplotData[0], [null, null, null, null, null]);
-assert.equal(zeroPriceAnalysis.monthlyStd[0], null);
-assert.equal(zeroPriceAnalysis.maxStdMonth, 2, "the only observed month is March, even when its variance is zero");
-assert.deepEqual(zeroPriceAnalysis.exportRows.typicalDay[1], ["00:00", "0.0", "0.0"]);
-assert.deepEqual(zeroPriceAnalysis.exportRows.boxplot[1], ["1月", "", "", "", "", "", ""]);
+assert.deepEqual(analysis.exportRows.monthTrend[1], ["2025-03", 3800 / 287, -10, 0, 40, 287]);
+assert.deepEqual(analysis.exportRows.intradaySpread[1], ["2025-03", 5, 10, 15, 2]);
+const marchIndex = 2 * 24;
+assert.deepEqual(analysis.heatData[marchIndex], [0, 2, 80 / 11, 400 / 11, 11]);
+assert.deepEqual(analysis.heatData[0], [0, 0, null, null, 0]);
+assert.deepEqual(analysis.exportRows.heatmap[marchIndex + 1], [3, "00时", "all", 80 / 11, 400 / 11, 11]);
 
-assert.equal(dayModeMatchesMonth("summer", 7), true);
-assert.equal(dayModeMatchesMonth("summer", 1), false);
-assert.equal(dayModeMatchesMonth("winter", 12), true);
-assert.equal(dayModeMatchesMonth("annual", 4), true);
+const weekdays = buildHistorySelectedAnalysis(sliced, { heatMode: "weekday" });
+const weekends = buildHistorySelectedAnalysis(sliced, { heatMode: "weekend" });
+assert.deepEqual(weekdays.heatData[marchIndex], [0, 2, 40, 0, 3]);
+assert.deepEqual(weekends.heatData[marchIndex], [0, 2, -5, 50, 8]);
+assert.deepEqual(weekdays.exportRows.heatmap[marchIndex + 1], [3, "00时", "weekday", 40, 0, 3]);
+assert.deepEqual(weekdays.monthly, weekends.monthly);
+assert.deepEqual(weekdays.intraday, weekends.intraday);
+assert.deepEqual(weekdays.duration, weekends.duration);
+assert.equal(weekdays.heatMin, weekends.heatMin);
+assert.equal(weekdays.heatMax, weekends.heatMax);
+
+const gapAnalysis = buildHistorySelectedAnalysis(selectHistoryYearsByDateRange({ years: [source2025] }, {
+  startDate: "2025-01-31",
+  endDate: "2025-03-01"
+}));
+assert.deepEqual(gapAnalysis.monthly.map(({ month, count, avg }) => [month, count, avg]), [
+  ["2025-01", 0, null],
+  ["2025-02", 0, null],
+  ["2025-03", 96, 0]
+]);
+assert.deepEqual(gapAnalysis.coverage, { expectedPoints: 30 * 96, samplePoints: 96 });
+assert.deepEqual(gapAnalysis.exportRows.monthTrend[1], ["2025-01", null, null, null, null, 0]);
+const multiYear = buildHistorySelectedAnalysis([marchFirstSlice, ...sliced]);
+assert.deepEqual(multiYear.monthly.map(({ month }) => month), ["2025-03", "2026-03"]);
+
+const noData = buildHistorySelectedAnalysis(selectHistoryYearsByDateRange({ years: [source2025] }, {
+  startDate: "2025-01-31",
+  endDate: "2025-01-31"
+}));
+assert.deepEqual(noData.coverage, { expectedPoints: 96, samplePoints: 0 });
+assert.equal(noData.valueAvg, null);
+assert.equal(noData.duration.negativeRatio, null);
+assert.deepEqual(noData.duration.points, []);
+const manyPrices = buildHistorySelectedAnalysis([
+  buildHistoryYearSlice(fullYearData, { startDate: "2026-01-01", endDate: "2026-12-31" })
+]);
+assert.ok(manyPrices.duration.points.length <= 805);
+assert.equal(manyPrices.duration.points.at(-1)[0], 100);
+assert.equal(manyPrices.exportRows.duration.length, 365 * 96 + 1);
+assert.equal(manyPrices.exportRows.duration.slice(1).reduce((sum, row) => sum + row[1], 0), 365 * 96);
 
 const mockProject = {
-  id: "proj-a",
-  province: "jiangsu",
-  capacityMw: 64,
-  startYear: 2026,
-  assetType: "wind",
-  siteType: "offshore",
-  hasStorage: true,
-  storagePowerMw: 32,
-  storageDurationH: 2
+  id: "proj-a", province: "jiangsu", capacityMw: 64, startYear: 2026,
+  assetType: "wind", siteType: "offshore", hasStorage: true, storagePowerMw: 32, storageDurationH: 2
 };
-assert.equal(historyCacheKey(mockProject), "proj-a|jiangsu|64|2026|wind|offshore|project_storage_independent_v1");
+const otherProject = {
+  id: "proj-b", province: "jiangsu", capacityMw: 450, startYear: 2042,
+  assetType: "photovoltaic", siteType: "onshore", hasStorage: false
+};
+const provinceBenchmarks = { jiangsu: { historyPrice: 365 }, shandong: { historyPrice: 365 } };
 const cache = new Map();
-const mockDataset = buildMockHistorySpotAnalysisDataset(mockProject, {
-  provinceBenchmarks: { jiangsu: { historyPrice: 365 } },
-  cache
-});
-assert.equal(mockDataset.sourceType, "database");
+const mockOptions = { provinceBenchmarks, cache };
+const mockDataset = buildMockHistorySpotAnalysisDataset(mockProject, mockOptions);
+assert.equal(mockDataset.sourceType, "mock");
 assert.equal(mockDataset.mock, true);
-assert.equal(mockDataset.marketPriceBasis, "project_storage_independent_v1");
+assert.equal(mockDataset.marketPriceBasis, HISTORY_MARKET_PRICE_BASIS);
+assert.equal(mockDataset.marketPriceLabel, "省级现货模拟价");
 assert.equal(mockDataset.startYear, 2018);
 assert.equal(mockDataset.endYear, 2025);
 assert.equal(mockDataset.years.length, 8);
 assert.equal(mockDataset.years[0].values.length, 365 * 96);
-assert.equal(mockDataset.years[0].monthValues.length, 12);
-assert.equal(mockDataset.years[0].hourlySumsByMonth[0].length, 24);
-assert.equal(cache.get(historyCacheKey(mockProject)), mockDataset);
-assert.equal(buildMockHistorySpotAnalysisDataset(mockProject, {
-  provinceBenchmarks: { jiangsu: { historyPrice: 365 } },
-  cache
-}), mockDataset);
-const noStorageProject = { ...mockProject, hasStorage: false, storagePowerMw: null, storageDurationH: null };
-assert.equal(historyCacheKey(noStorageProject), historyCacheKey(mockProject), "缓存口径不依赖项目配储");
-assert.deepEqual(buildMockHistorySpotAnalysisDataset(noStorageProject, {
-  provinceBenchmarks: { jiangsu: { historyPrice: 365 } }
-}), mockDataset, "不用缓存重新生成，有储与无储的市场历史价仍完全一致");
+assert.equal(cache.get(historyCacheKey(mockProject, mockOptions)), mockDataset);
+assert.equal(historyCacheKey(mockProject, mockOptions), historyCacheKey(otherProject, mockOptions));
+assert.equal(buildMockHistorySpotAnalysisDataset(otherProject, mockOptions), mockDataset);
+assert.deepEqual(buildMockHistorySpotAnalysisDataset(otherProject, { provinceBenchmarks }), mockDataset,
+  "same province and basis replay the same history even without a cache");
+assert.notEqual(historyCacheKey({ province: "shandong" }, mockOptions), historyCacheKey(mockProject, mockOptions));
+const otherProvince = buildMockHistorySpotAnalysisDataset({ province: "shandong" }, mockOptions);
+assert.notDeepEqual(otherProvince.years[0].values.slice(0, 96), mockDataset.years[0].values.slice(0, 96));
+assert.deepEqual(resolveHistoryDateRange({}, mockDataset), {
+  minDate: "2018-01-01", maxDate: "2025-12-31", startDate: "2024-01-01", endDate: "2025-12-31"
+});
 
 console.log("history analysis tests passed");

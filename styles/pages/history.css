@@ -49,9 +49,9 @@
   right: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  min-width: 360px;
+  width: min(360px, calc(100vw - 36px));
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -90,41 +90,15 @@
 }
 
 .history-source-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel-soft);
   padding: 10px;
-  align-items: start;
-}
-
-.history-source-left {
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.history-subhead {
-  display: grid;
-  gap: 6px;
-}
-
-.history-subhead h4 {
-  margin: 0;
-  font-size: 0.96rem;
-}
-
-.history-subhead p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.5;
-  font-size: 0.92rem;
 }
 
 .history-source-tags {
@@ -146,43 +120,32 @@
   font-weight: 700;
 }
 
-.history-section-head {
-  display: grid;
-  gap: 4px;
-  margin-top: 6px;
+.history-source-demo {
+  background: var(--info-bg);
+  color: var(--blue);
 }
 
-.history-section-head h4 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.history-section-head p {
-  margin: 0;
+.history-range {
   color: var(--muted);
-  line-height: 1.6;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .history-grid {
   display: grid;
-  gap: 10px;
-}
-
-.history-grid-top {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.history-grid-bottom {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .history-card {
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--panel-soft);
-  padding: 10px;
+  background: var(--panel);
+  padding: 11px;
   display: grid;
-  gap: 8px;
+  grid-template-rows: auto 1fr;
+  gap: 7px;
 }
 
 .history-card h4 {
@@ -196,6 +159,20 @@
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.history-card-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.history-card-select {
+  min-height: 30px;
+  width: auto;
+  padding-block: 3px;
+  font-size: 0.78rem;
 }
 
 .history-main-title {
@@ -248,13 +225,8 @@
 
 .history-chart {
   width: 100%;
-  min-height: 260px;
-  height: 260px;
-}
-
-.history-grid-top .history-chart {
-  min-height: 284px;
-  height: 284px;
+  min-width: 0;
+  height: 288px;
 }
 
 .history-kpi-row {

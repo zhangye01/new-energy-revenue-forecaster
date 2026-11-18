@@ -4,7 +4,6 @@ const assert = require("node:assert/strict");
 const {
   bindPolicyHistoryEvents,
   buildHistoryExportPlan,
-  buildHistoryInsightText,
   buildHistoryKpis,
   buildHistoryReadyViewModel,
   createPolicyHistoryEventHandlers
@@ -32,10 +31,11 @@ const historyEventRefs = {
   historyStartDate: new FakeTarget("2026-01-01"),
   historyEndDate: new FakeTarget("2026-12-31"),
   historyExportMonthTrendButton: new FakeTarget(),
-  historyExportTypicalDayButton: new FakeTarget(),
-  historyExportDistributionButton: new FakeTarget(),
+  historyTrendMode: new FakeTarget("yoy"),
+  historyHeatMode: new FakeTarget("weekend"),
   historyExportHeatmapButton: new FakeTarget(),
-  historyExportBoxplotButton: new FakeTarget()
+  historyExportDurationButton: new FakeTarget(),
+  historyExportIntradaySpreadButton: new FakeTarget()
 };
 bindPolicyHistoryEvents({
   refs: historyEventRefs,
@@ -44,6 +44,8 @@ bindPolicyHistoryEvents({
     changePolicyRegion: (value) => historyEventCalls.push(`region:${value}`),
     changeHistoryStartDate: (value) => historyEventCalls.push(`start:${value}`),
     changeHistoryEndDate: (value) => historyEventCalls.push(`end:${value}`),
+    changeHistoryTrendMode: (value) => historyEventCalls.push(`trend:${value}`),
+    changeHistoryHeatMode: (value) => historyEventCalls.push(`heat:${value}`),
     exportHistoryChart: (type) => historyEventCalls.push(`export:${type}`)
   }
 });
@@ -51,21 +53,23 @@ historyEventRefs.policyFilterProvince.dispatch("change");
 historyEventRefs.policyFilterRegion.dispatch("change");
 historyEventRefs.historyStartDate.dispatch("change");
 historyEventRefs.historyEndDate.dispatch("change");
+historyEventRefs.historyTrendMode.dispatch("change");
+historyEventRefs.historyHeatMode.dispatch("change");
 historyEventRefs.historyExportMonthTrendButton.dispatch("click");
-historyEventRefs.historyExportTypicalDayButton.dispatch("click");
-historyEventRefs.historyExportDistributionButton.dispatch("click");
 historyEventRefs.historyExportHeatmapButton.dispatch("click");
-historyEventRefs.historyExportBoxplotButton.dispatch("click");
+historyEventRefs.historyExportDurationButton.dispatch("click");
+historyEventRefs.historyExportIntradaySpreadButton.dispatch("click");
 assert.deepEqual(historyEventCalls, [
   "province:jiangsu",
   "region:east",
   "start:2026-01-01",
   "end:2026-12-31",
+  "trend:yoy",
+  "heat:weekend",
   "export:monthTrend",
-  "export:typicalDay",
-  "export:distribution",
   "export:heatmap",
-  "export:boxplot"
+  "export:duration",
+  "export:intradaySpread"
 ]);
 
 const historyHandlerCalls = [];
@@ -93,11 +97,15 @@ historyHandlers.changePolicyProvince("zhejiang");
 historyHandlers.changePolicyRegion("south");
 historyHandlers.changeHistoryStartDate("2027-01-01");
 historyHandlers.changeHistoryEndDate("2027-12-31");
+historyHandlers.changeHistoryTrendMode("yoy");
+historyHandlers.changeHistoryHeatMode("weekday");
 historyHandlers.exportHistoryChart("monthTrend");
 assert.deepEqual(policyFilters, { provinceKey: "zhejiang", regionKey: "south" });
 assert.deepEqual(historyAnalysisState, {
   startDate: "2027-01-01",
   endDate: "2027-12-31",
+  trendMode: "yoy",
+  heatMode: "weekday",
   sanitized: true
 });
 assert.deepEqual(historyHandlerCalls, [
@@ -109,26 +117,30 @@ assert.deepEqual(historyHandlerCalls, [
   "persist",
   "render-history",
   "persist",
+  "render-history",
+  "persist",
+  "render-history",
+  "persist",
   "export:monthTrend"
 ]);
 
 const exportPlan = buildHistoryExportPlan({
   provinceLabel: "江苏",
-  assetLabel: "风电",
-  siteLabel: "海上",
-  yearsRangeText: "2026-01-01至2030-12-31",
+  yearsRangeText: "2024-01-01 至 2025-12-31",
+  heatMode: "weekday",
   exportRows: {
-    monthTrend: [["year"]],
-    typicalDay: [["hour"]],
-    distribution: [["bucket"]],
+    monthTrend: [["month"], ["2024-01"]],
     heatmap: [["slot"]],
-    boxplot: [["month"]]
+    duration: [["price"]],
+    intradaySpread: [["spread"]]
   },
-  sanitizePart: (value) => String(value).replaceAll("-", "")
+  sanitizePart: (value) => value.replaceAll("-", "")
 });
-assert.equal(exportPlan.length, 5);
-assert.deepEqual(exportPlan[0], ["monthTrend", "江苏-历史现货-风电-海上-20260101至20301231-月度均价趋势对比.csv", [["year"]]]);
-assert.equal(exportPlan[4][0], "boxplot");
+assert.deepEqual(exportPlan.map(([name]) => name), ["monthTrend", "heatmap", "duration", "intradaySpread"]);
+assert.deepEqual(exportPlan[0], ["monthTrend", "江苏-省级模拟样本-20240101 至 20251231-月度电价趋势.csv", [
+  ["month", "sample_source", "price_basis"], ["2024-01", "省级模拟样本", "省级现货模拟价"]
+]]);
+assert.match(exportPlan[1][1], /周一至周五\.csv$/);
 
 const kpis = buildHistoryKpis({
   pointCount: 12345,
@@ -145,64 +157,22 @@ assert.deepEqual(kpis, {
   negative: "0.12%"
 });
 
-const insight = buildHistoryInsightText({
-  dataset: { sourceType: "database", mock: true },
-  provinceLabel: "江苏",
-  assetLabel: "风电",
-  siteLabel: "海上",
-  hasStorage: true,
-  storagePowerMw: 64,
-  storageDurationH: 2,
-  yearsRangeText: "2026-01-01至2030-12-31",
-  peakTime: "18:00",
-  maxStdMonthLabel: "7月",
-  maxStd: 42.18
-});
-assert.match(insight, /江苏省级现货模拟库/);
-assert.doesNotMatch(insight, /配储|平滑/);
-assert.match(insight, /18:00/);
-assert.match(insight, /7月/);
-assert.match(insight, /42.2 元\/MWh/);
-
-const fallbackInsight = buildHistoryInsightText({
-  dataset: { sourceType: "upload" },
-  provinceLabel: "上海",
-  assetLabel: "光伏",
-  siteLabel: "陆上"
-});
-assert.match(fallbackInsight, /历史现货数据库/);
-assert.doesNotMatch(fallbackInsight, /配储/);
-
 const readyView = buildHistoryReadyViewModel({
   historyData: {
-    allValues: [1, 2, 3],
-    valueAvg: 2,
-    p50: 2,
-    p90: 3,
-    negativeRatio: 0,
-    typicalWorkday: [100, 120, 110],
-    maxStdMonth: 0,
-    maxStd: 12.34,
-    exportRows: { monthTrend: [["year"]] }
+    coverage: { expectedPoints: 4, samplePoints: 3 },
+    valueAvg: 2, p50: 2, p90: 3, negativeRatio: 0,
+    exportRows: { monthTrend: [["month"], ["2025-01"]] }
   },
-  range: {
-    startDate: "2026-01-01",
-    endDate: "2026-12-31"
-  },
-  dataset: { sourceType: "database", mock: false },
-  project: { hasStorage: false },
-  labels: {
-    provinceLabel: "江苏",
-    assetLabel: "风电",
-    siteLabel: "海上"
-  },
-  monthLabels: ["1月"],
-  quarterLabels: ["00:00", "00:15", "00:30"],
-  sanitizePart: (value) => String(value)
+  range: { startDate: "2025-01-01", endDate: "2025-12-31" },
+  dataset: { mock: true, marketPriceLabel: "省级现货模拟价" },
+  provinceLabel: "江苏"
 });
-assert.equal(readyView.yearsRangeText, "2026-01-01至2026-12-31");
-assert.equal(readyView.exportPlan[0][1], "江苏-历史现货-风电-海上-2026-01-01至2026-12-31-月度均价趋势对比.csv");
+assert.equal(readyView.yearsRangeText, "2025-01-01 至 2025-12-31");
+assert.equal(readyView.sourceKind, "省级模拟样本");
+assert.equal(readyView.basisLabel, "省级现货模拟价");
+assert.equal(readyView.coverage, "75.0%");
+assert.equal(readyView.exportPlan[0][1], "江苏-省级模拟样本-2025-01-01 至 2025-12-31-月度电价趋势.csv");
 assert.equal(readyView.kpis.points, "3 点");
-assert.match(readyView.insightText, /00:15/);
+assert.equal(buildHistoryReadyViewModel().coverage, "—");
 
 console.log("history page tests passed");

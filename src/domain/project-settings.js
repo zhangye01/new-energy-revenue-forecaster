@@ -119,12 +119,16 @@
   function sanitizeHistoryAnalysis(raw) {
     const defaults = {
       startDate: "",
-      endDate: ""
+      endDate: "",
+      trendMode: "chronological",
+      heatMode: "all"
     };
     if (!isPlainObject(raw)) return defaults;
     return {
       startDate: isIsoDateString(raw.startDate) ? raw.startDate : "",
-      endDate: isIsoDateString(raw.endDate) ? raw.endDate : ""
+      endDate: isIsoDateString(raw.endDate) ? raw.endDate : "",
+      trendMode: raw.trendMode === "yoy" ? "yoy" : defaults.trendMode,
+      heatMode: ["weekday", "weekend"].includes(raw.heatMode) ? raw.heatMode : defaults.heatMode
     };
   }
 

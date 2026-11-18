@@ -171,9 +171,6 @@ const ENV_VALUE_MODE_SET = new Set(["global", "manual"]);
 const FEE_CONFIG_MODE_SET = new Set(["global", "manual"]);
 const RESULT_REPORT_VIEW_SET = new Set(["annual", "price", "detail"]);
 const MAP_LEVEL_SET = new Set(["nation", "province"]);
-const HISTORY_MONTH_LABELS = historyAnalysis.HISTORY_MONTH_LABELS;
-const HISTORY_HEAT_HOUR_LABELS = historyAnalysis.HISTORY_HEAT_HOUR_LABELS;
-const HISTORY_QUARTER_LABELS = historyAnalysis.HISTORY_QUARTER_LABELS;
 const ENERGY_MONTH_DAY_COUNTS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 const ENERGY_HOUR_LABELS = Array.from({ length: 24 }, (_, hour) => `${hour}时`);
 const ECHARTS_MAP_BASE_URLS = [
@@ -303,17 +300,15 @@ const resultChartInstances = {
 };
 const historyChartInstances = {
   monthTrend: null,
-  typicalDay: null,
-  distribution: null,
   heatmap: null,
-  boxplot: null
+  duration: null,
+  intradaySpread: null
 };
 const historyChartExportPayloads = {
   monthTrend: null,
-  typicalDay: null,
-  distribution: null,
   heatmap: null,
-  boxplot: null
+  duration: null,
+  intradaySpread: null
 };
 const benchmarkGeoCache = new Map();
 const LOCAL_STORAGE_PERSIST_INTERVAL_MS = 4000;
@@ -2790,7 +2785,7 @@ function createProjectFormFlowContext() {
       statusMapTemplate, createEmptyHistorySpotImport, createDefaultSpotMarketConfig,
       isProjectCreateCompleted, createBaselineScenario, syncProjectProvinceDefaultsToBaseline,
       shouldAutoSyncProvinceDefaults, syncProjectProvinceScopedState, createEmptyEnergyDataState,
-      clearHistoryAnalysisCacheForProject, ensureProjectEnergyTemplateExports, markDownstreamStale,
+      ensureProjectEnergyTemplateExports, markDownstreamStale,
       getProvinceName, ensureProjectEnergyDataState, moveProjectToHistoryWorkspaceIfReady,
       setCreateFormSyncedProjectId: (projectId) => {
         createFormSyncedProjectId = projectId;
@@ -2838,16 +2833,6 @@ function ensureProjectHistorySpotImport(project) {
 function hasImportedHistoryDataset(project) {
   const state = ensureProjectHistorySpotImport(project);
   return state.sourceType === "csv" && isHistoryDatasetUsable(state.dataset);
-}
-
-function clearHistoryAnalysisCacheForProject(projectId) {
-  const prefix = `${String(projectId || "")}|`;
-  if (!prefix) return;
-  for (const cacheKey of historyAnalysisCache.keys()) {
-    if (cacheKey.startsWith(prefix)) {
-      historyAnalysisCache.delete(cacheKey);
-    }
-  }
 }
 
 function getEnergyModeMeta(mode) {
@@ -3374,10 +3359,9 @@ function ensureHistoryChart(chartKey, node) {
 function ensureHistoryCharts() {
   const charts = {
     monthTrend: ensureHistoryChart("monthTrend", refs.historyMonthTrendChart),
-    typicalDay: ensureHistoryChart("typicalDay", refs.historyTypicalDayChart),
-    distribution: ensureHistoryChart("distribution", refs.historyDistributionChart),
     heatmap: ensureHistoryChart("heatmap", refs.historyHeatmapChart),
-    boxplot: ensureHistoryChart("boxplot", refs.historyBoxplotChart)
+    duration: ensureHistoryChart("duration", refs.historyDurationChart),
+    intradaySpread: ensureHistoryChart("intradaySpread", refs.historyIntradaySpreadChart)
   };
   historyChartsResizeBound = chartLifecycle.bindWindowResizeOnce({
     windowRef: window,
@@ -3703,14 +3687,10 @@ function renderHistoryPrices() {
     setHistoryExportPayload,
     syncHistoryExportButtons,
     getProvinceName,
-    getAssetTypeLabel,
-    getSiteTypeLabel,
     sanitizeExportFilenamePart,
     renderStatuses,
     renderProjects,
-    schedulePersistAppData,
-    historyMonthLabels: HISTORY_MONTH_LABELS,
-    historyQuarterLabels: HISTORY_QUARTER_LABELS
+    schedulePersistAppData
   });
 }
 
@@ -4490,10 +4470,9 @@ async function importManualScenarioTemplate(kind) {
 function syncHistoryExportButtons() {
   const buttonMap = {
     monthTrend: refs.historyExportMonthTrendButton,
-    typicalDay: refs.historyExportTypicalDayButton,
-    distribution: refs.historyExportDistributionButton,
     heatmap: refs.historyExportHeatmapButton,
-    boxplot: refs.historyExportBoxplotButton
+    duration: refs.historyExportDurationButton,
+    intradaySpread: refs.historyExportIntradaySpreadButton
   };
   Object.entries(buttonMap).forEach(([key, button]) => {
     if (!button) return;

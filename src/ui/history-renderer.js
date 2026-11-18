@@ -18,11 +18,14 @@
     if (refs.historyKpiNegative) refs.historyKpiNegative.textContent = "-";
   }
 
-  function renderHistoryImportState(refs = {}, project, getProvinceName = () => "") {
-    const provinceLabel = project?.provinceLabel || getProvinceName(project?.province) || "-";
+  function renderHistoryImportState(refs = {}, project, getProvinceName = () => "", view = {}) {
+    const provinceLabel = getProvinceName(project?.province) || project?.provinceLabel || "—";
     if (refs.historySourceProvince) {
-      refs.historySourceProvince.textContent = `当前省份：${provinceLabel}`;
+      refs.historySourceProvince.textContent = provinceLabel;
     }
+    if (refs.historySourceKind) refs.historySourceKind.textContent = view.sourceKind || "省级模拟样本";
+    if (refs.historySourceBasis) refs.historySourceBasis.textContent = view.basisLabel || "省级现货模拟价";
+    if (refs.historySourceCoverage) refs.historySourceCoverage.textContent = `样本覆盖率 ${view.coverage || "—"}`;
   }
 
   function setHistoryNoData(input = {}) {
@@ -47,9 +50,9 @@
     queueHistoryChartsResize();
   }
 
-  function renderUnavailable(input, message, insightText, project = null) {
+  function renderUnavailable(input, message, insightText, project = null, view = {}) {
     const { refs = {}, getProvinceName } = input;
-    renderHistoryImportState(refs, project, getProvinceName);
+    renderHistoryImportState(refs, project, getProvinceName, view);
     setHistoryNoData({ ...input, message });
     resetHistoryKpis(refs);
     if (refs.historyInsightBox) {
@@ -76,20 +79,18 @@
       setHistoryExportPayload = () => {},
       syncHistoryExportButtons = () => {},
       getProvinceName = () => "",
-      getAssetTypeLabel = () => "",
-      getSiteTypeLabel = () => "",
       sanitizeExportFilenamePart = (value) => value,
       renderStatuses = () => {},
       renderProjects = () => {},
-      schedulePersistAppData = () => {},
-      historyMonthLabels = [],
-      historyQuarterLabels = []
+      schedulePersistAppData = () => {}
     } = input;
     if (!refs.historyMonthTrendChart) return;
     if (resolveVisiblePageId(appState.activePage) !== "history-page") return;
 
     const controls = sanitizeHistoryAnalysis(appState.historyAnalysis);
     appState.historyAnalysis = controls;
+    if (refs.historyTrendMode) refs.historyTrendMode.value = controls.trendMode || "chronological";
+    if (refs.historyHeatMode) refs.historyHeatMode.value = controls.heatMode || "all";
     if (!windowRef?.echarts) {
       renderUnavailable(input, "图表引擎未加载完成，请稍后重试。", "图表引擎未加载完成，请稍后重试。");
       return;
@@ -115,10 +116,14 @@
     }
 
     const dataset = buildHistorySpotAnalysisDataset(project);
-    renderHistoryImportState(refs, project, getProvinceName);
+    if (!dataset?.years?.length) {
+      renderUnavailable(input, "暂无省级现货样本。", "当前省份暂无可分析日期。", project);
+      return;
+    }
     const range = historyAnalysis.resolveHistoryDateRange(controls, dataset);
     if (controls.startDate !== range.startDate || controls.endDate !== range.endDate) {
       appState.historyAnalysis = {
+        ...controls,
         startDate: range.startDate,
         endDate: range.endDate
       };
@@ -134,39 +139,27 @@
       refs.historyEndDate.value = range.endDate;
     }
     const selectedYears = historyAnalysis.selectHistoryYearsByDateRange(dataset, range);
-    if (!selectedYears.length) {
-      const message = "所选日期范围暂无可分析数据；当前365天曲线不包含2月29日。";
-      renderUnavailable(input, message, message, project);
+    const historyData = historyAnalysis.buildHistorySelectedAnalysis(selectedYears, { heatMode: controls.heatMode });
+    const provinceLabel = getProvinceName(project.province) || project.provinceLabel || "—";
+    const historyView = historyPage.buildHistoryReadyViewModel({
+      historyData, range, dataset, provinceLabel, heatMode: controls.heatMode,
+      sanitizePart: sanitizeExportFilenamePart
+    });
+    if (!historyData.allValues.length) {
+      const message = dataset.modelDays === 365 && range.startDate === range.endDate && range.startDate.endsWith("-02-29")
+        ? "模拟样本按 365 天生成，2 月 29 日留空。" : "所选日期范围暂无有效样本。";
+      renderUnavailable(input, message, message, project, historyView);
       return;
     }
 
-    const charts = ensureHistoryCharts();
-    const tokens = historyThemeTokens();
-    const lineColors = ["#2f78e8", "#6cb34f", "#ff8a1f", "#8b5cf6", "#0ea5a3"];
-    const historyData = historyAnalysis.buildHistorySelectedAnalysis(selectedYears, { lineColors });
-    const provinceLabel = project.provinceLabel || getProvinceName(project.province) || "-";
-    const assetLabel = getAssetTypeLabel(project.assetType);
-    const siteLabel = getSiteTypeLabel(project.siteType);
-    const historyView = historyPage.buildHistoryReadyViewModel({
-      historyData,
-      range,
-      dataset,
-      project,
-      labels: { provinceLabel, assetLabel, siteLabel },
-      monthLabels: historyMonthLabels,
-      quarterLabels: historyQuarterLabels,
-      sanitizePart: sanitizeExportFilenamePart
-    });
+    renderHistoryImportState(refs, project, getProvinceName, historyView);
     historyView.exportPlan.forEach(([key, filename, rows]) => {
       setHistoryExportPayload(key, filename, rows);
     });
     syncHistoryExportButtons();
-    const historyChartOptions = historyCharts.buildHistoryChartOptions(historyData, tokens);
-    if (charts.monthTrend) charts.monthTrend.setOption(historyChartOptions.monthTrend, true);
-    if (charts.typicalDay) charts.typicalDay.setOption(historyChartOptions.typicalDay, true);
-    if (charts.distribution) charts.distribution.setOption(historyChartOptions.distribution, true);
-    if (charts.heatmap) charts.heatmap.setOption(historyChartOptions.heatmap, true);
-    if (charts.boxplot) charts.boxplot.setOption(historyChartOptions.boxplot, true);
+    const charts = ensureHistoryCharts();
+    const chartOptions = historyCharts.buildHistoryChartOptions(historyData, historyThemeTokens(), { trendMode: controls.trendMode });
+    Object.entries(chartOptions).forEach(([key, option]) => charts?.[key]?.setOption(option, true));
 
     queueHistoryChartsResize();
 
@@ -177,9 +170,7 @@
     if (refs.historyKpiP90) refs.historyKpiP90.textContent = kpis.p90;
     if (refs.historyKpiNegative) refs.historyKpiNegative.textContent = kpis.negative;
     if (refs.historyInsightBox) {
-      refs.historyInsightBox.textContent = historyView.insightText;
-      refs.historyInsightBox.style.borderColor = "#8fb48d";
-      refs.historyInsightBox.style.background = "#f1fbf1";
+      refs.historyInsightBox.textContent = historyView.yearsRangeText;
     }
     if (project.statuses["history-page"] !== "completed") {
       project.statuses["history-page"] = "completed";

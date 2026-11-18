@@ -13,10 +13,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .history-grid-bottom {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .history-kpi-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -196,15 +192,12 @@
     grid-template-columns: 1fr;
   }
 
-  .history-grid-top,
-  .history-grid-bottom {
+  .history-grid {
     grid-template-columns: 1fr;
   }
 
-  .history-chart,
-  .history-grid-top .history-chart {
-    min-height: 220px;
-    height: 220px;
+  .history-chart {
+    height: 268px;
   }
 
   .compare-chart,

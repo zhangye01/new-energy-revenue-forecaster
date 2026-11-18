@@ -10,6 +10,14 @@
     root.window.NE_HISTORY_PAGE = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
+  const CHART_EXPORTS = Object.freeze([
+    ["monthTrend", "historyExportMonthTrendButton", "月度电价趋势"],
+    ["heatmap", "historyExportHeatmapButton", "月份与小时热力图"],
+    ["duration", "historyExportDurationButton", "价格持续曲线"],
+    ["intradaySpread", "historyExportIntradaySpreadButton", "月度日内价差"]
+  ]);
+  const HEAT_MODE_LABELS = Object.freeze({ all: "全部日期", weekday: "周一至周五", weekend: "周末" });
+
   function buildHistoryKpis(data = {}) {
     return {
       points: `${Number(data.pointCount || 0).toLocaleString()} 点`,
@@ -45,13 +53,9 @@
         handlers.changeHistoryEndDate?.(refs.historyEndDate.value);
       });
     }
-    [
-      ["historyExportMonthTrendButton", "monthTrend"],
-      ["historyExportTypicalDayButton", "typicalDay"],
-      ["historyExportDistributionButton", "distribution"],
-      ["historyExportHeatmapButton", "heatmap"],
-      ["historyExportBoxplotButton", "boxplot"]
-    ].forEach(([refKey, exportType]) => {
+    refs.historyTrendMode?.addEventListener("change", () => handlers.changeHistoryTrendMode?.(refs.historyTrendMode.value));
+    refs.historyHeatMode?.addEventListener("change", () => handlers.changeHistoryHeatMode?.(refs.historyHeatMode.value));
+    CHART_EXPORTS.forEach(([exportType, refKey]) => {
       refs[refKey]?.addEventListener("click", () => {
         handlers.exportHistoryChart?.(exportType);
       });
@@ -94,94 +98,49 @@
       changePolicyRegion: (regionKey) => updatePolicyFilters({ regionKey }),
       changeHistoryStartDate: (startDate) => updateHistoryAnalysis({ startDate }),
       changeHistoryEndDate: (endDate) => updateHistoryAnalysis({ endDate }),
+      changeHistoryTrendMode: (trendMode) => updateHistoryAnalysis({ trendMode }),
+      changeHistoryHeatMode: (heatMode) => updateHistoryAnalysis({ heatMode }),
       exportHistoryChart
     };
   }
 
   function buildHistoryExportPlan(input = {}) {
     const {
-      provinceLabel = "-",
-      assetLabel = "-",
-      siteLabel = "-",
-      yearsRangeText = "",
-      exportRows = {},
-      sanitizePart = (value) => String(value || "")
+      provinceLabel = "-", sourceKind = "省级模拟样本", basisLabel = "省级现货模拟价",
+      yearsRangeText = "", heatMode = "all", exportRows = {}, sanitizePart = (value) => value
     } = input;
-    const exportPrefix = [
-      sanitizePart(provinceLabel),
-      "历史现货",
-      sanitizePart(assetLabel),
-      sanitizePart(siteLabel),
-      sanitizePart(yearsRangeText)
-    ].join("-");
-    return [
-      ["monthTrend", `${exportPrefix}-月度均价趋势对比.csv`, exportRows.monthTrend],
-      ["typicalDay", `${exportPrefix}-典型日电价曲线.csv`, exportRows.typicalDay],
-      ["distribution", `${exportPrefix}-电价分布直方图.csv`, exportRows.distribution],
-      ["heatmap", `${exportPrefix}-分时电价热力图.csv`, exportRows.heatmap],
-      ["boxplot", `${exportPrefix}-月度电价箱线图.csv`, exportRows.boxplot]
-    ];
-  }
-
-  function buildHistoryInsightText(input = {}) {
-    const {
-      dataset = {},
-      provinceLabel = "-",
-      assetLabel = "-",
-      siteLabel = "-",
-      yearsRangeText = "",
-      peakTime = "--:--",
-      maxStdMonthLabel = "",
-      maxStd = 0
-    } = input;
-    const sourceLabel = dataset.sourceType === "database"
-      ? `${provinceLabel}${dataset.mock ? "省级现货模拟库" : "省级现货数据库"}`
-      : "历史现货数据库";
-    return `${sourceLabel} · ${assetLabel} / ${siteLabel} · ${yearsRangeText}（15分钟）。工作日高价约 ${peakTime}；波动最大 ${maxStdMonthLabel}（标准差 ${Number(maxStd || 0).toFixed(1)} 元/MWh）。`;
+    const exportPrefix = [provinceLabel, sourceKind, yearsRangeText].map(sanitizePart).join("-");
+    return CHART_EXPORTS.map(([key, , name]) => {
+      const suffix = key === "heatmap" ? `-${HEAT_MODE_LABELS[heatMode] || HEAT_MODE_LABELS.all}` : "";
+      const rows = exportRows[key] || [];
+      const withSource = rows.map((row, index) => [...row, ...(index === 0
+        ? ["sample_source", "price_basis"] : [sourceKind, basisLabel])]);
+      return [key, `${exportPrefix}-${name}${suffix}.csv`, withSource];
+    });
   }
 
   function buildHistoryReadyViewModel(input = {}) {
-    const {
-      historyData = {},
-      range = {},
-      dataset = {},
-      project = {},
-      labels = {},
-      monthLabels = [],
-      quarterLabels = [],
-      sanitizePart = (value) => String(value || "")
-    } = input;
-    const yearsRangeText = `${range.startDate || ""}至${range.endDate || ""}`;
-    const typicalWorkday = Array.isArray(historyData.typicalWorkday) ? historyData.typicalWorkday : [];
-    const workdayMax = Math.max(...typicalWorkday.filter((value) => Number.isFinite(value)));
-    const workdayPeakIndex = typicalWorkday.findIndex((value) => value === workdayMax);
-    const peakTime = workdayPeakIndex >= 0 ? quarterLabels[workdayPeakIndex] : "--:--";
+    const { historyData = {}, range = {}, dataset = {}, provinceLabel = "-", heatMode = "all",
+      sanitizePart = (value) => value } = input;
+    const yearsRangeText = `${range.startDate || ""} 至 ${range.endDate || ""}`;
+    const sourceKind = dataset.mock ? "省级模拟样本" : "省级历史样本";
+    const basisLabel = dataset.marketPriceLabel || "省级现货参考价";
+    const { expectedPoints = 0, samplePoints = 0 } = historyData.coverage || {};
     return {
       yearsRangeText,
+      sourceKind,
+      basisLabel,
+      coverage: expectedPoints > 0 ? (samplePoints / expectedPoints * 100).toFixed(1) + "%" : "—",
       exportPlan: buildHistoryExportPlan({
-        provinceLabel: labels.provinceLabel,
-        assetLabel: labels.assetLabel,
-        siteLabel: labels.siteLabel,
-        yearsRangeText,
-        exportRows: historyData.exportRows,
-        sanitizePart
+        provinceLabel, sourceKind, basisLabel, yearsRangeText, heatMode,
+        exportRows: historyData.exportRows, sanitizePart
       }),
       kpis: buildHistoryKpis({
-        pointCount: Array.isArray(historyData.allValues) ? historyData.allValues.length : 0,
+        pointCount: samplePoints,
         valueAvg: historyData.valueAvg,
         p50: historyData.p50,
         p90: historyData.p90,
         negativeRatio: historyData.negativeRatio
-      }),
-      insightText: buildHistoryInsightText({
-        dataset,
-        provinceLabel: labels.provinceLabel,
-        assetLabel: labels.assetLabel,
-        siteLabel: labels.siteLabel,
-        yearsRangeText,
-        peakTime,
-        maxStdMonthLabel: monthLabels[historyData.maxStdMonth],
-        maxStd: historyData.maxStd
       })
     };
   }
@@ -189,7 +148,6 @@
   return Object.freeze({
     bindPolicyHistoryEvents,
     buildHistoryExportPlan,
-    buildHistoryInsightText,
     buildHistoryKpis,
     buildHistoryReadyViewModel,
     createPolicyHistoryEventHandlers

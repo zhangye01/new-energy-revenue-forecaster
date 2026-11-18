@@ -35,7 +35,7 @@
 | `result-report.js` | 基准结果总览的数据摘要和图表数据 |
 | `compare-sensitivity.js` | 真实参数扰动与年度等价收益重算，和8760引擎对账 |
 | `compare-analysis.js` | 多方案对比、敏感性分析数据、对比页 frame 状态和选择态回写 |
-| `history-analysis.js` | 历史电价模拟样本、日期范围切片、统计、典型日、热力图、分布和导出数据 |
+| `history-analysis.js` | 固定省级模拟样本、15 分钟日期切片及月度趋势、分时热力、价格持续、日内价差统计和导出 |
 | `workflow-status.js` | 流程状态和缺失项判断 |
 | `scenario-config.js` | 场景配置清洗、逐年 CSV 模板和导入校验 |
 | `scenario-model.js` | 场景默认值、复制、重命名、基准锁定规则 |
@@ -76,7 +76,7 @@
 | `compare-page.js` | 多方案对比页变量列表、方案焦点列表和对比表格 HTML 构造 |
 | `history-page.js` | 历史电价展示页导出计划、KPI 和洞察文案构造 |
 | `history-renderer.js` | 历史电价展示页渲染控制、空态处理、图表和状态回写 |
-| `history-charts.js` | 历史电价展示五张 ECharts 图的 option 和主题 token 构造 |
+| `history-charts.js` | 历史电价四张图的 ECharts 配置及主题 token 构造 |
 | `theme-controller.js` | 主题偏好读取、切换、DOM data-theme 和设置页文案同步 |
 | `shell-events.js` | 全局壳层、弹窗、导航和窗口级事件绑定 |
 | `app-event-bindings.js` | 应用级事件绑定编排，把页面主控回调接入壳层、历史、对比、电量、场景和结果页事件模块 |

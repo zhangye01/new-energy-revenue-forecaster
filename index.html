@@ -21,9 +21,9 @@
     <link rel="stylesheet" href="./styles/pages/scenario.css?v=20261118d">
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
-    <link rel="stylesheet" href="./styles/pages/history.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/history.css?v=20261118m">
     <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118k">
-    <link rel="stylesheet" href="./styles/responsive.css?v=20261118d">
+    <link rel="stylesheet" href="./styles/responsive.css?v=20261118m">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
       window.__openLoginModal = function () {
@@ -88,7 +88,7 @@
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
     <script src="./config.js?v=20261118h" defer></script>
-    <script src="./runtime.js?v=20261118h" defer></script>
+    <script src="./runtime.js?v=20261118m" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
@@ -108,7 +108,7 @@
     <script src="./src/ui/policy-panel.js?v=20261113c" defer></script>
     <script src="./src/ui/province-defaults.js?v=20261118h" defer></script>
     <script src="./src/ui/energy-workspace.js?v=20261113c" defer></script>
-    <script src="./src/ui/create-project-flow.js?v=20261118d" defer></script>
+    <script src="./src/ui/create-project-flow.js?v=20261118m" defer></script>
     <script src="./src/ui/energy-template-flow.js?v=20261113c" defer></script>
     <script src="./src/ui/chart-lifecycle.js?v=20261113c" defer></script>
     <script src="./src/ui/energy-charts.js?v=20261113c" defer></script>
@@ -130,10 +130,10 @@
     <script src="./src/domain/compare-sensitivity.js?v=20261118i" defer></script>
     <script src="./src/domain/compare-analysis.js?v=20261118i" defer></script>
     <script src="./src/ui/result-history.js?v=20261118f" defer></script>
-    <script src="./src/domain/history-analysis.js?v=20261118b" defer></script>
-    <script src="./src/ui/history-charts.js?v=20261113c" defer></script>
-    <script src="./src/ui/history-page.js?v=20261118b" defer></script>
-    <script src="./src/ui/history-renderer.js?v=20261113c" defer></script>
+    <script src="./src/domain/history-analysis.js?v=20261118m" defer></script>
+    <script src="./src/ui/history-charts.js?v=20261118m" defer></script>
+    <script src="./src/ui/history-page.js?v=20261118m" defer></script>
+    <script src="./src/ui/history-renderer.js?v=20261118m" defer></script>
     <script src="./src/ui/theme-controller.js?v=20261113c" defer></script>
     <script src="./src/ui/shell-events.js?v=20261113c" defer></script>
     <script src="./src/ui/app-event-bindings.js?v=20261113c" defer></script>
@@ -143,7 +143,7 @@
     <script src="./src/ui/rough-trend-chart.js?v=20261118l" defer></script>
     <script src="./src/ui/rough-price-workspace.js?v=20261118l" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261118h" defer></script>
-    <script src="./src/domain/project-settings.js?v=20261113c" defer></script>
+    <script src="./src/domain/project-settings.js?v=20261118m" defer></script>
     <script src="./src/domain/project-model.js?v=20261118h" defer></script>
     <script src="./src/domain/project-display.js?v=20261113c" defer></script>
     <script src="./src/domain/energy-data.js?v=20261118b" defer></script>
@@ -151,7 +151,7 @@
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261118f" defer></script>
-    <script src="./app.js?v=20261118i" defer></script>
+    <script src="./app.js?v=20261118m" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -865,74 +865,69 @@
             </div>
 
             <div class="history-source-panel">
-              <div class="history-source-left">
-                <div class="history-subhead">
-                  <h4>当前数据范围</h4>
-                  <p data-help="数据范围与日期筛选">按当前项目已选省份自动展示省级15分钟历史现货样本，可按日选择开始日期与结束日期，不支持手动替换数据源。</p>
-                </div>
-                <div class="history-source-tags">
-                  <span class="history-source-chip" id="history-source-province">当前省份：-</span>
-                  <span class="history-source-chip">数据颗粒度：15分钟</span>
-                  <span class="history-source-chip">取数方式：省级数据库模拟样本</span>
-                </div>
+              <div class="history-source-tags" id="history-source-meta">
+                <span class="history-source-chip" id="history-source-province">—</span>
+                <span class="history-source-chip history-source-demo" id="history-source-kind">省级模拟样本</span>
+                <span class="history-source-chip" id="history-source-basis">省级现货模拟价</span>
+                <span class="history-source-chip" id="history-source-coverage">样本覆盖率 —</span>
               </div>
+              <p data-help="数据口径" data-help-anchor="#history-source-meta">同省同口径按相同日期取数。内置模拟样本固定为 2018–2025 年、15 分钟间隔，按 365 天生成，闰日留空。样本覆盖率按所选日期的模型时段计算。</p>
+              <span class="history-range" id="history-insight-box" role="status">等待选择日期</span>
             </div>
 
             <div class="history-kpi-row">
-              <div class="history-kpi-item"><span>样本点数</span><strong id="history-kpi-points">-</strong></div>
-              <div class="history-kpi-item"><span>全样本均价</span><strong id="history-kpi-avg">-</strong></div>
-              <div class="history-kpi-item"><span>P50</span><strong id="history-kpi-p50">-</strong></div>
-              <div class="history-kpi-item"><span>P90</span><strong id="history-kpi-p90">-</strong></div>
-              <div class="history-kpi-item"><span>负电价占比</span><strong id="history-kpi-negative">-</strong></div>
-            </div>
-            <div class="info-box" id="history-insight-box">等待生成历史现货分析图表。</div>
-
-            <div class="history-section-head">
-              <h4>趋势观察</h4>
-              <p data-help="趋势观察">先看所选日期区间内的价格趋势和日内轮廓，判断整体水平、季节性和峰谷特征。</p>
-            </div>
-            <div class="history-grid history-grid-top">
-              <article class="history-card">
-                <div class="history-card-head">
-                  <h4 class="history-card-title"><img class="history-card-icon" src="./assets/history-icon-trend.svg" alt="" aria-hidden="true">月度均价趋势对比</h4>
-                  <button type="button" class="history-card-export" id="history-export-month-trend" disabled>导出数据</button>
-                </div>
-                <div class="history-chart" id="history-month-trend-chart"></div>
-              </article>
-              <article class="history-card">
-                <div class="history-card-head">
-                  <h4 class="history-card-title"><img class="history-card-icon" src="./assets/history-icon-day.svg" alt="" aria-hidden="true">典型日电价曲线</h4>
-                  <button type="button" class="history-card-export" id="history-export-typical-day" disabled>导出数据</button>
-                </div>
-                <div class="history-chart" id="history-typical-day-chart"></div>
-              </article>
+              <div class="history-kpi-item"><span>有效样本</span><strong id="history-kpi-points">-</strong></div>
+              <div class="history-kpi-item"><span>现货均价</span><strong id="history-kpi-avg">-</strong></div>
+              <div class="history-kpi-item"><span>中位价 P50</span><strong id="history-kpi-p50">-</strong></div>
+              <div class="history-kpi-item"><span>高位价 P90</span><strong id="history-kpi-p90">-</strong></div>
+              <div class="history-kpi-item"><span>负价占比</span><strong id="history-kpi-negative">-</strong></div>
             </div>
 
-            <div class="history-section-head">
-              <h4>分布与波动</h4>
-              <p data-help="分布与波动">再看样本分布、分时热力和月度箱线，帮助识别尖峰、负价和波动强度。</p>
-            </div>
-            <div class="history-grid history-grid-bottom">
+            <div class="history-grid">
               <article class="history-card">
                 <div class="history-card-head">
-                  <h4 class="history-card-title"><img class="history-card-icon" src="./assets/history-icon-distribution.svg" alt="" aria-hidden="true">电价分布直方图</h4>
-                  <button type="button" class="history-card-export" id="history-export-distribution" disabled>导出数据</button>
+                  <h4 class="history-card-title" id="history-month-trend-title"><img class="history-card-icon" src="./assets/history-icon-trend.svg" alt="" aria-hidden="true">月度电价趋势</h4>
+                  <div class="history-card-controls">
+                    <select class="history-card-select" id="history-trend-mode" aria-label="月度趋势展示方式">
+                      <option value="chronological">按年月</option>
+                      <option value="yoy">同月同比</option>
+                    </select>
+                    <button type="button" class="history-card-export" id="history-export-month-trend" disabled>导出数据</button>
+                  </div>
                 </div>
-                <div class="history-chart" id="history-distribution-chart"></div>
+                <p data-help="月度电价趋势" data-help-anchor="#history-month-trend-title">折线是月均价，阴影是当月 15 分钟价格的 P10–P90 区间。缺样本的月份留空。</p>
+                <div class="history-chart" id="history-month-trend-chart" role="img" aria-labelledby="history-month-trend-title"></div>
               </article>
               <article class="history-card">
                 <div class="history-card-head">
-                  <h4 class="history-card-title"><img class="history-card-icon" src="./assets/history-icon-heatmap.svg" alt="" aria-hidden="true">分时电价热力图</h4>
-                  <button type="button" class="history-card-export" id="history-export-heatmap" disabled>导出数据</button>
+                  <h4 class="history-card-title" id="history-heatmap-title"><img class="history-card-icon" src="./assets/history-icon-heatmap.svg" alt="" aria-hidden="true">月份×小时热力图</h4>
+                  <div class="history-card-controls">
+                    <select class="history-card-select" id="history-heat-mode" aria-label="热力图日期类型">
+                      <option value="all">全部日期</option>
+                      <option value="weekday">周一至周五</option>
+                      <option value="weekend">周末</option>
+                    </select>
+                    <button type="button" class="history-card-export" id="history-export-heatmap" disabled>导出数据</button>
+                  </div>
                 </div>
-                <div class="history-chart" id="history-heatmap-chart"></div>
+                <p data-help="月份与小时" data-help-anchor="#history-heatmap-title">汇总所选日期内同月同小时的 15 分钟样本。悬停查看均价、负价占比和有效样本数。周一至周五按自然星期筛选。</p>
+                <div class="history-chart" id="history-heatmap-chart" role="img" aria-labelledby="history-heatmap-title"></div>
               </article>
               <article class="history-card">
                 <div class="history-card-head">
-                  <h4 class="history-card-title"><img class="history-card-icon" src="./assets/history-icon-boxplot.svg" alt="" aria-hidden="true">月度电价箱线图</h4>
-                  <button type="button" class="history-card-export" id="history-export-boxplot" disabled>导出数据</button>
+                  <h4 class="history-card-title" id="history-duration-title"><img class="history-card-icon" src="./assets/history-icon-distribution.svg" alt="" aria-hidden="true">价格持续曲线</h4>
+                  <button type="button" class="history-card-export" id="history-export-duration" disabled>导出数据</button>
                 </div>
-                <div class="history-chart" id="history-boxplot-chart"></div>
+                <p data-help="价格持续曲线" data-help-anchor="#history-duration-title">把价格从高到低排序，横轴为累计时段占比。悬停可查看严格高于该价格的时段占比。</p>
+                <div class="history-chart" id="history-duration-chart" role="img" aria-labelledby="history-duration-title"></div>
+              </article>
+              <article class="history-card">
+                <div class="history-card-head">
+                  <h4 class="history-card-title" id="history-intraday-spread-title"><img class="history-card-icon" src="./assets/history-icon-boxplot.svg" alt="" aria-hidden="true">月度日内价差</h4>
+                  <button type="button" class="history-card-export" id="history-export-intraday-spread" disabled>导出数据</button>
+                </div>
+                <p data-help="月度日内价差" data-help-anchor="#history-intraday-spread-title">先计算每个完整日的 P90−P10，再按月展示日价差的中位数与 P25–P75 区间。完整日含 96 个有效点。</p>
+                <div class="history-chart" id="history-intraday-spread-chart" role="img" aria-labelledby="history-intraday-spread-title"></div>
               </article>
             </div>
             <div class="history-next-step-row">
@@ -1899,7 +1894,7 @@
                   <div class="help-step-index">6</div>
                   <div class="help-step-body">
                     <strong>历史电价分析</strong>
-                    <p>系统按项目省份展示内置的15分钟模拟样本。可筛选日期并查看月均价、典型日、热力图和箱线图。</p>
+                    <p>系统按项目省份展示15分钟模拟样本。可筛选日期并查看月度电价趋势、月份×小时热力图、价格持续曲线和月度日内价差。</p>
                   </div>
                 </article>
                 <article class="help-step-card">

@@ -184,7 +184,6 @@ const updated = updateExistingProjectFromForm({
     syncProjectProvinceDefaultsToBaseline: () => false,
     shouldAutoSyncProvinceDefaults: () => true,
     createEmptyEnergyDataState: (mode) => ({ mode }),
-    clearHistoryAnalysisCacheForProject: (projectId) => existingCalls.push(`clear-history:${projectId}`),
     ensureProjectEnergyTemplateExports: (project) => project.energyTemplateExports,
     markDownstreamStale: (project, page) => existingCalls.push(`stale:${project.id}:${page}`),
     getProvinceName: (province) => `省份-${province}`,
@@ -198,7 +197,6 @@ assert.deepEqual(existingProject.historySpotImport, { source: "empty" });
 assert.equal(existingProject.statuses["energy-page"], "in_progress");
 assert.equal(existingProject.statuses["history-page"], "not_started");
 assert.equal(existingProject.energyTemplateExports.hourly_8760, "");
-assert.ok(existingCalls.includes("clear-history:proj-old"));
 assert.ok(existingCalls.includes("stale:proj-old:energy-page"));
 assert.ok(existingCalls.includes("top:当前项目已更新，请在步骤2重新导入电量。"));
 assert.ok(existingCalls.includes("page:energy-page"));
@@ -235,7 +233,6 @@ for (const changes of [
     project: preserved, projectInput: { ...preserved, ...changes }, modules: { projectModel: realProjectModel },
     actions: createActions([], {
       syncProjectProvinceDefaultsToBaseline: () => { throw new Error("配储或备注编辑不得覆盖原收益参数"); },
-      clearHistoryAnalysisCacheForProject: () => { throw new Error("配储或备注编辑不得清空历史价格"); },
       ensureProjectEnergyDataState: () => { throw new Error("配储或备注编辑不得重写原电量"); },
       ensureProjectEnergyTemplateExports: (target) => target.energyTemplateExports,
       markDownstreamStale: (target, page) => { target.statuses = workflowStatus.markDownstreamStale(target.statuses, page); }

@@ -6,9 +6,15 @@ const {
   renderHistoryPrices,
   resetHistoryKpis
 } = require("../src/ui/history-renderer");
+const historyAnalysis = require("../src/domain/history-analysis");
+const historyPage = require("../src/ui/history-page");
 
 const refs = {
   historySourceProvince: { textContent: "" },
+  historySourceKind: { textContent: "" },
+  historySourceCoverage: { textContent: "" },
+  historyTrendMode: {},
+  historyHeatMode: {},
   historyKpiPoints: { textContent: "1" },
   historyKpiAvg: { textContent: "2" },
   historyKpiP50: { textContent: "3" },
@@ -19,12 +25,14 @@ const refs = {
 };
 
 renderHistoryImportState(refs, { province: "jiangsu" }, () => "江苏");
-assert.equal(refs.historySourceProvince.textContent, "当前省份：江苏");
+assert.equal(refs.historySourceProvince.textContent, "江苏");
 resetHistoryKpis(refs);
 assert.equal(refs.historyKpiPoints.textContent, "-");
 assert.equal(refs.historyKpiNegative.textContent, "-");
 
 let noDataMessage = "";
+const testDataset = { startYear: 2024, endYear: 2024, mock: true, modelDays: 365,
+  years: [{ year: 2024, values: Array(365 * 96).fill(300) }] };
 renderHistoryPrices({
   refs,
   appState: { activePage: "history-page", historyAnalysis: {} },
@@ -55,8 +63,9 @@ renderHistoryPrices({
   windowRef: { echarts: {} },
   getActiveProject: () => ({ id: "leap-day-test", province: "jiangsu" }),
   isProjectCreateCompleted: () => true,
-  buildHistorySpotAnalysisDataset: () => ({ startYear: 2024, endYear: 2024, years: [{ year: 2024, values: Array(365 * 96).fill(300) }] }),
-  historyAnalysis: require("../src/domain/history-analysis"),
+  buildHistorySpotAnalysisDataset: () => testDataset,
+  historyAnalysis,
+  historyPage,
   ensureHistoryCharts: () => ({
     monthTrend: {
       clear: () => {},
@@ -65,8 +74,38 @@ renderHistoryPrices({
   }),
   historyCharts: { buildHistoryNoDataOption: (message) => ({ graphic: [{ style: { text: message } }] }) }
 });
-assert.match(noDataMessage, /所选日期范围暂无可分析数据/);
-assert.match(refs.historyInsightBox.textContent, /不包含2月29日/);
+assert.match(noDataMessage, /2 月 29 日留空/);
+assert.match(refs.historyInsightBox.textContent, /2 月 29 日留空/);
 assert.equal(refs.historyKpiAvg.textContent, "-", "a missing leap day must not show a zero or the previous day's price");
+
+const project = { id: "history-view", province: "jiangsu", statuses: {}, roughPrice: { snapshots: [{ id: "saved-rough" }] } };
+const chartKeys = ["monthTrend", "heatmap", "duration", "intradaySpread"];
+const renderedKeys = [];
+const exportKeys = [];
+const dates = { startDate: "2024-01-01", endDate: "2024-01-03", trendMode: "yoy", heatMode: "weekend" };
+renderHistoryPrices({
+  refs, appState: { activePage: "history-page", historyAnalysis: dates }, windowRef: { echarts: {} },
+  getActiveProject: () => project, getProvinceName: () => "江苏", isProjectCreateCompleted: () => true,
+  buildHistorySpotAnalysisDataset: () => testDataset, historyAnalysis, historyPage,
+  setHistoryExportPayload: (key) => exportKeys.push(key),
+  ensureHistoryCharts: () => Object.fromEntries(chartKeys.map((key) => [key, {
+    setOption: () => renderedKeys.push(key)
+  }])),
+  historyCharts: { buildHistoryChartOptions(data, tokens, options) {
+    assert.equal(options.trendMode, "yoy");
+    assert.equal(data.heatMode, "weekend");
+    return Object.fromEntries(chartKeys.map((key) => [key, {}]));
+  } }
+});
+assert.deepEqual(renderedKeys, chartKeys);
+assert.deepEqual(exportKeys, chartKeys);
+assert.equal(refs.historyTrendMode.value, "yoy");
+assert.equal(refs.historyHeatMode.value, "weekend");
+assert.equal(refs.historyKpiAvg.textContent, "300.0 元/MWh");
+assert.equal(refs.historySourceKind.textContent, "省级模拟样本");
+assert.equal(refs.historySourceCoverage.textContent, "样本覆盖率 100.0%");
+assert.equal(refs.historyInsightBox.textContent, "2024-01-01 至 2024-01-03");
+assert.deepEqual(project.roughPrice.snapshots, [{ id: "saved-rough" }]);
+assert.equal(project.statuses["history-page"], "completed");
 
 console.log("history renderer tests passed");

@@ -71,7 +71,6 @@
     if (baseChanged) {
       project.energyData = actions.createEmptyEnergyDataState?.(projectInput.energyMode);
       project.historySpotImport = actions.createEmptyHistorySpotImport?.();
-      actions.clearHistoryAnalysisCacheForProject?.(project.id);
       resetEnergyTemplateExports(actions.ensureProjectEnergyTemplateExports?.(project));
       project.statuses["energy-page"] = "in_progress";
       project.statuses["history-page"] = "not_started";
