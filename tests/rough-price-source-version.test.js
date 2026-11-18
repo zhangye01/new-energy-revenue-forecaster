@@ -61,7 +61,7 @@ assert.match(snapshot.contextFingerprint, /^rough-v2-/);
 assert.deepEqual(snapshot.sourceContext.storageContext, { hasStorage: true, storagePowerMw: 20, storageDurationH: 2 });
 assert.equal(result.sourceContext.contextFingerprint, snapshot.contextFingerprint);
 assert.equal(snapshot.config.envManualValuesByYear[2026].carbonPrice, 4);
-assert.equal(snapshot.calculationConfig.envManualValuesByYear[2026].carbonPrice, 0);
+assert.equal(Object.hasOwn(snapshot.calculationConfig.envManualValuesByYear[2026], "carbonPrice"), false);
 assert.notEqual(snapshot.config, scenario.config);
 assert.notEqual(snapshot.calculationConfig, snapshot.config);
 assert.equal(rough.baselineResultState(project, scenario, result).current, true);
@@ -85,7 +85,7 @@ for (const storagePowerMw of [0, null, undefined, -1, "20", Infinity]) {
 for (const storageDurationH of [0, null, undefined, -1, "2", Infinity]) {
   assert.equal(rough.calculateRough({ ...project, storageDurationH }, scenario, draft).ok, false);
 }
-const refinedScenario = { ...scenario, config: { ...scenario.config, otherFee: scenario.config.otherFee + 5 } };
+const refinedScenario = { ...scenario, config: { ...scenario.config, otherNetIncome: scenario.config.otherNetIncome - 5 } };
 const refinedResult = rough.stampBaselineResult(project, refinedScenario, run, calculateScenarioResult(project, refinedScenario, run));
 assert.equal(rough.snapshotState(project, refinedScenario, snapshot).refined, true);
 assert.equal(rough.compareBaselineResult(project, refinedScenario, snapshot, refinedResult).ok, true,

@@ -121,22 +121,22 @@ function testScenarioGoldenCalculation() {
   approx(first.nonMechanismEnergy, 12000, "首年市场化交易电量");
   approx(first.ltPnlPrice, 8, "首年交易策略损益度电值");
   approx(first.ltPnlRevenue, 96000, "首年交易策略损益");
-  approx(first.envRevenue, 162000, "首年环境价值收益");
+  approx(first.envRevenue, 150000, "首年环境价值收益只计绿证和绿电溢价");
   approx(first.storageSupplementRevenue, 400000, "平价下只计独立补充收益，不计旧手工套利");
   approx(first.storageDispatch.incrementalRevenue, 0, "平价下逐时套利为零");
   approx(first.comprehensiveFee, 600000, "首年综合费用");
   approx(first.otherIncome, 40000, "首年其他收入");
-  approx(first.fullRevenue, 6498000, "首年全口径收入");
-  approx(first.fullRevenuePrice, 324.9, "首年度电全口径收入");
+  approx(first.fullRevenue, 6486000, "首年全口径收入");
+  approx(first.fullRevenuePrice, 324.3, "首年度电全口径收入");
 
   const second = result.annualRows[1];
   approx(second.mechanismRatio, 0, "机制结束后次年机制占比");
   approx(second.mechanismRevenue, 0, "机制结束后次年机制收入");
   approx(second.ltPnlPrice, 5, "次年交易策略固定步长收敛");
-  approx(second.fullRevenue, 6730500, "次年全口径收入");
+  approx(second.fullRevenue, 6709500, "次年全口径收入");
   approx(result.totalEnergy, 41000, "周期总上网电量");
-  approx(result.totalFullRevenue, 13228500, "周期全口径总收入");
-  approx(result.avgFullRevenuePrice, 322.6463414634146, "周期平均度电收入");
+  approx(result.totalFullRevenue, 13195500, "周期全口径总收入");
+  approx(result.avgFullRevenuePrice, 321.8414634146341, "周期平均度电收入");
 }
 
 function testManualYearOverrides() {
@@ -173,10 +173,10 @@ function testManualYearOverrides() {
   const row = result.annualRows[0];
   approx(row.ltPnlPrice, 10, "手工逐年交易策略损益覆盖自动收敛");
   approx(row.ltPnlRevenue, 120000, "手工逐年交易策略损益收入");
-  approx(row.envRevenue, 103200, "手工逐年环境价值收入");
+  approx(row.envRevenue, 96000, "手工逐年配置仅计绿证和绿电溢价");
   approx(row.comprehensiveFee, 200000, "手工逐年综合费用");
   approx(row.otherIncome, 100000, "手工逐年其他收入");
-  approx(row.fullRevenue, 6923200, "手工逐年配置全口径收入");
+  approx(row.fullRevenue, 6916000, "手工逐年配置全口径收入");
 }
 
 function testMissingCurveReporting() {

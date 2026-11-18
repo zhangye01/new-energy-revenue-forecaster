@@ -367,8 +367,6 @@
     if (Object.hasOwn(config, "mechanismEnabled") && typeof config.mechanismEnabled !== "boolean") errors.push("是否启用机制电价需要明确选择。");
     if (config.mechanismEnabled && Object.hasOwn(config, "mechanismReferenceMode")
         && !["project_capture", "same_type"].includes(config.mechanismReferenceMode)) errors.push("机制补差参照口径无效，请明确选择。");
-    if (project.siteType === "offshore" && scenarioConfig.getEnvValueMode(config) !== "manual"
-        && Object.hasOwn(config, "carbonEnabled") && typeof config.carbonEnabled !== "boolean") errors.push("是否启用碳收益需要明确选择。");
     if (scenarioConfig.getLtPricingMode(config) === "auto" && config.ltConvergeSpeedUnit === "legacy_ratio"
         && Number(config.ltConvergeSpeed) > 1) errors.push("历史收敛比例应在0至1之间。");
     if (project?.hasStorage && !validStorageContext(storageContext(project))) {
@@ -437,7 +435,6 @@
           ["greenCertPrice", "greenCertRealizeRatio", "绿证"],
           ["greenPremiumPrice", "greenPremiumRealizeRatio", "绿电溢价"]
         ];
-        if (project.siteType === "offshore" && env.carbonEnabled) paths.push(["carbonPrice", "carbonRealizeRatio", "碳收益"]);
         paths.forEach(([priceKey, ratioKey, label]) => {
           validateNumber(env, priceKey, `${year}年${label}价格`, 0);
           validateNumber(env, ratioKey, `${year}年${label}兑现比例`, 0, 1);
@@ -452,8 +449,11 @@
       if (isObject(fees)) {
         [
           ["marketOpFee", "市场运营费"], ["gridAssessFee", "电网考核费"],
-          ["ancillaryFee", "辅助服务费"], ["otherFee", "其他费用"], ["otherIncome", "其他收入"]
+          ["ancillaryFee", "辅助服务费"]
         ].forEach(([key, label]) => validateNumber(fees, key, `${year}年${label}`, 0));
+        if (scenarioConfig.getOtherNetIncome(fees) === null) {
+          errors.push(`${year}年其他净收入不能为空且应为有效数字。`);
+        }
       }
     });
     return [...new Set(errors)];
@@ -501,7 +501,8 @@
     });
     if (!nodes.length || nodes[0].year !== years[0]) errors.push("请填写测算起始年份的现货均价，以覆盖全部测算年份。");
     if (errors.length) return { ok: false, errors: [...new Set(errors)], snapshot: null };
-    const config = normalizedConfig(project, scenario?.config);
+    const { carbonEnabled, carbonPrice, carbonRealizeRatio, ...greenValueConfig } = scenario.config;
+    const config = normalizedConfig(project, greenValueConfig);
     input.spotNodes = nodes;
     const rows = years.map((year, index) => {
       const node = nodes.filter((item) => item.year <= year).slice(-1)[0];

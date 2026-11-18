@@ -80,7 +80,7 @@ scenarioModel.confirmConfig(confirmationScenario);
 delete confirmationScenario.confirmedConfig.storageArbitragePrice;
 assert.equal(validateCalculationReadiness({ ...readyInput, project: confirmationProject,
   scenario: confirmationScenario, scenarioConfirmed: confirmation() }).ok, true, "只读历史储能套利值无需确认");
-confirmationScenario.config.otherFee += 1;
+confirmationScenario.config.otherNetIncome -= 1;
 assert.equal(validateCalculationReadiness({ ...readyInput, project: confirmationProject,
   scenario: confirmationScenario, scenarioConfirmed: confirmation() }).ok, false, "修改已确认参数后需要重新保存确认");
 

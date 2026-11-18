@@ -137,8 +137,8 @@
               <span class="value">${asNum(defaults.ancillaryFee, 1)} 元/MWh</span>
             </div>
             <div class="province-default-detail">
-              <span class="label">其他费用</span>
-              <span class="value">${asNum(defaults.otherFee, 1)} 元/MWh</span>
+              <span class="label">其他净收入</span>
+              <span class="value">${asNum(defaults.otherNetIncome, 1)} 元/MWh</span>
             </div>
             <div class="province-default-detail">
               <span class="label">绿证</span>

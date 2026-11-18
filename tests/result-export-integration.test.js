@@ -15,8 +15,8 @@ const calculator = require("../src/domain/revenue-calculator");
   const downloads = []; sandbox.downloadCsv = (name, rows) => downloads.push({ name, rows });
   sandbox.exportAnnualCsv(); sandbox.exportHourlyCsv(); assert.equal(downloads.length, 2);
   assert(downloads.every(({ rows }) => rows[0].includes('input_fingerprint')));
-  for (const invalidate of [() => { sc.config.otherFee += 10; }, () => { p.activeRunId = 'another'; }, () => { delete p.resultsByScenario[sc.id].sourceContext; }, () => { p.resultsByScenario[sc.id].annualRows = []; }]) {
-    sc.config.otherFee = 3; p.activeRunId = 'run'; current(); invalidate();
+  for (const invalidate of [() => { sc.config.otherNetIncome -= 10; }, () => { p.activeRunId = 'another'; }, () => { delete p.resultsByScenario[sc.id].sourceContext; }, () => { p.resultsByScenario[sc.id].annualRows = []; }]) {
+    sc.config.otherNetIncome = -1; p.activeRunId = 'run'; current(); invalidate();
     sandbox.exportAnnualCsv(); sandbox.exportHourlyCsv(); sandbox.printScenarioReport();
     assert.equal(downloads.length, 2, 'stale/incomplete results must never export');
   }

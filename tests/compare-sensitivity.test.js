@@ -56,11 +56,44 @@ for (const manual of [false, true]) for (const offshore of [false, true]) for (c
 
 const full = fixture(true, true, false);
 const env = sensitivity.buildFactors(full.project, full, [-0.2, 0, 0.2]).find((factor) => factor.key === "env_ratio");
-assert.ok(Math.abs(env.highDelta) < 1e-8, "兑现比例合计已经100%时不能继续增加");
+assert.ok(env.highDelta > 0, "历史碳比例不占用绿证和绿电兑现空间");
+full.scenario.config.envManualValuesByYear[2026].greenCertRealizeRatio = 0.65;
+full.result = calculator.calculateScenarioResult(full.project, full.scenario, full.run);
+const cappedEnv = sensitivity.buildFactors(full.project, full, [-0.2, 0, 0.2]).find((factor) => factor.key === "env_ratio");
+assert.ok(Math.abs(cappedEnv.highDelta) < 1e-8, "两类绿色价值兑现比例合计达到100%时不再增加");
+const { environmentValueVersion, ...legacyInputs } = full.result;
+const [storedYear] = legacyInputs.annualRows;
+const removedRevenue = storedYear.nonMechanismEnergy * 0.1 * 9.75;
+const fullRevenue = storedYear.fullRevenue + removedRevenue;
+const fullRevenuePrice = fullRevenue / storedYear.energyMwh;
+const historicalWithCarbon = { ...legacyInputs, totalFullRevenue: fullRevenue, avgFullRevenuePrice: fullRevenuePrice,
+  annualRows: [{ ...storedYear, envRevenue: storedYear.envRevenue + removedRevenue, fullRevenue, fullRevenuePrice,
+    storageDispatch: { ...storedYear.storageDispatch, withStorageFullRevenue: fullRevenue,
+      withoutStorageFullRevenue: storedYear.storageDispatch.withoutStorageFullRevenue + removedRevenue } }],
+  hourlyPreview: legacyInputs.hourlyPreview.map((hour) => ({ ...hour,
+    fullRevenue: hour.fullRevenue + (removedRevenue / storedYear.energyMwh) * hour.energyMwh })) };
+const legacyBefore = JSON.stringify(historicalWithCarbon);
+assert.equal(analysis.isResultComplete(full.project, full.scenario, historicalWithCarbon, { includeHourly: true }), true,
+  "保存的旧算式仍允许按原参数核验年表与时序结果");
+assert.equal(analysis.isResultComplete(full.project, full.scenario, { ...historicalWithCarbon, environmentValueVersion }), false,
+  "新版保存的结果只接受新版结算算式");
+assert.deepEqual(sensitivity.buildFactors(full.project, { scenario: full.scenario, result: historicalWithCarbon }, ratios), []);
+assert.match(sensitivity.availability(full.project, { scenario: full.scenario, result: historicalWithCarbon }).message, /重新测算/);
+assert.equal(JSON.stringify(historicalWithCarbon), legacyBefore, "旧结果无需被修改或静默按新口径重算");
 const current = sensitivity.buildFactors(full.project, full, [-0.2, 0, 0.2]);
 full.scenario.config.feeManualValuesByYear[2026].otherFee += 1;
 const result = calculator.calculateScenarioResult(full.project, full.scenario, full.run);
 assert.notEqual(sensitivity.buildFactors(full.project, { scenario: full.scenario, result }, [-0.2, 0, 0.2]), current, "参数变更重新计算，不复用旧缓存");
+
+for (const [net, expenses] of [[-5, 15], [0, 10], [5, 10]]) {
+  const { project, scenario, run } = fixture(false, false, false);
+  Object.assign(scenario.config, { marketOpFee: 2, gridAssessFee: 3, ancillaryFee: 5, otherNetIncome: net,
+    otherFee: 100, otherIncome: 200 });
+  const settled = calculator.calculateScenarioResult(project, scenario, run);
+  const fee = sensitivity.buildFactors(project, { scenario, result: settled }, [-0.2, 0, 0.2]).find((factor) => factor.key === "fee");
+  const expected = 0.2 * expenses * settled.totalEnergy / 10000;
+  assert.ok(Math.abs(fee.highDelta + expected) < 1e-7, "费用变动只影响三个扣费科目及负净额");
+}
 
 const { project: storageProject, scenario: storageScenario, run: storageRun } = fixture(true, true, false);
 storageScenario.config.storageRoundTripEfficiency = 1;

@@ -3,7 +3,9 @@
 (function (root, factory) {
   const getScenarioModel = () => typeof module !== "undefined" && module.exports
     ? require("../domain/scenario-model") : root.NE_SCENARIO_MODEL;
-  const api = factory(getScenarioModel);
+  const getScenarioConfig = () => typeof module !== "undefined" && module.exports
+    ? require("../domain/scenario-config") : root.NE_SCENARIO_CONFIG;
+  const api = factory(getScenarioModel, getScenarioConfig);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -11,7 +13,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_SCENARIO_FORM = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel, getScenarioConfig) {
   const loadedRatios = new WeakMap();
   const loadedInputs = new WeakMap();
   const refinementForms = new WeakMap();
@@ -25,6 +27,7 @@
     env: ["envValueMode", "envManualValuesByYear", "环境价值"],
     fee: ["feeConfigMode", "feeManualValuesByYear", "费用与其他收益"]
   });
+  const FEE_FIELDS = ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherNetIncome"];
   let storageState = "saved";
   const REFINEMENT_FIELDS = Object.freeze({
     mechanismEnabled: "mechanism-enabled", mechanismRatio: "mechanism-ratio", mechanismPrice: "mechanism-price",
@@ -33,9 +36,8 @@
     ltPricingMode: "lt-pricing-mode", ltYear1Pnl: "lt-year1-pnl", ltTargetPnl: "lt-target-pnl", ltConvergeSpeed: "lt-converge-speed",
     envValueMode: "env-value-mode", greenCertPrice: "green-cert-price", greenCertRealizeRatio: "green-cert-realize-ratio",
     greenPremiumPrice: "green-premium-price", greenPremiumRealizeRatio: "green-premium-realize-ratio",
-    carbonEnabled: "carbon-enabled", carbonPrice: "carbon-price", carbonRealizeRatio: "carbon-realize-ratio",
     feeConfigMode: "fee-config-mode", marketOpFee: "market-op-fee", gridAssessFee: "grid-assess-fee",
-    ancillaryFee: "ancillary-fee", otherFee: "other-fee", otherIncome: "other-income",
+    ancillaryFee: "ancillary-fee", otherNetIncome: "other-net-income",
     storageRoundTripEfficiency: "storage-round-trip-efficiency", storageCapacityCompPrice: "storage-capacity-comp-price",
     storageAncillaryRevenuePrice: "storage-ancillary-revenue-price", storageOtherRevenuePrice: "storage-other-revenue-price"
   });
@@ -55,6 +57,14 @@
     if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
     const keys = Object.keys(a);
     return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && sameValue(a[key], b[key]));
+  }
+
+  function fieldValue(config, key) {
+    return key === "otherNetIncome" ? getScenarioConfig().getOtherNetIncome(config) : config?.[key];
+  }
+
+  function sameFeeRow(before, after) {
+    return Boolean(before && after) && FEE_FIELDS.every((key) => sameValue(fieldValue(before, key), fieldValue(after, key)));
   }
 
   function getScenarioConfigForForm(project, scenario) {
@@ -103,10 +113,18 @@
     if (!pending) pending = { project, source, groups: {}, revision: 0 };
     const [modeKey, valuesKey] = MANUAL_GROUPS[kind];
     const field = getField(querySelector, `#${REFINEMENT_FIELDS[modeKey]}`) || refs[modeKey];
-    const imported = JSON.parse(JSON.stringify(values));
+    const previous = scenario.config?.[valuesKey];
+    let imported = JSON.parse(JSON.stringify(values));
+    if (kind === "env") imported = getScenarioConfig().preserveLegacyEnvFields(previous, imported);
+    if (kind === "fee") {
+      imported = getScenarioConfig().preserveLegacyFeeFields(previous, imported);
+      for (const year of Object.keys(imported)) {
+        if (sameFeeRow(previous?.[year], imported[year])) imported[year] = JSON.parse(JSON.stringify(previous[year]));
+      }
+    }
     pending.groups[kind] = { values: imported,
       previousMode: pending.groups[kind]?.previousMode ?? field?.value ?? scenario.config?.[modeKey],
-      changedYears: Object.keys(imported).filter((year) => !sameValue(imported[year], scenario.config?.[valuesKey]?.[year])).length };
+      changedYears: Object.keys(imported).filter((year) => !sameValue(imported[year], previous?.[year])).length };
     pending.revision += 1;
     manualImports.set(scenario, pending);
     if (field) field.value = "manual";
@@ -128,11 +146,7 @@
     }
     groups.trade.push(...(config.ltPricingMode === "manual" ? ["ltManualPricesByYear"] : ["ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed"]));
     groups.environment.push(...(config.envValueMode === "manual" ? ["envManualValuesByYear"] : ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"]));
-    if (config.envValueMode !== "manual" && project.siteType === "offshore") {
-      groups.environment.push("carbonEnabled");
-      if (config.carbonEnabled) groups.environment.push("carbonPrice", "carbonRealizeRatio");
-    }
-    groups.fees.push(...(config.feeConfigMode === "manual" ? ["feeManualValuesByYear"] : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]));
+    groups.fees.push(...(config.feeConfigMode === "manual" ? ["feeManualValuesByYear"] : FEE_FIELDS));
     const empty = (value) => value === undefined || value === null || (typeof value === "string" && !value.trim());
     const numeric = (value) => !empty(value) && Number.isFinite(Number(value));
     const annualComplete = (key) => {
@@ -140,21 +154,18 @@
       if (!Number.isInteger(startYear) || !Number.isInteger(years) || years <= 0) return false;
       return Array.from({ length: years }, (_, i) => config[key]?.[startYear + i]).every((entry) => {
         if (key === "ltManualPricesByYear") return numeric(entry);
-        const keys = key === "feeManualValuesByYear" ? ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]
+        const keys = key === "feeManualValuesByYear" ? FEE_FIELDS
           : ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"];
-        if (key === "envManualValuesByYear" && project.siteType === "offshore") {
-          if (typeof entry?.carbonEnabled !== "boolean") return false;
-          if (entry.carbonEnabled) keys.push("carbonPrice", "carbonRealizeRatio");
-        }
-        return keys.every((name) => numeric(entry?.[name]));
+        return keys.every((name) => numeric(fieldValue(entry, name)));
       });
     };
     const fields = {};
     const states = Object.entries(groups).map(([id, keys]) => {
       keys.forEach((key) => {
         const suggestedEfficiency = key === "storageRoundTripEfficiency" && !Object.hasOwn(config, key);
-        const missing = key.endsWith("ByYear") ? !annualComplete(key) : !suggestedEfficiency && empty(config[key]);
-        fields[key] = missing ? "missing" : !suggestedEfficiency && getScenarioModel().isConfigConfirmed(scenario, key, config[key]) ? "confirmed" : "pending";
+        const value = fieldValue(config, key);
+        const missing = key.endsWith("ByYear") ? !annualComplete(key) : !suggestedEfficiency && empty(value);
+        fields[key] = missing ? "missing" : !suggestedEfficiency && getScenarioModel().isConfigConfirmed(scenario, key, value) ? "confirmed" : "pending";
       });
       const missing = keys.filter((key) => fields[key] === "missing").length;
       const pending = keys.filter((key) => fields[key] === "pending").length;
@@ -289,16 +300,14 @@
       ["lt", "ltManualPricesByYear", "交易策略逐年损益", [[null, "策略损益 元/MWh"]]],
       ["env", "envManualValuesByYear", "逐年环境价值兑现", [
         ["greenCertPrice", "绿证价格 元/MWh"], ["greenCertRealizeRatio", "绿证兑现空间 %"],
-        ["greenPremiumPrice", "绿电溢价 元/MWh"], ["greenPremiumRealizeRatio", "绿电兑现空间 %"],
-        ...(project.siteType === "offshore" ? [["carbonEnabled", "碳收益"], ["carbonPrice", "碳收益 元/MWh"], ["carbonRealizeRatio", "碳兑现空间 %"]] : [])
+        ["greenPremiumPrice", "绿电溢价 元/MWh"], ["greenPremiumRealizeRatio", "绿电兑现空间 %"]
       ]],
       ["fee", "feeManualValuesByYear", "逐年扣费与其他收益", [
         ["marketOpFee", "市场运营费用 元/MWh"], ["gridAssessFee", "并网考核费用 元/MWh"],
-        ["ancillaryFee", "辅助服务费用 元/MWh"], ["otherFee", "其他费用 元/MWh"], ["otherIncome", "其他收入 元/MWh"]
+        ["ancillaryFee", "辅助服务费用 元/MWh"], ["otherNetIncome", "其他净收入 元/MWh"]
       ]]
     ];
     const display = (value, key) => {
-      if (key === "carbonEnabled") return typeof value === "boolean" ? value ? "是" : "否" : "未填写";
       if (value === undefined || value === null || (typeof value === "string" && !value.trim()) || !Number.isFinite(Number(value))) return "未填写";
       return String(key?.endsWith("Ratio") ? Number((Number(value) * 100).toPrecision(15)) : Number(value));
     };
@@ -316,7 +325,7 @@
         const row = config[key]?.[year];
         const oldRow = savedConfig[key]?.[year];
         return `<tr><td>${year}</td>${columns.map(([field]) => {
-          const value = field === null ? row : row?.[field], before = field === null ? oldRow : oldRow?.[field];
+          const value = field === null ? row : fieldValue(row, field), before = field === null ? oldRow : fieldValue(oldRow, field);
           return staged && !sameValue(value, before)
             ? `<td data-import-changed="true"><span title="原年表值">${display(before, field)}</span> → <strong>${display(value, field)}</strong></td>`
             : `<td>${display(value, field)}</td>`;
@@ -479,13 +488,9 @@
       field.addEventListener("input", () => handlers.updateMarketTradeEnergyDisplay?.());
       field.addEventListener("change", () => handlers.updateMarketTradeEnergyDisplay?.());
     });
-    querySelector("#carbon-enabled")?.addEventListener("change", () => {
-      handlers.syncScenarioFieldLocks?.();
-    });
     [
       "#green-cert-realize-ratio",
-      "#green-premium-realize-ratio",
-      "#carbon-realize-ratio"
+      "#green-premium-realize-ratio"
     ].forEach((selector) => {
       const field = querySelector(selector);
       if (!field) return;
@@ -644,14 +649,10 @@
     setValue(querySelector, "#green-premium-price", config.greenPremiumPrice);
     setRatioValue(querySelector, "#green-premium-realize-ratio", config.greenPremiumRealizeRatio);
     if (refs.envValueMode) refs.envValueMode.value = storedMode("envValueMode", ["global", "manual"], "global");
-    setValue(querySelector, "#carbon-enabled", typeof config.carbonEnabled === "boolean" ? config.carbonEnabled ? "yes" : "no" : "");
-    setValue(querySelector, "#carbon-price", config.carbonPrice);
-    setRatioValue(querySelector, "#carbon-realize-ratio", config.carbonRealizeRatio);
     setValue(querySelector, "#market-op-fee", config.marketOpFee);
     setValue(querySelector, "#grid-assess-fee", config.gridAssessFee);
     setValue(querySelector, "#ancillary-fee", config.ancillaryFee);
-    setValue(querySelector, "#other-fee", config.otherFee);
-    setValue(querySelector, "#other-income", config.otherIncome);
+    setValue(querySelector, "#other-net-income", fieldValue(config, "otherNetIncome"));
     if (refs.feeConfigMode) refs.feeConfigMode.value = storedMode("feeConfigMode", ["global", "manual"], "global");
     if (refs.storageArbitragePrice) refs.storageArbitragePrice.value = config.storageArbitragePrice ?? "";
     setRatioValue(querySelector, "#storage-round-trip-efficiency",
@@ -661,7 +662,7 @@
     if (refs.storageOtherRevenuePrice) refs.storageOtherRevenuePrice.value = config.storageOtherRevenuePrice ?? "";
     Object.entries(REFINEMENT_FIELDS).forEach(([key, id]) => {
       const field = getField(querySelector, `#${id}`) || refs[key];
-      if (field) loadedInputs.set(field, { display: String(field.value), original: config[key] });
+      if (field) loadedInputs.set(field, { display: String(field.value), original: fieldValue(config, key) });
     });
     bindRefinementState(input);
   }
@@ -721,11 +722,6 @@
     } = input;
     const mode = refs.envValueMode?.value || envValueMode || "global";
     const isManual = mode === "manual";
-    const canUseCarbon = project?.siteType === "offshore";
-    const carbonEnabledField = getField(querySelector, "#carbon-enabled");
-    const carbonPriceField = getField(querySelector, "#carbon-price");
-    const carbonRatioField = getField(querySelector, "#carbon-realize-ratio");
-    const carbonEnabled = carbonEnabledField?.value === "yes";
 
     if (refs.envManualPanel) refs.envManualPanel.hidden = !isManual;
     if (refs.envValueMode) refs.envValueMode.disabled = locked;
@@ -738,9 +734,6 @@
       const field = getField(querySelector, selector);
       if (field) field.disabled = locked || isManual;
     });
-    if (carbonEnabledField) carbonEnabledField.disabled = locked || isManual || !canUseCarbon;
-    if (carbonPriceField) carbonPriceField.disabled = locked || isManual || !(canUseCarbon && carbonEnabled);
-    if (carbonRatioField) carbonRatioField.disabled = locked || isManual || !(canUseCarbon && carbonEnabled);
     if (refs.envValueSpaceRatio) refs.envValueSpaceRatio.disabled = true;
     if (refs.envValueUsedRatio) refs.envValueUsedRatio.disabled = true;
     if (refs.exportEnvTemplateButton) refs.exportEnvTemplateButton.disabled = locked || !project;
@@ -750,8 +743,6 @@
     return {
       mode,
       isManual,
-      canUseCarbon,
-      carbonEnabled,
       hasScenario: Boolean(project && scenario)
     };
   }
@@ -770,8 +761,6 @@
       feeConfigMode = "global",
       feeManualValuesByYear = {}
     } = input;
-    const offshore = project.siteType === "offshore";
-    const carbonEnabled = offshore && selectValue(querySelector, "#carbon-enabled") === "yes";
     return {
       mechanismEnabled: selectValue(querySelector, "#mechanism-enabled") === "yes",
       mechanismRatio: readRatioValue(querySelector, "#mechanism-ratio", clamp(numberValue(querySelector, "#mechanism-ratio") / 100, 0, 1)),
@@ -792,16 +781,12 @@
       greenCertRealizeRatio: readRatioValue(querySelector, "#green-cert-realize-ratio", ratioValue(clamp, envAllocationDraft.greenCertRatio)),
       greenPremiumPrice: numberValue(querySelector, "#green-premium-price"),
       greenPremiumRealizeRatio: readRatioValue(querySelector, "#green-premium-realize-ratio", ratioValue(clamp, envAllocationDraft.greenPremiumRatio)),
-      carbonEnabled,
-      carbonPrice: offshore ? numberValue(querySelector, "#carbon-price") : 0,
-      carbonRealizeRatio: carbonEnabled ? readRatioValue(querySelector, "#carbon-realize-ratio", ratioValue(clamp, envAllocationDraft.carbonRatio)) : 0,
       feeConfigMode,
       feeManualValuesByYear,
       marketOpFee: numberValue(querySelector, "#market-op-fee"),
       gridAssessFee: numberValue(querySelector, "#grid-assess-fee"),
       ancillaryFee: numberValue(querySelector, "#ancillary-fee"),
-      otherFee: numberValue(querySelector, "#other-fee"),
-      otherIncome: numberValue(querySelector, "#other-income"),
+      otherNetIncome: numberValue(querySelector, "#other-net-income"),
       ...(project.hasStorage ? { storageRoundTripEfficiency: readRatioValue(querySelector,
         "#storage-round-trip-efficiency", numberValue(querySelector, "#storage-round-trip-efficiency") / 100) } : {}),
       storageArbitragePrice: project.hasStorage ? Number(refs.storageArbitragePrice?.value || 0) : 0,
@@ -829,14 +814,11 @@
       add("#green-cert-realize-ratio", "绿证兑现比例", 0, 100);
       add("#green-premium-price", "绿电溢价");
       add("#green-premium-realize-ratio", "绿电兑现比例", 0, 100);
-      if (project.siteType === "offshore" && selectValue(querySelector, "#carbon-enabled") === "yes") {
-        add("#carbon-price", "碳收益");
-        add("#carbon-realize-ratio", "碳收益兑现比例", 0, 100);
-      }
     }
     if (feeConfigMode !== "manual") {
-      [["#market-op-fee", "市场运营费"], ["#grid-assess-fee", "电网考核费"], ["#ancillary-fee", "辅助服务费"],
-        ["#other-fee", "其他费用"], ["#other-income", "其他收入"]].forEach(([selector, label]) => add(selector, label));
+      [["#market-op-fee", "市场运营费"], ["#grid-assess-fee", "电网考核费"], ["#ancillary-fee", "辅助服务费"]]
+        .forEach(([selector, label]) => add(selector, label));
+      add("#other-net-income", "其他净收入", -Infinity);
     }
     if (project.hasStorage) {
       const efficiency = getField(querySelector, "#storage-round-trip-efficiency")?.value;
@@ -880,6 +862,8 @@
         && JSON.stringify(loaded.original) === JSON.stringify(stored[key]);
       if (!applicable.has(key) || (key.endsWith("ByYear") && !stagedKeys.has(key)) || unchanged) config[key] = stored[key];
     });
+    if (!Object.hasOwn(stored, "otherNetIncome") && (!applicable.has("otherNetIncome") ||
+        candidate.otherNetIncome === fieldValue(stored, "otherNetIncome"))) delete config.otherNetIncome;
     // This value remains the original rough-price assumption. Refinement neither
     // edits it nor invents one for old scenarios that never saved the field.
     if (Object.hasOwn(stored, "storageArbitragePrice")) config.storageArbitragePrice = stored.storageArbitragePrice;
@@ -930,9 +914,6 @@
     if (selectValue(querySelector, "#mechanism-enabled") === "yes") {
       choices.push([selectValue(querySelector, "#mechanism-reference-mode"), ["project_capture", "same_type"], "机制补差参照口径"]);
     }
-    if (project.siteType === "offshore" && refs.envValueMode?.value === "global") {
-      choices.push([selectValue(querySelector, "#carbon-enabled"), ["yes", "no"], "碳收益是否适用"]);
-    }
     for (const [value, allowed, label] of choices) {
       if (!allowed.includes(value)) return invalid(`${label}无效或未填写，请明确选择后再保存。`);
     }
@@ -972,10 +953,9 @@
     } else if (
       envAllocationDraft.greenCertRatio < 0
       || envAllocationDraft.greenPremiumRatio < 0
-      || envAllocationDraft.carbonRatio < 0
       || envAllocationDraft.totalRatio > 1 + 0.000001
     ) {
-      return invalid(`环境价值兑现空间分配无效：绿证、绿电溢价、碳收益合计为 ${asPercent(envAllocationDraft.totalRatio)}，不能超过 100.0%。`);
+      return invalid(`绿证和绿电溢价的兑现比例合计为 ${asPercent(envAllocationDraft.totalRatio)}，须在 0% 至 100% 内。`);
     }
 
     const feeConfigMode = scenarioConfig.getFeeConfigMode
@@ -1043,15 +1023,8 @@
     confirmedKeys.push(...(config.ltPricingMode === "manual" ? ["ltManualPricesByYear"]
       : ["ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed", "ltConvergeSpeedUnit"]));
     if (config.envValueMode === "manual") confirmedKeys.push("envManualValuesByYear");
-    else {
-      confirmedKeys.push("greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio");
-      if (project.siteType === "offshore") {
-        confirmedKeys.push("carbonEnabled");
-        if (config.carbonEnabled) confirmedKeys.push("carbonPrice", "carbonRealizeRatio");
-      }
-    }
-    confirmedKeys.push(...(config.feeConfigMode === "manual" ? ["feeManualValuesByYear"]
-      : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]));
+    else confirmedKeys.push("greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio");
+    confirmedKeys.push(...(config.feeConfigMode === "manual" ? ["feeManualValuesByYear"] : FEE_FIELDS));
     if (project.hasStorage) confirmedKeys.push("storageRoundTripEfficiency", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice");
     getScenarioModel().confirmConfig(scenario, confirmedKeys, { project });
     scenario.updatedAt = nowIso();

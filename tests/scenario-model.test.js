@@ -45,7 +45,10 @@ const defaultConfig = defaultScenarioConfig(offshoreStorageProject, {
 });
 assert.equal(defaultConfig.mechanismStartYm, "2026-01");
 assert.equal(defaultConfig.mechanismEndYm, "2028-12");
-assert.equal(defaultConfig.carbonEnabled, true);
+assert.equal(Object.hasOwn(defaultConfig, "carbonEnabled"), false);
+assert.equal(defaultConfig.otherNetIncome, -1);
+assert.equal(Object.hasOwn(defaultConfig, "otherFee"), false);
+assert.equal(Object.hasOwn(defaultConfig, "otherIncome"), false);
 assert.equal(defaultConfig.storageArbitragePrice, 18);
 assert.equal(defaultConfig.mechanismReferenceMode, "project_capture");
 assert.equal(defaultConfig.sameTypeSpread, 0);
@@ -61,7 +64,7 @@ const fallbackConfig = defaultScenarioConfig({
 });
 assert.equal(fallbackConfig.mechanismStartYm, "2026-01");
 assert.equal(fallbackConfig.mechanismEndYm, "2029-12");
-assert.equal(fallbackConfig.carbonEnabled, false);
+assert.equal(Object.hasOwn(fallbackConfig, "carbonEnabled"), false);
 assert.equal(fallbackConfig.storageCapacityCompPrice, 0);
 
 assert.equal(normalizeLtConvergeStep(0.5, 8, 2, 2, false), 3);
@@ -157,7 +160,9 @@ assert.equal(applyTarget.config.mechanismPrice, provinceDefaults.mechanismPrice)
 assert.equal(applyTarget.config.marketOpFee, provinceDefaults.marketOpFee);
 assert.equal(applyTarget.config.greenCertRealizeRatio, 1);
 assert.equal(applyTarget.config.greenPremiumRealizeRatio, 0);
-assert.equal(applyTarget.config.carbonRealizeRatio, 0);
+assert.equal(Object.hasOwn(applyTarget.config, "carbonRealizeRatio"), false);
+assert.equal(applyTarget.config.otherNetIncome, -1);
+assert.equal(isConfigConfirmed(applyTarget, "otherNetIncome"), true);
 assert.equal(applyTarget.config.storageArbitragePrice, provinceDefaults.storageArbitragePrice);
 assert.equal(applyTarget.updatedAt, "2026-06-10T08:00:00.000Z");
 assert.equal(isConfigConfirmed(applyTarget, "mechanismPrice"), true);
@@ -193,12 +198,42 @@ assert.equal(baselineScenario.id, "scn-base");
 assert.equal(baselineScenario.name, "基准方案");
 assert.equal(baselineScenario.isBaseline, true);
 assert.equal(baselineScenario.locked, false);
-assert.equal(baselineScenario.config.carbonEnabled, true);
+assert.equal(Object.hasOwn(baselineScenario.config, "carbonEnabled"), false);
 assert.equal(baselineScenario.updatedAt, "2026-06-10T00:00:00.000Z");
 assert.deepEqual(baselineScenario.confirmedConfig, {});
 assert.deepEqual(baselineScenario.confirmedConfigSources, {});
 assert.equal(baselineScenario.confirmationReviewVersion, 1);
 assert.equal(isConfigConfirmed(baselineScenario, "mechanismPrice"), false, "a populated system default is still unconfirmed");
+
+const oldInputs = createBaselineScenario(offshoreStorageProject);
+delete oldInputs.config.otherNetIncome;
+Object.assign(oldInputs.config, { otherFee: 14.75, otherIncome: 0.25, carbonEnabled: true, carbonPrice: 4.123, carbonRealizeRatio: null });
+oldInputs.confirmedConfig = { otherFee: 14.75, otherIncome: 0.25, carbonEnabled: true, carbonPrice: 4.123, carbonRealizeRatio: null };
+oldInputs.confirmedConfigSources = Object.fromEntries(Object.keys(oldInputs.confirmedConfig).map((key) => [key, "explicit"]));
+const oldInputsBefore = JSON.stringify(oldInputs);
+const reloadedOldInputs = sanitizeScenario(offshoreStorageProject, oldInputs);
+assert.deepEqual(reloadedOldInputs.config, oldInputs.config, "legacy gross and environmental inputs retain their raw values and keys");
+assert.deepEqual(reloadedOldInputs.confirmedConfig, oldInputs.confirmedConfig);
+assert.deepEqual(reloadedOldInputs.confirmedConfigSources, oldInputs.confirmedConfigSources);
+assert.equal(JSON.stringify(oldInputs), oldInputsBefore);
+assert.equal(isConfigConfirmed(reloadedOldInputs, "carbonPrice"), false, "retired carbon fields do not count in the current confirmation flow");
+assert.equal(isConfigConfirmed(reloadedOldInputs, "otherNetIncome", -14.5), true, "explicitly confirmed gross inputs support the derived amount");
+assert.equal(isConfigConfirmed(reloadedOldInputs, "otherNetIncome", 14.5), false);
+const noOrigin = sanitizeScenario(offshoreStorageProject, { ...oldInputs, confirmedConfigSources: {} });
+assert.deepEqual(noOrigin.confirmedConfig, oldInputs.confirmedConfig, "ambiguous legacy confirmations remain as records");
+assert.equal(isConfigConfirmed(noOrigin, "otherNetIncome", -14.5), false, "ambiguous old confirmation records must not confirm the merged field");
+delete reloadedOldInputs.confirmedConfig.otherIncome;
+assert.equal(isConfigConfirmed(reloadedOldInputs, "otherNetIncome", -14.5), false, "both old inputs must be confirmed");
+confirmConfig(reloadedOldInputs, ["otherNetIncome"], { project: offshoreStorageProject });
+assert.equal(isConfigConfirmed(sanitizeScenario(offshoreStorageProject, reloadedOldInputs), "otherNetIncome"), true);
+assert.equal(Object.hasOwn(reloadedOldInputs.config, "otherNetIncome"), false, "confirmation does not write the derived value into the legacy config");
+const signedFeeBatch = applyBatchParameter({ ...offshoreStorageProject, scenarios: [reloadedOldInputs] }, {
+  key: "otherNetIncome", spec: { type: "number", min: -2000, max: 2000 }, rawValue: "-1.5", scope: "all"
+});
+assert.equal(signedFeeBatch.updated, 1);
+assert.equal(reloadedOldInputs.config.otherNetIncome, -1.5);
+assert.deepEqual([reloadedOldInputs.config.otherFee, reloadedOldInputs.config.otherIncome], [14.75, 0.25]);
+assert.equal(isConfigConfirmed(reloadedOldInputs, "otherNetIncome"), true);
 
 const confirmationScenario = createBaselineScenario(offshoreStorageProject);
 confirmationScenario.config.mechanismEnabled = false;
@@ -297,7 +332,7 @@ assert.equal(isConfigConfirmed(sourcedReload, "mechanismRatio"), true);
 assert.equal(sourcedReload.confirmedConfigSources.mechanismRatio, "rough_edit");
 assert.equal(isConfigConfirmed(sourcedReload, "greenCertPrice"), true,
   "new explicit origins survive legacy review even when their values equal defaults");
-assert.equal(isConfigConfirmed(sourcedReload, "otherFee"), false,
+assert.equal(isConfigConfirmed(sourcedReload, "otherNetIncome"), false,
   "a new source on one field must not authenticate unrelated old confirmations");
 const noRoughLegacy = sanitizeScenario(offshoreStorageProject, legacyDefaultScenario, 0, { provinceDefaults });
 assert.equal(isConfigConfirmed(noRoughLegacy, "mechanismRatio"), true,
@@ -489,7 +524,7 @@ const batchResult = applyBatchParameter(batchProject, {
   scope: "non_baseline",
   nowIso: () => "2026-06-10T00:00:00.000Z",
   getEnvValueAllocation: (_project, config) => ({
-    totalRatio: config.greenCertRealizeRatio + config.greenPremiumRealizeRatio + config.carbonRealizeRatio
+    totalRatio: config.greenCertRealizeRatio + config.greenPremiumRealizeRatio
   })
 });
 assert.equal(batchResult.ok, true);
@@ -510,7 +545,7 @@ const skipSpaceResult = applyBatchParameter(batchProject, {
   rawValue: "90",
   scope: "all",
   getEnvValueAllocation: (_project, config) => ({
-    totalRatio: config.greenCertRealizeRatio + config.greenPremiumRealizeRatio + config.carbonRealizeRatio
+    totalRatio: config.greenCertRealizeRatio + config.greenPremiumRealizeRatio
   })
 });
 assert.equal(skipSpaceResult.updated, 0);

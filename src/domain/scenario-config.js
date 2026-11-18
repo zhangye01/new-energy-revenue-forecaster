@@ -20,6 +20,18 @@
   const LT_PRICING_MODE_SET = new Set(["auto", "manual"]);
   const ENV_VALUE_MODE_SET = new Set(["global", "manual"]);
   const FEE_CONFIG_MODE_SET = new Set(["global", "manual"]);
+  const LEGACY_ENV_VALUE_KEYS = Object.freeze(["carbonEnabled", "carbonPrice", "carbonRealizeRatio"]);
+  const LEGACY_FEE_VALUE_KEYS = Object.freeze(["otherFee", "otherIncome"]);
+  const ENV_TEMPLATE_COLUMNS = Object.freeze([
+    "year", "green_cert_price_yuan_per_mwh", "green_cert_realize_ratio_pct",
+    "green_premium_price_yuan_per_mwh", "green_premium_realize_ratio_pct"
+  ]);
+  const LEGACY_ENV_TEMPLATE_HEADER = [...ENV_TEMPLATE_COLUMNS, "carbon_enabled", "carbon_price_yuan_per_mwh", "carbon_realize_ratio_pct"].join(",");
+  const FEE_TEMPLATE_COLUMNS = Object.freeze([
+    "year", "market_op_fee_yuan_per_mwh", "grid_assess_fee_yuan_per_mwh",
+    "ancillary_fee_yuan_per_mwh", "other_net_income_yuan_per_mwh"
+  ]);
+  const LEGACY_FEE_TEMPLATE_HEADER = [...FEE_TEMPLATE_COLUMNS.slice(0, -1), "other_fee_yuan_per_mwh", "other_income_yuan_per_mwh"].join(",");
   const {
     normalizeCsvHeaderRow,
     parseCsvRows
@@ -79,6 +91,19 @@
     return FEE_CONFIG_MODE_SET.has(config?.feeConfigMode) ? config.feeConfigMode : "global";
   }
 
+  function readSignedNumber(value) {
+    if (isBlank(value) || (typeof value !== "number" && typeof value !== "string")) return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function getOtherNetIncome(config) {
+    if (Object.hasOwn(config || {}, "otherNetIncome")) return readSignedNumber(config.otherNetIncome);
+    const fee = readSignedNumber(config?.otherFee);
+    const income = readSignedNumber(config?.otherIncome);
+    return fee !== null && fee >= 0 && income !== null && income >= 0 ? income - fee : null;
+  }
+
   function sanitizeLtManualPricesByYear(rawPrices, project) {
     const next = {};
     if (!isPlainObject(rawPrices)) return next;
@@ -99,20 +124,38 @@
       const year = Number(yearKey);
       if (!Number.isInteger(year) || !isPlainObject(rawValue)) return;
       if (!isYearInProjectRange(year, project)) return;
-      const carbonEnabled = project?.siteType === "offshore" && parseBooleanLike(rawValue.carbonEnabled, Boolean(rawValue.carbonEnabled));
       const entry = {
         greenCertPrice: Number(rawValue.greenCertPrice) || 0,
         greenCertRealizeRatio: clamp(Number(rawValue.greenCertRealizeRatio) || 0, 0, 1),
         greenPremiumPrice: Number(rawValue.greenPremiumPrice) || 0,
-        greenPremiumRealizeRatio: clamp(Number(rawValue.greenPremiumRealizeRatio) || 0, 0, 1),
-        carbonEnabled,
-        carbonPrice: carbonEnabled ? Number(rawValue.carbonPrice) || 0 : 0,
-        carbonRealizeRatio: carbonEnabled ? clamp(Number(rawValue.carbonRealizeRatio) || 0, 0, 1) : 0
+        greenPremiumRealizeRatio: clamp(Number(rawValue.greenPremiumRealizeRatio) || 0, 0, 1)
       };
-      if (entry.greenCertRealizeRatio + entry.greenPremiumRealizeRatio + entry.carbonRealizeRatio > 1 + 0.000001) return;
+      if (entry.greenCertRealizeRatio + entry.greenPremiumRealizeRatio > 1 + 0.000001) return;
       next[year] = entry;
     });
     return next;
+  }
+
+  function preserveLegacyColumns(previousRows, nextRows, keys) {
+    if (!isPlainObject(nextRows)) return {};
+    return Object.fromEntries(Object.entries(nextRows).map(([year, value]) => {
+      if (!isPlainObject(value)) return [year, value];
+      const row = { ...value };
+      const previous = previousRows?.[year];
+      for (const key of keys) {
+        if (previous && Object.hasOwn(previous, key)) row[key] = previous[key];
+        else delete row[key];
+      }
+      return [year, row];
+    }));
+  }
+
+  function preserveLegacyEnvFields(previousRows, nextRows) {
+    return preserveLegacyColumns(previousRows, nextRows, LEGACY_ENV_VALUE_KEYS);
+  }
+
+  function preserveLegacyFeeFields(previousRows, nextRows) {
+    return preserveLegacyColumns(previousRows, nextRows, LEGACY_FEE_VALUE_KEYS);
   }
 
   function sanitizeFeeManualValuesByYear(rawValues, project) {
@@ -125,12 +168,11 @@
       const entry = {
         marketOpFee: Number(rawValue.marketOpFee) || 0,
         gridAssessFee: Number(rawValue.gridAssessFee) || 0,
-        ancillaryFee: Number(rawValue.ancillaryFee) || 0,
-        otherFee: Number(rawValue.otherFee) || 0,
-        otherIncome: Number(rawValue.otherIncome) || 0
+        ancillaryFee: Number(rawValue.ancillaryFee) || 0
       };
       if (Object.values(entry).some((value) => value < 0)) return;
-      next[year] = entry;
+      const otherNetIncome = getOtherNetIncome(rawValue);
+      if (otherNetIncome !== null) next[year] = { ...entry, otherNetIncome };
     });
     return next;
   }
@@ -190,16 +232,13 @@
     };
   }
 
-  function validAnnualEntry(entry, project, kind) {
+  function validAnnualEntry(entry, _project, kind) {
     if (!isPlainObject(entry)) return false;
-    const keys = kind === "fees" ? ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]
+    const keys = kind === "fees" ? ["marketOpFee", "gridAssessFee", "ancillaryFee"]
       : ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"];
-    if (kind === "environment" && project?.siteType === "offshore") {
-      if (typeof entry.carbonEnabled !== "boolean") return false;
-      if (entry.carbonEnabled) keys.push("carbonPrice", "carbonRealizeRatio");
-    }
     if (!keys.every((key) => !isBlank(entry[key]) && Number.isFinite(Number(entry[key])) && Number(entry[key]) >= 0
         && (!key.endsWith("Ratio") || Number(entry[key]) <= 1))) return false;
+    if (kind === "fees") return getOtherNetIncome(entry) !== null;
     return kind !== "environment" || keys.filter((key) => key.endsWith("Ratio"))
       .reduce((sum, key) => sum + Number(entry[key]), 0) <= 1 + 0.000001;
   }
@@ -213,15 +252,9 @@
     keys.push(...(getLtPricingMode(config) === "manual" ? ["ltManualPricesByYear"]
       : ["ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed", "ltConvergeSpeedUnit"]));
     if (getEnvValueMode(config) === "manual") keys.push("envManualValuesByYear");
-    else {
-      keys.push("greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio");
-      if (project.siteType === "offshore") {
-        keys.push("carbonEnabled");
-        if (config.carbonEnabled) keys.push("carbonPrice", "carbonRealizeRatio");
-      }
-    }
+    else keys.push("greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio");
     keys.push(...(getFeeConfigMode(config) === "manual" ? ["feeManualValuesByYear"]
-      : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]));
+      : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherNetIncome"]));
     if (project.hasStorage) keys.push("storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice", "storageRoundTripEfficiency");
     return keys;
   }
@@ -280,20 +313,11 @@
   }
 
   function buildEnvManualTemplateRows(project) {
-    const rows = [[
-      "year",
-      "green_cert_price_yuan_per_mwh",
-      "green_cert_realize_ratio_pct",
-      "green_premium_price_yuan_per_mwh",
-      "green_premium_realize_ratio_pct",
-      "carbon_enabled",
-      "carbon_price_yuan_per_mwh",
-      "carbon_realize_ratio_pct"
-    ]];
+    const rows = [[...ENV_TEMPLATE_COLUMNS]];
     const { startYear, forecastYears, hasValidRange } = projectYearBounds(project);
     if (!hasValidRange) return rows;
     for (let index = 0; index < forecastYears; index += 1) {
-      rows.push([startYear + index, "", "", "", "", "", "", ""]);
+      rows.push([startYear + index, "", "", "", ""]);
     }
     return rows;
   }
@@ -318,17 +342,8 @@
   function parseEnvManualValuesCsv(csvText, project) {
     const rows = parseCsvRows(csvText);
     const header = normalizeCsvHeaderRow(rows[0] || []);
-    const expectedHeader = [
-      "year",
-      "green_cert_price_yuan_per_mwh",
-      "green_cert_realize_ratio_pct",
-      "green_premium_price_yuan_per_mwh",
-      "green_premium_realize_ratio_pct",
-      "carbon_enabled",
-      "carbon_price_yuan_per_mwh",
-      "carbon_realize_ratio_pct"
-    ].join(",");
-    if (header !== expectedHeader) {
+    const expectedHeader = ENV_TEMPLATE_COLUMNS.join(",");
+    if (header !== expectedHeader && header !== LEGACY_ENV_TEMPLATE_HEADER) {
       return {
         ok: false,
         message: `表头不匹配。请使用：${expectedHeader}。`
@@ -355,31 +370,15 @@
       if (!greenPremiumPrice.ok) return greenPremiumPrice;
       const greenPremiumRatio = parseRatio(row[4], "green_premium_realize_ratio_pct", rowNumber);
       if (!greenPremiumRatio.ok) return greenPremiumRatio;
-      const carbonEnabled = parseBooleanLike(row[5], project?.siteType === "offshore" ? null : false);
-      if (carbonEnabled === null) {
-        return { ok: false, message: `第 ${rowNumber} 行 carbon_enabled 无效，请填写“是”或“否”。` };
-      }
-      const activeCarbon = project?.siteType === "offshore" && carbonEnabled;
-      const carbonPrice = activeCarbon || !isBlank(row[6])
-        ? parseNonNegativeNumber(row[6], "carbon_price_yuan_per_mwh", rowNumber)
-        : { ok: true, value: null };
-      if (!carbonPrice.ok) return carbonPrice;
-      const carbonRatio = activeCarbon || !isBlank(row[7])
-        ? parseRatio(row[7], "carbon_realize_ratio_pct", rowNumber)
-        : { ok: true, value: null };
-      if (!carbonRatio.ok) return carbonRatio;
-      const totalRatio = greenCertRatio.value + greenPremiumRatio.value + (activeCarbon ? carbonRatio.value : 0);
+      const totalRatio = greenCertRatio.value + greenPremiumRatio.value;
       if (totalRatio > 1 + 0.000001) {
-        return { ok: false, message: `第 ${rowNumber} 行三条路径兑现空间合计为 ${asPercent(totalRatio)}，不能超过100.0%。` };
+        return { ok: false, message: `第 ${rowNumber} 行绿证和绿电兑现比例合计为 ${asPercent(totalRatio)}，不能超过100.0%。` };
       }
       values[year] = {
         greenCertPrice: greenCertPrice.value,
         greenCertRealizeRatio: greenCertRatio.value,
         greenPremiumPrice: greenPremiumPrice.value,
-        greenPremiumRealizeRatio: greenPremiumRatio.value,
-        carbonEnabled,
-        carbonPrice: carbonPrice.value,
-        carbonRealizeRatio: carbonRatio.value
+        greenPremiumRealizeRatio: greenPremiumRatio.value
       };
     }
     const sanitized = Object.fromEntries(Object.entries(values).filter(([year]) => isYearInProjectRange(Number(year), project)));
@@ -394,18 +393,11 @@
   }
 
   function buildFeeManualTemplateRows(project) {
-    const rows = [[
-      "year",
-      "market_op_fee_yuan_per_mwh",
-      "grid_assess_fee_yuan_per_mwh",
-      "ancillary_fee_yuan_per_mwh",
-      "other_fee_yuan_per_mwh",
-      "other_income_yuan_per_mwh"
-    ]];
+    const rows = [[...FEE_TEMPLATE_COLUMNS]];
     const { startYear, forecastYears, hasValidRange } = projectYearBounds(project);
     if (!hasValidRange) return rows;
     for (let index = 0; index < forecastYears; index += 1) {
-      rows.push([startYear + index, "", "", "", "", ""]);
+      rows.push([startYear + index, "", "", "", ""]);
     }
     return rows;
   }
@@ -413,15 +405,9 @@
   function parseFeeManualValuesCsv(csvText, project) {
     const rows = parseCsvRows(csvText);
     const header = normalizeCsvHeaderRow(rows[0] || []);
-    const expectedHeader = [
-      "year",
-      "market_op_fee_yuan_per_mwh",
-      "grid_assess_fee_yuan_per_mwh",
-      "ancillary_fee_yuan_per_mwh",
-      "other_fee_yuan_per_mwh",
-      "other_income_yuan_per_mwh"
-    ].join(",");
-    if (header !== expectedHeader) {
+    const expectedHeader = FEE_TEMPLATE_COLUMNS.join(",");
+    const isLegacyTemplate = header === LEGACY_FEE_TEMPLATE_HEADER;
+    if (header !== expectedHeader && !isLegacyTemplate) {
       return {
         ok: false,
         message: `表头不匹配。请使用：${expectedHeader}。`
@@ -446,16 +432,13 @@
       if (!gridAssessFee.ok) return gridAssessFee;
       const ancillaryFee = parseNonNegativeNumber(row[3], "ancillary_fee_yuan_per_mwh", rowNumber);
       if (!ancillaryFee.ok) return ancillaryFee;
-      const otherFee = parseNonNegativeNumber(row[4], "other_fee_yuan_per_mwh", rowNumber);
-      if (!otherFee.ok) return otherFee;
-      const otherIncome = parseNonNegativeNumber(row[5], "other_income_yuan_per_mwh", rowNumber);
-      if (!otherIncome.ok) return otherIncome;
+      const otherNetIncome = parseOtherNetIncome(row, rowNumber, isLegacyTemplate);
+      if (!otherNetIncome.ok) return otherNetIncome;
       values[year] = {
         marketOpFee: marketOpFee.value,
         gridAssessFee: gridAssessFee.value,
         ancillaryFee: ancillaryFee.value,
-        otherFee: otherFee.value,
-        otherIncome: otherIncome.value
+        otherNetIncome: otherNetIncome.value
       };
     }
     const sanitized = sanitizeFeeManualValuesByYear(values, project);
@@ -469,16 +452,33 @@
     return { ok: true, values: sanitized };
   }
 
+  function parseOtherNetIncome(row, rowNumber, isLegacyTemplate) {
+    if (!isLegacyTemplate) {
+      const value = readSignedNumber(row[4]);
+      return value === null ? { ok: false, message: `第 ${rowNumber} 行 other_net_income_yuan_per_mwh 无效：${row[4] || "(空)"}` }
+        : { ok: true, value };
+    }
+    const fee = parseNonNegativeNumber(row[4], "other_fee_yuan_per_mwh", rowNumber);
+    if (!fee.ok) return fee;
+    const income = parseNonNegativeNumber(row[5], "other_income_yuan_per_mwh", rowNumber);
+    return income.ok ? { ok: true, value: income.value - fee.value } : income;
+  }
+
   return Object.freeze({
+    LEGACY_ENV_VALUE_KEYS,
+    LEGACY_FEE_VALUE_KEYS,
     applicableConfigKeys,
     validAnnualEntry,
     parseBooleanLike,
     getLtPricingMode,
     getEnvValueMode,
     getFeeConfigMode,
+    getOtherNetIncome,
     sanitizeLtManualPricesByYear,
     sanitizeEnvManualValuesByYear,
+    preserveLegacyEnvFields,
     sanitizeFeeManualValuesByYear,
+    preserveLegacyFeeFields,
     getLtManualCompleteness,
     getEnvManualEntryForYear,
     getEnvManualCompleteness,

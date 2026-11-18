@@ -388,9 +388,6 @@
     if (!project.hasStorage && input.hasStorage) newlyApplicable.push(
       "storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"
     );
-    if (project.siteType !== "offshore" && input.siteType === "offshore") newlyApplicable.push(
-      "carbonEnabled", "carbonPrice", "carbonRealizeRatio", "envManualValuesByYear"
-    );
     // Older saves confirmed hidden defaults. A newly applicable revenue item
     // needs review, while retaining its value and unrelated confirmations.
     (project.scenarios || []).forEach((scenario) => {

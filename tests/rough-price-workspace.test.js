@@ -146,6 +146,9 @@ assert.match(fixture.rough.innerHTML, /data-rough-group="environment" open/);
 assert.doesNotMatch(fixture.rough.innerHTML, /data-shared-key="carbon(?:Enabled|Price|RealizeRatio)"/,
   "onshore projects do not show inapplicable carbon fields as pending input");
 assert.match(fixture.rough.innerHTML, /data-rough-group="storage" open/);
+assert.match(fixture.rough.innerHTML, /data-shared-key="otherNetIncome"[^>]*step="any"(?![^>]* min=)/);
+assert.match(fixture.rough.innerHTML, /data-shared-key="marketOpFee"[^>]* min="0"/);
+assert.doesNotMatch(fixture.rough.innerHTML, /data-shared-key="other(Fee|Income)"/);
 assert.doesNotMatch(fixture.rough.innerHTML, /is-confirmed/);
 assert.equal(comparisons, 0);
 assert.equal(project.roughPrice.draftsByScenario[scenario.id].spotNodes[0].value, null);
@@ -206,7 +209,7 @@ for (const key of ["storageArbitragePrice", "storageCapacityCompPrice", "storage
 const refinementState = require("../src/ui/scenario-form").buildRefinementState({ project, scenario });
 assert.equal(refinementState.fields.mechanismPrice, "confirmed");
 assert.equal(refinementState.fields.mechanismRatio, "pending");
-assert.equal(refinementState.fields.otherFee, "pending");
+assert.equal(refinementState.fields.otherNetIncome, "pending");
 assert.equal(refinementState.confirmed, 1, "the refinement page confirms only the single actual rough edit");
 
 const rawResult = calculateScenarioResult(project, scenario, project.priceRuns[0]);
@@ -261,13 +264,13 @@ defaultsFixture.controls.form.onsubmit({ preventDefault() {} });
 assert.equal(require("../src/ui/scenario-form").buildRefinementState(defaultsData).confirmed, 0);
 const snapshotBeforeConfirmation = JSON.stringify(defaultsData.project.roughPrice.snapshots);
 defaultsFixture.controls.save.onclick();
-assert.ok(inputState.isConfigConfirmed(defaultsData.scenario, "otherFee"), "explicit whole-page confirmation accepts even unchanged defaults");
+assert.ok(inputState.isConfigConfirmed(defaultsData.scenario, "otherNetIncome"), "explicit whole-page confirmation accepts even unchanged defaults");
 assert.equal(JSON.stringify(defaultsData.project.roughPrice.snapshots), snapshotBeforeConfirmation, "confirmation never rewrites existing rough snapshots");
 const restoredDefaults = inputState.sanitizeScenario(defaultsData.project, defaultsData.scenario);
-assert.ok(inputState.isConfigConfirmed(restoredDefaults, "otherFee"), "explicit default confirmation survives hydration");
+assert.ok(inputState.isConfigConfirmed(restoredDefaults, "otherNetIncome"), "explicit default confirmation survives hydration");
 workspace.renderWorkspace(defaultsOptions);
 defaultsFixture.controls.form.onsubmit({ preventDefault() {} });
-assert.ok(inputState.isConfigConfirmed(defaultsData.scenario, "otherFee"), "subsequent generation preserves prior confirmation");
+assert.ok(inputState.isConfigConfirmed(defaultsData.scenario, "otherNetIncome"), "subsequent generation preserves prior confirmation");
 
 // Switching to yearly inputs auto-fills suggested values; one annual edit cannot approve all years.
 const annualFixture = documentFixture();
@@ -291,7 +294,7 @@ thresholdData.project.hasStorage = false;
 Object.assign(thresholdData.scenario.config, {
   mechanismEnabled: false, ltYear1Pnl: 0, ltTargetPnl: 0,
   greenCertPrice: 0, greenPremiumPrice: 0,
-  marketOpFee: 0, gridAssessFee: 0, ancillaryFee: 0, otherFee: 0, otherIncome: 0
+  marketOpFee: 0, gridAssessFee: 0, ancillaryFee: 0, otherNetIncome: 0
 });
 const thresholdSnapshot = domain.calculateRough(thresholdData.project, thresholdData.scenario, {
   spotNodes: [{ year: 2027, value: 270 }], captureRate: 100, sourceNote: "阈值回归"
@@ -387,6 +390,8 @@ workspace.renderWorkspace({ documentRef: manualFixture.documentRef, ...manualDat
 assert.match(manualFixture.rough.innerHTML, /data-shared-group="envManualValuesByYear"/);
 assert.match(manualFixture.rough.innerHTML, /data-shared-key="greenCertRealizeRatio"[^>]*value="60"/);
 assert.match(manualFixture.rough.innerHTML, /data-shared-group="feeManualValuesByYear"/);
+assert.match(manualFixture.rough.innerHTML, /data-shared-key="otherNetIncome"[^>]*data-shared-year="2027"[^>]*value="1"/);
+assert.doesNotMatch(manualFixture.rough.innerHTML, /data-shared-key="other(Fee|Income)"/);
 assert.doesNotMatch(manualFixture.rough.innerHTML, /data-shared-key="carbon(?:Enabled|Price|RealizeRatio)"/,
   "manual onshore years also omit inapplicable carbon fields");
 assert.equal(JSON.stringify(manualData.scenario.config), manualBefore, "rendering preserves independent manual components");
@@ -399,17 +404,89 @@ for (const mode of ["global", "manual"]) {
   const offshoreData = projectFixture();
   offshoreData.project.siteType = "offshore";
   offshoreData.scenario.config.envValueMode = mode;
+  Object.assign(offshoreData.scenario.config, { carbonEnabled: true, carbonPrice: 8, carbonRealizeRatio: 0.1 });
   workspace.renderWorkspace({ documentRef: offshoreFixture.documentRef, ...offshoreData, domain });
-  for (const key of ["carbonEnabled", "carbonPrice", "carbonRealizeRatio"]) {
-    assert.match(offshoreFixture.rough.innerHTML, new RegExp(`data-shared-key="${key}"`),
-      `offshore ${mode} mode retains applicable ${key} input`);
+  assert.doesNotMatch(offshoreFixture.rough.innerHTML, /碳收益|data-shared-key="carbon(?:Enabled|Price|RealizeRatio)"/,
+    `rough offshore ${mode} removes carbon controls and help`);
+  for (const key of ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"]) {
+    assert.match(offshoreFixture.rough.innerHTML, new RegExp(`data-shared-key="${key}"`));
   }
 }
+
+const retiredFixture = documentFixture();
+const retired = projectFixture();
+retired.project.siteType = "offshore";
+const legacyCarbon = { carbonEnabled: true, carbonPrice: 8, carbonRealizeRatio: 0.1 };
+const legacyRow = { greenCertPrice: 20, greenCertRealizeRatio: 0.6, greenPremiumPrice: 12,
+  greenPremiumRealizeRatio: 0.3, ...legacyCarbon };
+Object.assign(retired.scenario.config, legacyRow, { envManualValuesByYear: { 2027: legacyRow } });
+const archivedSnapshot = domain.calculateRough(retired.project, retired.scenario, {
+  spotNodes: [{ year: 2027, value: 300 }], captureRate: 95
+}).snapshot;
+assert.ok(archivedSnapshot);
+retired.project.roughPrice = domain.sanitizeWorkspace({ snapshots: [archivedSnapshot] }, retired.project);
+const retiredSnapshotBefore = JSON.stringify(retired.project.roughPrice.snapshots[0]);
+const envMode = new Element({ sharedKey: "envValueMode" });
+envMode.type = "select-one";
+const greenCert = new Element({ sharedKey: "greenCertPrice", sharedGroup: "envManualValuesByYear", sharedYear: "2027" });
+retiredFixture.rough.groups["[data-shared-key]"].push(envMode, greenCert);
+workspace.renderWorkspace({ documentRef: retiredFixture.documentRef, ...retired, domain, inputState });
+envMode.value = "manual";
+envMode.onchange();
+greenCert.value = "24";
+greenCert.oninput();
+retiredFixture.controls.save.onclick();
+assert.equal(retired.scenario.config.envValueMode, "manual");
+assert.deepEqual(retired.scenario.config.envManualValuesByYear[2027], { ...legacyRow, greenCertPrice: 24 });
+assert.deepEqual(Object.keys(retired.scenario.config.envManualValuesByYear[2028]).sort(),
+  ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"].sort());
+for (const [key, value] of Object.entries(legacyCarbon)) assert.equal(retired.scenario.config[key], value);
+assert.equal(JSON.stringify(retired.project.roughPrice.snapshots[0]), retiredSnapshotBefore, "green value edits preserve the original rough snapshot");
+
+const netIncomeFixture = documentFixture();
+const netIncomeData = projectFixture();
+const netConfig = netIncomeData.scenario.config;
+delete netConfig.otherNetIncome;
+Object.assign(netConfig, { otherFee: 7.25, otherIncome: 3.25,
+  feeManualValuesByYear: { 2027: { marketOpFee: 4, gridAssessFee: 1, ancillaryFee: 2, otherFee: 6.5, otherIncome: 2 } } });
+const netSnapshot = domain.calculateRough(netIncomeData.project, netIncomeData.scenario, {
+  spotNodes: [{ year: 2027, value: 300 }], captureRate: 95
+}).snapshot;
+assert.ok(netSnapshot);
+netIncomeData.project.roughPrice = domain.sanitizeWorkspace({ snapshots: [netSnapshot] }, netIncomeData.project);
+const beforeNetSnapshot = JSON.stringify(netIncomeData.project.roughPrice.snapshots[0]);
+const netMode = new Element({ sharedKey: "feeConfigMode" }); netMode.type = "select-one";
+const netScalar = new Element({ sharedKey: "otherNetIncome" });
+const netYear = new Element({ sharedKey: "otherNetIncome", sharedGroup: "feeManualValuesByYear", sharedYear: "2027" });
+netIncomeFixture.rough.groups["[data-shared-key]"].push(netMode, netScalar, netYear);
+const netOptions = { documentRef: netIncomeFixture.documentRef, ...netIncomeData, domain, inputState };
+workspace.renderWorkspace(netOptions);
+assert.match(netIncomeFixture.rough.innerHTML, /data-shared-key="otherNetIncome"[^>]*value="-4"/);
+assert.match(netIncomeFixture.rough.innerHTML, /为正计入收入，为负计入费用/);
+netScalar.value = "6"; netScalar.oninput();
+assert.equal(workspace.hasUnsubmittedChanges(netIncomeFixture.documentRef, [netIncomeData.project]), true);
+netScalar.value = "-4"; netScalar.oninput();
+assert.equal(workspace.hasUnsubmittedChanges(netIncomeFixture.documentRef, [netIncomeData.project]), false);
+netIncomeFixture.controls.save.onclick();
+assert.equal(Object.hasOwn(netIncomeData.scenario.config, "otherNetIncome"), false, "confirming a derived value keeps the old scalar fields");
+assert.equal(inputState.isConfigConfirmed(netIncomeData.scenario, "otherNetIncome"), true);
+netScalar.value = "-7"; netScalar.oninput();
+netIncomeFixture.controls.save.onclick();
+assert.deepEqual([netIncomeData.scenario.config.otherNetIncome, netIncomeData.scenario.config.otherFee, netIncomeData.scenario.config.otherIncome], [-7, 7.25, 3.25]);
+netMode.value = "manual"; netMode.onchange();
+assert.match(netIncomeFixture.rough.innerHTML, /data-shared-key="otherNetIncome"[^>]*data-shared-year="2027"[^>]*value="-4.5"/);
+assert.match(netIncomeFixture.rough.innerHTML, /data-shared-key="otherNetIncome"[^>]*data-shared-year="2028"[^>]*value="-7"/);
+netYear.value = "1"; netYear.oninput();
+netIncomeFixture.controls.save.onclick();
+assert.deepEqual(netIncomeData.scenario.config.feeManualValuesByYear[2027],
+  { marketOpFee: 4, gridAssessFee: 1, ancillaryFee: 2, otherFee: 6.5, otherIncome: 2, otherNetIncome: 1 });
+assert.equal(netIncomeData.scenario.config.feeManualValuesByYear[2028].otherNetIncome, -7);
+assert.equal(JSON.stringify(netIncomeData.project.roughPrice.snapshots[0]), beforeNetSnapshot, "signed inputs preserve the original rough snapshot");
 
 // Switching presentation modes must not silently turn a missing assumption into a zero.
 for (const [modeKey, missingKey, manualField] of [
   ["envValueMode", "greenCertPrice", "greenCertPrice"],
-  ["feeConfigMode", "otherFee", "otherFee"],
+  ["feeConfigMode", "otherNetIncome", "otherNetIncome"],
   ["ltPricingMode", "ltYear1Pnl", "value"]
 ]) {
   const missingFixture = documentFixture();
@@ -452,15 +529,15 @@ const conditionalData = projectFixture();
 conditionalData.project.siteType = "offshore";
 conditionalData.project.hasStorage = false;
 conditionalData.scenario.config.mechanismEnabled = false;
-conditionalData.scenario.config.carbonEnabled = false;
+Object.assign(conditionalData.scenario.config, legacyCarbon);
 inputState.confirmConfig(conditionalData.scenario, ["mechanismEnabled", "envValueMode", "greenCertPrice",
-  "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio", "carbonEnabled"]);
+  "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"]);
 const conditionalOptions = { documentRef: conditionalFixture.documentRef, ...conditionalData, domain, inputState };
 workspace.renderWorkspace(conditionalOptions);
 assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-group="mechanism" open/,
   "disabled mechanism parameters do not force duplicate confirmation");
 assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-group="environment" open/,
-  "disabled carbon values do not force duplicate confirmation");
+  "legacy carbon values do not require any confirmation");
 assert.doesNotMatch(conditionalFixture.rough.innerHTML, /data-rough-group="storage"/);
 conditionalData.project.hasStorage = true;
 workspace.renderWorkspace(conditionalOptions);

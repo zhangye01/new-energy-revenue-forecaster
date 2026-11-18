@@ -132,8 +132,8 @@ assert.equal(exportRefs.ltManualStatus.textContent, "已导出空白逐年损益
   const { buildRefinementState } = form;
   for (const [kind, modeKey, valuesKey, originalMode, globalKey, csvRow] of [
     ["lt", "ltPricingMode", "ltManualPricesByYear", "auto", "ltYear1Pnl", [2026, 8]],
-    ["env", "envValueMode", "envManualValuesByYear", "global", "greenCertPrice", [2026, 20, 50, 10, 25, "否", 4, 25]],
-    ["fee", "feeConfigMode", "feeManualValuesByYear", "global", "otherFee", [2026, 6, 7, 14, 9, 2]]
+    ["env", "envValueMode", "envManualValuesByYear", "global", "greenCertPrice", [2026, 20, 50, 10, 25]],
+    ["fee", "feeConfigMode", "feeManualValuesByYear", "global", "otherNetIncome", [2026, 6, 7, 14, -7]]
   ]) {
     const importProject = { id: `review-${kind}`, startYear: 2026, forecastYears: 1,
       siteType: "offshore", hasStorage: false, statuses: {} };

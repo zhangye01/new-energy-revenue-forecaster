@@ -131,8 +131,7 @@
       const envAllocation = rules.getEnvValueAllocation(project, cfg, year);
       const greenCertRevenue = nonMechanismEnergy * envAllocation.greenCertRatio * envAllocation.greenCertPrice;
       const greenPremiumRevenue = nonMechanismEnergy * envAllocation.greenPremiumRatio * envAllocation.greenPremiumPrice;
-      const carbonRevenue = nonMechanismEnergy * envAllocation.carbonRatio * envAllocation.carbonPrice;
-      const envRevenue = greenCertRevenue + greenPremiumRevenue + carbonRevenue;
+      const envRevenue = greenCertRevenue + greenPremiumRevenue;
       const storageSupplementPerMwh = project.hasStorage
         ? Number(cfg.storageCapacityCompPrice || 0)
           + Number(cfg.storageAncillaryRevenuePrice || 0)
@@ -235,6 +234,7 @@
     ];
 
     return {
+      environmentValueVersion: rules.ENVIRONMENT_VALUE_VERSION,
       annualRows: rows,
       hourlyPreview,
       firstYearSplit: split,

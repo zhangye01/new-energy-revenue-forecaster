@@ -46,16 +46,17 @@ const offshoreEnv = getEnvValueAllocation({ siteType: "offshore" }, {
   carbonPrice: 4
 });
 assert.equal(offshoreEnv.greenCertRatio, 1);
-assert.equal(offshoreEnv.carbonRatio, 0.3);
-assert.equal(offshoreEnv.unitValuePerMarketMwh, 12.2);
+assert.equal(offshoreEnv.totalRatio, 1.2);
+assert.equal(offshoreEnv.unitValuePerMarketMwh, 11);
+assert.equal(Object.hasOwn(offshoreEnv, "carbonRatio"), false);
 
 const onshoreEnv = getEnvValueAllocation({ siteType: "onshore" }, {
   carbonEnabled: true,
   carbonRealizeRatio: 1,
   carbonPrice: 99
 });
-assert.equal(onshoreEnv.carbonRatio, 0);
-assert.equal(onshoreEnv.carbonPrice, 0);
+assert.equal(onshoreEnv.totalRatio, 0);
+assert.equal(onshoreEnv.unitValuePerMarketMwh, 0);
 
 const manualEnv = getEnvValueAllocation({ siteType: "offshore" }, {
   envValueMode: "manual",
@@ -64,7 +65,8 @@ const manualEnv = getEnvValueAllocation({ siteType: "offshore" }, {
   envManualValuesByYear: {
     2026: {
       greenCertPrice: 20,
-      greenCertRealizeRatio: 0.5
+      greenCertRealizeRatio: 0.5,
+      carbonEnabled: true, carbonPrice: 500, carbonRealizeRatio: 0.5
     }
   }
 }, 2026);
@@ -90,5 +92,14 @@ assert.deepEqual(fee, {
   otherFee: 4,
   otherIncome: 5
 });
+
+for (const [net, expense, income] of [[-4.25, 4.25, 0], [0, 0, 0], [5.125, 0, 5.125]]) {
+  const legacy = { otherFee: 40, otherIncome: 21, otherNetIncome: net, marketOpFee: 3 };
+  for (const conf of [legacy, { feeConfigMode: "manual", envValueMode: "manual", feeManualValuesByYear: { 2026: legacy } }]) {
+    assert.deepEqual(getFeeConfigForYear({}, conf, 2026), {
+      marketOpFee: 3, gridAssessFee: 0, ancillaryFee: 0, otherFee: expense, otherIncome: income
+    });
+  }
+}
 
 console.log("revenue rules tests passed");

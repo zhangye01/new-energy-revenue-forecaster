@@ -10,6 +10,8 @@
     root.window.NE_REVENUE_RULES = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
+  const ENVIRONMENT_VALUE_VERSION = 2;
+
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
   }
@@ -78,31 +80,29 @@
     return isPlainObject(entry) ? entry : null;
   }
 
-  function getEnvValueAllocation(project, config, year = null) {
+  function getEnvValueAllocation(_project, config, year = null) {
     const manualEntry = Number.isInteger(year) ? getEnvManualEntryForYear(config, year) : null;
     const source = manualEntry || config || {};
-    const canUseCarbon = project?.siteType === "offshore" && Boolean(source?.carbonEnabled);
     const greenCertRatio = clamp(Number(source?.greenCertRealizeRatio) || 0, 0, 1);
     const greenPremiumRatio = clamp(Number(source?.greenPremiumRealizeRatio) || 0, 0, 1);
-    const carbonRatio = canUseCarbon ? clamp(Number(source?.carbonRealizeRatio) || 0, 0, 1) : 0;
     const greenCertPrice = Number(source?.greenCertPrice) || 0;
     const greenPremiumPrice = Number(source?.greenPremiumPrice) || 0;
-    const carbonPrice = canUseCarbon ? Number(source?.carbonPrice) || 0 : 0;
-    const totalRatio = greenCertRatio + greenPremiumRatio + carbonRatio;
-    const unitValuePerMarketMwh =
-      greenCertRatio * greenCertPrice
-      + greenPremiumRatio * greenPremiumPrice
-      + carbonRatio * carbonPrice;
     return {
       greenCertRatio,
       greenPremiumRatio,
-      carbonRatio,
       greenCertPrice,
       greenPremiumPrice,
-      carbonPrice,
-      totalRatio,
-      unitValuePerMarketMwh
+      totalRatio: greenCertRatio + greenPremiumRatio,
+      unitValuePerMarketMwh: greenCertRatio * greenCertPrice + greenPremiumRatio * greenPremiumPrice
     };
+  }
+
+  // Only the reconciliation of stored results uses this retired term.
+  function legacyCarbonValuePerMarketMwh(project, config, year) {
+    const source = getEnvManualEntryForYear(config, year) || config;
+    if (project?.siteType !== "offshore" || !source?.carbonEnabled) return 0;
+    const ratio = clamp(Number(source.carbonRealizeRatio) || 0, 0, 1);
+    return ratio * (Number(source.carbonPrice) || 0);
   }
 
   function getFeeConfigMode(config) {
@@ -115,25 +115,29 @@
     return isPlainObject(entry) ? entry : null;
   }
 
-  function getFeeConfigForYear(project, config, year = null) {
+  function getFeeConfigForYear(_project, config, year = null) {
     const manualEntry = Number.isInteger(year) ? getFeeManualEntryForYear(config, year) : null;
     const source = manualEntry || config || {};
+    const useNet = Object.hasOwn(source, "otherNetIncome");
+    const net = Number(source.otherNetIncome) || 0;
     return {
       marketOpFee: Number(source.marketOpFee) || 0,
       gridAssessFee: Number(source.gridAssessFee) || 0,
       ancillaryFee: Number(source.ancillaryFee) || 0,
-      otherFee: Number(source.otherFee) || 0,
-      otherIncome: Number(source.otherIncome) || 0
+      otherFee: useNet ? Math.max(0, -net) : Number(source.otherFee) || 0,
+      otherIncome: useNet ? Math.max(0, net) : Number(source.otherIncome) || 0
     };
   }
 
   return Object.freeze({
+    ENVIRONMENT_VALUE_VERSION,
     monthSerial,
     mechanismActiveMonthsForYear,
     mechanismReferencePrice,
     ltPnlPriceForYear,
     tradeStrategyPnlPriceForYear,
     getEnvValueAllocation,
+    legacyCarbonValuePerMarketMwh,
     getFeeConfigForYear
   });
 });

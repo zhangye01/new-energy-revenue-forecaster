@@ -202,7 +202,6 @@ const refs = {
   envManualStatus: document.querySelector("#env-manual-status"),
   greenCertRealizeRatio: document.querySelector("#green-cert-realize-ratio"),
   greenPremiumRealizeRatio: document.querySelector("#green-premium-realize-ratio"),
-  carbonRealizeRatio: document.querySelector("#carbon-realize-ratio"),
   feeConfigMode: document.querySelector("#fee-config-mode"),
   feeManualPanel: document.querySelector("#fee-manual-panel"),
   exportFeeTemplateButton: document.querySelector("#export-fee-template-button"),
@@ -291,8 +290,7 @@ const refs = {
   compareBridgeChart: document.querySelector("#compare-bridge-chart"),
   compareScenarioBridgeLabel: document.querySelector("#compare-scenario-bridge-label"),
   compareScenarioFocusList: document.querySelector("#compare-scenario-focus-list"),
-  compareBody: document.querySelector("#compare-body"),
-  carbonEnabled: document.querySelector("#carbon-enabled")
+  compareBody: document.querySelector("#compare-body")
 };
 
 window.NE_RUNTIME = {

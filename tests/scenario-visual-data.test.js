@@ -52,10 +52,9 @@ const rows = buildScenarioVisualRows({
   mechanismActiveMonthsForYear: (year) => (year === 2026 ? 12 : 0),
   tradeStrategyPnlPriceForYear: (_cfg, index) => (index === 1 ? 8 : 2),
   getEnvValueAllocation: () => ({
-    totalRatio: 0.75,
+    totalRatio: 0.6,
     greenCertRatio: 0.4,
     greenPremiumRatio: 0.2,
-    carbonRatio: 0.15,
     unitValuePerMarketMwh: 12.8
   }),
   getFeeConfigForYear: () => ({
@@ -72,7 +71,7 @@ assert.equal(rows[0].energyMwh, 1000);
 assert.equal(rows[0].marketEnergy, 640);
 assert.equal(rows[0].mechanismEnergy, 360);
 assert.equal(rows[0].greenCertEnergy, 256);
-assert.equal(rows[0].unredeemedMarketEnergy, 160);
+assert.equal(rows[0].unredeemedMarketEnergy, 256);
 assert.equal(rows[0].storageSupplementPerMwh, 20);
 assert.equal(rows[0].feeTotal, 30);
 assert.equal(rows[0].netImpact, 0.64 * 8 + 0.64 * 12.8 + 20 + 2 - 30);
@@ -124,10 +123,9 @@ const activeView = buildScenarioVisualViewModel({
   mechanismActiveMonthsForYear: (year) => (year === 2026 ? 12 : 0),
   tradeStrategyPnlPriceForYear: (_cfg, index) => (index === 1 ? 8 : 2),
   getEnvValueAllocation: () => ({
-    totalRatio: 0.75,
+    totalRatio: 0.6,
     greenCertRatio: 0.4,
     greenPremiumRatio: 0.2,
-    carbonRatio: 0.15,
     unitValuePerMarketMwh: 12.8
   }),
   getFeeConfigForYear: () => ({

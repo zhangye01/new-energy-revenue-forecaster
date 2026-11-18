@@ -24,10 +24,12 @@ function project(years = 2) {
 }
 
 function scenario(p, config = {}) {
+  // Keep this old-form fixture on the legacy gross inputs unless a case sets a signed value.
+  const { otherNetIncome, ...defaults } = defaultScenarioConfig(p);
   return {
     id: "scenario-a", name: "基准方案",
     config: {
-      ...defaultScenarioConfig(p),
+      ...defaults,
       mechanismEnabled: true, mechanismRatio: 0.5, mechanismPrice: 120,
       mechanismStartYm: "2026-01", mechanismEndYm: "2027-12",
       ltYear1Pnl: 10, ltTargetPnl: 10,
@@ -56,11 +58,13 @@ assert.deepEqual(defaultDraft(p), { spotNodes: [{ year: 2026, value: null }], ca
 const snapshot = calculate(p, s);
 approx(snapshot.rows[0].capturePrice, 100, "粗算捕获价");
 approx(snapshot.rows[0].mechanismAdjustment, 10, "默认项目捕获价机制补差");
-approx(snapshot.rows[0].envValue, 1.25, "环境价值按市场化电量兑现");
-approx(snapshot.rows[0].fullRevenuePrice, 108.25, "兼容精算原有口径");
+approx(snapshot.rows[0].envValue, 1.1, "只计绿证与绿电的环境价值按市场化电量兑现");
+approx(snapshot.rows[0].fullRevenuePrice, 108.1, "与基准测算使用一致的环境价值口径");
 assert.equal(snapshot.rows[0].energyMwh, null);
 assert.equal(snapshot.summary.weightedPrice, null, "缺电量时不能制造加权均价");
 assert.equal(snapshot.config.mechanismReferenceMode, "project_capture");
+assert.equal(snapshot.config.carbonPrice, 3, "原录入值完整保存在原始参数副本");
+assert.equal(Object.hasOwn(snapshot.calculationConfig, "carbonPrice"), false);
 assert.equal(snapshot.scenarioName, "基准方案");
 assert.equal(snapshot.id, "rough-1");
 
@@ -68,7 +72,7 @@ const sameType = scenario(p, { mechanismReferenceMode: "same_type", sameTypeSpre
 const sameSnapshot = calculate(p, sameType, draft(p, 100, 95));
 approx(sameSnapshot.rows[0].capturePrice, 95, "捕获率按百分数计算");
 approx(sameSnapshot.rows[0].mechanismAdjustment, 2.5, "九步同类型机组补差");
-approx(sameSnapshot.rows[0].fullRevenuePrice, 95.75, "九步全口径公式及已有其他收入");
+approx(sameSnapshot.rows[0].fullRevenuePrice, 95.6, "九步全口径公式及已有其他收入");
 
 const monthly = calculate(p, scenario(p, { mechanismStartYm: "2026-07", mechanismEndYm: "2027-06" }));
 assert.deepEqual(monthly.rows.map((row) => row.mechanismRatio), [0.25, 0.25]);
@@ -123,7 +127,8 @@ approx(manual.rows[0].ltPnlPrice, -10, "保留逐年策略负损益");
 approx(manual.rows[1].ltPnlPrice, 20, "保留逐年策略差异");
 approx(manual.rows[0].envValue, 7.5, "逐年环境价值");
 approx(manual.rows[1].envValue, 25, "第二年环境价值");
-approx(manual.rows[0].fee, 18, "逐年综合扣费");
+approx(manual.rows[0].fee, 12, "逐年综合费用保留三个扣费科目");
+approx(manual.rows[0].otherIncome, 1, "旧版逐年其他收入与费用折成单一净额");
 approx(manual.rows[1].otherIncome, 9, "逐年其他收入");
 for (const [key, badValue] of [
   ["ltManualPricesByYear", { 2026: 1 }],
@@ -135,15 +140,24 @@ for (const [key, badValue] of [
   assert.equal(invalid.ok, false, `不完整的 ${key} 应拒绝`);
 }
 assert.equal(calculateRough(p, scenario(p, { greenCertRealizeRatio: 1, greenPremiumRealizeRatio: 1 }), draft(p)).ok, false);
+for (const [signed, fee, income] of [[-3.5, 9.5, 0], [0, 6, 0], [3.5, 6, 3.5]]) {
+  const signedSnapshot = calculate(p, scenario(p, { otherNetIncome: signed, otherFee: 4000, otherIncome: 2000 }));
+  approx(signedSnapshot.rows[0].fee, fee, "仅负的其他净收益计入扣费");
+  approx(signedSnapshot.rows[0].otherIncome, income, "仅正的其他净收益计入收入");
+  approx(signedSnapshot.rows[0].fullRevenuePrice, 110.1 + signed, "旧字段与新输入并存时只计一次");
+}
+for (const value of [null, "", "无", NaN, Infinity]) {
+  assert.equal(calculateRough(p, scenario(p, { otherNetIncome: value }), draft(p)).ok, false, "已录有净收益时验证原输入");
+}
 for (const key of [
-  "greenCertPrice", "greenPremiumPrice", "carbonPrice", "marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"
+  "greenCertPrice", "greenPremiumPrice", "marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"
 ]) {
   for (const value of [undefined, null, "", "bad", Infinity, NaN, -1]) {
     const invalid = calculateRough(p, scenario(p, { [key]: value }), draft(p));
     assert.equal(invalid.ok, false, `${key}=${value} 不得静默改为0或负费用`);
   }
 }
-for (const key of ["greenCertRealizeRatio", "greenPremiumRealizeRatio", "carbonRealizeRatio"]) {
+for (const key of ["greenCertRealizeRatio", "greenPremiumRealizeRatio"]) {
   for (const value of [-0.1, 1.1, "", undefined, NaN, Infinity]) {
     assert.equal(calculateRough(p, scenario(p, { [key]: value }), draft(p)).ok, false, `${key} 在clamp前验证`);
   }
@@ -179,7 +193,7 @@ const storage = calculate(storageProject, scenario(storageProject, {
   storageArbitragePrice: 1, storageCapacityCompPrice: 2, storageAncillaryRevenuePrice: 3, storageOtherRevenuePrice: 4
 }));
 approx(storage.rows[0].storageSupplement, 10, "配储补充收益");
-approx(storage.rows[0].fullRevenuePrice, 118.25, "配储和其他收入均保留");
+approx(storage.rows[0].fullRevenuePrice, 118.1, "配储和其他收入均保留");
 
 const weightedProject = project();
 weightedProject.energyData.annualSummary = {
@@ -188,8 +202,8 @@ weightedProject.energyData.annualSummary = {
 const weighted = calculate(weightedProject, scenario(weightedProject, { mechanismEnabled: false }), {
   ...draft(weightedProject), spotNodes: [{ year: 2026, value: 100 }, { year: 2027, value: 200 }]
 });
-approx(weighted.summary.weightedPrice, 179.5, "跨年度采用电量加权");
-approx(weighted.summary.simpleAverage, 154.5, "明确保留年度算术平均");
+approx(weighted.summary.weightedPrice, 179.2, "跨年度采用电量加权");
+approx(weighted.summary.simpleAverage, 154.2, "明确保留年度算术平均");
 weightedProject.energyData.annualSummary[2027].status = "缺失";
 assert.equal(calculate(weightedProject, scenario(weightedProject)).summary.weightedPrice, null);
 weightedProject.energyData.hourlyByYear[2026] = hours(1);
@@ -225,10 +239,10 @@ assert.equal(comparison.stale, false);
 approx(comparison.rows[0].delta, 0, "相同输入精粗一致");
 approx(comparison.rows[1].delta, 10, "精算减粗算");
 approx(comparison.rows[1].fineCaptureRate, 100, "精算捕获率为百分数");
-approx(comparison.rows[1].relativeDelta, 10 / 98.25, "差异率");
+approx(comparison.rows[1].relativeDelta, 10 / 98.1, "差异率");
 approx(comparison.summary.maxAbsDelta, 10, "最大年度差额");
-approx(comparison.summary.weightedRough, 98.25, "粗算电量加权");
-approx(comparison.summary.weightedFine, 98.25 + 20 / 3, "精算电量加权");
+approx(comparison.summary.weightedRough, 98.1, "粗算电量加权");
+approx(comparison.summary.weightedFine, 98.1 + 20 / 3, "精算电量加权");
 assert.equal(JSON.stringify(comparisonProject), before, "交叉验证不改项目和现有精算结果");
 
 const manualReloadScenario = scenario(comparisonProject, {
@@ -243,12 +257,12 @@ const rawManualBefore = JSON.stringify(manualReloadScenario.config);
 const manualReloadSnapshot = calculate(comparisonProject, manualReloadScenario);
 assert.equal(JSON.stringify(manualReloadScenario.config), rawManualBefore, "规范化快照不能改写方案原始逐年配置");
 assert.equal(manualReloadSnapshot.config.envManualValuesByYear[2026].carbonPrice, 4,
-  "新快照保留原始停用碳价，计算视图另行归零");
+  "新快照留存旧方案原始停用碳价");
 assert.equal(manualReloadSnapshot.config.envManualValuesByYear[2026].carbonRealizeRatio, 0.25);
-assert.equal(manualReloadSnapshot.calculationConfig.envManualValuesByYear[2026].carbonPrice, 0);
-assert.equal(manualReloadSnapshot.calculationConfig.envManualValuesByYear[2026].carbonRealizeRatio, 0);
-assert.equal(manualReloadSnapshot.config.envManualValuesByYear[2027].carbonPrice, 8, "启用碳收益的有效价格完整保留");
-approx(manualReloadSnapshot.rows[1].envValue, 13.5, "有效逐年绿证和碳收益仍按原比例计入");
+assert.equal(Object.hasOwn(manualReloadSnapshot.calculationConfig.envManualValuesByYear[2026], "carbonPrice"), false);
+assert.equal(Object.hasOwn(manualReloadSnapshot.calculationConfig.envManualValuesByYear[2026], "carbonRealizeRatio"), false);
+assert.equal(manualReloadSnapshot.config.envManualValuesByYear[2027].carbonPrice, 8, "同样留存旧方案原始启用值");
+approx(manualReloadSnapshot.rows[1].envValue, 12.5, "逐年环境价值只计录入的绿色分项");
 assert.deepEqual(manualReloadSnapshot.config.ltManualPricesByYear, manualReloadScenario.config.ltManualPricesByYear);
 assert.deepEqual(manualReloadSnapshot.config.feeManualValuesByYear, manualReloadScenario.config.feeManualValuesByYear);
 const hydratedManualScenario = sanitizeScenario(comparisonProject, JSON.parse(JSON.stringify(manualReloadScenario)), 0);
@@ -269,7 +283,7 @@ assert.equal(calculateRough(comparisonProject, missingManualValue, draft(compari
 const fine = calculateScenarioResult(comparisonProject, comparisonScenario, run);
 approx(comparison.rows[1].fineSettlement, fine.annualRows[1].fullRevenuePrice, "直接复用真实精算公式");
 approx(comparison.rows[1].fineBreakdown.mechanismAdjustment, -10, "精算补差按同类型均价");
-approx(comparison.rows[1].fineBreakdown.envValue, 1.25, "精算环境分项转为元/MWh");
+approx(comparison.rows[1].fineBreakdown.envValue, 1.1, "精算绿色环境分项转为元/MWh");
 approx(fine.hourlyPreview[0].fullRevenue, fine.annualRows[0].fullRevenuePrice, "小时展开同样使用新机制参照");
 
 const changed = JSON.parse(JSON.stringify(comparisonScenario));

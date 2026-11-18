@@ -6,9 +6,12 @@ const {
   getLtPricingMode,
   getEnvValueMode,
   getFeeConfigMode,
+  getOtherNetIncome,
   sanitizeLtManualPricesByYear,
   sanitizeEnvManualValuesByYear,
   sanitizeFeeManualValuesByYear,
+  preserveLegacyEnvFields,
+  preserveLegacyFeeFields,
   getLtManualCompleteness,
   getEnvManualEntryForYear,
   getEnvManualCompleteness,
@@ -75,8 +78,8 @@ const envValues = sanitizeEnvManualValuesByYear({
     carbonEnabled: false
   }
 }, offshoreProject);
-assert.deepEqual(Object.keys(envValues), ["2026"]);
-assert.equal(envValues[2026].carbonEnabled, true);
+assert.deepEqual(Object.keys(envValues), ["2026", "2027"]);
+assert.equal(Object.hasOwn(envValues[2026], "carbonEnabled"), false);
 assert.equal(envValues[2026].greenCertPrice, 22);
 
 const onshoreEnv = sanitizeEnvManualValuesByYear({
@@ -88,9 +91,15 @@ const onshoreEnv = sanitizeEnvManualValuesByYear({
     carbonRealizeRatio: "0.4"
   }
 }, { ...offshoreProject, siteType: "onshore" });
-assert.equal(onshoreEnv[2026].carbonEnabled, false);
-assert.equal(onshoreEnv[2026].carbonPrice, 0);
-assert.equal(onshoreEnv[2026].carbonRealizeRatio, 0);
+assert.deepEqual(onshoreEnv[2026], {
+  greenCertPrice: 0, greenCertRealizeRatio: 0.4, greenPremiumPrice: 0, greenPremiumRealizeRatio: 0.2
+});
+assert.deepEqual(preserveLegacyEnvFields({ 2026: { carbonEnabled: true, carbonPrice: null, carbonRealizeRatio: "0.36001" } }, {
+  2026: { greenCertPrice: 24, carbonPrice: 90 }, 2027: { greenCertPrice: 25, carbonEnabled: true }
+}), {
+  2026: { greenCertPrice: 24, carbonEnabled: true, carbonPrice: null, carbonRealizeRatio: "0.36001" },
+  2027: { greenCertPrice: 25 }
+});
 
 const manualEnvConfig = {
   envValueMode: "manual",
@@ -121,13 +130,24 @@ const feeValues = sanitizeFeeManualValuesByYear({
     otherIncome: "0"
   }
 }, offshoreProject);
-assert.deepEqual(Object.keys(feeValues), ["2026", "2028"]);
+assert.deepEqual(Object.keys(feeValues), ["2026"]);
 assert.equal(feeValues[2026].ancillaryFee, 14);
 assert.equal(getFeeManualEntryForYear(offshoreProject, { feeConfigMode: "global", feeManualValuesByYear: feeValues }, 2026), null);
-assert.equal(getFeeManualEntryForYear(offshoreProject, { feeConfigMode: "manual", feeManualValuesByYear: feeValues }, 2026).otherIncome, 2);
+assert.equal(getFeeManualEntryForYear(offshoreProject, { feeConfigMode: "manual", feeManualValuesByYear: feeValues }, 2026).otherNetIncome, -1);
 const feeCompleteness = getFeeManualCompleteness(offshoreProject, { feeManualValuesByYear: feeValues });
-assert.equal(feeCompleteness.complete, 2);
-assert.deepEqual(feeCompleteness.missingYears, [2027]);
+assert.equal(feeCompleteness.complete, 1);
+assert.deepEqual(feeCompleteness.missingYears, [2027, 2028]);
+assert.equal(getOtherNetIncome({ otherFee: 3, otherIncome: 2 }), -1);
+assert.equal(getOtherNetIncome({ otherNetIncome: 0, otherFee: 3, otherIncome: 2 }), 0);
+assert.equal(getOtherNetIncome({ otherNetIncome: 5, otherFee: 3, otherIncome: 2 }), 5);
+for (const invalid of [null, "", "   ", false, Infinity, []]) {
+  assert.equal(getOtherNetIncome({ otherNetIncome: invalid, otherFee: 3, otherIncome: 2 }), null);
+  assert.equal(getOtherNetIncome({ otherFee: invalid, otherIncome: 2 }), null);
+}
+assert.equal(getOtherNetIncome({ otherFee: 3 }), null);
+assert.deepEqual(preserveLegacyFeeFields({ 2026: { otherFee: 3, otherIncome: 2 } }, {
+  2026: { otherNetIncome: -4, otherFee: 999 }, 2027: { otherNetIncome: 4, otherIncome: 999 }
+}), { 2026: { otherNetIncome: -4, otherFee: 3, otherIncome: 2 }, 2027: { otherNetIncome: 4 } });
 
 assert.deepEqual(buildLtManualTemplateRows(offshoreProject), [
   ["year", "trade_strategy_pnl_yuan_per_mwh"],
@@ -147,18 +167,19 @@ assert.deepEqual(parsedLt.prices, { 2026: 8, 2027: 6, 2028: 2 });
 assert.match(parseLtManualPricesCsv("year,price\n2026,8", offshoreProject).message, /不完整/);
 
 assert.equal(buildEnvManualTemplateRows(offshoreProject).length, 4);
+assert.equal(buildEnvManualTemplateRows(offshoreProject)[0].length, 5);
 const parsedEnv = parseEnvManualValuesCsv([
   "year,green_cert_price_yuan_per_mwh,green_cert_realize_ratio_pct,green_premium_price_yuan_per_mwh,green_premium_realize_ratio_pct,carbon_enabled,carbon_price_yuan_per_mwh,carbon_realize_ratio_pct",
-  "2026,22,40,12,20,是,4,40",
+  "2026,22,40,12,20,已删除的旧字段,不是价格,200",
   "2027,22,30,12,20,否,4,0",
   "2028,22,10,12,10,yes,4,20"
 ].join("\n"), offshoreProject);
 assert.equal(parsedEnv.ok, true);
 assert.equal(parsedEnv.values[2026].greenCertRealizeRatio, 0.4);
-assert.equal(parsedEnv.values[2026].carbonEnabled, true);
+assert.equal(Object.hasOwn(parsedEnv.values[2026], "carbonEnabled"), false);
 const envOverAllocated = parseEnvManualValuesCsv([
   "year,green_cert_price_yuan_per_mwh,green_cert_realize_ratio_pct,green_premium_price_yuan_per_mwh,green_premium_realize_ratio_pct,carbon_enabled,carbon_price_yuan_per_mwh,carbon_realize_ratio_pct",
-  "2026,22,50,12,30,是,4,30",
+  "2026,22,50,12,60,是,4,30",
   "2027,22,30,12,20,否,4,0",
   "2028,22,10,12,10,yes,4,20"
 ].join("\n"), offshoreProject);
@@ -166,6 +187,7 @@ assert.equal(envOverAllocated.ok, false);
 assert.match(envOverAllocated.message, /不能超过100.0%/);
 
 assert.equal(buildFeeManualTemplateRows(offshoreProject).length, 4);
+assert.equal(buildFeeManualTemplateRows(offshoreProject)[0].at(-1), "other_net_income_yuan_per_mwh");
 const parsedFee = parseFeeManualValuesCsv([
   "year,market_op_fee_yuan_per_mwh,grid_assess_fee_yuan_per_mwh,ancillary_fee_yuan_per_mwh,other_fee_yuan_per_mwh,other_income_yuan_per_mwh",
   "2026,6,7,14,3,2",
@@ -174,6 +196,16 @@ const parsedFee = parseFeeManualValuesCsv([
 ].join("\n"), offshoreProject);
 assert.equal(parsedFee.ok, true);
 assert.equal(parsedFee.values[2026].gridAssessFee, 7);
+assert.equal(parsedFee.values[2026].otherNetIncome, -1);
+assert.equal(Object.hasOwn(parsedFee.values[2026], "otherFee"), false);
+const currentFee = parseFeeManualValuesCsv([
+  buildFeeManualTemplateRows(offshoreProject)[0].join(","),
+  "2026,6,7,14,-3.25",
+  "2027,6,7,14,0",
+  "2028,6,7,14,2.5"
+].join("\n"), offshoreProject);
+assert.equal(currentFee.ok, true);
+assert.deepEqual(Object.values(currentFee.values).map((row) => row.otherNetIncome), [-3.25, 0, 2.5]);
 const invalidFee = parseFeeManualValuesCsv([
   "year,market_op_fee_yuan_per_mwh,grid_assess_fee_yuan_per_mwh,ancillary_fee_yuan_per_mwh,other_fee_yuan_per_mwh,other_income_yuan_per_mwh",
   "2026,-1,7,14,3,2",
@@ -196,8 +228,6 @@ for (const [build, parse] of [
   assert.equal(parse(rows.map((row) => row.join(",")).join("\n"), singleYearProject).ok, true,
     "explicit zero values remain valid");
   for (let column = 1; column < rows[1].length; column += 1) {
-    // Carbon price and ratio are inactive when carbon_enabled is 0.
-    if (parse === parseEnvManualValuesCsv && column > 5) continue;
     for (const blank of ["", "   "]) {
       const incomplete = rows.map((row) => row.slice());
       incomplete[1][column] = blank;
@@ -206,23 +236,11 @@ for (const [build, parse] of [
     }
   }
 }
-const offshoreCarbonRows = buildEnvManualTemplateRows(singleYearProject);
-offshoreCarbonRows[1] = [2026, 0, 0, 0, 0, "yes", 0, 0];
-for (const column of [6, 7]) {
-  const missing = offshoreCarbonRows.map((row) => row.slice());
-  missing[1][column] = "";
-  assert.equal(parseEnvManualValuesCsv(missing.map((row) => row.join(",")).join("\n"), singleYearProject).ok, false);
-}
-offshoreCarbonRows[1] = [2026, 0, 0, 0, 0, "", "", ""];
-assert.equal(parseEnvManualValuesCsv(offshoreCarbonRows.map((row) => row.join(",")).join("\n"), {
-  ...singleYearProject, siteType: "onshore"
-}).ok, true, "onshore projects do not require inactive carbon inputs");
-
 const oneYearProject = { ...offshoreProject, forecastYears: 1 };
 for (const [name, template, parse, first, repeated] of [
   ["strategy", buildLtManualTemplateRows, parseLtManualPricesCsv, "2026,8", "2026,50"],
-  ["environment", buildEnvManualTemplateRows, parseEnvManualValuesCsv, "2026,20,100,0,0,no,0,0", "2026,99,100,0,0,no,0,0"],
-  ["fee", buildFeeManualTemplateRows, parseFeeManualValuesCsv, "2026,7,8,18,4.75,2", "2026,7,8,18,14.75,2"]
+  ["environment", buildEnvManualTemplateRows, parseEnvManualValuesCsv, "2026,20,100,0,0", "2026,99,100,0,0"],
+  ["fee", buildFeeManualTemplateRows, parseFeeManualValuesCsv, "2026,7,8,18,-2.75", "2026,7,8,18,-12.75"]
 ]) {
   const header = template(oneYearProject)[0].join(",");
   for (const duplicate of [repeated, first]) {

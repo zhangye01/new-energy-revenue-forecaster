@@ -77,7 +77,7 @@
     return ranked[0].value > 0.000001 ? ranked[0].name : "无差异";
   }
 
-  function annualRowIsComplete(project, scenario, row, index) {
+  function annualRowIsComplete(project, scenario, row, index, options) {
     const fields = ["annualHours", "energyMwh", "fullRevenue", "fullRevenuePrice", "capturePrice", "spotAvgPrice", "spotRevenue",
       "mechanismRevenue", "ltPnlRevenue", "envRevenue", "storageSupplementRevenue", "comprehensiveFee", "otherIncome"];
     if (!row || row.year !== project.startYear + index || row.energyMwh < 0 || !fields.every((key) => Number.isFinite(row[key]))) return false;
@@ -87,13 +87,14 @@
       closeAmount(row.energyMwh, row.annualHours * project.capacityMw) && closeAmount(row.fullRevenue, revenue) &&
       closeAmount(row.spotRevenue, row.capturePrice * row.energyMwh) &&
       closeAmount(row.fullRevenuePrice, row.energyMwh > 0 ? row.fullRevenue / row.energyMwh : 0) &&
-      closeAmount(row.fullRevenue, sensitivity.calculateAnnualRevenue(project, scenario.config, row));
+      closeAmount(row.fullRevenue, sensitivity.calculateAnnualRevenue(project, scenario.config, row, options));
   }
 
   function isResultComplete(project, scenario, result, options = {}) {
     const rows = result?.annualRows;
+    const accounting = { legacyEnvironment: result?.environmentValueVersion === undefined };
     if (!project || !scenario?.config || !Array.isArray(rows) || rows.length !== project.forecastYears || !rows.length || result.missingYears?.length ||
-        !rows.every((row, index) => annualRowIsComplete(project, scenario, row, index)) ||
+        !rows.every((row, index) => annualRowIsComplete(project, scenario, row, index, accounting)) ||
         ![result.totalFullRevenue, result.totalEnergy, result.avgFullRevenuePrice].every(Number.isFinite)) return false;
     const totalEnergy = rows.reduce((sum, row) => sum + row.energyMwh, 0);
     const totalRevenue = rows.reduce((sum, row) => sum + row.fullRevenue, 0);

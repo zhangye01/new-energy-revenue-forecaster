@@ -279,7 +279,7 @@ assert.equal(ready.state, "ready");
 assert.match(ready.executiveSummary, /周期全口径收入合计350.0 万元/);
 assert.match(ready.metricHtml, /首年度电净价/);
 assert.match(ready.insightHtml, /主要贡献项/);
-assert.match(ready.assumptionHtml, /环境价值采用逐年导入配置/);
+assert.match(ready.assumptionHtml, /环境价值采用逐年配置，兑现空间按市场化交易电量核对/);
 assert.match(ready.assumptionHtml, /综合费用与其他收入采用逐年导入配置/);
 assert.match(ready.annualRowsHtml, /¥3,500,000/);
 assert.match(ready.hourlyRowsHtml, /2026-01-01 00:00/);
@@ -307,7 +307,7 @@ assert.equal(renderState.scenario.id, "scenario1");
 assert.equal(renderState.result, result);
 assert.equal(renderState.view.state, "ready");
 assert.match(renderState.view.metaHtml, /项目：江苏海上风电示例项目/);
-assert.match(renderState.view.assumptionHtml, /环境价值采用逐年导入配置/);
+assert.match(renderState.view.assumptionHtml, /环境价值采用逐年配置/);
 assert.equal(renderState.view.scenarioHeading, "基准方案 · 基准场景");
 
 const pressureScenario = { id: "pressure", name: "费用压力方案", isBaseline: false, config: { mechanismEnabled: false } };

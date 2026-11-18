@@ -102,7 +102,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
     restoredRough.draft, { id: "unrelated-rough" }).snapshot;
   assert.equal(sandbox.NE_ROUGH_PRICE.snapshotState(restored, restoredScenario, unrelatedRough).comparable, false);
 
-  restoredScenario.config.otherFee += 10;
+  restoredScenario.config.otherNetIncome -= 10;
   assert.equal(sandbox.NE_ROUGH_PRICE.snapshotState(restored, restoredScenario, restoredRough).refined, true);
   assert.equal(sandbox.NE_ROUGH_PRICE.compareBaselineResult(restored, restoredScenario, restoredRough, calculate(restored)).ok, true);
   const newRough = sandbox.NE_ROUGH_PRICE.calculateRough(restored, restoredScenario,
@@ -128,7 +128,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
   assert.equal(sandbox.NE_ROUGH_PRICE.snapshotState(secondCopy, secondCopy.scenarios[0], unrelatedRough).comparable, false);
   assert.equal(JSON.stringify(project), originalBytes, "restoring, recalculating and refining the copy never changes the original project");
   const originalQuery = sandbox.document.querySelector;
-  const feeControl = { id: "other-fee", type: "number", value: "14.75" };
+  const feeControl = { id: "other-net-income", type: "number", value: "-14.75" };
   const fakeScenarioForm = { querySelectorAll: () => [feeControl] };
   sandbox.document.querySelector = (selector) => selector === "#scenario-form" ? fakeScenarioForm : originalQuery(selector);
   sandbox.NE_PROJECT_BACKUP.captureFormState(sandbox.document);
@@ -138,7 +138,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
   assert.equal(sandbox.hasUnsubmittedInputs(), true, "app-level leave guard includes DOM-only refinement edits");
   assert.equal(JSON.stringify(sandbox.buildAppDataSnapshot().payload.projects), beforeInput,
     "detecting an unsaved form cannot confirm or mutate project parameters");
-  feeControl.value = "14.75";
+  feeControl.value = "-14.75";
   assert.equal(sandbox.hasUnsubmittedInputs(), false);
   console.log("project backup integration tests passed");
 })().catch((error) => { console.error(error); process.exit(1); });

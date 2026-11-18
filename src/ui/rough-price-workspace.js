@@ -1,20 +1,20 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory(typeof module !== "undefined" && module.exports ? require("../domain/result-versions") : root.NE_RESULT_VERSIONS);
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  const isCommonJs = typeof module !== "undefined" && module.exports;
+  const api = factory(isCommonJs ? require("../domain/result-versions") : root.NE_RESULT_VERSIONS,
+    isCommonJs ? require("../domain/scenario-config") : root.NE_SCENARIO_CONFIG);
+  if (isCommonJs) module.exports = api;
   root.NE_ROUGH_PRICE_WORKSPACE = api;
   if (root.window && root.window !== root) root.window.NE_ROUGH_PRICE_WORKSPACE = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (versions) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (versions, scenarioConfig) {
   const states = new WeakMap();
   const ENV_FIELDS = [
     ["greenCertPrice", "绿证价格"], ["greenCertRealizeRatio", "绿证兑现比例", "ratio"],
-    ["greenPremiumPrice", "绿电溢价"], ["greenPremiumRealizeRatio", "绿电兑现比例", "ratio"],
-    ["carbonEnabled", "启用碳收益", "boolean"], ["carbonPrice", "碳收益"],
-    ["carbonRealizeRatio", "碳收益兑现比例", "ratio"]
+    ["greenPremiumPrice", "绿电溢价"], ["greenPremiumRealizeRatio", "绿电兑现比例", "ratio"]
   ];
   const FEE_FIELDS = [["marketOpFee", "市场运营费"], ["gridAssessFee", "电网考核费"],
-    ["ancillaryFee", "辅助服务费"], ["otherFee", "其他费用"], ["otherIncome", "其他收入"]];
+    ["ancillaryFee", "辅助服务费"], ["otherNetIncome", "其他净收入", "signed"]];
   const STORAGE_FIELDS = [["storageArbitragePrice", "配储套利收益"],
     ["storageCapacityCompPrice", "配储容量补偿"], ["storageAncillaryRevenuePrice", "配储辅助服务收益"],
     ["storageOtherRevenuePrice", "配储其他收益"]];
@@ -74,18 +74,21 @@
       `<option value="${id}"${id === value ? " selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></label>`;
   }
 
-  function fieldsHtml(fields, config, project, disabled, group = "", year = "") {
-    return fields.filter(([key]) => project.siteType === "offshore" || !key.startsWith("carbon"))
-      .map(([key, label, type]) => inputField(key, label, config?.[key], {
-      type: type === "boolean" ? "checkbox" : "number", ratio: type === "ratio", group, year,
+  function fieldValue(config, key) {
+    return key === "otherNetIncome" ? scenarioConfig.getOtherNetIncome(config) : config?.[key];
+  }
+
+  function fieldsHtml(fields, config, disabled, group = "", year = "") {
+    return fields.map(([key, label, type]) => inputField(key, label, fieldValue(config, key), {
+      ratio: type === "ratio", group, year,
       disabled,
-      min: 0, max: type === "ratio" ? 100 : undefined
+      min: type === "signed" ? undefined : 0, max: type === "ratio" ? 100 : undefined
     })).join("");
   }
 
   function manualFieldsHtml(group, fields, config, project, disabled, confirmed) {
     const rows = config[group] || {};
-    return `<div class="rough-manual-years">${yearsFor(project).map((year) => `<details class="rough-year-fields"${confirmed ? "" : " open"}><summary>${year} 年${rows[year] ? "" : " · 待补齐"}</summary><div class="rough-fields">${fieldsHtml(fields, rows[year] || {}, project, disabled, group, year)}</div></details>`).join("")}</div>`;
+    return `<div class="rough-manual-years">${yearsFor(project).map((year) => `<details class="rough-year-fields"${confirmed ? "" : " open"}><summary>${year} 年${rows[year] ? "" : " · 待补齐"}</summary><div class="rough-fields">${fieldsHtml(fields, rows[year] || {}, disabled, group, year)}</div></details>`).join("")}</div>`;
   }
 
   function sharedGroups(project, config) {
@@ -93,8 +96,7 @@
       ? ["mechanismPrice", "mechanismRatio", "mechanismStartYm", "mechanismEndYm", "mechanismReferenceMode",
         ...(config.mechanismReferenceMode === "same_type" ? ["sameTypeSpread"] : [])] : [])];
     const strategy = config.ltPricingMode === "manual" ? ["ltPricingMode", "ltManualPricesByYear"] : ["ltPricingMode", "ltYear1Pnl", "ltTargetPnl", "ltConvergeSpeed"];
-    const environment = config.envValueMode === "manual" ? ["envValueMode", "envManualValuesByYear"] : ["envValueMode", ...ENV_FIELDS.filter(([key]) =>
-      !key.startsWith("carbon") || (project.siteType === "offshore" && (key === "carbonEnabled" || config.carbonEnabled))).map(([key]) => key)];
+    const environment = config.envValueMode === "manual" ? ["envValueMode", "envManualValuesByYear"] : ["envValueMode", ...ENV_FIELDS.map(([key]) => key)];
     const fees = config.feeConfigMode === "manual" ? ["feeConfigMode", "feeManualValuesByYear"] : ["feeConfigMode", ...FEE_FIELDS.map(([key]) => key)];
     return { mechanism, strategy, environment, fees, ...(project.hasStorage ? { storage: STORAGE_FIELDS.map(([key]) => key) } : {}) };
   }
@@ -103,7 +105,7 @@
     const config = entry.config;
     const locked = Boolean(scenario.locked);
     const groups = sharedGroups(project, config);
-    const confirmed = (key) => Boolean(inputState?.isConfigConfirmed?.(scenario, key, config[key]));
+    const confirmed = (key) => Boolean(inputState?.isConfigConfirmed?.(scenario, key, fieldValue(config, key)));
     const fieldStates = (html) => html.replace(/(<label[^>]*>)([\s\S]*?)(<\/label>)/g, (match, open, body, close) => {
       const field = body.match(/data-shared-key="([^"]+)"/);
       if (!field) return match;
@@ -139,9 +141,9 @@
       <p class="rough-note" data-help="结算参数" data-help-anchor="#rough-shared-heading">已确认参数自动带入，未确认参数保留填写。生成粗算不会批量确认参数；实际调整的单项参数自动带入，未修改的默认值仍待确认。逐年表需明确确认；核对本页适用参数后，可点击“确认并保存本页结算参数”。</p>
       ${groupHtml("mechanism", "机制电价与补差口径", `<div class="rough-fields">${mechanism}</div><p class="rough-note" data-help="机制补差口径" data-help-anchor="#rough-group-mechanism-title">同类型机组均价＝项目捕获电价＋同类型机组价差；年度有效机制占比按执行月份折算。</p>`)}
       ${groupHtml("strategy", "交易策略损益", selectField("ltPricingMode", "配置方式", config.ltPricingMode || "auto", [["auto", "按首年与目标逐年收敛"], ["manual", "保留 / 设置逐年值"]], locked) + ltFields)}
-      ${groupHtml("environment", "环境价值", selectField("envValueMode", "配置方式", config.envValueMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + '<p class="rough-note" data-help="环境价值" data-help-anchor="#rough-group-environment-title">价格与兑现比例按绿证、绿电、碳收益分别配置；兑现比例合计不得超过 100%。</p>' + (config.envValueMode === "manual" ? manualFieldsHtml("envManualValuesByYear", ENV_FIELDS, config, project, locked, confirmed("envManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(ENV_FIELDS, config, project, locked)}</div>`))}
-      ${groupHtml("fees", "费用与其他收入", selectField("feeConfigMode", "配置方式", config.feeConfigMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + (config.feeConfigMode === "manual" ? manualFieldsHtml("feeManualValuesByYear", FEE_FIELDS, config, project, locked, confirmed("feeManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(FEE_FIELDS, config, project, locked)}</div>`))}
-      ${project.hasStorage ? groupHtml("storage", "配储补充收益", `<div class="rough-fields">${fieldsHtml(STORAGE_FIELDS, config, project, locked)}</div>`) : ""}
+      ${groupHtml("environment", "环境价值", selectField("envValueMode", "配置方式", config.envValueMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + '<p class="rough-note" data-help="环境价值" data-help-anchor="#rough-group-environment-title">分别配置绿证和绿电溢价的价格与兑现比例，两项兑现比例合计不得超过 100%。</p>' + (config.envValueMode === "manual" ? manualFieldsHtml("envManualValuesByYear", ENV_FIELDS, config, project, locked, confirmed("envManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(ENV_FIELDS, config, locked)}</div>`))}
+      ${groupHtml("fees", "费用与其他净收入", selectField("feeConfigMode", "配置方式", config.feeConfigMode || "global", [["global", "全周期分项配置"], ["manual", "保留 / 设置逐年分项"]], locked) + '<p class="rough-note" data-help="其他净收入" data-help-anchor="#rough-group-fees-title">其他净收入为正计入收入，为负计入费用。</p>' + (config.feeConfigMode === "manual" ? manualFieldsHtml("feeManualValuesByYear", FEE_FIELDS, config, project, locked, confirmed("feeManualValuesByYear")) : `<div class="rough-fields">${fieldsHtml(FEE_FIELDS, config, locked)}</div>`))}
+      ${project.hasStorage ? groupHtml("storage", "配储补充收益", `<div class="rough-fields">${fieldsHtml(STORAGE_FIELDS, config, locked)}</div>`) : ""}
       <div class="rough-actions"><button type="button" class="ghost-button" data-rough-save-shared${locked ? " disabled" : ""}>确认并保存本页结算参数</button><span data-rough-dirty>${entry.dirty ? "有未保存调整，生成粗算时一并保存。" : ""}</span></div>
     </section>`;
   }
@@ -278,9 +280,9 @@
       [FEE_FIELDS, config.feeConfigMode === "manual" ? Object.values(config.feeManualValuesByYear || {}) : [config]]];
     if (project.hasStorage) groups.push([STORAGE_FIELDS, [config]]);
     groups.forEach(([fields, entries]) => entries.forEach((item) => fields.forEach(([key, label, type]) => {
-      if (type === "boolean" || (key.startsWith("carbon") && (project.siteType !== "offshore" || !item.carbonEnabled))) return;
-      checkNumber(item[key], label, 0);
-      if (type === "ratio" && Number(item[key]) > 1) errors.push(`${label}不得超过100%。`);
+      const value = fieldValue(item, key);
+      checkNumber(value, label, type === "signed" ? -Infinity : 0);
+      if (type === "ratio" && Number(value) > 1) errors.push(`${label}不得超过100%。`);
     })));
     return [...new Set(errors)];
   }
@@ -300,8 +302,10 @@
           const delta = Math.min(Math.abs(target - first), index * Math.max(0, step));
           config[group][year] = first + Math.sign(target - first) * delta;
         } else config[group][year] = null;
-      } else config[group][year] = Object.fromEntries((key === "envValueMode" ? ENV_FIELDS : FEE_FIELDS).map(([field, , type]) =>
-        [field, type === "boolean" ? Boolean(config[field]) : finiteValue(config[field]) ? Number(config[field]) : null]));
+      } else config[group][year] = Object.fromEntries((key === "envValueMode" ? ENV_FIELDS : FEE_FIELDS).map(([field]) => {
+        const value = fieldValue(config, field);
+        return [field, finiteValue(value) ? Number(value) : null];
+      }));
     });
   }
 
@@ -349,11 +353,17 @@
           field.value === "" ? null : Number(field.value) / (field.dataset.sharedRatio ? 100 : 1) : field.value;
         if (group === "ltManualPricesByYear") {
           entry.config[group] = entry.config[group] || {}; entry.config[group][year] = value;
-        } else if (group) {
-          entry.config[group] = entry.config[group] || {};
-          entry.config[group][year] = entry.config[group][year] || {};
-          entry.config[group][year][key] = value;
-        } else entry.config[key] = value;
+        } else {
+          const original = group ? scenario.config?.[group]?.[year] : scenario.config;
+          let target = entry.config;
+          if (group) {
+            entry.config[group] ||= {};
+            target = entry.config[group][year] ||= {};
+          }
+          if (key === "otherNetIncome" && original && !Object.hasOwn(original, key) && value === fieldValue(original, key)) {
+            delete target[key];
+          } else target[key] = value;
+        }
         entry.dirty = JSON.stringify(entry.config) !== entry.source;
         const dirtyLabel = refs.rough.querySelector("[data-rough-dirty]");
         if (dirtyLabel) dirtyLabel.textContent = entry.dirty ? "有未保存调整，生成粗算时一并保存。" : "";

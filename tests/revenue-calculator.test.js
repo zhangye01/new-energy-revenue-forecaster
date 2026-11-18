@@ -90,21 +90,31 @@ approx(row.mechanismRevenue, 87600, "机制收入");
 approx(row.nonMechanismEnergy, 4380, "市场化交易电量");
 approx(row.ltPnlPrice, 10, "交易策略度电损益");
 approx(row.ltPnlRevenue, 43800, "交易策略损益");
-approx(row.envRevenue, 10950, "环境价值收益");
+approx(row.envRevenue, 9636, "环境价值收益只计绿证与绿电溢价");
 approx(row.storageSupplementRevenue, 0, "无配储时配储补充收益");
 approx(row.comprehensiveFee, 87600, "综合费用");
 approx(row.otherIncome, 17520, "其他收入");
-approx(row.fullRevenue, 948270, "全口径收入");
-approx(row.fullRevenuePrice, 108.25, "全口径度电收入");
+approx(row.fullRevenue, 946956, "全口径收入");
+approx(row.fullRevenuePrice, 108.1, "全口径度电收入");
 approx(result.totalEnergy, 8760, "周期电量");
-approx(result.totalFullRevenue, 948270, "周期全口径收入");
-approx(result.avgFullRevenuePrice, 108.25, "周期平均度电收入");
+approx(result.totalFullRevenue, 946956, "周期全口径收入");
+approx(result.avgFullRevenuePrice, 108.1, "周期平均度电收入");
 
 const firstHour = result.hourlyPreview[0];
 assert.equal(firstHour.time, "2026-01-01 00:00");
 approx(firstHour.energyMwh, 1, "首小时电量");
 approx(firstHour.spotRevenue, 100, "首小时现货收入");
-approx(firstHour.fullRevenue, 108.25, "首小时全口径收入");
+approx(firstHour.fullRevenue, 108.1, "首小时全口径收入与年度一致");
+
+for (const net of [-7.5, 0, 2.75]) {
+  const scenario = createScenario();
+  scenario.config.feeConfigMode = "manual";
+  scenario.config.feeManualValuesByYear = { 2026: { marketOpFee: 1, gridAssessFee: 2, ancillaryFee: 3,
+    otherNetIncome: net, otherFee: 400, otherIncome: 200 } };
+  const signed = calculateScenarioResult(createProject(), scenario, { pricesByYear: { 2026: fullYearHours(100) } });
+  approx(signed.annualRows[0].fullRevenuePrice, 110.1 + net, "逐年录入净值只计一次");
+  approx(signed.hourlyPreview[0].fullRevenue, 110.1 + net, "年度和逐时净额计算一致");
+}
 
 const missing = calculateScenarioResult(
   createProject(),

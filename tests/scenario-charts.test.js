@@ -30,8 +30,7 @@ const rows = [
     mechanismEnergy: 36000,
     greenCertEnergy: 20000,
     greenPremiumEnergy: 12000,
-    carbonEnergy: 16000,
-    unredeemedMarketEnergy: 16000,
+    unredeemedMarketEnergy: 32000,
     mechanismActive: true,
     mechanismPrice: 365,
     tradeImpact: 5.12,
@@ -52,8 +51,7 @@ const rows = [
     mechanismEnergy: 0,
     greenCertEnergy: 44000,
     greenPremiumEnergy: 22000,
-    carbonEnergy: 44000,
-    unredeemedMarketEnergy: 0,
+    unredeemedMarketEnergy: 44000,
     mechanismActive: false,
     mechanismPrice: 365,
     tradeImpact: 2,
@@ -77,11 +75,10 @@ assert.deepEqual(options.energy.series.map((item) => item.name), [
   "机制电量",
   "绿证电量",
   "绿电溢价电量",
-  "碳收益电量",
   "未兑现市场化电量",
   "机制电价"
 ]);
-assert.deepEqual(options.energy.series[5].data, [365, null]);
+assert.deepEqual(options.energy.series[4].data, [365, null]);
 assert.equal(options.energy.series[0].data[0], 3.6);
 assert.ok(options.energy.tooltip.formatter([
   { axisValueLabel: "2026", dataIndex: 0, marker: "●", seriesName: "机制电量", value: 3.6 },

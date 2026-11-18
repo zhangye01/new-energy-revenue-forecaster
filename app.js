@@ -3753,7 +3753,7 @@ function renderProvinceLibrary() {
     selectedProvinceDefaultContextKey,
     expandedKeys: Array.from(expandedProvinceDefaultKeys),
     currentMessage: refs.provinceApplyMessage.textContent,
-    getProvinceDefaults,
+    getProvinceDefaults: (key) => ({ ...getProvinceDefaults(key), otherNetIncome: defaultScenarioConfig({ province: key }).otherNetIncome }),
     getProvinceName,
     getRegionKey: getPolicyRegionKeyByProvince
   });
@@ -3830,20 +3830,17 @@ function getEnvManualCompleteness(project, config) {
   return scenarioConfig.getEnvManualCompleteness(project, config);
 }
 
-function readEnvValueAllocationDraft(project = getActiveProject()) {
-  const canUseCarbon = project?.siteType === "offshore" && document.querySelector("#carbon-enabled")?.value === "yes";
+function readEnvValueAllocationDraft() {
   const readPercent = (selector) => {
     const value = Number(document.querySelector(selector)?.value);
     return Number.isFinite(value) ? value / 100 : 0;
   };
   const greenCertRatio = readPercent("#green-cert-realize-ratio");
   const greenPremiumRatio = readPercent("#green-premium-realize-ratio");
-  const carbonRatio = canUseCarbon ? readPercent("#carbon-realize-ratio") : 0;
   return {
     greenCertRatio,
     greenPremiumRatio,
-    carbonRatio,
-    totalRatio: greenCertRatio + greenPremiumRatio + carbonRatio
+    totalRatio: greenCertRatio + greenPremiumRatio
   };
 }
 
@@ -3857,7 +3854,7 @@ function updateEnvValueSpaceDisplay(project = getActiveProject(), scenario = nul
     : mechanismDraft
       ? (mechanismDraft.mechanismEnabled ? clamp(1 - mechanismDraft.mechanismRatio, 0, 1) : 1)
       : 0;
-  let draft = readEnvValueAllocationDraft(project);
+  let draft = readEnvValueAllocationDraft();
   const selectedEnvMode = refs.envValueMode?.value || getEnvValueMode(activeScenario?.config);
   if (selectedEnvMode === "manual") {
     const firstYear = Number.isInteger(project?.startYear) ? project.startYear : null;
@@ -3962,8 +3959,7 @@ function syncFeeConfigControls(project = getActiveProject(), scenario = null, lo
     "#market-op-fee",
     "#grid-assess-fee",
     "#ancillary-fee",
-    "#other-fee",
-    "#other-income"
+    "#other-net-income"
   ].forEach((selector) => {
     const field = document.querySelector(selector);
     if (field) field.disabled = locked || isManual;

@@ -45,7 +45,6 @@
         market: "#6fb18b",
         trade: "#8b8df4",
         env: "#70c690",
-        carbon: "#a58cff",
         storage: "#c294ef",
         other: "#6ec9c1"
       };
@@ -65,7 +64,6 @@
         market: "#78a86e",
         trade: "#8174b4",
         env: "#5f9d79",
-        carbon: "#9a7fca",
         storage: "#a27ab9",
         other: "#5b988e"
       };
@@ -84,7 +82,6 @@
       market: "#79b592",
       trade: "#6f6bd9",
       env: "#56a36f",
-      carbon: "#8a69c8",
       storage: "#a36cc1",
       other: "#3fa096"
     };
@@ -216,13 +213,6 @@
         data: rows.map((row) => rounded(Number(row.greenPremiumEnergy) / 10000))
       },
       {
-        name: "碳收益电量",
-        type: "bar",
-        stack: "energy",
-        barWidth: 18,
-        data: rows.map((row) => rounded(Number(row.carbonEnergy) / 10000))
-      },
-      {
         name: "未兑现市场化电量",
         type: "bar",
         stack: "energy",
@@ -245,7 +235,7 @@
     }
     return {
       animationDuration: 360,
-      color: [tokens.mechanism, tokens.env, tokens.positiveSoft, tokens.carbon, tokens.market, tokens.negative],
+      color: [tokens.mechanism, tokens.env, tokens.positiveSoft, tokens.market, tokens.negative],
       grid: { top: 72, right: hasActiveMechanismPrice ? 72 : 28, bottom: 44, left: 58, containLabel: true },
       legend: parts.legend,
       tooltip: {

@@ -18,8 +18,8 @@ const annualKeys = ["ltManualPricesByYear", "envManualValuesByYear", "feeManualV
 const scalarIds = ["scenario-name", "mechanism-enabled", "mechanism-ratio", "mechanism-price", "mechanism-start-ym",
   "mechanism-end-ym", "mechanism-reference-mode", "same-type-spread", "lt-pricing-mode", "lt-year1-pnl",
   "lt-target-pnl", "lt-converge-speed", "env-value-mode", "green-cert-price", "green-cert-realize-ratio",
-  "green-premium-price", "green-premium-realize-ratio", "carbon-enabled", "carbon-price", "carbon-realize-ratio",
-  "fee-config-mode", "market-op-fee", "grid-assess-fee", "ancillary-fee", "other-fee", "other-income",
+  "green-premium-price", "green-premium-realize-ratio",
+  "fee-config-mode", "market-op-fee", "grid-assess-fee", "ancillary-fee", "other-net-income",
   "storage-arbitrage-price", "storage-round-trip-efficiency", "storage-capacity-comp-price", "storage-ancillary-revenue-price", "storage-other-revenue-price"];
 const refIds = { ltPricingMode: "lt-pricing-mode", envValueMode: "env-value-mode", feeConfigMode: "fee-config-mode",
   storageArbitragePrice: "storage-arbitrage-price", storageCapacityCompPrice: "storage-capacity-comp-price",
@@ -40,9 +40,7 @@ function loadForm(targetProject, scenario) {
     readEnvValueAllocationDraft: () => {
       const greenCertRatio = Number(querySelector("#green-cert-realize-ratio").value) / 100;
       const greenPremiumRatio = Number(querySelector("#green-premium-realize-ratio").value) / 100;
-      const carbonRatio = targetProject.siteType === "offshore" && querySelector("#carbon-enabled").value === "yes"
-        ? Number(querySelector("#carbon-realize-ratio").value) / 100 : 0;
-      return { greenCertRatio, greenPremiumRatio, carbonRatio, totalRatio: greenCertRatio + greenPremiumRatio + carbonRatio };
+      return { greenCertRatio, greenPremiumRatio, totalRatio: greenCertRatio + greenPremiumRatio };
     }
   };
   return { fields, refs, options, draft: () => form.buildScenarioSaveDraft(options) };
@@ -156,7 +154,7 @@ const invalidAnnualCases = [
   ["ltManualPricesByYear", null, "invalid"], ["envManualValuesByYear", null, null],
   ["feeManualValuesByYear", null, null]
 ];
-for (const field of ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio", "carbonEnabled"]) {
+for (const field of ["greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio"]) {
   for (const value of [null, undefined]) invalidAnnualCases.push(["envManualValuesByYear", field, value]);
 }
 for (const field of ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee", "otherIncome"]) {
@@ -179,7 +177,7 @@ const inactiveNull = manualScenario();
 inactiveNull.config.envManualValuesByYear[2026].carbonPrice = null;
 delete inactiveNull.config.envManualValuesByYear[2026].carbonRealizeRatio;
 assert.equal(loadForm(project, inactiveNull).draft().ok, true);
-assert.equal(rules.getEnvValueAllocation(project, inactiveNull.config, 2026).carbonPrice, 0);
+assert.equal(rules.getEnvValueAllocation(project, inactiveNull.config, 2026).carbonPrice, undefined);
 assert.equal(inactiveNull.config.envManualValuesByYear[2026].carbonPrice, null);
 assert.equal(Object.hasOwn(inactiveNull.config.envManualValuesByYear[2026], "carbonRealizeRatio"), false);
 
@@ -195,16 +193,16 @@ for (const ref of ["ltPricingMode", "envValueMode", "feeConfigMode"]) switchUi.r
 const manualDraft = switchUi.draft();
 assert.equal(manualDraft.ok, true, manualDraft.message);
 form.applyScenarioSaveDraft({ project, scenario: modeScenario, draft: manualDraft, nowIso: () => frozenTime });
-for (const key of ["ltYear1Pnl", "greenCertPrice", "otherFee"]) {
+for (const key of ["ltYear1Pnl", "greenCertPrice", "otherNetIncome"]) {
   assert.equal(modeScenario.config[key], originalModeConfig[key]);
   assert.equal(model.isConfigConfirmed(modeScenario, key), false);
 }
 assert.deepEqual(modeScenario.confirmationEvidence.confirmedConfig, originalModeEvidence);
 const globalAgain = { ...modeScenario.config, ltPricingMode: "auto", envValueMode: "global", feeConfigMode: "global" };
 const nextState = form.buildRefinementState({ project, scenario: modeScenario, config: globalAgain });
-for (const key of ["ltYear1Pnl", "greenCertPrice", "otherFee"]) assert.equal(nextState.fields[key], "pending");
+for (const key of ["ltYear1Pnl", "greenCertPrice", "otherNetIncome"]) assert.equal(nextState.fields[key], "pending");
 model.confirmConfig(modeScenario, Object.keys(modeScenario.config), { project });
-assert.equal(model.isConfigConfirmed(modeScenario, "otherFee"), false, "direct confirmation also filters current applicability");
+assert.equal(model.isConfigConfirmed(modeScenario, "otherNetIncome"), false, "direct confirmation also filters current applicability");
 
 // Global disabled / onshore carbon and absent storage retain original hidden
 // values through the actual load, lock, save, and hydration pipeline.
@@ -228,11 +226,11 @@ for (const siteType of ["onshore", "offshore"]) {
     assert.equal(model.isConfigConfirmed(restored, key), false);
   }
   const allocation = rules.getEnvValueAllocation(hiddenProject, restored.config);
-  assert.equal(allocation.carbonPrice, 0);
-  assert.equal(allocation.carbonRatio, 0);
+  assert.equal(allocation.carbonPrice, undefined);
+  assert.equal(allocation.carbonRatio, undefined);
 }
 
-for (const field of ["#green-cert-price", "#other-fee", "#lt-year1-pnl"]) {
+for (const field of ["#green-cert-price", "#other-net-income", "#lt-year1-pnl"]) {
   const target = model.createBaselineScenario(project);
   const ui = loadForm(project, target);
   const before = JSON.stringify(target);
@@ -249,7 +247,6 @@ for (const field of ["#green-cert-price", "#other-fee", "#lt-year1-pnl"]) {
 // customer must choose it; only that deliberate change may replace the raw value.
 for (const [key, selector, explicitChoice, expected] of [
   ["mechanismEnabled", "#mechanism-enabled", "no", false],
-  ["carbonEnabled", "#carbon-enabled", "no", false],
   ["ltPricingMode", "#lt-pricing-mode", "auto", "auto"],
   ["envValueMode", "#env-value-mode", "global", "global"],
   ["feeConfigMode", "#fee-config-mode", "global", "global"]
@@ -373,7 +370,7 @@ form.applyScenarioSaveDraft({ project: targetProject, scenario: target, draft: e
 const afterResult = resultFor();
 assert.deepEqual(afterResult.annualRows[0], beforeResult.annualRows[0]);
 assert.ok(Math.abs(afterResult.annualRows[1].fullRevenue - beforeResult.annualRows[1].fullRevenue + 210000) < 0.0001);
-assert.ok(Math.abs(afterResult.annualRows[1].fullRevenuePrice - 310.5) < 0.0001,
+assert.ok(Math.abs(afterResult.annualRows[1].fullRevenuePrice - 309.5) < 0.0001,
   "flat positive prices produce no dispatch arbitrage; the old 18 yuan/MWh assumption is not added");
 const comparison = roughApi.compareBaselineResult(targetProject, target, targetProject.roughPrice.snapshots[0], afterResult);
 assert.ok(Math.abs(comparison.summary.delta - (-10.79268292683)) < 0.0001);

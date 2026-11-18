@@ -20,7 +20,7 @@ const project = { id: "compare-test", name: "对标测试", province: "shandong"
   hasStorage: false, startYear: 2026, forecastYears: 2, activeRunId: "run-1", resultsByScenario: {},
   energyData: { hourlyByYear: { 2026: Array(8760).fill(0.2), 2027: Array(8760).fill(0.3) } } };
 const base = model.createBaselineScenario(project); base.id = "base";
-const up = JSON.parse(JSON.stringify(base)); Object.assign(up, { id: "up", name: "乐观", isBaseline: false }); up.config.otherFee -= 1;
+const up = JSON.parse(JSON.stringify(base)); Object.assign(up, { id: "up", name: "乐观", isBaseline: false }); up.config.otherNetIncome += 1;
 const draft = JSON.parse(JSON.stringify(base)); Object.assign(draft, { id: "draft", isBaseline: false });
 project.scenarios = [draft, base, up];
 const run = { id: "run-1", pricesByYear: { 2026: Array(8760).fill(300), 2027: Array(8760).fill(310) } };

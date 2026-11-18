@@ -272,8 +272,9 @@ const applicabilityProject = { siteType: "onshore", hasStorage: false, scenarios
 ] };
 applyCreateProjectInput(applicabilityProject, { ...applicabilityProject, siteType: "offshore", hasStorage: true });
 for (const scenario of applicabilityProject.scenarios) {
-  assert.deepEqual(scenario.confirmedConfig, { otherFee: 3, mechanismPrice: 365 },
-    "newly enabled storage and carbon inputs require review, including legacy confirmations");
+  assert.deepEqual(scenario.confirmedConfig, { otherFee: 3, mechanismPrice: 365,
+    carbonEnabled: false, carbonPrice: 0, carbonRealizeRatio: 0, envManualValuesByYear: applicableConfirmations.envManualValuesByYear },
+  "newly enabled storage requires review, while site changes leave archived environmental confirmations intact");
   assert.deepEqual(scenario.config, applicableConfirmations, "re-review never discards saved values");
   scenario.confirmedConfig = structuredClone(applicableConfirmations);
 }

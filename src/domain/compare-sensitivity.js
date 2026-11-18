@@ -16,9 +16,10 @@
   const cache = new Map();
   const STORAGE_KEYS = ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"];
   const DISPATCH_FACTORS = new Set(["spot", "hours", "capture_spread"]);
-  const FEE_KEYS = ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee"];
-  const ENV_PRICE_KEYS = ["greenCertPrice", "greenPremiumPrice", "carbonPrice"];
-  const ENV_RATIO_KEYS = ["greenCertRealizeRatio", "greenPremiumRealizeRatio", "carbonRealizeRatio"];
+  const MAIN_FEE_KEYS = ["marketOpFee", "gridAssessFee", "ancillaryFee"];
+  const FEE_KEYS = [...MAIN_FEE_KEYS, "otherFee"];
+  const ENV_PRICE_KEYS = ["greenCertPrice", "greenPremiumPrice"];
+  const ENV_RATIO_KEYS = ["greenCertRealizeRatio", "greenPremiumRealizeRatio"];
   const FACTORS = [
     ["spot", "现货价格水平", "同比调整首年全部现货小时价格，联动捕获价及机制补差", 0],
     ["hours", "年利用小时 / 上网电量", "保持首年发电形状，同比调整全部小时电量", 1],
@@ -59,14 +60,17 @@
       }
       else config.ltYear1Pnl *= factor;
     }
-    if (key === "fee") scaleFields(yearlySource(config, "feeConfigMode", "feeManualValuesByYear", first.year), FEE_KEYS, factor);
+    if (key === "fee") {
+      const source = yearlySource(config, "feeConfigMode", "feeManualValuesByYear", first.year);
+      scaleFields(source, MAIN_FEE_KEYS, factor);
+      if (!Object.hasOwn(source, "otherNetIncome")) scaleFields(source, ["otherFee"], factor);
+      else if (source.otherNetIncome < 0) source.otherNetIncome *= factor;
+    }
     if (key === "storage") scaleFields(config, first.storageDispatch ? STORAGE_KEYS.slice(1) : STORAGE_KEYS, factor);
     if (key === "env_value" || key === "env_ratio") {
       const source = yearlySource(config, "envValueMode", "envManualValuesByYear", first.year);
-      const count = project.siteType === "offshore" && source.carbonEnabled ? 3 : 2;
-      const prices = ENV_PRICE_KEYS.slice(0, count), ratios = ENV_RATIO_KEYS.slice(0, count);
-      const totalRatio = ratios.reduce((sum, name) => sum + (Number(source[name]) || 0), 0);
-      scaleFields(source, key === "env_value" ? prices : ratios,
+      const totalRatio = ENV_RATIO_KEYS.reduce((sum, name) => sum + (Number(source[name]) || 0), 0);
+      scaleFields(source, key === "env_value" ? ENV_PRICE_KEYS : ENV_RATIO_KEYS,
         key === "env_ratio" && totalRatio > 0 ? Math.min(factor, 1 / totalRatio) : factor);
     }
     return { config, row };
@@ -74,7 +78,7 @@
 
   // Settlement terms mirror the annual result. For hourly input changes,
   // buildFactors recalculates dispatch separately against the perturbed series.
-  function calculateAnnualRevenue(project, config, row) {
+  function calculateAnnualRevenue(project, config, row, options = {}) {
     const energy = row.energyMwh;
     const months = config.mechanismEnabled
       ? rules.mechanismActiveMonthsForYear(row.year, config.mechanismStartYm, config.mechanismEndYm) : 0;
@@ -82,7 +86,8 @@
     const marketEnergy = Math.max(0, energy * (1 - mechanismRatio));
     const mechanism = energy * mechanismRatio * (config.mechanismPrice - rules.mechanismReferencePrice(config, row.capturePrice));
     const strategy = rules.tradeStrategyPnlPriceForYear(config, row.year - project.startYear + 1, row.year);
-    const environment = rules.getEnvValueAllocation(project, config, row.year).unitValuePerMarketMwh;
+    const environment = rules.getEnvValueAllocation(project, config, row.year).unitValuePerMarketMwh +
+      (options.legacyEnvironment ? rules.legacyCarbonValuePerMarketMwh(project, config, row.year) : 0);
     const fees = rules.getFeeConfigForYear(project, config, row.year);
     const storageKeys = row.storageDispatch ? STORAGE_KEYS.slice(1) : STORAGE_KEYS;
     const storage = project.hasStorage ? storageKeys.reduce((sum, key) => sum + (Number(config[key]) || 0), 0) : 0;

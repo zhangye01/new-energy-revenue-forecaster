@@ -48,7 +48,7 @@
       clamp = defaultClamp,
       mechanismActiveMonthsForYear = () => 0,
       tradeStrategyPnlPriceForYear = () => 0,
-      getEnvValueAllocation = () => ({ totalRatio: 0, greenCertRatio: 0, greenPremiumRatio: 0, carbonRatio: 0, unitValuePerMarketMwh: 0 }),
+      getEnvValueAllocation = () => ({ totalRatio: 0, greenCertRatio: 0, greenPremiumRatio: 0, unitValuePerMarketMwh: 0 }),
       getFeeConfigForYear = () => ({ marketOpFee: 0, gridAssessFee: 0, ancillaryFee: 0, otherFee: 0, otherIncome: 0 })
     } = input;
     const cfg = scenario?.config || {};
@@ -88,7 +88,6 @@
       const envTotalRatio = Math.min(1, Math.max(0, envAllocation.totalRatio));
       const greenCertEnergy = marketEnergy * envAllocation.greenCertRatio;
       const greenPremiumEnergy = marketEnergy * envAllocation.greenPremiumRatio;
-      const carbonEnergy = marketEnergy * envAllocation.carbonRatio;
       const unredeemedMarketEnergy = Math.max(0, marketEnergy * (1 - envTotalRatio));
       const feeConfig = getFeeConfigForYear(project, cfg, year);
       const feeTotal = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
@@ -111,7 +110,6 @@
         marketEnergy,
         greenCertEnergy,
         greenPremiumEnergy,
-        carbonEnergy,
         unredeemedMarketEnergy,
         mechanismPrice: cfg.mechanismEnabled ? Number(cfg.mechanismPrice || 0) : 0,
         ltPnlPrice,

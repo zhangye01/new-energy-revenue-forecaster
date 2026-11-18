@@ -16,7 +16,7 @@ const first = versions.stampComputedResult(project, scenario, run, legacy);
 versions.archivePreviousResult(project, scenario.id, legacy);
 versions.archivePreviousResult(project, scenario.id, first);
 scenario.name = "新方案名称";
-scenario.config.otherFee += 10;
+scenario.config.otherNetIncome -= 10;
 
 const panel = { dataset: {} };
 const select = { value: "archive-2" };

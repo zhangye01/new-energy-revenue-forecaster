@@ -17,7 +17,8 @@
     throw new Error("场景模型模块初始化失败：缺少场景配置模块");
   }
 
-  const SITE_TYPE_SET = new Set(["onshore", "offshore"]);
+  const LEGACY_FEE_VALUE_KEYS = scenarioConfig.LEGACY_FEE_VALUE_KEYS;
+  const LEGACY_CONFIG_KEYS = new Set([...scenarioConfig.LEGACY_ENV_VALUE_KEYS, ...LEGACY_FEE_VALUE_KEYS]);
   const FALLBACK_PROVINCE_DEFAULTS = Object.freeze({
     mechanismEnabled: true,
     mechanismRatio: 0.36,
@@ -86,7 +87,6 @@
     const forecastYears = Number.isInteger(project?.forecastYears) && project.forecastYears > 0
       ? project.forecastYears
       : 30;
-    const siteType = SITE_TYPE_SET.has(project?.siteType) ? project.siteType : "onshore";
     return {
       mechanismEnabled: provinceDefaults.mechanismEnabled,
       mechanismRatio: provinceDefaults.mechanismRatio,
@@ -107,16 +107,12 @@
       greenCertRealizeRatio: 1,
       greenPremiumPrice: provinceDefaults.greenPremiumPrice,
       greenPremiumRealizeRatio: 0,
-      carbonEnabled: siteType === "offshore",
-      carbonPrice: siteType === "offshore" ? 4 : 0,
-      carbonRealizeRatio: 0,
       feeConfigMode: "global",
       feeManualValuesByYear: {},
       marketOpFee: provinceDefaults.marketOpFee,
       gridAssessFee: provinceDefaults.gridAssessFee,
       ancillaryFee: provinceDefaults.ancillaryFee,
-      otherFee: provinceDefaults.otherFee,
-      otherIncome: 2,
+      otherNetIncome: 2 - provinceDefaults.otherFee,
       storageArbitragePrice: project?.hasStorage ? provinceDefaults.storageArbitragePrice : 0,
       storageCapacityCompPrice: project?.hasStorage ? provinceDefaults.storageCapacityCompPrice : 0,
       storageAncillaryRevenuePrice: project?.hasStorage ? provinceDefaults.storageAncillaryRevenuePrice : 0,
@@ -145,8 +141,23 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function isOtherNetIncomeConfirmed(scenario, value) {
+    const config = scenario?.config || {};
+    const confirmed = scenario?.confirmedConfig || {};
+    const current = scenarioConfig.getOtherNetIncome(config);
+    const displayed = value === undefined ? current : scenarioConfig.getOtherNetIncome({ otherNetIncome: value });
+    if (current === null || displayed !== current) return false;
+    if (Object.hasOwn(confirmed, "otherNetIncome")) return scenarioConfig.getOtherNetIncome(confirmed) === current;
+    const legacy = { otherFee: config.otherFee, otherIncome: config.otherIncome };
+    return scenarioConfig.getOtherNetIncome(legacy) === current && LEGACY_FEE_VALUE_KEYS.every((key) => (
+      Object.hasOwn(confirmed, key) && sameConfigValue(confirmed[key], config[key])
+      && CONFIRMATION_SOURCES.has(scenario?.confirmedConfigSources?.[key])
+    ));
+  }
+
   function isConfigConfirmed(scenario, key, value = scenario?.config?.[key]) {
-    return CONFIG_KEYS.has(key)
+    if (key === "otherNetIncome") return isOtherNetIncomeConfirmed(scenario, value);
+    return (CONFIG_KEYS.has(key) || LEGACY_FEE_VALUE_KEYS.includes(key))
       // A partly edited historical table does not prove that its remaining years
       // were reviewed. Require explicit table confirmation regardless of old migrations.
       && (!ANNUAL_CONFIG_KEYS.has(key) || scenario?.confirmedConfigSources?.[key] === "explicit")
@@ -161,11 +172,14 @@
     if (!isPlainObject(scenario.confirmedConfigSources)) scenario.confirmedConfigSources = {};
     if (options.project) invalidateInactiveConfirmations(options.project, scenario);
     const source = CONFIRMATION_SOURCES.has(options.source) ? options.source : "explicit";
-    const selectedKeys = keys === undefined ? Object.keys(scenario.config) : (Array.isArray(keys) ? keys : [keys]);
+    const selectedKeys = keys === undefined ? new Set([...Object.keys(scenario.config), "otherNetIncome"])
+      : (Array.isArray(keys) ? keys : [keys]);
     const applicable = options.project ? new Set(scenarioConfig.applicableConfigKeys(options.project, scenario.config)) : null;
     selectedKeys.forEach((key) => {
-      if ((!applicable || applicable.has(key)) && CONFIG_KEYS.has(key) && Object.prototype.hasOwnProperty.call(scenario.config, key) && scenario.config[key] !== undefined) {
-        scenario.confirmedConfig[key] = cloneConfigValue(scenario.config[key]);
+      const value = key === "otherNetIncome" ? scenarioConfig.getOtherNetIncome(scenario.config) : scenario.config[key];
+      const available = key === "otherNetIncome" ? value !== null : Object.hasOwn(scenario.config, key) && value !== undefined;
+      if ((!applicable || applicable.has(key)) && CONFIG_KEYS.has(key) && available) {
+        scenario.confirmedConfig[key] = cloneConfigValue(value);
         scenario.confirmedConfigSources[key] = source;
       }
     });
@@ -183,7 +197,7 @@
   function invalidateInactiveConfirmations(project, scenario) {
     const applicable = new Set(scenarioConfig.applicableConfigKeys(project, scenario.config));
     Object.keys(scenario.confirmedConfig || {}).forEach((key) => {
-      if (applicable.has(key)) return;
+      if (applicable.has(key) || LEGACY_CONFIG_KEYS.has(key)) return;
       retainConfirmationEvidence(scenario);
       delete scenario.confirmedConfig[key];
       if (scenario.confirmedConfigSources) delete scenario.confirmedConfigSources[key];
@@ -230,16 +244,12 @@
         greenPremiumRealizeRatio: Number.isFinite(Number(merged.greenPremiumRealizeRatio)) ? clamp(Number(merged.greenPremiumRealizeRatio), 0, 1) : baseConfig.greenPremiumRealizeRatio,
         envValueMode: scenarioConfig.getEnvValueMode(merged),
         envManualValuesByYear: scenarioConfig.sanitizeEnvManualValuesByYear(merged.envManualValuesByYear, project),
-        carbonEnabled: Boolean(merged.carbonEnabled),
-        carbonPrice: finiteOrFallback(merged.carbonPrice, baseConfig.carbonPrice),
-        carbonRealizeRatio: Number.isFinite(Number(merged.carbonRealizeRatio)) ? clamp(Number(merged.carbonRealizeRatio), 0, 1) : baseConfig.carbonRealizeRatio,
         feeConfigMode: scenarioConfig.getFeeConfigMode(merged),
         feeManualValuesByYear: scenarioConfig.sanitizeFeeManualValuesByYear(merged.feeManualValuesByYear, project),
         marketOpFee: finiteOrFallback(merged.marketOpFee, baseConfig.marketOpFee),
         gridAssessFee: finiteOrFallback(merged.gridAssessFee, baseConfig.gridAssessFee),
         ancillaryFee: finiteOrFallback(merged.ancillaryFee, baseConfig.ancillaryFee),
-        otherFee: finiteOrFallback(merged.otherFee, baseConfig.otherFee),
-        otherIncome: finiteOrFallback(merged.otherIncome, baseConfig.otherIncome),
+        otherNetIncome: finiteOrFallback(merged.otherNetIncome, baseConfig.otherNetIncome),
         storageArbitragePrice: finiteOrFallback(merged.storageArbitragePrice, baseConfig.storageArbitragePrice),
         storageCapacityCompPrice: finiteOrFallback(merged.storageCapacityCompPrice, baseConfig.storageCapacityCompPrice),
         storageAncillaryRevenuePrice: finiteOrFallback(merged.storageAncillaryRevenuePrice, baseConfig.storageAncillaryRevenuePrice),
@@ -250,6 +260,9 @@
     // Hydration must not repair stored input. Preserve nulls, inactive values,
     // partial/extra-year maps and precision; validate a separate calculation view.
     next.config = { ...next.config, ...cloneConfigValue(srcConfig) };
+    if (!Object.hasOwn(srcConfig, "otherNetIncome") && LEGACY_FEE_VALUE_KEYS.some((key) => Object.hasOwn(srcConfig, key))) {
+      delete next.config.otherNetIncome;
+    }
     if (srcConfig.ltConvergeSpeedUnit !== "fixed_step" && Number(srcConfig.ltConvergeSpeed) > 0
         && Number(srcConfig.ltConvergeSpeed) <= 1 && Number(srcConfig.ltYear1Pnl) !== Number(srcConfig.ltTargetPnl)) {
       next.config.ltConvergeSpeedUnit = "legacy_ratio";
@@ -259,30 +272,35 @@
       next.confirmationEvidence = { confirmedConfig: cloneConfigValue(scenario.confirmedConfig),
         confirmedConfigSources: cloneConfigValue(scenario.confirmedConfigSources || {}) };
     }
-    const annualConfirmations = {
-      ltManualPricesByYear: [scenarioConfig.sanitizeLtManualPricesByYear, scenarioConfig.getLtManualCompleteness],
-      envManualValuesByYear: [scenarioConfig.sanitizeEnvManualValuesByYear, scenarioConfig.getEnvManualCompleteness],
-      feeManualValuesByYear: [scenarioConfig.sanitizeFeeManualValuesByYear, scenarioConfig.getFeeManualCompleteness]
+    for (const key of LEGACY_CONFIG_KEYS) {
+      if (Object.hasOwn(scenario.confirmedConfig || {}, key)) next.confirmedConfig[key] = cloneConfigValue(scenario.confirmedConfig[key]);
+      if (Object.hasOwn(scenario.confirmedConfigSources || {}, key)) next.confirmedConfigSources[key] = cloneConfigValue(scenario.confirmedConfigSources[key]);
+    }
+    const annualCoverage = {
+      ltManualPricesByYear: scenarioConfig.getLtManualCompleteness,
+      envManualValuesByYear: scenarioConfig.getEnvManualCompleteness,
+      feeManualValuesByYear: scenarioConfig.getFeeManualCompleteness
     };
     const roughSnapshots = Array.isArray(options.roughSnapshots) ? options.roughSnapshots : project.roughPrice?.snapshots;
     const reviewLegacyDefaults = !(Number(scenario.confirmationReviewVersion) >= CONFIRMATION_REVIEW_VERSION)
       && Array.isArray(roughSnapshots) && roughSnapshots.some((snapshot) => snapshot?.scenarioId === scenario.id);
-    Object.keys(next.config).forEach((key) => {
-      const annual = annualConfirmations[key];
-      if (annual) {
-        // Only normalize a map that still matches what the user confirmed. This
-        // preserves disabled carbon fields across reloads without confirming edits.
+    new Set([...Object.keys(next.config), "otherNetIncome"]).forEach((key) => {
+      if (LEGACY_CONFIG_KEYS.has(key)) return;
+      const value = key === "otherNetIncome" ? scenarioConfig.getOtherNetIncome(next.config) : next.config[key];
+      if (key === "otherNetIncome" && !Object.hasOwn(scenario.confirmedConfig || {}, key)) return;
+      const getCoverage = annualCoverage[key];
+      if (getCoverage) {
         if (!isConfigConfirmed(scenario, key)) return;
         const value = scenario.confirmedConfig[key];
-        const coverage = annual[1](project, { [key]: value });
+        const coverage = getCoverage(project, { [key]: value });
         if (coverage.complete !== coverage.total || !sameConfigValue(value, next.config[key])) return;
-      } else if (!isConfigConfirmed(scenario, key, next.config[key])) return;
+      } else if (!isConfigConfirmed(scenario, key, value)) return;
       const source = scenario.confirmedConfigSources?.[key];
       // Unknown annual confirmations were rejected above. Review ambiguous scalar
       // defaults once, retaining all values and confirmed non-default assumptions.
       if (reviewLegacyDefaults && !CONFIRMATION_SOURCES.has(source)
-          && sameConfigValue(next.config[key], baseConfig[key])) return;
-      next.confirmedConfig[key] = cloneConfigValue(next.config[key]);
+          && sameConfigValue(value, baseConfig[key])) return;
+      next.confirmedConfig[key] = cloneConfigValue(value);
       if (CONFIRMATION_SOURCES.has(source)) next.confirmedConfigSources[key] = source;
     });
     invalidateInactiveConfirmations(project, next);
@@ -359,20 +377,15 @@
     scenario.config.marketOpFee = defaults.marketOpFee;
     scenario.config.gridAssessFee = defaults.gridAssessFee;
     scenario.config.ancillaryFee = defaults.ancillaryFee;
-    scenario.config.otherFee = defaults.otherFee;
+    scenario.config.otherNetIncome = 2 - defaults.otherFee;
     scenario.config.greenCertPrice = defaults.greenCertPrice;
     scenario.config.greenCertRealizeRatio = 1;
     scenario.config.greenPremiumPrice = defaults.greenPremiumPrice;
     scenario.config.greenPremiumRealizeRatio = 0;
-    scenario.config.carbonRealizeRatio = 0;
     scenario.config.storageArbitragePrice = project.hasStorage ? defaults.storageArbitragePrice : 0;
     scenario.config.storageCapacityCompPrice = project.hasStorage ? defaults.storageCapacityCompPrice : 0;
     scenario.config.storageAncillaryRevenuePrice = project.hasStorage ? defaults.storageAncillaryRevenuePrice : 0;
     scenario.config.storageOtherRevenuePrice = project.hasStorage ? defaults.storageOtherRevenuePrice : 0;
-    if (project.siteType !== "offshore") {
-      scenario.config.carbonEnabled = false;
-      scenario.config.carbonPrice = 0;
-    }
     const applicable = new Set(scenarioConfig.applicableConfigKeys(project, scenario.config));
     Object.keys(scenario.config).forEach((key) => {
       if (applicable.has(key)) return;
@@ -381,11 +394,9 @@
     });
     confirmConfig(scenario, [
       "mechanismEnabled", "mechanismRatio", "mechanismPrice",
-      "marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee",
+      "marketOpFee", "gridAssessFee", "ancillaryFee", "otherNetIncome",
       "greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio",
-      "carbonRealizeRatio", "storageArbitragePrice", "storageCapacityCompPrice",
-      "storageAncillaryRevenuePrice", "storageOtherRevenuePrice",
-      ...(project.siteType !== "offshore" ? ["carbonEnabled", "carbonPrice"] : [])
+      "storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"
     ], { project });
     scenario.updatedAt = typeof nowIso === "function" ? nowIso() : resolveNowIso({ nowIso });
     return scenario;
@@ -429,11 +440,7 @@
       return { ok: false, message: "批量参数值无效，请输入数字。" };
     }
 
-    const envValueRatioKeys = new Set([
-      "greenCertRealizeRatio",
-      "greenPremiumRealizeRatio",
-      "carbonRealizeRatio"
-    ]);
+    const envValueRatioKeys = new Set(["greenCertRealizeRatio", "greenPremiumRealizeRatio"]);
     const result = {
       ok: true,
       updated: 0,
@@ -458,32 +465,19 @@
         result.skippedInapplicable += 1;
         return;
       }
-      if (key === "carbonPrice" && project.siteType !== "offshore") {
-        scenario.config.carbonPrice = 0;
-        scenario.config.carbonEnabled = false;
-        scenario.config.carbonRealizeRatio = 0;
-      } else if (key === "carbonRealizeRatio" && project.siteType !== "offshore") {
-        scenario.config.carbonRealizeRatio = 0;
-      } else if (envValueRatioKeys.has(key)) {
+      if (envValueRatioKeys.has(key)) {
         const nextConfig = { ...scenario.config, [key]: parsed };
-        if (project.siteType !== "offshore") {
-          nextConfig.carbonRealizeRatio = 0;
-        }
         const allocation = getEnvValueAllocation(project, nextConfig);
         if (allocation.totalRatio > 1 + 0.000001) {
           result.skippedSpace += 1;
           return;
         }
-        scenario.config[key] = parsed;
-      } else {
-        scenario.config[key] = parsed;
       }
+      scenario.config[key] = parsed;
       // The batch control is explicitly labelled 元/MWh/年. Applying it is an
       // intentional replacement, unlike opening/reviewing a legacy ratio.
       if (key === "ltConvergeSpeed") scenario.config.ltConvergeSpeedUnit = "fixed_step";
-      confirmConfig(scenario, key === "carbonPrice" && project.siteType !== "offshore"
-        ? ["carbonPrice", "carbonEnabled", "carbonRealizeRatio"]
-        : key === "ltConvergeSpeed" ? [key, "ltConvergeSpeedUnit"] : [key], { project });
+      confirmConfig(scenario, key === "ltConvergeSpeed" ? [key, "ltConvergeSpeedUnit"] : [key], { project });
       scenario.updatedAt = typeof nowIso === "function" ? nowIso() : nowIso;
       result.updated += 1;
     });

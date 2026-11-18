@@ -61,10 +61,10 @@ assert.equal(JSON.stringify(project.roughPrice), roughBefore, "正常重测保�
 const firstSource = resultVersions.getArchivedCalculationContext(first);
 assert.equal(isResultComplete(firstSource.project, firstSource.scenario, first, { includeHourly: true }), true);
 scenario.name = "重命名后方案";
-scenario.config.otherFee += 7;
+scenario.config.otherNetIncome -= 7;
 const archivedSource = resultVersions.getArchivedCalculationContext(first);
 assert.equal(archivedSource.scenario.name, "原基准");
-assert.notEqual(archivedSource.scenario.config.otherFee, scenario.config.otherFee);
+assert.equal(archivedSource.scenario.config.otherNetIncome, scenario.config.otherNetIncome + 7);
 const empty = calculate({ calculateScenarioResult: () => null });
 assert.equal(empty.status, "invalid_result");
 const unreconciled = calculate({ calculateScenarioResult: () => ({ annualRows: [{ year: scenarioYear, fullRevenue: 100 }] }) });
@@ -74,6 +74,7 @@ assert.equal(resultVersions.listArchivedResults(project, scenario.id).length, 1,
 
 const second = calculate().result;
 assert.notEqual(second.resultVersion.id, first.resultVersion.id);
+assert.ok(Math.abs(first.totalFullRevenue - second.totalFullRevenue - first.totalEnergy * 7) < 0.0001);
 assert.equal(second.resultVersion.scenarioName, "重命名后方案");
 assert.equal(roughPrice.baselineResultState(project, scenario, second).current, true);
 const restored = JSON.parse(JSON.stringify(project));

@@ -136,7 +136,7 @@ approx(totals.comprehensiveFee, -1230000, "周期综合费用以负值参与对�
 assert.equal(annualExportRows.length, 3);
 assert.equal(annualExportRows[0][0], "year");
 assert.equal(annualExportRows[1][0], 2026);
-assert.equal(annualExportRows[1][13], "324.900000");
+assert.equal(annualExportRows[1][13], "324.300000");
 assert.equal(annualExportRows[1][annualExportRows[0].indexOf("storage_spot_increment")], "0.00");
 assert.equal(annualExportRows[1][annualExportRows[0].indexOf("storage_independent_revenue")], "400000.00");
 assert.equal(hourlyExportRows.length, 8761);
