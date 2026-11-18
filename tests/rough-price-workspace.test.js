@@ -558,6 +558,23 @@ fillSettlement(conditionalFixture, { feesNetPrice: 0, storagePrice: -5 });
 conditionalFixture.controls.form.onsubmit({ preventDefault() {} });
 assert.equal(conditionalData.project.roughPrice.snapshots[0].rows[0].storageSupplement, -5,
   "a storage correction can carry a signed net amount");
+conditionalData.project.hasStorage = false;
+workspace.renderWorkspace(conditionalOptions);
+fillSettlement(conditionalFixture, { feesNetPrice: 1 });
+conditionalFixture.controls.form.onsubmit({ preventDefault() {} });
+assert.equal(conditionalData.project.roughPrice.draftsByScenario[conditionalData.scenario.id].settlement.storagePrice, -5,
+  "editing a different assumption preserves the previously entered storage draft");
+assert.equal(conditionalData.project.roughPrice.snapshots[0].rows[0].storageSupplement, 0);
+
+const lateConfirmationFixture = documentFixture();
+const lateConfirmationData = projectFixture();
+const lateConfirmationOptions = { documentRef: lateConfirmationFixture.documentRef, ...lateConfirmationData, domain, inputState };
+workspace.renderWorkspace(lateConfirmationOptions);
+fillSettlement(lateConfirmationFixture, { ltYear1Pnl: 8 });
+inputState.confirmConfig(lateConfirmationData.scenario, ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherNetIncome"]);
+workspace.renderWorkspace(lateConfirmationOptions);
+assert.doesNotMatch(lateConfirmationFixture.rough.innerHTML, /data-rough-settlement="feesNetPrice" value=""/,
+  "a single entered rough assumption does not block future carry of newly confirmed compatible values");
 
 const csv = workspace.buildRoughCsv(snapshot);
 assert.match(csv, /^\ufeff/);
