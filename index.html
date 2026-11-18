@@ -99,7 +99,7 @@
     <script src="./src/domain/supply-demand.js?v=20261118q" defer></script>
     <script src="./src/domain/price-forecast.js?v=20261118q" defer></script>
     <script src="./src/domain/result-versions.js?v=20261118i" defer></script>
-    <script src="./src/domain/revenue-rules.js?v=20261118i" defer></script>
+    <script src="./src/domain/revenue-rules.js?v=20261118r" defer></script>
     <script src="./src/domain/export-builders.js?v=20261118i" defer></script>
     <script src="./src/domain/storage-dispatch.js?v=20261118b" defer></script>
     <script src="./src/domain/revenue-calculator.js?v=20261118h" defer></script>
@@ -123,7 +123,7 @@
     <script src="./src/ui/result-print.js?v=20261118g" defer></script>
     <script src="./src/ui/result-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/scenario-charts.js?v=20261118i" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20261118i" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261118r" defer></script>
     <script src="./src/ui/scenario-visual-data.js?v=20261118i" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20261118e" defer></script>
     <script src="./src/ui/compare-charts.js?v=20261118i" defer></script>
@@ -142,7 +142,7 @@
     <script src="./src/domain/scenario-config.js?v=20261118h" defer></script>
     <script src="./src/domain/rough-price.js?v=20261118p" defer></script>
     <script src="./src/ui/rough-trend-chart.js?v=20261118p" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261118p" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261118r" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261118h" defer></script>
     <script src="./src/domain/project-settings.js?v=20261118n" defer></script>
     <script src="./src/domain/project-model.js?v=20261118h" defer></script>
@@ -152,7 +152,7 @@
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261118q" defer></script>
-    <script src="./app.js?v=20261118o" defer></script>
+    <script src="./app.js?v=20261118r" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -1134,13 +1134,17 @@
                         <input id="mechanism-price" type="number" min="0" value="340" step="any">
                       <span class="scenario-field-status" data-refinement-field="mechanismPrice">待确认</span>
                       </label>
-                      <label>机制执行起始年月
+                      <label>机制开始年月
                         <input id="mechanism-start-ym" type="month" value="2027-01">
                       <span class="scenario-field-status" data-refinement-field="mechanismStartYm">待确认</span>
                       </label>
-                      <label>机制执行结束年月
-                        <input id="mechanism-end-ym" type="month" value="2030-12">
+                      <label><span id="mechanism-duration-heading">机制执行周期（月）</span>
+                        <input id="mechanism-duration-months" type="number" min="1" step="1" value="48" inputmode="numeric">
+                        <span data-help="机制执行周期" data-help-anchor="#mechanism-duration-heading">按整月填写，12 个月为 1 年。开始年月计入执行周期。</span>
                       <span class="scenario-field-status" data-refinement-field="mechanismEndYm">待确认</span>
+                      </label>
+                      <label>机制结束年月（自动计算）
+                        <input id="mechanism-end-ym" type="month" value="2030-12" readonly>
                       </label>
                       <label>机制补差参照
                         <select id="mechanism-reference-mode">
@@ -2016,7 +2020,7 @@
                 </article>
                 <article class="help-card">
                   <strong>差价机制结算收入</strong>
-                  <p>按年度口径处理。输入机制电量占比、机制电价和起止年月，用于仍处于机制期的场站。</p>
+                  <p>填写机制电量占比、机制电价、开始年月和执行周期（月）。开始月计为第 1 个月，结束年月自动计算。系统按各年有效执行月份折算机制电量占比。</p>
                 </article>
                 <article class="help-card">
                   <strong>交易策略损益</strong>

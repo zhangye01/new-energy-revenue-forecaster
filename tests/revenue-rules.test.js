@@ -3,6 +3,8 @@
 const assert = require("node:assert/strict");
 const {
   monthSerial,
+  mechanismDurationMonths,
+  mechanismEndMonth,
   mechanismActiveMonthsForYear,
   mechanismReferencePrice,
   ltPnlPriceForYear,
@@ -14,6 +16,22 @@ const {
 
 assert.equal(monthSerial("2026-01"), 2026 * 12);
 assert.equal(monthSerial("bad"), null);
+
+for (const [startYm, months, endYm] of [
+  ["2026-01", 48, "2029-12"], ["2026-07", 12, "2027-06"],
+  ["2026-12", 1, "2026-12"], ["2026-12", 2, "2027-01"], ["9999-11", 2, "9999-12"]
+]) {
+  assert.equal(mechanismEndMonth(startYm, months), endYm);
+  assert.equal(mechanismDurationMonths(startYm, endYm), months);
+}
+for (const months of [0, -1, 1.5, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER, 3]) {
+  assert.equal(mechanismEndMonth("9999-11", months), "");
+}
+for (const ym of ["", "2026-13", "2026-1", "0000-01", null]) {
+  assert.equal(mechanismEndMonth(ym, 1), "");
+  assert.equal(mechanismDurationMonths("2026-01", ym), null);
+}
+assert.equal(mechanismDurationMonths("2026-10", "2026-09"), null);
 
 assert.equal(mechanismActiveMonthsForYear(2026, "2026-01", "2026-12"), 12);
 assert.equal(mechanismActiveMonthsForYear(2026, "2026-07", "2027-06"), 6);

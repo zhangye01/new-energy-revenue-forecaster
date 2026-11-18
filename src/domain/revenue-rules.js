@@ -26,6 +26,26 @@
     return year * 12 + (month - 1);
   }
 
+  function executionMonthSerial(ym) {
+    return typeof ym === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(ym) ? monthSerial(ym) : null;
+  }
+
+  function mechanismDurationMonths(startYm, endYm) {
+    const start = executionMonthSerial(startYm);
+    const end = executionMonthSerial(endYm);
+    return start === null || end === null || end < start ? null : end - start + 1;
+  }
+
+  function mechanismEndMonth(startYm, months) {
+    const start = executionMonthSerial(startYm);
+    if (start === null || !Number.isSafeInteger(months) || months < 1) return "";
+    const end = start + months - 1;
+    if (end > 9999 * 12 + 11) return "";
+    const year = String(Math.floor(end / 12)).padStart(4, "0");
+    const month = String(end % 12 + 1).padStart(2, "0");
+    return `${year}-${month}`;
+  }
+
   function mechanismActiveMonthsForYear(year, startYm, endYm) {
     const start = monthSerial(startYm);
     const end = monthSerial(endYm);
@@ -151,6 +171,8 @@
   return Object.freeze({
     ENVIRONMENT_VALUE_VERSION,
     monthSerial,
+    mechanismDurationMonths,
+    mechanismEndMonth,
     mechanismActiveMonthsForYear,
     mechanismReferencePrice,
     ltPnlPriceForYear,

@@ -16,7 +16,7 @@ const envRow = () => ({ greenCertPrice: 20.123456789012345, greenCertRealizeRati
 const feeRow = () => ({ marketOpFee: 6, gridAssessFee: 7, ancillaryFee: 14, otherFee: 3.125, otherIncome: 2 });
 const annualKeys = ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"];
 const scalarIds = ["scenario-name", "mechanism-enabled", "mechanism-ratio", "mechanism-price", "mechanism-start-ym",
-  "mechanism-end-ym", "mechanism-reference-mode", "same-type-spread", "lt-pricing-mode", "lt-year1-pnl",
+  "mechanism-duration-months", "mechanism-end-ym", "mechanism-reference-mode", "same-type-spread", "lt-pricing-mode", "lt-year1-pnl",
   "lt-target-pnl", "lt-converge-speed", "env-value-mode", "green-cert-price", "green-cert-realize-ratio",
   "green-premium-price", "green-premium-realize-ratio",
   "fee-config-mode", "market-op-fee", "grid-assess-fee", "ancillary-fee", "other-net-income",
@@ -36,7 +36,7 @@ function loadForm(targetProject, scenario) {
     feeConfigMode: scenario.config.feeConfigMode
   } });
   const options = { project: targetProject, scenario, refs, querySelector, scenarioConfig: configApi,
-    clamp: (value, min, max) => Math.max(min, Math.min(max, value)), monthSerial: rules.monthSerial,
+    clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
     readEnvValueAllocationDraft: () => {
       const greenCertRatio = Number(querySelector("#green-cert-realize-ratio").value) / 100;
       const greenPremiumRatio = Number(querySelector("#green-premium-realize-ratio").value) / 100;
@@ -131,6 +131,23 @@ for (const key of annualKeys) {
   assert.equal(Object.hasOwn(beyondStored.config[key], 2029), false, "missing years must not be fabricated");
 }
 assert.equal(JSON.stringify(reviewProject.roughPrice), roughBeforeReview);
+
+const datedScenario = model.createBaselineScenario(project, { nowIso: frozenTime });
+Object.assign(datedScenario.config, { mechanismEnabled: true, mechanismStartYm: "2026-03", mechanismEndYm: "2027-08" });
+model.confirmConfig(datedScenario, ["mechanismStartYm", "mechanismEndYm"], { project });
+const datedSource = JSON.stringify(datedScenario.config);
+const datedForm = loadForm(reviewProject, datedScenario);
+assert.equal(datedForm.fields.get("#mechanism-duration-months").value, 18);
+assert.equal(datedForm.draft().config.mechanismEndYm, "2027-08");
+datedForm.fields.get("#mechanism-start-ym").value = "2026-10";
+const movedTerm = datedForm.draft();
+assert.equal(movedTerm.ok, true, movedTerm.message);
+assert.equal(movedTerm.config.mechanismEndYm, "2028-03", "changing the start moves the readonly endpoint even when period length is unchanged");
+assert.equal(JSON.stringify(datedScenario.config), datedSource, "editing the form cannot rewrite persisted dates before saving");
+assert.equal(form.applyScenarioSaveDraft({ project: reviewProject, scenario: datedScenario, draft: movedTerm, nowIso: () => frozenTime }).ok, true);
+assert.equal(datedScenario.config.mechanismStartYm, "2026-10");
+assert.equal(datedScenario.confirmedConfig.mechanismEndYm, "2028-03");
+assert.equal(JSON.stringify(reviewProject.roughPrice), roughBeforeReview, "saving a revised term leaves the historical rough snapshot intact");
 
 // A newly saved confirmation may not yet have passed through hydration. Expanding
 // the project must retain that original evidence before making annual inputs pending.

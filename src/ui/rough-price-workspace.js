@@ -44,6 +44,7 @@
       const lockMessage = locked && entry?.dirty
         ? "方案已锁定，未保存的共用参数调整已撤销，当前显示已保存值。" : "";
       entry = { config: clone(scenario.config || {}), source, projectContext, locked, dirty: false,
+        mechanismDurationMonths: revenueRules.mechanismDurationMonths(scenario.config?.mechanismStartYm, scenario.config?.mechanismEndYm),
         snapshotId: entry?.snapshotId || "",
         trendVisibility: entry?.trendVisibility || {},
         threshold: entry?.threshold ?? 10, message: lockMessage, tone: "info", groupOpen: {} };
@@ -89,18 +90,21 @@
     const open = entry.groupOpen.mechanism ?? !complete;
     const status = complete ? "已带入，可展开核对" : count ? `已带入 ${count} 项 · 其余待确认` : "请填写或确认";
     const referenceMode = config.mechanismReferenceMode === "same_type" ? "same_type" : "project_capture";
+    const duration = Object.hasOwn(entry, "mechanismDurationMonths") ? entry.mechanismDurationMonths
+      : revenueRules.mechanismDurationMonths(config.mechanismStartYm, config.mechanismEndYm);
     const mechanism = inputField("mechanismEnabled", "启用机制电价", config.mechanismEnabled, { type: "checkbox", disabled: locked }) +
       inputField("mechanismPrice", "机制电价", config.mechanismPrice, { disabled: locked, min: 0 }) +
       inputField("mechanismRatio", "机制电量占比", config.mechanismRatio, { ratio: true, min: 0, max: 100, disabled: locked }) +
       inputField("mechanismStartYm", "机制开始年月", config.mechanismStartYm, { type: "month", disabled: locked }) +
-      inputField("mechanismEndYm", "机制结束年月", config.mechanismEndYm, { type: "month", disabled: locked }) +
+      `<label>机制执行周期（月）<input id="rough-mechanism-duration-months" type="number" min="1" step="1" inputmode="numeric" data-shared-key="mechanismEndYm" value="${escapeHtml(duration)}"${locked ? " disabled" : ""}></label>` +
+      `<label>机制结束年月（自动计算）<input id="rough-mechanism-end-ym" type="month" value="${escapeHtml(config.mechanismEndYm)}" readonly${locked ? " disabled" : ""}></label>` +
       selectField("mechanismReferenceMode", "机制补差参照口径", referenceMode,
         [["project_capture", "项目捕获电价（现有口径）"], ["same_type", "同类型机组均价（九步口径）"]], locked) +
       inputField("sameTypeSpread", "同类型机组价差", config.sameTypeSpread ?? 0, { disabled: locked });
     return `<details class="rough-parameter-group" data-rough-group="mechanism"${open ? " open" : ""}>
       <summary><strong id="rough-group-mechanism-title">机制电价与补差口径</strong><span>${locked ? "方案已锁定，只读" : status}</span></summary>
       <div class="rough-fieldset"><div class="rough-fields">${fieldStates(mechanism)}</div>
-      <p class="rough-note" data-help="机制补差口径" data-help-anchor="#rough-group-mechanism-title">已确认机制参数自动带入。年度有效机制占比按执行月份折算，同类型机组均价等于项目捕获电价加同类型机组价差。</p>
+      <p class="rough-note" data-help="机制补差口径" data-help-anchor="#rough-group-mechanism-title">已确认机制参数自动带入。开始当月计为第 1 个月，12 个月为 1 年。年度有效机制占比按执行月份折算，同类型机组均价等于项目捕获电价加同类型机组价差。</p>
       <div class="rough-actions"><button type="button" class="ghost-button" data-rough-save-shared${locked ? " disabled" : ""}>确认并保存机制参数</button><span data-rough-dirty>${entry.dirty ? "有未保存调整，生成粗算时一并保存。" : ""}</span></div></div></details>`;
   }
 
@@ -429,6 +433,9 @@
       if (target) { target.textContent = text; target.classList?.toggle("rough-alert", tone === "error"); }
       onMessage(text, tone);
     };
+    const invalidMechanismPeriod = (config) => config.mechanismEnabled
+      && revenueRules.mechanismDurationMonths(config.mechanismStartYm, config.mechanismEndYm) === null;
+    const periodMessage = "请填写有效的机制开始年月和执行周期。执行周期须为正整数月。";
     const commitShared = (confirmAll = false) => {
       if (scenario.locked || !confirmAll && !entry.dirty) return false;
       const changed = entry.dirty;
@@ -465,7 +472,14 @@
         const { sharedKey: key } = field.dataset;
         const value = field.type === "checkbox" ? field.checked : field.type === "number" ?
           field.value === "" ? null : Number(field.value) / (field.dataset.sharedRatio ? 100 : 1) : field.value;
-        entry.config[key] = value;
+        if (key === "mechanismEndYm") entry.mechanismDurationMonths = value;
+        else entry.config[key] = value;
+        if (key === "mechanismStartYm" || key === "mechanismEndYm") {
+          const end = revenueRules.mechanismEndMonth(entry.config.mechanismStartYm, entry.mechanismDurationMonths);
+          entry.config.mechanismEndYm = end;
+          const endControl = refs.rough.querySelector("#rough-mechanism-end-ym");
+          if (endControl) endControl.value = end;
+        }
         entry.dirty = JSON.stringify(entry.config) !== entry.source;
         const dirtyLabel = refs.rough.querySelector("[data-rough-dirty]");
         if (dirtyLabel) dirtyLabel.textContent = entry.dirty ? "有未保存调整，生成粗算时一并保存。" : "";
@@ -479,6 +493,7 @@
     const save = refs.rough.querySelector("[data-rough-save-shared]");
     if (save) save.onclick = () => {
       if (scenario.locked) return message("当前方案已锁定。", "error");
+      if (invalidMechanismPeriod(entry.config)) return message(periodMessage, "error");
       const errors = domain.validateRoughMechanism(entry.config);
       if (errors.length) return message(errors.join(" "), "error");
       const changed = commitShared(true);
@@ -496,6 +511,7 @@
         .some((field) => Number(field.value) === endYear);
       if (repeatedEnd) return message("末年价格请填写在自动生成的末年节点，其他节点请选择不同年份。", "error");
       const config = scenario.locked ? scenario.config : entry.config;
+      if (invalidMechanismPeriod(config)) return message(periodMessage, "error");
       const result = domain.calculateCompactRough(project, { ...scenario, config }, { ...draft, settlement }, {
         id: typeof options.makeId === "function" ? options.makeId("rough") : undefined,
         createdAt: typeof options.nowIso === "function" ? options.nowIso() : options.nowIso

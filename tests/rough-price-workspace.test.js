@@ -40,18 +40,23 @@ function documentFixture() {
     capture: new Element(), source: new Element(), node: new Element({ roughNode: "0", nodeField: "value" }),
     endPrice: new Element(),
     sharedPrice: new Element({ sharedKey: "mechanismPrice" }), form: new Element(),
+    mechanismStart: new Element({ sharedKey: "mechanismStartYm" }),
+    mechanismDuration: new Element({ sharedKey: "mechanismEndYm" }), mechanismEnd: new Element(),
     save: new Element(), message: new Element(), dirty: new Element(), add: new Element(),
     threshold: new Element(), comparisonSummary: new Element(), snapshot: new Element()
   };
+  controls.mechanismStart.type = "month";
   controls.settlement = Object.fromEntries(Object.keys(compactInputs).map((key) => [key, new Element({ roughSettlement: key })]));
   rough.selectors = {
     "[data-rough-capture]": controls.capture, "[data-rough-source]": controls.source,
     "[data-rough-end-price]": controls.endPrice,
     "#rough-price-form": controls.form, "[data-rough-save-shared]": controls.save,
     "[data-rough-message]": controls.message, "[data-rough-dirty]": controls.dirty,
+    "#rough-mechanism-end-ym": controls.mechanismEnd,
     "[data-rough-add]": controls.add
   };
-  rough.groups = { "[data-rough-node]": [controls.node], "[data-shared-key]": [controls.sharedPrice],
+  rough.groups = { "[data-rough-node]": [controls.node],
+    "[data-shared-key]": [controls.sharedPrice, controls.mechanismStart, controls.mechanismDuration],
     "[data-rough-settlement]": Object.values(controls.settlement) };
   compare.selectors = { "[data-rough-threshold]": controls.threshold, "[data-rough-comparison-summary]": controls.comparisonSummary };
   compare.groups = { "[data-rough-snapshot]": [controls.snapshot] };
@@ -80,6 +85,49 @@ function projectFixture() {
   project.scenarios = [scenario]; project.activeScenarioId = scenario.id;
   return { project, scenario };
 }
+
+const mechanismFixture = documentFixture();
+const mechanismData = projectFixture();
+const mechanismConfig = mechanismData.scenario.config;
+Object.assign(mechanismConfig, { mechanismEnabled: true, mechanismStartYm: "2027-03", mechanismEndYm: "2028-01" });
+const history = domain.calculateCompactRough(mechanismData.project, mechanismData.scenario,
+  { spotNodes: [{ year: 2027, value: 200 }], captureRate: 95, settlement: compactInputs },
+  { id: "old-mechanism" }).snapshot;
+assert.ok(history);
+const historicalMechanism = JSON.stringify(history);
+mechanismData.project.roughPrice = { draftsByScenario: {}, snapshots: [history] };
+const mechanismOptions = { ...mechanismData, documentRef: mechanismFixture.documentRef, domain, inputState };
+const mechanismControls = mechanismFixture.controls;
+workspace.renderWorkspace(mechanismOptions);
+assert.match(mechanismFixture.rough.innerHTML, /id="rough-mechanism-duration-months"[^>]*value="11"/);
+assert.match(mechanismFixture.rough.innerHTML, /id="rough-mechanism-end-ym"[^>]*value="2028-01" readonly/);
+mechanismControls.mechanismStart.value = "";
+mechanismControls.mechanismStart.oninput();
+assert.equal(mechanismControls.mechanismEnd.value, "");
+workspace.renderWorkspace(mechanismOptions);
+assert.match(mechanismFixture.rough.innerHTML, /id="rough-mechanism-duration-months"[^>]*value="11"/,
+  "temporarily clearing the start keeps the period across rendering");
+mechanismControls.mechanismStart.value = "2027-11";
+mechanismControls.mechanismStart.oninput();
+assert.equal(mechanismControls.mechanismEnd.value, "2028-09");
+for (const invalidDuration of ["", "0", "-1", "1.5", "999999"]) {
+  mechanismControls.mechanismDuration.value = invalidDuration;
+  mechanismControls.mechanismDuration.oninput();
+  assert.equal(mechanismControls.mechanismEnd.value, "");
+  mechanismControls.save.onclick();
+  assert.match(mechanismControls.message.textContent, /执行周期须为正整数月/);
+  assert.equal(mechanismData.scenario.config, mechanismConfig, "an invalid period is never committed");
+}
+mechanismControls.mechanismDuration.value = "4";
+mechanismControls.mechanismDuration.oninput();
+assert.equal(mechanismControls.mechanismEnd.value, "2028-02");
+assert.equal(mechanismData.scenario.config.mechanismEndYm, "2028-01", "the preview does not save until confirmed");
+mechanismControls.save.onclick();
+assert.equal(mechanismData.scenario.config.mechanismStartYm, "2027-11");
+assert.equal(mechanismData.scenario.config.mechanismEndYm, "2028-02");
+assert.equal(Object.hasOwn(mechanismData.scenario.config, "mechanismDurationMonths"), false);
+assert.equal(inputState.isConfigConfirmed(mechanismData.scenario, "mechanismEndYm"), true);
+assert.equal(JSON.stringify(mechanismData.project.roughPrice.snapshots[0]), historicalMechanism);
 
 const priceFixture = documentFixture();
 const priceData = projectFixture();

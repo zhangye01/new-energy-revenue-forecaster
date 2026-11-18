@@ -2916,10 +2916,6 @@ function energyTemplateFlowContext() {
   };
 }
 
-function monthSerial(ym) {
-  return revenueRules.monthSerial(ym);
-}
-
 function mechanismActiveMonthsForYear(year, startYm, endYm) {
   return revenueRules.mechanismActiveMonthsForYear(year, startYm, endYm);
 }
@@ -3773,9 +3769,7 @@ function readScenarioMechanismDraft(scenario) {
     mechanismEnabled: document.querySelector("#mechanism-enabled")?.value === "yes",
     mechanismRatio: Number.isFinite(ratioInput)
       ? clamp(ratioInput / 100, 0, 1)
-      : clamp(Number(scenario?.config?.mechanismRatio || 0), 0, 1),
-    mechanismStartYm: document.querySelector("#mechanism-start-ym")?.value || scenario?.config?.mechanismStartYm || "",
-    mechanismEndYm: document.querySelector("#mechanism-end-ym")?.value || scenario?.config?.mechanismEndYm || ""
+      : clamp(Number(scenario?.config?.mechanismRatio || 0), 0, 1)
   };
 }
 
@@ -4202,7 +4196,7 @@ function saveScenarioFromForm() {
   const scenario = getActiveScenario(project); if (!scenario) return;
 
   const draft = scenarioForm.buildScenarioSaveDraft({
-    project, scenario, refs, clamp, monthSerial, scenarioConfig,
+    project, scenario, refs, clamp, scenarioConfig,
     querySelector: (selector) => document.querySelector(selector),
     readEnvValueAllocationDraft
   });

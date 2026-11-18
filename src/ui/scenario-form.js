@@ -5,7 +5,9 @@
     ? require("../domain/scenario-model") : root.NE_SCENARIO_MODEL;
   const getScenarioConfig = () => typeof module !== "undefined" && module.exports
     ? require("../domain/scenario-config") : root.NE_SCENARIO_CONFIG;
-  const api = factory(getScenarioModel, getScenarioConfig);
+  const getRevenueRules = () => typeof module !== "undefined" && module.exports
+    ? require("../domain/revenue-rules") : root.NE_REVENUE_RULES;
+  const api = factory(getScenarioModel, getScenarioConfig, getRevenueRules);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -13,7 +15,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_SCENARIO_FORM = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel, getScenarioConfig) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (getScenarioModel, getScenarioConfig, getRevenueRules) {
   const loadedRatios = new WeakMap();
   const loadedInputs = new WeakMap();
   const refinementForms = new WeakMap();
@@ -31,7 +33,7 @@
   let storageState = "saved";
   const REFINEMENT_FIELDS = Object.freeze({
     mechanismEnabled: "mechanism-enabled", mechanismRatio: "mechanism-ratio", mechanismPrice: "mechanism-price",
-    mechanismStartYm: "mechanism-start-ym", mechanismEndYm: "mechanism-end-ym",
+    mechanismStartYm: "mechanism-start-ym", mechanismEndYm: "mechanism-duration-months",
     mechanismReferenceMode: "mechanism-reference-mode", sameTypeSpread: "same-type-spread",
     ltPricingMode: "lt-pricing-mode", ltYear1Pnl: "lt-year1-pnl", ltTargetPnl: "lt-target-pnl", ltConvergeSpeed: "lt-converge-speed",
     envValueMode: "env-value-mode", greenCertPrice: "green-cert-price", greenCertRealizeRatio: "green-cert-realize-ratio",
@@ -165,7 +167,9 @@
         const suggestedEfficiency = key === "storageRoundTripEfficiency" && !Object.hasOwn(config, key);
         const value = fieldValue(config, key);
         const missing = key.endsWith("ByYear") ? !annualComplete(key) : !suggestedEfficiency && empty(value);
-        fields[key] = missing ? "missing" : !suggestedEfficiency && getScenarioModel().isConfigConfirmed(scenario, key, value) ? "confirmed" : "pending";
+        const changedDuration = key === "mechanismEndYm" && getRevenueRules().mechanismDurationMonths(config.mechanismStartYm, value)
+          !== getRevenueRules().mechanismDurationMonths(scenario.config?.mechanismStartYm, scenario.config?.mechanismEndYm);
+        fields[key] = missing ? "missing" : !suggestedEfficiency && !changedDuration && getScenarioModel().isConfigConfirmed(scenario, key, value) ? "confirmed" : "pending";
       });
       const missing = keys.filter((key) => fields[key] === "missing").length;
       const pending = keys.filter((key) => fields[key] === "pending").length;
@@ -178,6 +182,7 @@
     const { querySelector = () => null, scenario = {}, project = {}, resetOpen = false } = input;
     const config = { ...scenario.config };
     Object.entries(REFINEMENT_FIELDS).forEach(([key, id]) => {
+      if (key === "mechanismEndYm") return;
       const field = getField(querySelector, `#${id}`);
       if (!field || field.value === undefined) return;
       const raw = field.value;
@@ -185,6 +190,7 @@
         : key.endsWith("Mode") || key.endsWith("Ym") ? raw
           : key.endsWith("Ratio") || key === "storageRoundTripEfficiency" ? readRatioValue(querySelector, `#${id}`, Number(raw) / 100) : Number(raw);
     });
+    if (getField(querySelector, "#mechanism-duration-months")) config.mechanismEndYm = syncMechanismEndMonth(querySelector);
     const state = buildRefinementState({ project, scenario, config });
     state.groups.forEach((group) => {
       const section = getField(querySelector, `[data-refinement-group="${group.id}"]`);
@@ -392,6 +398,18 @@
     return getField(querySelector, selector)?.value || "";
   }
 
+  function readMechanismTerm(querySelector) {
+    const mechanismStartYm = selectValue(querySelector, "#mechanism-start-ym");
+    const months = numberValue(querySelector, "#mechanism-duration-months");
+    return { mechanismStartYm, mechanismEndYm: getRevenueRules().mechanismEndMonth(mechanismStartYm, months) };
+  }
+
+  function syncMechanismEndMonth(querySelector) {
+    const { mechanismEndYm } = readMechanismTerm(querySelector);
+    setValue(querySelector, "#mechanism-end-ym", mechanismEndYm);
+    return mechanismEndYm;
+  }
+
   function textValue(querySelector, selector) {
     return String(getField(querySelector, selector)?.value || "").trim();
   }
@@ -481,12 +499,16 @@
     [
       "#mechanism-ratio",
       "#mechanism-start-ym",
-      "#mechanism-end-ym"
+      "#mechanism-duration-months"
     ].forEach((selector) => {
       const field = querySelector(selector);
       if (!field) return;
-      field.addEventListener("input", () => handlers.updateMarketTradeEnergyDisplay?.());
-      field.addEventListener("change", () => handlers.updateMarketTradeEnergyDisplay?.());
+      const update = () => {
+        if (selector !== "#mechanism-ratio") syncMechanismEndMonth(querySelector);
+        handlers.updateMarketTradeEnergyDisplay?.();
+      };
+      field.addEventListener("input", update);
+      field.addEventListener("change", update);
     });
     [
       "#green-cert-realize-ratio",
@@ -637,7 +659,8 @@
     setRatioValue(querySelector, "#mechanism-ratio", config.mechanismRatio);
     setValue(querySelector, "#mechanism-price", config.mechanismPrice);
     setValue(querySelector, "#mechanism-start-ym", config.mechanismStartYm);
-    setValue(querySelector, "#mechanism-end-ym", config.mechanismEndYm);
+    setValue(querySelector, "#mechanism-duration-months", getRevenueRules().mechanismDurationMonths(config.mechanismStartYm, config.mechanismEndYm));
+    syncMechanismEndMonth(querySelector);
     setValue(querySelector, "#mechanism-reference-mode", ["project_capture", "same_type"].includes(config.mechanismReferenceMode) ? config.mechanismReferenceMode : "");
     setValue(querySelector, "#same-type-spread", config.sameTypeSpread);
     if (refs.ltPricingMode) refs.ltPricingMode.value = storedMode("ltPricingMode", ["auto", "manual"], "auto");
@@ -688,11 +711,14 @@
       "#mechanism-reference-mode",
       "#same-type-spread",
       "#mechanism-start-ym",
+      "#mechanism-duration-months",
       "#mechanism-end-ym"
     ].forEach((selector) => {
       const target = getField(querySelector, selector);
       if (target) target.disabled = locked || !mechanismEnabled;
     });
+    const endLabel = getField(querySelector, "#mechanism-end-ym")?.closest?.("label");
+    if (endLabel) endLabel.hidden = !mechanismEnabled;
 
     [
       getField(querySelector, "#storage-round-trip-efficiency"),
@@ -768,8 +794,7 @@
       mechanismEnabled: selectValue(querySelector, "#mechanism-enabled") === "yes",
       mechanismRatio: readRatioValue(querySelector, "#mechanism-ratio", clamp(numberValue(querySelector, "#mechanism-ratio") / 100, 0, 1)),
       mechanismPrice: numberValue(querySelector, "#mechanism-price"),
-      mechanismStartYm: selectValue(querySelector, "#mechanism-start-ym"),
-      mechanismEndYm: selectValue(querySelector, "#mechanism-end-ym"),
+      ...readMechanismTerm(querySelector),
       mechanismReferenceMode: selectValue(querySelector, "#mechanism-reference-mode") === "same_type" ? "same_type" : "project_capture",
       sameTypeSpread: numberValue(querySelector, "#same-type-spread"),
       ltPricingMode,
@@ -861,7 +886,7 @@
     Object.keys(stored).forEach((key) => {
       const field = getField(querySelector, `#${REFINEMENT_FIELDS[key]}`) || refs[key];
       const loaded = field && loadedInputs.get(field);
-      const unchanged = loaded && String(field.value) === loaded.display
+      const unchanged = key !== "mechanismEndYm" && loaded && String(field.value) === loaded.display
         && JSON.stringify(loaded.original) === JSON.stringify(stored[key]);
       if (!applicable.has(key) || (key.endsWith("ByYear") && !stagedKeys.has(key)) || unchanged) config[key] = stored[key];
     });
@@ -884,7 +909,6 @@
       refs = {},
       querySelector,
       clamp = (value) => value,
-      monthSerial = () => null,
       scenarioConfig = {},
       readEnvValueAllocationDraft = () => ({})
     } = input;
@@ -921,15 +945,10 @@
       if (!allowed.includes(value)) return invalid(`${label}无效或未填写，请明确选择后再保存。`);
     }
 
-    const mechanismEnabled = selectValue(querySelector, "#mechanism-enabled") === "yes";
-    const mechanismStartYm = selectValue(querySelector, "#mechanism-start-ym");
-    const mechanismEndYm = selectValue(querySelector, "#mechanism-end-ym");
-    if (mechanismEnabled) {
-      const startSerial = monthSerial(mechanismStartYm);
-      const endSerial = monthSerial(mechanismEndYm);
-      if (startSerial === null || endSerial === null || endSerial < startSerial) {
-        return invalid("机制执行年月无效，请检查起止区间。");
-      }
+    if (selectValue(querySelector, "#mechanism-enabled") === "yes") {
+      const { mechanismStartYm, mechanismEndYm } = readMechanismTerm(querySelector);
+      if (!getRevenueRules().mechanismEndMonth(mechanismStartYm, 1)) return invalid("请填写有效的机制开始年月。");
+      if (!mechanismEndYm) return invalid("机制执行周期须填写正整数月，且结束年月须在有效范围内。");
     }
 
     const ltPricingMode = scenarioConfig.getLtPricingMode

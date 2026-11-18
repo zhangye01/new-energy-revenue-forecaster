@@ -133,7 +133,8 @@ const derivedEventCalls = [];
 const derivedFields = new Map([
   ["#mechanism-enabled", new FakeTarget()],
   ["#mechanism-ratio", new FakeTarget()],
-  ["#mechanism-start-ym", new FakeTarget()],
+  ["#mechanism-start-ym", new FakeTarget("2026-01")],
+  ["#mechanism-duration-months", new FakeTarget("48")],
   ["#mechanism-end-ym", new FakeTarget()],
   ["#green-cert-realize-ratio", new FakeTarget()],
   ["#green-premium-realize-ratio", new FakeTarget()],
@@ -149,10 +150,20 @@ bindScenarioDerivedFieldEvents({
 derivedFields.get("#mechanism-enabled").dispatch("change");
 derivedFields.get("#mechanism-ratio").dispatch("input");
 derivedFields.get("#mechanism-start-ym").dispatch("change");
+assert.equal(derivedFields.get("#mechanism-end-ym").value, "2029-12", "48 inclusive months end in December of the fourth year");
+derivedFields.get("#mechanism-duration-months").value = "1";
+derivedFields.get("#mechanism-duration-months").dispatch("input");
+assert.equal(derivedFields.get("#mechanism-end-ym").value, "2026-01", "a one-month term ends in the starting month");
+derivedFields.get("#mechanism-start-ym").value = "2026-12";
+derivedFields.get("#mechanism-duration-months").value = "2";
+derivedFields.get("#mechanism-start-ym").dispatch("input");
+assert.equal(derivedFields.get("#mechanism-end-ym").value, "2027-01", "the live calculation crosses years");
 derivedFields.get("#green-cert-realize-ratio").dispatch("input");
 derivedFields.get("#green-premium-realize-ratio").dispatch("change");
 assert.deepEqual(derivedEventCalls, [
   "sync-locks",
+  "market-trade",
+  "market-trade",
   "market-trade",
   "market-trade",
   "env-space",
@@ -238,6 +249,8 @@ loadScenarioToForm({
 assert.equal(loadHarness.fields.get("#scenario-name").value, "基准场景");
 assert.equal(loadHarness.fields.get("#mechanism-enabled").value, "yes");
 assert.equal(loadHarness.fields.get("#mechanism-ratio").value, "36");
+assert.equal(loadHarness.fields.get("#mechanism-duration-months").value, 48, "saved start and end backfill an inclusive duration");
+assert.equal(loadHarness.fields.get("#mechanism-end-ym").value, "2029-12");
 assert.equal(loadHarness.fields.get("#green-cert-realize-ratio").value, "40");
 assert.equal(loadHarness.fields.get("#other-net-income").value, -1, "legacy other income 2 and fee 3 display a net of -1");
 assert.equal(loadRefs.ltPricingMode.value, "manual");
@@ -251,6 +264,7 @@ const lockHarness = makeFields({
   "#mechanism-reference-mode": "same_type",
   "#same-type-spread": "5",
   "#mechanism-start-ym": "2026-01",
+  "#mechanism-duration-months": "48",
   "#mechanism-end-ym": "2029-12"
 });
 const lockRefs = {
@@ -268,6 +282,7 @@ applyScenarioFieldLocks({
   canUseStorageRevenue: false
 });
 assert.equal(lockHarness.fields.get("#mechanism-ratio").disabled, true);
+assert.equal(lockHarness.fields.get("#mechanism-duration-months").disabled, true);
 assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, true);
 assert.equal(lockRefs.storageArbitragePrice.disabled, true);
 assert.equal(lockRefs.storageArbitragePrice.value, "18", "hiding storage controls must preserve their loaded values");
@@ -281,6 +296,7 @@ applyScenarioFieldLocks({
   canUseStorageRevenue: true
 });
 assert.equal(lockHarness.fields.get("#mechanism-price").disabled, true);
+assert.equal(lockHarness.fields.get("#mechanism-duration-months").disabled, true);
 assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, false);
 assert.equal(lockRefs.storageCapacityCompPrice.disabled, true);
 assert.equal(lockRefs.scenarioLockHint.textContent, "当前方案已锁定，请切换方案或解锁。");
@@ -357,7 +373,8 @@ const saveHarness = makeFields({
   "#mechanism-reference-mode": "same_type",
   "#same-type-spread": "5",
   "#mechanism-start-ym": "2026-01",
-  "#mechanism-end-ym": "2029-12",
+  "#mechanism-duration-months": "48",
+  "#mechanism-end-ym": "2040-12",
   "#lt-year1-pnl": "8",
   "#lt-target-pnl": "2",
   "#lt-converge-speed": "1.2",
@@ -396,6 +413,9 @@ assert.equal(config.mechanismReferenceMode, "same_type");
 assert.equal(config.sameTypeSpread, 5);
 assert.equal(config.mechanismEnabled, true);
 assert.equal(config.mechanismRatio, 1);
+assert.equal(config.mechanismStartYm, "2026-01");
+assert.equal(config.mechanismEndYm, "2029-12", "saving reads start and duration even when the readonly display contains a stale value");
+assert.equal(Object.hasOwn(config, "mechanismDurationMonths"), false, "the existing config contract retains start and end dates");
 assert.equal(config.ltConvergeSpeedUnit, "fixed_step");
 assert.equal(config.greenCertRealizeRatio, 0.4);
 assert.equal(config.greenPremiumRealizeRatio, 0.2);
@@ -458,6 +478,7 @@ const saveDraft = buildScenarioSaveDraft({
     "#mechanism-price": "365",
     "#mechanism-reference-mode": "project_capture",
     "#mechanism-start-ym": "2026-01",
+    "#mechanism-duration-months": "24",
     "#mechanism-end-ym": "2027-12",
     "#lt-year1-pnl": "8",
     "#lt-target-pnl": "2",
@@ -473,10 +494,6 @@ const saveDraft = buildScenarioSaveDraft({
     "#storage-round-trip-efficiency": "90"
   }).querySelector,
   clamp,
-  monthSerial: (ym) => {
-    const match = String(ym).match(/^(\d{4})-(\d{2})$/);
-    return match ? Number(match[1]) * 12 + Number(match[2]) : null;
-  },
   scenarioConfig,
   readEnvValueAllocationDraft: () => ({
     greenCertRatio: 0.4,
@@ -561,7 +578,7 @@ assert.match(invalidEnvDraft.message, /0% 至 100%/);
 // A blank active field must not silently become a confirmed zero.
 const numericHarness = makeFields({
   "#scenario-name": "基准场景", "#mechanism-enabled": "yes", "#mechanism-ratio": "0",
-  "#mechanism-price": "0", "#mechanism-start-ym": "2026-01", "#mechanism-end-ym": "2027-12",
+  "#mechanism-price": "0", "#mechanism-start-ym": "2026-01", "#mechanism-duration-months": "24", "#mechanism-end-ym": "2027-12",
   "#mechanism-reference-mode": "same_type", "#same-type-spread": "0",
   "#lt-year1-pnl": "0", "#lt-target-pnl": "0", "#lt-converge-speed": "0",
   "#green-cert-price": "0", "#green-cert-realize-ratio": "0",
@@ -576,23 +593,30 @@ const numericRefs = {
 };
 const numericOptions = {
   project: saveProject, scenario: saveScenario, refs: numericRefs, querySelector: numericHarness.querySelector,
-  scenarioConfig, clamp, monthSerial: (ym) => Number(ym.replace("-", "")),
+  scenarioConfig, clamp,
   readEnvValueAllocationDraft: () => ({ greenCertRatio: 0, greenPremiumRatio: 0, totalRatio: 0 })
 };
 assert.equal(buildScenarioSaveDraft(numericOptions).ok, true, "explicit zero remains valid in every active group");
+const durationInput = numericHarness.fields.get("#mechanism-duration-months");
+for (const invalidDuration of ["", " ", "0", "-1", "1.5", "Infinity", "1000000"]) {
+  durationInput.value = invalidDuration;
+  assert.match(buildScenarioSaveDraft(numericOptions).message, /执行周期/);
+}
+durationInput.value = "1";
+assert.equal(buildScenarioSaveDraft(numericOptions).config.mechanismEndYm, "2026-01");
+durationInput.value = "24";
 for (const [selector, field] of numericHarness.fields) {
-  if (!["#scenario-name", "#mechanism-enabled", "#mechanism-start-ym", "#mechanism-end-ym", "#mechanism-reference-mode", "#storage-round-trip-efficiency"].includes(selector)) {
-    for (const emptyValue of ["", "  "]) {
-      field.value = emptyValue;
-      const invalidDraft = buildScenarioSaveDraft(numericOptions);
-      assert.equal(invalidDraft.ok, false, `${selector} rejects blank input`);
-      assert.match(invalidDraft.message, /不能为空/);
-      const unchangedScenario = { config: { otherFee: 3 }, confirmedConfig: { otherFee: 3 } };
-      assert.equal(applyScenarioSaveDraft({ project: saveProject, scenario: unchangedScenario, draft: invalidDraft }).ok, false);
-      assert.deepEqual(unchangedScenario, { config: { otherFee: 3 }, confirmedConfig: { otherFee: 3 } });
-    }
-    field.value = "0";
+  if (["#scenario-name", "#mechanism-enabled", "#mechanism-start-ym", "#mechanism-duration-months", "#mechanism-end-ym", "#mechanism-reference-mode", "#storage-round-trip-efficiency"].includes(selector)) continue;
+  for (const emptyValue of ["", "  "]) {
+    field.value = emptyValue;
+    const invalidDraft = buildScenarioSaveDraft(numericOptions);
+    assert.equal(invalidDraft.ok, false, `${selector} rejects blank input`);
+    assert.match(invalidDraft.message, /不能为空/);
+    const unchangedScenario = { config: { otherFee: 3 }, confirmedConfig: { otherFee: 3 } };
+    assert.equal(applyScenarioSaveDraft({ project: saveProject, scenario: unchangedScenario, draft: invalidDraft }).ok, false);
+    assert.deepEqual(unchangedScenario, { config: { otherFee: 3 }, confirmedConfig: { otherFee: 3 } });
   }
+  field.value = "0";
 }
 for (const key of ["storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"]) {
   numericRefs[key].value = "";
@@ -609,6 +633,7 @@ numericHarness.querySelector("#storage-round-trip-efficiency").value = "90";
 numericRefs.storageArbitragePrice.value = "";
 assert.equal(buildScenarioSaveDraft(numericOptions).ok, true, "historical rough-only arbitrage is not required for refinement");
 numericHarness.fields.get("#mechanism-enabled").value = "no";
+durationInput.value = "";
 numericHarness.fields.get("#mechanism-price").value = "";
 numericHarness.fields.get("#mechanism-ratio").value = "";
 numericHarness.fields.get("#same-type-spread").value = "";
@@ -946,7 +971,6 @@ assert.equal(JSON.stringify(storageScenario), storageOriginal, "opening refineme
 assert.equal(buildRefinementState({ project: storageProject, scenario: storageScenario }).fields.storageRoundTripEfficiency, "pending");
 const storageOptions = { project: storageProject, scenario: storageScenario, refs: storageRefs,
   querySelector: storageFields.querySelector, scenarioConfig, clamp,
-  monthSerial: require("../src/domain/revenue-rules").monthSerial,
   readEnvValueAllocationDraft: () => ({ greenCertRatio: 1, greenPremiumRatio: 0, totalRatio: 1 }) };
 storageRefs.storageArbitragePrice.value = "999";
 const storageDraft = buildScenarioSaveDraft(storageOptions);
