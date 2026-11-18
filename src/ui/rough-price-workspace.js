@@ -4,11 +4,12 @@
   const isCommonJs = typeof module !== "undefined" && module.exports;
   const api = factory(isCommonJs ? require("../domain/result-versions") : root.NE_RESULT_VERSIONS,
     isCommonJs ? require("../domain/scenario-config") : root.NE_SCENARIO_CONFIG,
-    isCommonJs ? require("../domain/revenue-rules") : root.NE_REVENUE_RULES);
+    isCommonJs ? require("../domain/revenue-rules") : root.NE_REVENUE_RULES,
+    isCommonJs ? require("./rough-trend-chart") : root.NE_ROUGH_TREND_CHART);
   if (isCommonJs) module.exports = api;
   root.NE_ROUGH_PRICE_WORKSPACE = api;
   if (root.window && root.window !== root) root.window.NE_ROUGH_PRICE_WORKSPACE = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (versions, scenarioConfig, revenueRules) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (versions, scenarioConfig, revenueRules, trendChart) {
   const states = new WeakMap();
   const ENV_FIELDS = [
     ["greenCertPrice", "绿证价格"], ["greenCertRealizeRatio", "绿证兑现比例", "ratio"],
@@ -54,6 +55,7 @@
         ? "方案已锁定，未保存的共用参数调整已撤销，当前显示已保存值。" : "";
       entry = { config: clone(scenario.config || {}), source, projectContext, locked, dirty: false,
         snapshotId: entry?.snapshotId || "",
+        trendVisibility: entry?.trendVisibility || {},
         threshold: entry?.threshold ?? 10, message: lockMessage, tone: "info", groupOpen: {} };
       state.entries.set(key, entry);
     }
@@ -165,6 +167,89 @@
     return `<figure class="rough-trend"><figcaption>${escapeHtml(title)} <span>${lines.map((line, index) => `<i class="rough-legend rough-legend-${index}">${escapeHtml(line.label)}</i>`).join(" ")}</span></figcaption><svg viewBox="0 0 620 190" role="img" aria-label="${escapeHtml(title)}，详细数值见下方年度明细"><line x1="58" y1="154" x2="592" y2="154" class="rough-trend-axis"/><text x="5" y="37">${escapeHtml(number(high))}</text><text x="5" y="145">${escapeHtml(number(low))}</text>${path}<text x="58" y="177">${rows[0].year}</text><text x="558" y="177">${rows.at(-1).year}</text></svg></figure>`;
   }
 
+  function annualTrendHtml(visible) {
+    const buttons = trendChart.SERIES.map(({ key, label, stroke, colorKey }) =>
+      `<button type="button" class="rough-trend-toggle" data-rough-trend-series="${key}" data-series-color="${colorKey}" data-series-stroke="${stroke}" aria-pressed="${visible[key] !== false}" aria-controls="rough-annual-trend-plot">${escapeHtml(label)}</button>`).join("");
+    return `<figure class="rough-annual-trend" data-rough-trend>
+      <figcaption><div class="rough-annual-trend-title"><strong id="rough-annual-trend-title">年度粗算电价趋势</strong><span class="rough-trend-unit">元/MWh</span></div>
+        <div class="rough-trend-controls" data-rough-trend-controls role="group" aria-label="显示的电价曲线" hidden>${buttons}</div></figcaption>
+      <p data-help="粗算趋势图" data-help-anchor="#rough-annual-trend-title">点图例显示或隐藏曲线，至少保留一条。悬停查看同年价格。现货线上的圆点标记价格节点，菱形标记测算末年。</p>
+      <div class="rough-annual-plot" id="rough-annual-trend-plot" data-rough-trend-plot role="img" aria-label="年度粗算电价趋势，详细数值见下方年度明细" hidden></div>
+      <p class="rough-trend-fallback" data-rough-trend-fallback>图表暂不可用，可查看下方年度明细。</p>
+    </figure>`;
+  }
+
+  function bindAnnualTrend(documentRef, root, snapshot, visible) {
+    const plot = root.querySelector("[data-rough-trend-plot]");
+    const windowRef = documentRef.defaultView;
+    if (!plot || !windowRef?.echarts?.init) return null;
+    const buttons = Array.from(root.querySelectorAll("[data-rough-trend-series]"));
+    const tokenKeys = { spot: "blue", capture: "orange", settlement: "green", ink: "ink", muted: "muted",
+      line: "line", lineStrong: "line-strong", panel: "panel" };
+    plot.hidden = false;
+    let chart;
+    let width = plot.clientWidth;
+    const draw = () => {
+      const style = windowRef.getComputedStyle(plot);
+      const tokens = Object.fromEntries(Object.entries(tokenKeys).map(([key, cssKey]) =>
+        [key, style.getPropertyValue(`--${cssKey}`).trim()]));
+      chart.setOption(trendChart.buildOption(snapshot, visible, tokens, width), true);
+    };
+    try {
+      chart = windowRef.echarts.init(plot, null, { renderer: "canvas" });
+      draw();
+    } catch {
+      chart?.dispose();
+      plot.hidden = true;
+      return null;
+    }
+    root.querySelector("[data-rough-trend-fallback]").hidden = true;
+    root.querySelector("[data-rough-trend-controls]").hidden = false;
+    const syncLegend = () => {
+      const count = trendChart.SERIES.filter(({ key }) => visible[key] !== false).length;
+      buttons.forEach((button) => {
+        const selected = visible[button.dataset.roughTrendSeries] !== false;
+        const required = selected && count === 1;
+        button.setAttribute("aria-pressed", String(selected));
+        if (required) button.setAttribute("aria-disabled", "true");
+        else button.removeAttribute("aria-disabled");
+        button.title = required ? "至少保留一条曲线" : "";
+      });
+    };
+    buttons.forEach((button) => {
+      const series = trendChart.SERIES.find(({ key }) => key === button.dataset.roughTrendSeries);
+      button.onclick = () => {
+        if (button.getAttribute("aria-disabled") === "true") return;
+        visible[series.key] = visible[series.key] === false;
+        chart.dispatchAction({ type: "hideTip" });
+        chart.dispatchAction({ type: visible[series.key] ? "legendSelect" : "legendUnSelect", name: series.label });
+        syncLegend();
+      };
+    });
+    syncLegend();
+    const resize = () => {
+      const currentWidth = plot.clientWidth;
+      if (!currentWidth || chart.isDisposed()) return;
+      chart.resize();
+      if (currentWidth === width) return;
+      width = currentWidth;
+      draw();
+    };
+    const observer = windowRef.ResizeObserver ? new windowRef.ResizeObserver(resize) : null;
+    if (observer) observer.observe(plot);
+    else windowRef.addEventListener("resize", resize);
+    const themeObserver = windowRef.MutationObserver && documentRef.body ? new windowRef.MutationObserver(() => {
+      if (!chart.isDisposed() && plot.clientWidth) draw();
+    }) : null;
+    themeObserver?.observe(documentRef.body, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => {
+      themeObserver?.disconnect();
+      if (observer) observer.disconnect();
+      else windowRef.removeEventListener("resize", resize);
+      chart.dispose();
+    };
+  }
+
   function roughFeeBreakdown(snapshot, row) {
     return revenueRules.getOtherNetBreakdown(snapshot.calculationConfig || snapshot.config, row.year, row.fee, row.otherIncome);
   }
@@ -176,7 +261,7 @@
       ${snapshotState && !snapshotState.comparable ? `<p class="rough-alert">${escapeHtml(snapshotState.message)}</p>` : snapshotState?.refined ? '<span class="rough-badge">已保留原粗算 · 收益参数已细化</span>' : ""}
       <div class="rough-metrics"><div><span>全周期电量加权均价</span><strong>${number(summary.weightedPrice)}<small> 元/MWh</small></strong>${summary.weightedPrice === null ? "<small>电量未完整录入，暂不展示</small>" : ""}</div><div><span>年度算术均价（参考）</span><strong>${number(summary.simpleAverage)}<small> 元/MWh</small></strong></div><div><span>首年 / 末年综合结算价</span><strong>${number(summary.firstPrice)} / ${number(summary.lastPrice)}</strong></div></div>
       <div class="rough-assumptions"><span>捕获率 ${number(snapshot.draft.captureRate)}%</span><span>${snapshot.config.mechanismReferenceMode === "same_type" ? `同类型补差 · 价差 ${number(snapshot.config.sameTypeSpread)} 元/MWh` : "项目捕获价补差"}</span><span id="rough-source-summary">${snapshot.draft.sourceNote ? "已记录假设来源" : "未填写假设来源"}</span>${snapshot.draft.sourceNote ? `<p data-help="假设来源" data-help-anchor="#rough-source-summary">${escapeHtml(snapshot.draft.sourceNote)}</p>` : ""}</div>
-      ${trendSvg(snapshot.rows, [{ key: "spotAvgPrice", label: "现货均价" }, { key: "capturePrice", label: "捕获电价" }, { key: "fullRevenuePrice", label: "综合结算价" }], "年度粗算电价趋势（元/MWh）")}
+      ${annualTrendHtml(entry.trendVisibility || {})}
       <div class="rough-table-wrap"><table class="rough-table"><caption>年度价格及结算贡献（元/MWh；电量为 MWh）</caption><thead><tr>${["年份", "现货均价", "捕获电价", "有效机制占比", "机制补差", "策略贡献", "环境价值贡献", "配储收益", "三项费用", "其他净收入", "综合结算价", "电量"].map((label) => `<th scope="col">${label}</th>`).join("")}</tr></thead><tbody>${snapshot.rows.map((row) => {
         const { primaryFees, otherNetIncome } = roughFeeBreakdown(snapshot, row);
         return `<tr><th scope="row">${row.year}</th><td>${number(row.spotAvgPrice)}</td><td>${number(row.capturePrice)}</td><td>${number(row.mechanismRatio * 100)}%</td><td>${number(row.mechanismAdjustment)}</td><td>${number((1 - row.mechanismRatio) * row.ltPnlPrice)}</td><td>${number(row.envValue)}</td><td>${number(row.storageSupplement)}</td><td>${number(primaryFees)}</td><td>${number(otherNetIncome)}</td><td><strong>${number(row.fullRevenuePrice)}</strong></td><td>${number(row.energyMwh)}</td></tr>`;
@@ -546,6 +631,8 @@
     const inactive = { querySelector: () => null, querySelectorAll: () => [] };
     const refs = { rough: mode === "rough" ? target : inactive, compare: mode === "compare" ? target : inactive };
     const state = getState(documentRef);
+    state.disposeTrend?.();
+    state.disposeTrend = null;
     if (!project || !scenario || !domain) {
       target.innerHTML = '<div class="rough-card rough-empty">请先创建或选择项目及测算方案。<button type="button" class="ghost-button" data-jump="projects-page">选择项目</button></div>';
       target.querySelector("[data-jump]")?.addEventListener?.("click", () => options.onNavigate?.("projects-page"));
@@ -569,6 +656,7 @@
     target.innerHTML = mode === "rough"
       ? roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, options.inputState, domain.getDefaultEndPrice)
       : compareHtml(project, snapshots, snapshot, entry, comparison, scenario, result);
+    if (mode === "rough" && snapshot) state.disposeTrend = bindAnnualTrend(documentRef, target, snapshot, entry.trendVisibility);
     bindWorkspace(options, refs, state, entry, draft, snapshot, comparison);
   }
 

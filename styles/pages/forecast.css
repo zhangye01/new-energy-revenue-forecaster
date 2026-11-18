@@ -70,6 +70,45 @@
 .rough-table thead th { background: var(--table-head-bg); color: var(--table-head-ink); font-weight: 700; }
 .rough-table tbody tr:last-child > * { border-bottom: 0; }
 .rough-table tbody tr:hover { background: var(--panel-soft); }
+.rough-annual-trend { min-width: 0; margin: 0; padding: 14px 14px 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.rough-annual-trend figcaption { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.rough-annual-trend-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; color: var(--ink); font-size: 0.9rem; }
+.rough-trend-unit { color: var(--muted); font-size: 0.75rem; }
+.rough-trend-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.rough-trend-controls[hidden], .rough-annual-plot[hidden], .rough-trend-fallback[hidden] { display: none; }
+.rough-trend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink);
+  background: transparent;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rough-trend-toggle::before { width: 17px; border-top: 2px solid var(--series-color); content: ""; }
+.rough-trend-toggle[data-series-color="spot"] { --series-color: var(--blue); }
+.rough-trend-toggle[data-series-color="capture"] { --series-color: var(--orange); }
+.rough-trend-toggle[data-series-color="settlement"] { --series-color: var(--green); font-weight: 750; }
+.rough-trend-toggle[data-series-color="settlement"]::before { border-top-width: 3px; }
+.rough-trend-toggle[data-series-stroke="dashed"]::before { border-top-style: dashed; }
+.rough-trend-toggle[aria-pressed="false"] { --series-color: var(--line-strong); color: var(--muted); }
+.rough-trend-toggle[aria-disabled="true"] { cursor: default; }
+.rough-trend-toggle:hover:not([aria-disabled="true"]) { border-color: var(--line); background: var(--panel-soft); }
+.rough-trend-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.rough-annual-plot { width: 100%; height: clamp(248px, 24vw, 330px); }
+.rough-trend-fallback { margin: 16px 0; color: var(--muted); font-size: 0.8rem; }
+.rough-year-tooltip { max-width: min(270px, calc(100vw - 38px)); white-space: normal !important; }
+.rough-tooltip-year, .rough-tooltip-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.rough-tooltip-year { margin-bottom: 5px; }
+.rough-tooltip-year > span { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+.rough-tooltip-row i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
+.rough-tooltip-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rough-tooltip-note, .rough-tooltip-driver { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); font-size: 0.76rem; }
 .rough-trend { margin: 0; padding: 10px 12px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); }
 .rough-trend figcaption { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 0.77rem; }
 .rough-trend svg { display: block; max-width: 100%; width: 100%; max-height: 245px; }
@@ -104,6 +143,8 @@
 }
 @media (max-width: 760px) {
   .rough-card { padding: 11px; }
+  .rough-annual-trend { padding: 10px 8px 4px; }
+  .rough-trend-toggle { min-height: 36px; padding-inline: 5px; }
   .rough-draft-grid, .rough-metrics, .rough-compare-controls, .rough-comparison-grid { grid-template-columns: minmax(0, 1fr); }
   .rough-section-head { flex-direction: column; }
   .rough-parameter-group > summary > span:not([data-context-help]) { display: block; margin: 5px 0 0 16px; }

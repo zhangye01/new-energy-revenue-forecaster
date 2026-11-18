@@ -60,6 +60,7 @@
 | `chart-lifecycle.js` | ECharts 实例存活判断、批量 resize、窗口 resize 绑定和双帧延迟刷新 |
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
 | `rough-price-workspace.js` | 独立粗算页面、共用参数编辑、粗算快照与结果阶段交叉验证 |
+| `rough-trend-chart.js` | 读取粗算快照构建年度趋势图，统一坐标轴、价格节点与年度悬停提示 |
 | `supply-demand-workspace.js` | 供需元素编辑、草稿、曲线粘贴、生成预览和CSV导出 |
 | `supply-demand-flow.js` | 供需保存/水合、预测输入准备、来源有效性及旧运行失效编排 |
 | `forecast-page.js` | 电价预测版本列表、质量门槛和激活日志 HTML 构造 |
