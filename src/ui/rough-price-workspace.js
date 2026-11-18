@@ -173,7 +173,7 @@
     return `<figure class="rough-annual-trend" data-rough-trend>
       <figcaption><div class="rough-annual-trend-title"><strong id="rough-annual-trend-title">年度粗算电价趋势</strong><span class="rough-trend-unit">元/MWh</span></div>
         <div class="rough-trend-controls" data-rough-trend-controls role="group" aria-label="显示的电价曲线" hidden>${buttons}</div></figcaption>
-      <p data-help="粗算趋势图" data-help-anchor="#rough-annual-trend-title">点图例显示或隐藏曲线，至少保留一条。悬停查看同年价格。现货线上的圆点标记价格节点，菱形标记测算末年。</p>
+      <p data-help="粗算趋势图" data-help-anchor="#rough-annual-trend-title">点图例显示或隐藏曲线，至少保留一条。小圆点对应各年，悬停查看同年价格。现货线上的空心圆标记价格节点，菱形标记测算末年。</p>
       <div class="rough-annual-plot" id="rough-annual-trend-plot" data-rough-trend-plot role="img" aria-label="年度粗算电价趋势，详细数值见下方年度明细" hidden></div>
       <p class="rough-trend-fallback" data-rough-trend-fallback>图表暂不可用，可查看下方年度明细。</p>
     </figure>`;

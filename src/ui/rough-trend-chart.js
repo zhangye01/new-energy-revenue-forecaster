@@ -137,6 +137,7 @@
     const years = rows.map((row) => String(row.year));
     const ticks = yearTicks(rows, width);
     const nodes = spotNodes(snapshot, rows, axis.scale, colors);
+    const annualDotSize = width < 500 || rows.length > 45 ? 3 : 5;
     const axisLabel = { color: colors.muted, fontSize: 11 };
     return {
       animation: false,
@@ -156,7 +157,7 @@
         axisLabel: { ...axisLabel, formatter: axis.formatter }, splitLine: { show: true, lineStyle: { color: colors.line } } },
       series: SERIES.map(({ key, label, stroke, colorKey }, index) => ({
         id: key, name: label, type: "line", smooth: false, connectNulls: false, z: index + 2,
-        showSymbol: rows.length === 1 && index > 0, symbol: "circle", symbolSize: 7,
+        showSymbol: true, showAllSymbol: true, symbol: "circle", symbolSize: rows.length === 1 ? 7 : annualDotSize,
         itemStyle: { color: colors[colorKey] }, lineStyle: { color: colors[colorKey], type: stroke, width: index === 2 ? 3 : 2 },
         data: rows.map((row) => Number.isFinite(row[key]) ? row[key] / axis.scale : null),
         ...(index === 0 ? { markPoint: { silent: true, label: { show: false }, data: nodes } } : {})
