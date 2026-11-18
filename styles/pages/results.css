@@ -38,6 +38,11 @@
   color: var(--text);
 }
 
+#result-scenario-heading {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .result-report-lead {
   max-width: 980px;
   color: var(--muted);
@@ -135,6 +140,31 @@
 
 .result-disclosure-primary {
   border-color: color-mix(in srgb, var(--blue) 35%, var(--line));
+}
+
+.result-version-trace {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.result-history-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+
+.result-history-picker select {
+  width: min(100%, 32rem);
+  min-width: 0;
+}
+
+.result-history [data-history-detail] {
+  display: grid;
+  gap: 8px;
 }
 
 .result-insight-list,
@@ -387,6 +417,8 @@
   .topbar,
   .workflow-context,
   #results-page .button-inline,
+  #results-page .result-history,
+  #result-current-trace,
   #results-page .result-report-tabbar,
   #results-page .result-hourly-detail,
   #hourly-preview-hint {
@@ -456,6 +488,11 @@
     gap: 6px;
     font-size: 11px;
     color: #222;
+  }
+
+  .print-result-trace {
+    grid-column: 1 / -1;
+    overflow-wrap: anywhere;
   }
 
   body.print-report-mode #results-page .grid-2 {

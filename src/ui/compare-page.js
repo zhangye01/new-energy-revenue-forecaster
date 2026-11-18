@@ -398,6 +398,7 @@
       available = [],
       compareState = {},
       comparePeriod = "-",
+      renderPlaceholder = () => {},
       sensitivitySettings = {},
       detectTopDriver = () => "-",
       asCompactMoney = (value) => String(value),
@@ -408,9 +409,17 @@
       renderers = {}
     } = input;
 
-    renderers.renderSensitivityTornadoChart?.(compareState.sensitivityFactors, compareState.baselineRevenueWan);
+    if (compareState.sensitivityNotice) {
+      renderPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, compareState.sensitivityNotice);
+    } else {
+      renderers.renderSensitivityTornadoChart?.(compareState.sensitivityFactors, compareState.baselineRevenueWan);
+    }
     renderers.renderSensitivityFactorList?.(compareState.allSensitivityFactors, compareState.sensitivityFactors);
-    renderers.renderSensitivityResponseChart?.(compareState.sensitivityFactors, compareState.baselineRevenueWan);
+    if (compareState.sensitivityNotice) {
+      renderPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, compareState.sensitivityNotice);
+    } else {
+      renderers.renderSensitivityResponseChart?.(compareState.sensitivityFactors, compareState.baselineRevenueWan);
+    }
     renderers.renderSensitivityTable?.(compareState.sensitivityFactors);
 
     applyCompareView({
@@ -488,6 +497,7 @@
       available,
       compareState,
       comparePeriod,
+      renderPlaceholder,
       sensitivitySettings,
       detectTopDriver,
       asCompactMoney,

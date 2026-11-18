@@ -151,6 +151,12 @@
     }
     ["energyData", "statuses", "energyTemplateExports", "roughPrice", "resultsByScenario"].forEach((key) => validateContainer(project, key, false, path));
     validateContainer(project, "legacyStorageResultsByScenario", false, path);
+    validateContainer(project, "resultHistoryByScenario", false, path);
+    for (const versions of Object.values(project.resultHistoryByScenario || {})) {
+      if (!Array.isArray(versions) || versions.some((version) => !isObject(version) || !Array.isArray(version.annualRows))) {
+        throw new Error(`备份测算历史结构无效：${path}，未恢复任何项目。`);
+      }
+    }
     ["priceRuns", "activationLogs", "restoredFromProjectIds", "duplicatedFromProjectIds"].forEach((key) => validateContainer(project, key, true, path));
     project.scenarios.forEach((scenario, i) => {
       if (!isObject(scenario)) throw new Error(`备份方案结构无效：${path}.scenarios[${i}]，未恢复任何项目。`);

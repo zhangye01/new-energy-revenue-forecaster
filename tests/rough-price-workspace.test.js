@@ -489,7 +489,10 @@ assert.match(compareCsv, /综合价差异率/);
 assert.match(compareCsv, /基准结果生成时间/);
 assert.match(compareCsv, /与当前基准结果对照/);
 const historicCsv = workspace.buildComparisonCsv(snapshot, { runId: "old-run" }, {
-  rows: [], baselineState: { current: false, message: "生效现货预测已变化。" }
+  rows: [], baselineState: { current: false, message: "生效现货预测已变化。" },
+  resultTrace: { versionId: "result-traced", priceSourceLabel: "演示现货曲线", priceContentFingerprint: "price-v1-0011223344556677" }
 });
 assert.match(historicCsv, /"基准结果状态","历史版。生效现货预测已变化。"/);
+assert.match(historicCsv, /"测算版本","result-traced"/);
+assert.match(historicCsv, /"价格来源","演示现货曲线"/);
 console.log("rough price workspace tests passed");

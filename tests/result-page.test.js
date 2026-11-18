@@ -97,7 +97,7 @@ assert.equal(pricePane.hidden, false);
 assert.equal(annualPane.hidden, true);
 
 assert.match(buildEmptyMetricCards(), /首年全口径收入/);
-assert.match(buildEmptyMetricCards(), /生效方案/);
+assert.match(buildEmptyMetricCards(), /当前方案/);
 assert.match(
   buildResultMetaHtml({
     projectName: "江苏<风电>",
@@ -122,6 +122,7 @@ assert.equal(noProjectState.view.state, "no_project");
 
 const resultDomRefs = {
   resultReportMeta: { innerHTML: "old" },
+  resultScenarioHeading: { textContent: "old" },
   resultExecutiveSummary: { textContent: "old" },
   resultMetricGrid: { innerHTML: "old" },
   resultInsightList: { innerHTML: "old" },
@@ -139,6 +140,7 @@ applyResultPageViewModel({
   refs: resultDomRefs,
   view: {
     metaHtml: "<span>项目：测试</span>",
+    scenarioHeading: "当前方案 · 压力方案",
     executiveSummary: "摘要",
     metricHtml: "<article>指标</article>",
     insightHtml: "<article>洞察</article>",
@@ -149,6 +151,7 @@ applyResultPageViewModel({
   }
 });
 assert.equal(resultDomRefs.resultReportMeta.innerHTML, "<span>项目：测试</span>");
+assert.equal(resultDomRefs.resultScenarioHeading.textContent, "当前方案 · 压力方案");
 assert.equal(resultDomRefs.resultExecutiveSummary.textContent, "摘要");
 assert.equal(resultDomRefs.resultMetricGrid.innerHTML, "<article>指标</article>");
 assert.equal(resultDomRefs.hourlyPreviewHint.textContent, "预览");
@@ -187,6 +190,7 @@ for (const [view, current] of [
 const project = { name: "江苏海上风电示例项目" };
 const scenario = {
   name: "基准场景",
+  isBaseline: true,
   config: {
     mechanismEnabled: true,
     mechanismPrice: 365
@@ -208,6 +212,8 @@ const noResult = buildResultPageViewModel({
 assert.equal(noResult.state, "no_result");
 assert.match(noResult.metricHtml, /周期总上网电量/);
 assert.equal(noResult.chartPlaceholder, "请先发起基准测算");
+assert.equal(noResult.scenarioHeading, "基准方案 · 基准场景");
+assert.equal(noResult.calculationLabel, "发起基准测算");
 
 const annualRow = {
   year: 2026,
@@ -302,6 +308,25 @@ assert.equal(renderState.result, result);
 assert.equal(renderState.view.state, "ready");
 assert.match(renderState.view.metaHtml, /项目：江苏海上风电示例项目/);
 assert.match(renderState.view.assumptionHtml, /环境价值采用逐年导入配置/);
+assert.equal(renderState.view.scenarioHeading, "基准方案 · 基准场景");
+
+const pressureScenario = { id: "pressure", name: "费用压力方案", isBaseline: false, config: { mechanismEnabled: false } };
+const pressureResult = { ...result, avgFullRevenuePrice: 348 };
+const pressureRender = buildResultPageRenderState({
+  project: { ...project, resultsByScenario: { baseline: result, pressure: pressureResult } },
+  getActiveScenario: () => pressureScenario,
+  buildResultSummaryData: () => summaryData
+});
+assert.equal(pressureRender.result, pressureResult);
+assert.match(pressureRender.view.executiveSummary, /348\.00元/);
+assert.doesNotMatch(`${pressureRender.view.executiveSummary}${pressureRender.view.assumptionHtml}`, /基准方案/);
+const pressureRefs = { resultScenarioHeading: new FakeTarget(), runCalcButton: new FakeTarget() };
+applyResultPageViewModel({ refs: pressureRefs, view: pressureRender.view });
+assert.equal(pressureRefs.resultScenarioHeading.textContent, "当前方案 · 费用压力方案");
+assert.equal(pressureRefs.runCalcButton.textContent, "发起测算");
+applyResultPageViewModel({ refs: pressureRefs, view: renderState.view });
+assert.equal(pressureRefs.resultScenarioHeading.textContent, "基准方案 · 基准场景");
+assert.equal(pressureRefs.runCalcButton.textContent, "发起基准测算");
 
 const emptyRows = buildResultPageViewModel({
   project,

@@ -38,6 +38,7 @@ const revenueRules = window.NE_REVENUE_RULES;
 const revenueCalculator = window.NE_REVENUE_CALCULATOR;
 const resultCalculation = window.NE_RESULT_CALCULATION;
 const resultReport = window.NE_RESULT_REPORT;
+const resultVersions = window.NE_RESULT_VERSIONS;
 const compareAnalysis = window.NE_COMPARE_ANALYSIS;
 const historyAnalysis = window.NE_HISTORY_ANALYSIS;
 const workflowStatus = window.NE_WORKFLOW_STATUS;
@@ -66,6 +67,7 @@ const roughPrice = window.NE_ROUGH_PRICE;
 const roughPriceWorkspace = window.NE_ROUGH_PRICE_WORKSPACE;
 const projectListView = window.NE_PROJECT_LIST_VIEW;
 const resultPage = window.NE_RESULT_PAGE;
+const resultHistory = window.NE_RESULT_HISTORY;
 const resultRunner = window.NE_RESULT_RUNNER;
 const resultPrint = window.NE_RESULT_PRINT;
 const resultCharts = window.NE_RESULT_CHARTS;
@@ -87,6 +89,8 @@ const appUtils = window.NE_APP_UTILS;
 if (!supplyDemandFlowModule || !energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !scriptLoader || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !roughPrice || !roughPriceWorkspace || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
+
+if (!resultVersions || !resultHistory) throw new Error("应用初始化失败：缺少结果版本模块");
 
 const {
   makeId,
@@ -1110,6 +1114,8 @@ function sanitizeProjectScenarioState(project, rawProject) {
   project.activeScenarioId = rawProject.activeScenarioId;
   scenarioModel.normalizeScenarioMetadata(project);
   project.resultsByScenario = isPlainObject(rawProject.resultsByScenario) ? rawProject.resultsByScenario : {};
+  const resultArchive = resultVersions.restoreResultHistory(rawProject.resultHistoryByScenario);
+  if (resultArchive) project.resultHistoryByScenario = resultArchive;
   if (isPlainObject(rawProject.legacyStorageResultsByScenario)) {
     project.legacyStorageResultsByScenario = rawProject.legacyStorageResultsByScenario;
   }
@@ -1673,15 +1679,16 @@ function normalizeUserFacingError(errorLike) {
   return message.replace(/^Uncaught\s+/i, "").trim() || "系统出现异常，请刷新页面后重试。";
 }
 
-function updatePrintReportHeader(project, scenario) {
+function updatePrintReportHeader(project, scenario, result = project?.resultsByScenario?.[scenario?.id]) {
   if (!refs.printProjectName || !refs.printScenarioName || !refs.printPeriodRange || !refs.printGeneratedTime) {
     return;
   }
-  const period = resultPage.savedResultPeriod(project?.resultsByScenario?.[scenario?.id]) || getForecastPeriodDisplayRange(project);
+  const period = resultPage.savedResultPeriod(result) || getForecastPeriodDisplayRange(project);
   refs.printProjectName.textContent = project?.name || "-";
   refs.printScenarioName.textContent = scenario?.name || "-";
   refs.printPeriodRange.textContent = period;
   refs.printGeneratedTime.textContent = new Date().toLocaleString("zh-CN", { hour12: false });
+  resultPrint.renderVersionTrace(document.querySelector("#print-result-trace"), project, result);
 }
 
 function resolveVisiblePageId(pageId) {
@@ -4138,6 +4145,7 @@ function deleteActiveScenario() {
   }
   project.scenarios = project.scenarios.filter((scenario) => scenario.id !== target.id);
   delete project.resultsByScenario[target.id];
+  delete project.resultHistoryByScenario?.[target.id];
   const fallback = getBaselineScenario(project) || project.scenarios[0] || null;
   project.activeScenarioId = fallback?.id || null;
   project.statuses["compare-page"] = countScenariosForCompare(project) >= 2 ? "completed" : "in_progress";
@@ -4265,6 +4273,7 @@ function runCalculation() {
     resultCalculation,
     scenarioConfirmed: isScenarioConfigConfirmed(project, scenario),
     calculateScenarioResult, stampResult: roughPrice.stampBaselineResult, validateConfig: roughPrice.validateBaselineConfig,
+    validateResult: (project, scenario, result) => compareAnalysis.isResultComplete(project, scenario, result, { includeHourly: true }),
     countScenariosForCompare,
     setTopMeta,
     renderAll
@@ -4373,6 +4382,7 @@ function renderResults() {
   updatePrintReportHeader(project, scenario);
 
   resultPage.applyResultPageViewModel({ refs, view });
+  if (appState.activePage === "results-page") resultHistory.render({ documentRef: document, project, scenario, result, view, downloadCsv });
   if (view.chartPlaceholder) {
     renderResultChartsPlaceholder(view.chartPlaceholder);
     return;
@@ -4547,7 +4557,8 @@ function exportResultCsv(kind) {
   const hourly = kind === "hourly";
   const filename = hourly ? exportBuilders.buildHourlyResultExportFilename : exportBuilders.buildAnnualResultExportFilename;
   const rows = hourly ? exportBuilders.buildHourlyResultExportRows : exportBuilders.buildAnnualResultExportRows;
-  downloadCsv(filename(project, scenario), rows(result, { includeSource: true }));
+  const run = project.priceRuns?.find((item) => item.id === result.sourceContext?.runId);
+  downloadCsv(filename(project, scenario, result), rows(result, { includeSource: true, run }));
 }
 
 function exportAnnualCsv() { exportResultCsv("annual"); }

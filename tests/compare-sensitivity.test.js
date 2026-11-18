@@ -61,4 +61,36 @@ const current = sensitivity.buildFactors(full.project, full, [-0.2, 0, 0.2]);
 full.scenario.config.feeManualValuesByYear[2026].otherFee += 1;
 const result = calculator.calculateScenarioResult(full.project, full.scenario, full.run);
 assert.notEqual(sensitivity.buildFactors(full.project, { scenario: full.scenario, result }, [-0.2, 0, 0.2]), current, "参数变更重新计算，不复用旧缓存");
+
+const { project: storageProject, scenario: storageScenario, run: storageRun } = fixture(true, true, false);
+storageScenario.config.storageRoundTripEfficiency = 1;
+storageProject.energyData.hourlyByYear[2026].fill(0.25);
+const prices = storageRun.pricesByYear[2026];
+prices.fill(150, 0, 24);
+const originalResult = calculator.calculateScenarioResult(storageProject, storageScenario, storageRun);
+const originalBaseline = { scenario: storageScenario, result: originalResult };
+const originalFactors = sensitivity.buildFactors(storageProject, originalBaseline, ratios);
+assert.ok(originalFactors.length);
+const originalHour = originalResult.hourlyPreview[0];
+const damagedBaseline = { scenario: storageScenario, result: {
+  ...originalResult,
+  hourlyPreview: [{ ...originalHour, spotPrice: -100000 }, ...originalResult.hourlyPreview.slice(1)]
+} };
+assert.equal(analysis.isResultComplete(storageProject, storageScenario, damagedBaseline.result), true, "有限价格损坏只影响小时明细");
+assert.equal(analysis.isResultComplete(storageProject, storageScenario, damagedBaseline.result, { includeHourly: true }), false);
+assert.deepEqual(sensitivity.buildFactors(storageProject, damagedBaseline, ratios), [], "检测到损坏须清除结果，即使同基准已有缓存");
+assert.match(sensitivity.availability(storageProject, damagedBaseline).message, /小时明细.*对账未通过/);
+const damagedView = analysis.buildCompareRenderState({ project: storageProject, available: [damagedBaseline] });
+assert.match(damagedView.sensitivityNotice, /小时明细.*对账未通过/);
+assert.deepEqual(damagedView.sensitivityFactors, []);
+assert.equal(damagedView.baseline, damagedBaseline, "小时明细问题只阻止敏感性结果，年度对标仍可查看");
+assert.strictEqual(sensitivity.buildFactors(storageProject, originalBaseline, ratios), originalFactors);
+
+const swappedRun = { ...storageRun, pricesByYear: { 2026: [...prices.slice(24, 48), ...prices.slice(0, 24), ...prices.slice(48)] } };
+const swappedResult = calculator.calculateScenarioResult(storageProject, storageScenario, swappedRun);
+assert.deepEqual(swappedResult.annualRows, originalResult.annualRows, "交换两个完整日仅改变小时顺序，不改变年度恒等式");
+assert.equal(analysis.isResultComplete(storageProject, storageScenario, swappedResult, { includeHourly: true }), true);
+const swappedFactors = sensitivity.buildFactors(storageProject, { scenario: storageScenario, result: swappedResult }, ratios);
+assert.ok(swappedFactors.length);
+assert.notStrictEqual(swappedFactors, originalFactors, "即使版本号与全年结果相同，小时序列变化也须重算");
 console.log("compare sensitivity tests passed");

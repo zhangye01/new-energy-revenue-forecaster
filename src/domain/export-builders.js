@@ -1,10 +1,9 @@
 "use strict";
 
 (function (root, factory) {
-  const csvUtils = typeof module !== "undefined" && module.exports
-    ? require("./csv-utils")
-    : root.NE_CSV_UTILS;
-  const api = factory(csvUtils);
+  const isCommonJs = typeof module !== "undefined" && module.exports;
+  const api = factory(isCommonJs ? require("./csv-utils") : root.NE_CSV_UTILS,
+    isCommonJs ? require("./result-versions") : root.NE_RESULT_VERSIONS);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -12,9 +11,9 @@
   if (root.window && root.window !== root) {
     root.window.NE_EXPORT_BUILDERS = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (csvUtils) {
-  if (!csvUtils) {
-    throw new Error("导出模块初始化失败：缺少 CSV 工具模块");
+})(typeof globalThis !== "undefined" ? globalThis : window, function (csvUtils, versions) {
+  if (!csvUtils || !versions) {
+    throw new Error("导出模块初始化失败：缺少 CSV 工具或结果版本模块");
   }
 
   function sanitizeExportFilenamePart(value) {
@@ -37,19 +36,27 @@
     return scenarioFilename(project, scenario, "逐年扣费收益模板");
   }
 
-  function buildAnnualResultExportFilename(project, scenario) {
-    return scenarioFilename(project, scenario, "年度收入");
+  function resultFilename(project, scenario, label, result, options) {
+    const version = result?.resultVersion?.id;
+    const parts = [options.historical ? "历史" : "", label, version ? sanitizeExportFilenamePart(version) : ""];
+    return scenarioFilename(project, scenario, parts.filter(Boolean).join("-"));
   }
 
-  function buildHourlyResultExportFilename(project, scenario) {
-    return scenarioFilename(project, scenario, "首年8760小时明细");
+  function buildAnnualResultExportFilename(project, scenario, result, options = {}) {
+    return resultFilename(project, scenario, "年度收入", result, options);
+  }
+
+  function buildHourlyResultExportFilename(project, scenario, result, options = {}) {
+    return resultFilename(project, scenario, "首年8760小时明细", result, options);
   }
 
   function withSourceMetadata(rows, result, options) {
     if (!options.includeSource) return rows;
-    const source = result.sourceContext || {};
-    const headers = ["generated_at", "project_id", "scenario_id", "price_run_id", "input_fingerprint"];
-    const values = [source.generatedAt, source.projectId, source.scenarioId, source.runId, source.contextFingerprint].map((value) => value || "");
+    const source = result?.sourceContext || {};
+    const trace = versions.describeResult(result, options.run);
+    const headers = ["result_version", "result_status", "price_source", "price_content_fingerprint", "generated_at", "project_id", "scenario_id", "price_run_id", "input_fingerprint"];
+    const values = [trace.versionId || "旧版未编号", options.historical ? "历史结果" : "当前结果", trace.priceSourceLabel,
+      trace.priceContentFingerprint, trace.generatedAt, source.projectId, source.scenarioId, trace.runId, source.contextFingerprint].map((value) => value || "");
     return rows.map((row, index) => [...row, ...(index === 0 ? headers : values)]);
   }
 

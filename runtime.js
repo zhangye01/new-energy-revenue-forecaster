@@ -238,6 +238,7 @@ const refs = {
   exportAnnualButton: document.querySelector("#export-annual-button"),
   exportHourlyButton: document.querySelector("#export-hourly-button"),
   printReportButton: document.querySelector("#print-report-button"),
+  resultScenarioHeading: document.querySelector("#result-scenario-heading"),
   resultExecutiveSummary: document.querySelector("#result-executive-summary"),
   resultReportMeta: document.querySelector("#result-report-meta"),
   resultInsightList: document.querySelector("#result-insight-list"),

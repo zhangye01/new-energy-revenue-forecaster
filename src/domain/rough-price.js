@@ -5,13 +5,14 @@
   const api = factory(
     isCommonJs ? require("./revenue-rules") : root.NE_REVENUE_RULES,
     isCommonJs ? require("./scenario-config") : root.NE_SCENARIO_CONFIG,
-    isCommonJs ? require("./revenue-calculator") : root.NE_REVENUE_CALCULATOR
+    isCommonJs ? require("./revenue-calculator") : root.NE_REVENUE_CALCULATOR,
+    isCommonJs ? require("./result-versions") : root.NE_RESULT_VERSIONS
   );
   if (isCommonJs) module.exports = api;
   root.NE_ROUGH_PRICE = api;
   if (root.window && root.window !== root) root.window.NE_ROUGH_PRICE = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, scenarioConfig, calculator) {
-  if (!rules || !scenarioConfig || !calculator) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, scenarioConfig, calculator, resultVersions) {
+  if (!rules || !scenarioConfig || !calculator || !resultVersions) {
     throw new Error("关键参数粗算初始化失败：缺少收入规则、场景配置或收入测算模块");
   }
 
@@ -588,6 +589,9 @@
     }
     if (source.version === 1 && project?.hasStorage) {
       return state(false, "legacy_storage_context", "历史配储边界待核对：原结果未记录配储功率和时长，请核对后重新测算。");
+    }
+    if (!resultVersions.matchesSavedPriceSource(project, result)) {
+      return state(false, "invalid_source_prices", "电价版本内容与保存的测算记录不一致，请核对曲线后重新测算。");
     }
     if (source.runId !== project?.activeRunId) {
       return state(false, "stale_run", "生效现货预测已变化，当前展示旧预测版本的结果，请重新发起基准测算。");

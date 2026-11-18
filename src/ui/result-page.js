@@ -16,7 +16,7 @@
     "周期全口径收入",
     "周期平均度电净价",
     "周期总上网电量",
-    "生效方案"
+    "当前方案"
   ]);
 
   function escapeHtml(text) {
@@ -136,11 +136,13 @@
     for (const button of [refs.exportAnnualButton, refs.exportHourlyButton, refs.printReportButton]) {
       if (button) {
         button.disabled = view.state !== "ready" || Boolean(view.isHistorical);
-        button.title = button.disabled ? "请先生成当前参数的基准结果" : "";
+        button.title = button.disabled ? "请先生成当前方案的有效结果" : "";
       }
     }
     setHtml(refs.resultReportMeta, view.metaHtml);
     if (refs.resultReportMeta) refs.resultReportMeta.hidden = !view.isHistorical;
+    setText(refs.resultScenarioHeading, view.scenarioHeading);
+    setText(refs.runCalcButton, view.calculationLabel);
     setText(refs.resultExecutiveSummary, view.executiveSummary);
     setHtml(refs.resultMetricGrid, view.metricHtml);
     setHtml(refs.resultInsightList, view.insightHtml);
@@ -312,7 +314,7 @@
         title: "差价机制口径",
         body: cfg.mechanismEnabled
           ? `机制电量按有效月份折算，首年机制电量占比${asPercent(first.mechanismRatio)}，机制电价${asNum(cfg.mechanismPrice, 1)}元/MWh。`
-          : "当前基准方案未启用差价机制。"
+          : "当前方案未启用差价机制。"
       },
       {
         title: "市场化交易电量",
@@ -342,7 +344,7 @@
     return {
       state: "ready",
       isHistorical: Boolean(resultState && !resultState.current),
-      executiveSummary: `${resultState?.priceSourceLabel ? `${resultState.priceSourceLabel}。` : ""}${resultState && !resultState.current ? "已保存结果中" : "基准方案下"}，${project.name}测算周期为${labels.periodText}，周期全口径收入合计${asCompactMoney(result.totalFullRevenue)}，平均度电净价${asNum(result.avgFullRevenuePrice, 2)}元/MWh。首年度电净价较捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，${positiveText}，${negativeText}。`,
+      executiveSummary: `${resultState?.priceSourceLabel ? `${resultState.priceSourceLabel}。` : ""}${resultState && !resultState.current ? "已保存结果中，" : ""}${project.name}测算周期为${labels.periodText}，周期全口径收入合计${asCompactMoney(result.totalFullRevenue)}，平均度电净价${asNum(result.avgFullRevenuePrice, 2)}元/MWh。首年度电净价较捕获电价${liftText}${asNum(Math.abs(unitLift), 2)}元/MWh，${positiveText}，${negativeText}。`,
       metricHtml: buildMetricCards(metricItems),
       insightHtml: buildTextItems(insightItems, "result-insight-item"),
       assumptionHtml: buildTextItems(assumptionItems, "result-assumption-item"),
@@ -371,11 +373,18 @@
       resultState = null,
       previewLimit = 240
     } = input;
+    const scenarioName = String(scenario?.name || "").trim();
+    const scenarioRole = scenario?.isBaseline === true ? "基准方案" : "当前方案";
+    const scenarioHeading = scenarioName && scenarioName !== scenarioRole
+      ? `${scenarioRole} · ${scenarioName}` : scenarioName || "方案测算简报";
+    const calculationLabel = scenario?.isBaseline === true ? "发起基准测算" : "发起测算";
+    const presentation = { scenarioHeading, calculationLabel };
 
     if (!project) {
       return {
+        ...presentation,
         state: "no_project",
-        executiveSummary: "请先选择项目并完成基准方案测算，生成可导出的结果简报。",
+        executiveSummary: "请先选择项目和方案，再发起测算。",
         metaHtml: "<span>项目：-</span><span>方案：-</span><span>周期：-</span><span>口径：-</span>",
         chartPlaceholder: "请选择项目后发起测算"
       };
@@ -384,18 +393,20 @@
     let metaHtml = buildResultMetaHtml(labels);
     if (!result) {
       return {
+        ...presentation,
         state: "no_result",
-        executiveSummary: "当前基准方案尚未生成测算结果。点击“发起基准测算”后，将自动形成简报摘要、图表与明细附表。",
+        executiveSummary: `当前方案尚未生成结果。点击“${calculationLabel}”查看测算简报。`,
         metaHtml,
         metricHtml: buildEmptyMetricCards(),
-        chartPlaceholder: "请先发起基准测算"
+        chartPlaceholder: `请先${calculationLabel}`
       };
     }
 
     if (["incomplete_result", "invalid_source_prices"].includes(resultState?.reason) || !resultRowsAreRenderable(result)) {
       return {
+        ...presentation,
         state: "invalid_result", isHistorical: true, metaHtml,
-        executiveSummary: resultState?.message || "已保存的结果明细不完整或无法对账，请重新发起基准测算。",
+        executiveSummary: resultState?.message || "已保存的结果明细不完整或无法对账，请重新测算。",
         metricHtml: buildEmptyMetricCards(), annualRowsHtml: "", hourlyRowsHtml: "",
         chartPlaceholder: "结果明细不完整，请重新测算"
       };
@@ -408,6 +419,7 @@
     }
 
     return {
+      ...presentation,
       metaHtml,
       ...buildReadyResultView({
         project,

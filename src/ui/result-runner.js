@@ -1,7 +1,7 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module !== "undefined" && module.exports ? require("../domain/result-versions") : root.NE_RESULT_VERSIONS);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -9,7 +9,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_RESULT_RUNNER = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (resultVersions) {
   function runScenarioCalculation(input = {}) {
     const {
       project = null,
@@ -18,6 +18,7 @@
       scenarioConfig = {},
       scenarioConfirmed = false,
       validateConfig = null,
+      validateResult = null,
       resultCalculation = {},
       calculateScenarioResult = () => null,
       stampResult = (_project, _scenario, _run, result) => result,
@@ -51,9 +52,27 @@
       setTopMeta(message);
       return { status: "missing_curves", message, result };
     }
+    let resultValid = Array.isArray(result?.annualRows) && result.annualRows.length > 0;
+    try {
+      if (resultValid && validateResult) resultValid = validateResult(project, scenario, result);
+    } catch (_) {
+      resultValid = false;
+    }
+    if (!resultValid) {
+      const message = "本次测算结果未通过明细对账，请核对输入后重试。";
+      setTopMeta(message);
+      return { status: "invalid_result", message };
+    }
 
-    result = stampResult(project, scenario, run, result);
+    try {
+      result = resultVersions.stampComputedResult(project, scenario, run, stampResult(project, scenario, run, result));
+    } catch (error) {
+      const message = error?.message || "测算结果来源保存失败，请核对后重试。";
+      setTopMeta(message);
+      return { status: "invalid_input", message };
+    }
     const previous = project.resultsByScenario[scenario.id];
+    resultVersions.archivePreviousResult(project, scenario.id, previous);
     if (Array.isArray(previous?.annualRows) && previous.annualRows.length
         && !previous.annualRows.some((row) => row?.storageDispatch)
         && (project.hasStorage || previous.sourceContext?.storageContext?.hasStorage

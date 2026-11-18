@@ -1,11 +1,11 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module !== "undefined" && module.exports ? require("../domain/result-versions") : root.NE_RESULT_VERSIONS);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.NE_ROUGH_PRICE_WORKSPACE = api;
   if (root.window && root.window !== root) root.window.NE_ROUGH_PRICE_WORKSPACE = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (versions) {
   const states = new WeakMap();
   const ENV_FIELDS = [
     ["greenCertPrice", "绿证价格"], ["greenCertRealizeRatio", "绿证兑现比例", "ratio"],
@@ -216,8 +216,10 @@
     const summary = comparison.summary;
     const delta = summary.delta ?? (summary.weightedFine - summary.weightedRough);
     const relative = summary.relativeDelta ?? summary.weightedRelativeDelta ?? null;
-    const priceSourceLabel = comparison.baselineState?.priceSourceLabel;
-    return `${head}${comparison.snapshotState?.refined ? '<span class="rough-badge">原粗算预期 × 细化后基准</span>' : ""}${historical ? `<p class="rough-alert" role="status">历史对照。${escapeHtml(comparison.baselineState.message)}</p>` : ""}<div class="rough-baseline-source"><span>${escapeHtml(scenario?.name || snapshot.scenarioName || "当前方案")} · ${historical ? "历史" : ""}基准结果 ${escapeHtml(timestamp(comparison.source?.generatedAt))}${priceSourceLabel ? ` · ${escapeHtml(priceSourceLabel)}` : ""}</span><button type="button" class="text-button" data-jump="results-page">查看基准结果</button></div>
+    const trace = comparison.resultTrace || {};
+    const resultLabel = scenario?.isBaseline === false ? "方案结果" : "基准结果";
+    const sourceLine = [scenario?.name || snapshot.scenarioName || "当前方案", `${historical ? "历史" : ""}${resultLabel} ${timestamp(comparison.source?.generatedAt)}`, trace.versionId, trace.priceSourceLabel].filter(Boolean).map(escapeHtml).join(" · ");
+    return `${head}${comparison.snapshotState?.refined ? '<span class="rough-badge">原粗算预期 × 细化后基准</span>' : ""}${historical ? `<p class="rough-alert" role="status">历史对照。${escapeHtml(comparison.baselineState.message)}</p>` : ""}<div class="rough-baseline-source"><span>${sourceLine}</span><button type="button" class="text-button" data-jump="results-page">查看${resultLabel}</button></div>
       <div class="rough-metrics"><div><span>粗算电量加权均价</span><strong>${number(summary.weightedRough)}<small> 元/MWh</small></strong></div><div><span>基准电量加权均价</span><strong>${number(summary.weightedFine)}<small> 元/MWh</small></strong></div><div><span>整体差额 / 差异率</span><strong>${signed(delta)}<small> 元/MWh</small></strong><small>${relative === null ? "粗算接近零，参考绝对差额" : `${signed(relative * 100)}%`}</small></div></div>
       <div class="rough-comparison-summary" data-rough-comparison-summary role="status">${comparisonSummaryHtml(comparison, entry.threshold)}</div>
       ${trendSvg(comparison.rows, [{ key: "roughSettlement", label: "粗算综合价" }, { key: "fineSettlement", label: "基准综合价" }], "综合结算电价对照趋势（元/MWh）")}
@@ -240,9 +242,11 @@
         row.storageSupplement, row.fee, row.otherIncome, row.fullRevenuePrice, row.energyMwh])]);
   }
   function buildComparisonCsv(snapshot, source, comparison) {
+    const trace = comparison.resultTrace || versions.describeResult({ sourceContext: source });
     return csvText([["粗算版本", snapshot.id], ["基准结果方案", source.scenarioId || snapshot.scenarioId],
       ["基准结果生成时间", source.generatedAt || ""], ["基准预测曲线版本", source.runId || ""],
       ["基准结果状态", comparison.baselineState?.current === false ? `历史版。${comparison.baselineState.message}` : "与当前基准结果对照"],
+      ["测算版本", trace.versionId || "旧版未编号"], ["价格来源", trace.priceSourceLabel], ["价格内容指纹", trace.priceContentFingerprint],
       ["收益参数状态", comparison.snapshotState?.refined ? "已细化；保留原粗算预期" : "沿用粗算参数"],
       ["粗算电量加权均价", comparison.summary?.weightedRough], ["基准电量加权均价", comparison.summary?.weightedFine],
       ["年份", "粗算现货均价", "基准现货均价", "粗算捕获价", "基准捕获价", "粗算综合结算价", "基准综合结算价", "综合价差额(基准-粗算)", "综合价差异率", "基准捕获率(%)"],
@@ -425,7 +429,8 @@
     const exportComparison = refs.compare.querySelector("[data-compare-export]");
     if (exportComparison && snapshot && comparison?.ok) exportComparison.onclick = () => {
       const label = comparison.baselineState?.current === false ? "历史交叉验证" : "交叉验证";
-      downloadCsv(documentRef, `${project.name || "项目"}-${label}-${snapshot.id}.csv`, buildComparisonCsv(snapshot, comparison.source || {}, comparison));
+      const version = comparison.resultTrace?.versionId ? `-${comparison.resultTrace.versionId}` : "";
+      downloadCsv(documentRef, `${project.name || "项目"}-${label}-${snapshot.id}${version}.csv`, buildComparisonCsv(snapshot, comparison.source || {}, comparison));
     };
   }
 
@@ -454,6 +459,10 @@
     const snapshotState = snapshot ? domain.snapshotState(project, scenario, snapshot) : null;
     const result = project.resultsByScenario?.[scenario.id];
     const comparison = mode === "compare" && snapshot ? domain.compareBaselineResult(project, scenario, snapshot, result, options.getBaselineResultState) : null;
+    if (comparison?.ok) {
+      const run = project.priceRuns?.find((item) => item.id === result?.sourceContext?.runId);
+      comparison.resultTrace = versions.describeResult(result, run);
+    }
     target.innerHTML = mode === "rough"
       ? roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, options.inputState)
       : compareHtml(project, snapshots, snapshot, entry, comparison, scenario, result);

@@ -121,6 +121,11 @@ function assertAtomicRejection(data, expected) {
 }
 const envelope = (projects, recoveryBranches) => ({ format: 'new-energy-project-backup', version: 1, projects,
   ...(recoveryBranches ? { recoveryBranches } : {}) });
+const archivedProject = { ...project, resultHistoryByScenario: { s: [{ annualRows: [{ year: 2026, fullRevenue: 102.375 }] }] } };
+const archivedBackup = backup.buildBackup({ payload: { projects: [archivedProject] } }, "demo1");
+const archivedCopy = backup.prepareRestore(archivedBackup, [archivedProject], "demo1", () => "archive-copy").projects[0];
+assert.deepEqual(archivedCopy.resultHistoryByScenario, archivedProject.resultHistoryByScenario);
+assertAtomicRejection(envelope([project, { ...archivedProject, resultHistoryByScenario: { s: [{}] } }]), /测算历史结构无效/);
 for (const key of ['__proto__', 'constructor', 'prototype']) {
   const maliciousProject = JSON.parse(JSON.stringify(project));
   maliciousProject.scenarios[0].config = JSON.parse(`{"otherFee":14.75,"nested":{"${key}":{"polluted":true}}}`);

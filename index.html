@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="./styles/pages/help.css?v=20261019f">
     <link rel="stylesheet" href="./styles/pages/energy.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/scenario.css?v=20261118d">
-    <link rel="stylesheet" href="./styles/pages/results.css?v=20261118d">
+    <link rel="stylesheet" href="./styles/pages/results.css?v=20261118f">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118d">
@@ -88,10 +88,9 @@
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
     <script src="./config.js?v=20261118d" defer></script>
-    <script src="./runtime.js?v=20261118d" defer></script>
+    <script src="./runtime.js?v=20261118f" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
-    <script src="./src/domain/export-builders.js?v=20261118b" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
     <script src="./src/ui/script-loader.js?v=20261113c" defer></script>
     <script src="./src/ui/context-help.js?v=20261118d" defer></script>
@@ -99,10 +98,12 @@
     <script src="./src/domain/app-utils.js?v=20261113c" defer></script>
     <script src="./src/domain/supply-demand.js?v=20261113c" defer></script>
     <script src="./src/domain/price-forecast.js?v=20261118e" defer></script>
+    <script src="./src/domain/result-versions.js?v=20261118f" defer></script>
+    <script src="./src/domain/export-builders.js?v=20261118f" defer></script>
     <script src="./src/domain/revenue-rules.js?v=20261113c" defer></script>
     <script src="./src/domain/storage-dispatch.js?v=20261118b" defer></script>
     <script src="./src/domain/revenue-calculator.js?v=20261118e" defer></script>
-    <script src="./src/domain/result-calculation.js?v=20261118e" defer></script>
+    <script src="./src/domain/result-calculation.js?v=20261118f" defer></script>
     <script src="./src/domain/result-report.js?v=20261113c" defer></script>
     <script src="./src/ui/policy-panel.js?v=20261113c" defer></script>
     <script src="./src/ui/province-defaults.js?v=20261118d" defer></script>
@@ -116,18 +117,19 @@
     <script src="./src/ui/forecast-page.js?v=20261118e" defer></script>
     <script src="./src/ui/forecast-run-flow.js?v=20261118e" defer></script>
     <script src="./src/ui/project-list.js?v=20261118d" defer></script>
-    <script src="./src/ui/result-page.js?v=20261118e" defer></script>
-    <script src="./src/ui/result-runner.js?v=20261118e" defer></script>
-    <script src="./src/ui/result-print.js?v=20261113c" defer></script>
+    <script src="./src/ui/result-page.js?v=20261118f" defer></script>
+    <script src="./src/ui/result-runner.js?v=20261118f" defer></script>
+    <script src="./src/ui/result-print.js?v=20261118f" defer></script>
     <script src="./src/ui/result-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/scenario-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/scenario-form.js?v=20261118e" defer></script>
     <script src="./src/ui/scenario-visual-data.js?v=20261118b" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20261118e" defer></script>
     <script src="./src/ui/compare-charts.js?v=20261113c" defer></script>
-    <script src="./src/ui/compare-page.js?v=20261113c" defer></script>
-    <script src="./src/domain/compare-sensitivity.js?v=20261118b" defer></script>
-    <script src="./src/domain/compare-analysis.js?v=20261118e" defer></script>
+    <script src="./src/ui/compare-page.js?v=20261118f" defer></script>
+    <script src="./src/domain/compare-sensitivity.js?v=20261118f" defer></script>
+    <script src="./src/domain/compare-analysis.js?v=20261118f" defer></script>
+    <script src="./src/ui/result-history.js?v=20261118f" defer></script>
     <script src="./src/domain/history-analysis.js?v=20261118b" defer></script>
     <script src="./src/ui/history-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/history-page.js?v=20261118b" defer></script>
@@ -137,8 +139,8 @@
     <script src="./src/ui/app-event-bindings.js?v=20261113c" defer></script>
     <script src="./src/domain/workflow-status.js?v=20261118e" defer></script>
     <script src="./src/domain/scenario-config.js?v=20261118b" defer></script>
-    <script src="./src/domain/rough-price.js?v=20261118e" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261118e" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261118f" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261118f" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261118d" defer></script>
     <script src="./src/domain/project-settings.js?v=20261113c" defer></script>
     <script src="./src/domain/project-model.js?v=20261118e" defer></script>
@@ -147,8 +149,8 @@
     <script src="./src/domain/energy-import-flow.js?v=20261113c" defer></script>
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
-    <script src="./src/ui/project-backup.js?v=20261118c" defer></script>
-    <script src="./app.js?v=20261118e" defer></script>
+    <script src="./src/ui/project-backup.js?v=20261118f" defer></script>
+    <script src="./app.js?v=20261118f" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -1449,15 +1451,16 @@
                 <span>项目：<strong id="print-project-name">-</strong></span>
                 <span>方案：<strong id="print-scenario-name">-</strong></span>
                 <span>周期：<strong id="print-period-range">-</strong></span>
-                <span>生成时间：<strong id="print-generated-time">-</strong></span>
+                <span>打印时间：<strong id="print-generated-time">-</strong></span>
+                <span id="print-result-trace" class="print-result-trace" hidden></span>
               </div>
             </section>
 
-            <section class="result-report-hero" aria-label="基准方案测算简报摘要">
+            <section class="result-report-hero" aria-label="方案测算简报摘要">
               <div>
-                <p class="eyebrow">基准方案测算简报</p>
-                <h2>新能源全口径收入基准结果</h2>
-                <p class="result-report-lead" id="result-executive-summary">请先发起测算，生成可导出的基准结果简报。</p>
+                <p class="eyebrow" id="result-scenario-heading">方案测算简报</p>
+                <h2>新能源全口径收入测算结果</h2>
+                <p class="result-report-lead" id="result-executive-summary">请先发起测算，生成可导出的结果简报。</p>
               </div>
               <div class="result-report-meta" id="result-report-meta" hidden>
                 <span>项目：-</span>
@@ -1471,19 +1474,24 @@
               <div>
                 <h3 id="result-preview-heading">简报预览</h3>
                 <div data-help="简报预览与导出" data-help-anchor="#result-preview-heading">
-                  <p>面向基准方案的报告正文预览，支持打印导出与年度/小时数据附件导出。</p>
-                  <p>年度收益查看收入构成与累计贡献；度电路径查看价格路径与收益桥；明细附表包含年度表与8760附件。</p>
-                  <p id="print-report-hint">打印报告展示简报正文与年度附表，8760小时明细建议另行CSV导出。</p>
+                  <p>预览当前方案的简报。年度 CSV 覆盖全测算周期，小时 CSV 覆盖首年。</p>
+                  <p id="print-report-hint">打印包含简报正文和年度附表，首年小时明细可另行导出。</p>
                 </div>
               </div>
               <div class="button-inline">
-                <button type="button" class="primary-button" id="run-calc-button">发起基准测算</button>
+                <button type="button" class="primary-button" id="run-calc-button">发起测算</button>
                 <button type="button" class="ghost-button" id="export-annual-button">导出年度CSV</button>
-                <button type="button" class="ghost-button" id="export-hourly-button">导出8760CSV</button>
+                <button type="button" class="ghost-button" id="export-hourly-button">导出首年8760小时 CSV</button>
                 <button type="button" class="ghost-button" id="print-report-button">打印报告</button>
                 <button type="button" class="ghost-button next-step-button" id="result-validation-button" data-jump="validation-page">进入交叉验证</button>
               </div>
             </div>
+
+            <p class="result-version-trace" id="result-current-trace" hidden></p>
+            <details class="result-disclosure result-history" id="result-history-panel" hidden>
+              <summary><span>历史测算</span><small id="result-history-count"></small></summary>
+              <div id="result-history-content"></div>
+            </details>
 
             <div class="metric-grid" id="result-metric-grid"></div>
             <div class="panel" id="storage-dispatch-summary" hidden></div>
@@ -1496,7 +1504,7 @@
               <div class="result-insight-list" id="result-insight-list"></div>
             </details>
 
-            <div class="result-report-tabbar" role="tablist" aria-label="基准结果简报模块切换">
+            <div class="result-report-tabbar" role="tablist" aria-label="测算简报模块切换">
               <button class="result-report-tab active" type="button" role="tab" aria-selected="true" data-result-view="annual">
                 <span>年度收益</span>
               </button>
@@ -1752,7 +1760,7 @@
                   <div class="value" id="compare-metric-scenario-count">0 个</div>
                 </article>
                 <article class="metric-card compare-metric-card">
-                  <div class="label">最优方案</div>
+                  <div class="label">周期收入最高</div>
                   <div class="value" id="compare-metric-best-scenario">-</div>
                 </article>
                 <article class="metric-card compare-metric-card">
@@ -2057,7 +2065,7 @@
                 <article class="help-card">
                   <strong>配储逐时充放电</strong>
                   <p>同一条现货曲线下，按储能功率、时长、往返效率计算场站内日内充放电。套利净增等于放电收益减去充电机会成本，容量补偿、辅助服务等独立收益另计。原手工套利假设留在粗算口径。</p>
-                  <p>在“基准结果总览”查看有储和无储对照，并通过“导出8760CSV”核对首年小时明细。</p>
+                  <p>在“基准结果总览”查看有储和无储对照，并通过“导出首年8760小时 CSV”核对小时明细。</p>
                 </article>
               </div>
             </details>

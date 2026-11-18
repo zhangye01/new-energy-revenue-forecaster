@@ -84,4 +84,16 @@ for (const build of [buildAnnualResultExportRows, buildHourlyResultExportRows]) 
   const rows = build(tracedResult, { includeSource: true });
   assert.deepEqual(rows[0].slice(-5), ['generated_at', 'project_id', 'scenario_id', 'price_run_id', 'input_fingerprint']);
   assert.deepEqual(rows[1].slice(-5), ['2026-10-19T00:00:00Z', 'p', 's', 'r', 'fingerprint']);
+  const legacyTrace = Object.fromEntries(rows[0].map((name, i) => [name, rows[1][i]]));
+  assert.equal(legacyTrace.result_version, "旧版未编号");
+  assert.equal(legacyTrace.price_source, "价格来源待核对");
+
+  const stamped = { ...tracedResult, resultVersion: { id: "result-test", schemaVersion: 1 },
+    priceSource: { type: "demo", runId: "r", fingerprint: "price-v1-0011223344556677" } };
+  const newRows = build(stamped, { includeSource: true });
+  const newTrace = Object.fromEntries(newRows[0].map((name, i) => [name, newRows[1][i]]));
+  assert.equal(newTrace.result_version, "result-test");
+  assert.equal(newTrace.price_source, "演示现货曲线");
+  assert.equal(newTrace.result_status, "当前结果");
+  assert.equal(newTrace.price_content_fingerprint, stamped.priceSource.fingerprint);
 }

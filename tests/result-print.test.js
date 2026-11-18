@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { printScenarioReport } = require("../src/ui/result-print");
+const { printScenarioReport, renderVersionTrace } = require("../src/ui/result-print");
 
 let topMeta = "";
 assert.equal(printScenarioReport({ setTopMeta: (message) => { topMeta = message; } }), false);
@@ -24,6 +24,7 @@ function makeClassList(initial = []) {
 
 const pane = { hidden: true, classList: makeClassList([]) };
 const disclosure = { open: false, classList: makeClassList([]) };
+const archive = { open: false, classList: makeClassList(["result-history"]) };
 const bodyClassList = makeClassList([]);
 let afterPrint = null;
 let printed = false;
@@ -39,7 +40,7 @@ const ok = printScenarioReport({
   },
   documentRef: {
     body: { classList: bodyClassList },
-    querySelectorAll: () => [disclosure]
+    querySelectorAll: () => [disclosure, archive]
   },
   windowRef: {
     addEventListener: (_name, handler) => { afterPrint = handler; },
@@ -55,11 +56,21 @@ assert.equal(printed, true);
 assert.equal(activePage, "results-page");
 assert.equal(pane.hidden, false);
 assert.equal(disclosure.open, true);
+assert.equal(archive.open, false);
 assert.equal(bodyClassList.contains("print-report-mode"), true);
 afterPrint();
 assert.equal(pane.hidden, true);
 assert.equal(disclosure.open, false);
 assert.equal(activePage, "compare-page");
 assert.equal(bodyClassList.contains("print-report-mode"), false);
+
+const trace = {};
+renderVersionTrace(trace, {}, { sourceContext: { generatedAt: "2026-01-02T03:04:05Z", runId: "run-old" },
+  resultVersion: { id: "result-traced", schemaVersion: 1 },
+  priceSource: { type: "demo", runId: "run-old", fingerprint: "price-v1-0011223344556677" } });
+assert.equal(trace.hidden, false);
+assert.match(trace.textContent, /测算版本 result-traced.*测算时间.*演示现货曲线.*价格版本 run-old/);
+renderVersionTrace(trace, {}, undefined);
+assert.equal(trace.hidden, true);
 
 console.log("result print tests passed");

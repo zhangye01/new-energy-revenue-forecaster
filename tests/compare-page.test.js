@@ -478,4 +478,21 @@ assert.deepEqual(frameReadyCalls, [
   "resize"
 ]);
 
+const invalidHoursRefs = makeFrameRefs();
+const invalidHoursText = "首年配储小时明细缺失或对账未通过，请重新测算后查看敏感性。";
+const invalidHoursCharts = [];
+assert.equal(renderCompareFrame({
+  refs: invalidHoursRefs,
+  project: { id: "hourly-reconciliation" },
+  available,
+  compareState: { baseline: available[0], sensitivityNotice: invalidHoursText, sensitivityFactors: [] },
+  renderPlaceholder: (key, node, message) => invalidHoursCharts.push({ key, message }),
+  renderers: {
+    renderSensitivityTornadoChart: () => assert.fail("待重算时清除敏感性排序"),
+    renderSensitivityResponseChart: () => assert.fail("待重算时清除敏感性响应")
+  }
+}), "ready", "年度对标不受小时对账错误影响");
+assert.equal(invalidHoursRefs.compareSensitivityMessage.textContent, invalidHoursText);
+assert.deepEqual(invalidHoursCharts, ["sensitivityTornado", "sensitivityResponse"].map((key) => ({ key, message: invalidHoursText })));
+
 console.log("compare page tests passed");

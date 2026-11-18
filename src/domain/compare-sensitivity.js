@@ -4,13 +4,15 @@
   const commonJs = typeof module !== "undefined" && module.exports;
   const api = factory(
     commonJs ? require("./revenue-rules") : root.NE_REVENUE_RULES,
-    commonJs ? require("./storage-dispatch") : root.NE_STORAGE_DISPATCH
+    commonJs ? require("./storage-dispatch") : root.NE_STORAGE_DISPATCH,
+    commonJs ? require("./result-calculation") : root.NE_RESULT_CALCULATION
   );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.NE_COMPARE_SENSITIVITY = api;
   if (root.window && root.window !== root) root.window.NE_COMPARE_SENSITIVITY = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, dispatch) {
-  if (!rules || !dispatch) throw new Error("敏感性分析初始化失败：缺少收入规则或配储调度模块");
+})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, dispatch, calculation) {
+  if (!rules || !dispatch || !calculation) throw new Error("敏感性分析初始化失败：缺少收益测算依赖");
+  const { closeAmount, hourlyRowsAreComplete } = calculation;
   const cache = new Map();
   const STORAGE_KEYS = ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"];
   const DISPATCH_FACTORS = new Set(["spot", "hours", "capture_spread"]);
@@ -94,19 +96,21 @@
       return { ok: false, message: "首年没有有效上网电量，暂不展示敏感性。" };
     }
     const initial = calculateAnnualRevenue(project, baseline.scenario.config, first);
-    if (!Number.isFinite(initial) || Math.abs(initial - first.fullRevenue) > Math.max(0.01, Math.abs(first.fullRevenue) * 1e-9)) {
+    if (!closeAmount(initial, first.fullRevenue)) {
       return { ok: false, message: "首年基准结果与当前参数不一致，请重新测算后查看敏感性。" };
+    }
+    if ((project.hasStorage || first.storageDispatch) && !hourlyRowsAreComplete(project, baseline.scenario, baseline.result)) {
+      return { ok: false, message: "首年配储小时明细缺失或对账未通过，请重新测算后查看敏感性。" };
     }
     return { ok: true, message: "" };
   }
 
-  function perturbDispatch(row, hours, key, ratio) {
+  function perturbDispatch(row, hours, key, ratio, scheme) {
     const factor = 1 + ratio;
     const prices = hours.map(({ spotPrice }) => key === "spot" ? spotPrice * factor
       : key === "capture_spread" ? row.spotAvgPrice + (spotPrice - row.spotAvgPrice) * factor : spotPrice);
     const generationMwh = hours.map(({ energyMwh }) => key === "hours" ? energyMwh * factor : energyMwh);
-    const { powerMw, durationH, roundTripEfficiency } = row.storageDispatch;
-    const value = dispatch.calculateHourlyDispatch({ prices, generationMwh, powerMw, durationH, roundTripEfficiency });
+    const value = dispatch.calculateHourlyDispatch({ prices, generationMwh, ...scheme });
     return { ...row.storageDispatch, incrementalRevenue: value.incrementalRevenue };
   }
 
@@ -114,19 +118,22 @@
     const first = baseline?.result?.annualRows?.[0];
     if (!availability(project, baseline).ok) return [];
     const { hourlyPreview, sourceContext } = baseline.result;
-    const hoursReady = hourlyPreview?.length === 8760 && hourlyPreview.every((hour) =>
-      Number.isFinite(hour?.spotPrice) && Number.isFinite(hour?.energyMwh) && hour.energyMwh >= 0);
+    const scheme = first.storageDispatch ? {
+      powerMw: project.storagePowerMw, durationH: project.storageDurationH,
+      roundTripEfficiency: baseline.scenario.config.storageRoundTripEfficiency ?? 0.9
+    } : null;
+    // A repeated run ID and equal annual totals may still have different dispatch inputs.
+    const dispatchInputs = scheme ? hourlyPreview.map(({ spotPrice, energyMwh }) => [spotPrice, energyMwh]) : null;
     const cacheKey = JSON.stringify([project.id, project.siteType, project.hasStorage, project.startYear,
-      baseline.scenario.config, first, sourceContext?.runId, hoursReady, ratios]);
+      baseline.scenario.config, first, sourceContext?.runId, scheme, dispatchInputs, ratios]);
     if (cache.has(cacheKey)) return cache.get(cacheKey);
     const base = first.fullRevenue / 10000;
-    const factors = FACTORS.filter(([key]) => (key !== "storage" || project.hasStorage)
-      && (!first.storageDispatch || !DISPATCH_FACTORS.has(key) || hoursReady)).map(([key, name, note, colorIndex]) => {
+    const factors = FACTORS.filter(([key]) => key !== "storage" || project.hasStorage).map(([key, name, note, colorIndex]) => {
       const series = ratios.map((ratio) => {
         if (ratio === 0) return base;
         const changed = createPerturbation(project, baseline.scenario, first, key, ratio);
-        if (first.storageDispatch && DISPATCH_FACTORS.has(key)) {
-          changed.row.storageDispatch = perturbDispatch(changed.row, hourlyPreview, key, ratio);
+        if (scheme && DISPATCH_FACTORS.has(key)) {
+          changed.row.storageDispatch = perturbDispatch(changed.row, hourlyPreview, key, ratio, scheme);
         }
         return calculateAnnualRevenue(project, changed.config, changed.row) / 10000;
       });

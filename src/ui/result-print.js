@@ -1,7 +1,7 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module !== "undefined" && module.exports ? require("../domain/result-versions") : root.NE_RESULT_VERSIONS);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -9,7 +9,19 @@
   if (root.window && root.window !== root) {
     root.window.NE_RESULT_PRINT = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (versions) {
+  function renderVersionTrace(node, project, result) {
+    if (!node) return;
+    node.hidden = !result;
+    if (!result) { node.textContent = ""; return; }
+    const run = project?.priceRuns?.find((item) => item.id === result.sourceContext?.runId);
+    const trace = versions.describeResult(result, run);
+    const time = Number.isFinite(Date.parse(trace.generatedAt))
+      ? new Date(trace.generatedAt).toLocaleString("zh-CN", { hour12: false }) : "未记录";
+    node.textContent = [`测算版本 ${trace.versionId || "旧版未编号"}`, `测算时间 ${time}`,
+      trace.priceSourceLabel, trace.runId ? `价格版本 ${trace.runId}` : "价格版本未记录"].join(" · ");
+  }
+
   function printScenarioReport(input = {}) {
     const {
       project,
@@ -35,7 +47,7 @@
     }
     if (!documentRef?.body) return false;
 
-    updatePrintReportHeader(project, scenario);
+    updatePrintReportHeader(project, scenario, result);
 
     const previousPage = appState.activePage;
     if (previousPage !== "results-page") {
@@ -55,7 +67,7 @@
       pane.classList.add("active");
     });
     disclosureStates.forEach(({ node }) => {
-      if (!node.classList.contains("result-hourly-detail")) {
+      if (!node.classList.contains("result-hourly-detail") && !node.classList.contains("result-history")) {
         node.open = true;
       }
     });
@@ -93,6 +105,6 @@
   }
 
   return Object.freeze({
-    printScenarioReport
+    printScenarioReport, renderVersionTrace
   });
 });
