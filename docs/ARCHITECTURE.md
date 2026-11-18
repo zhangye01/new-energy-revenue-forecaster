@@ -65,8 +65,9 @@
 | `supply-demand-chart.js` | 读取已生成的供需时序，展示分月和典型日供给构成与总需求曲线 |
 | `supply-demand-workspace.js` | 供需模板导入、年度预览、保存生成及 CSV 导出 |
 | `supply-demand-flow.js` | 供需保存/水合、预测输入准备、来源有效性及旧运行失效编排 |
-| `forecast-page.js` | 电价预测版本列表、质量门槛和激活日志 HTML 构造 |
-| `forecast-run-flow.js` | 电价预测运行生成、自动激活、手动切换和强制发布流程 |
+| `forecast-page.js` | 后台预测提交、任务状态查询和输入版本隔离 |
+| `forecast-results-view.js` | 三种模型的回传结果和历史预测记录的只读展示 |
+| `forecast-run-flow.js` | 旧预测运行兼容和已生效价格运行可用性校验 |
 | `result-page.js` | 基准结果总览报告文案、指标卡、假设说明、明细表 HTML 和渲染状态构造 |
 | `result-print.js` | 基准结果总览打印前展开、图表刷新和打印后恢复控制 |
 | `result-charts.js` | 基准结果总览四张 ECharts 图的 option 构造和图表 token 扩展 |

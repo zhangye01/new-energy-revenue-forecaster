@@ -24,7 +24,6 @@ const {
   PROVINCE_BENCHMARKS,
   POLICY_CARDS,
   OVERVIEW_POLICY_DETAILS,
-  QUALITY_GATE,
   PROVINCE_DEFAULT_PARAMS,
   BATCH_PARAM_SPECS
 } = config;
@@ -62,6 +61,7 @@ const manualScenarioFlow = window.NE_MANUAL_SCENARIO_FLOW;
 const chartLifecycle = window.NE_CHART_LIFECYCLE;
 const energyCharts = window.NE_ENERGY_CHARTS;
 const forecastPage = window.NE_FORECAST_PAGE;
+const forecastResultsView = window.NE_FORECAST_RESULTS_VIEW;
 const forecastRunFlow = window.NE_FORECAST_RUN_FLOW;
 const roughPrice = window.NE_ROUGH_PRICE;
 const roughPriceWorkspace = window.NE_ROUGH_PRICE_WORKSPACE;
@@ -86,7 +86,7 @@ const appStorage = window.NE_APP_STORAGE;
 const appPersistence = window.NE_APP_PERSISTENCE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!supplyDemandFlowModule || !energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !scriptLoader || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastRunFlow || !roughPrice || !roughPriceWorkspace || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
+if (!supplyDemandFlowModule || !energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !scriptLoader || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastResultsView || !forecastRunFlow || !roughPrice || !roughPriceWorkspace || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -120,18 +120,15 @@ const supplyDemandFlow = supplyDemandFlowModule.create({
   onPersist: schedulePersistAppData, onRender: renderAll, onMessage: setTopMeta,
   onDraftChange: () => backendForecastPanel.render()
 });
+let renderedForecastResults = { projectId: null, html: "" };
 const backendForecastPanel = forecastPage.createBackendForecastPanel({
   documentRef: document, getProject: getActiveProject,
   getService: () => config.backendForecastService,
   inspectInput: supplyDemandFlow.inspectSupplyDemand, prepareInput: supplyDemandFlow.prepareSupplyDemand,
-  hasUsableDemoRun: (project) => getActiveRun(project)?.executionKind !== "real_model"
-    && !supplyDemandFlow.hasUnsavedChanges() && !supplyDemandFlow.hasPendingDraft(project)
-    && forecastRunFlow.hasActiveActivatableRun(project, { validateSupplyDemandRun: supplyDemandFlow.validateSupplyDemandRun }),
-  isRunActive: (project, runId) => {
-    const run = getActiveRun(project);
-    return run?.id === runId && run.executionKind === "real_model"
-      && forecastRunFlow.hasActiveActivatableRun(project, { validateSupplyDemandRun: supplyDemandFlow.validateSupplyDemandRun });
-  }
+  hasUsableRun: (project) => !supplyDemandFlow.hasUnsavedChanges() && !supplyDemandFlow.hasPendingDraft(project)
+    && hasActiveActivatableRun(project),
+  isActive: () => appState.activePage === "forecast-page",
+  onTask: renderBackendForecastResults
 });
 const createEmptyEnergyDataState = projectModel.createEmptyEnergyDataState;
 const normalizeTypicalCurveProfile = energyProfiles.normalizeTypicalCurveProfile;
@@ -330,7 +327,7 @@ const PAGE_COMPLETION_STANDARD_MAP = {
   "energy-page": "逐年总量覆盖全部测算年度，并完成典型年曲线来源二选一。",
   "rough-page": "已保存与当前项目、测算期和电量口径一致的粗算版本。",
   "history-page": "已按项目省份自动展示历史现货图表。",
-  "forecast-page": "存在已生效且可发布的电价预测版本。",
+  "forecast-page": "项目已有可用于收益测算的有效价源。",
   "scenario-page": "当前收益参数补充与细化已保存。",
   "results-page": "当前方案已成功生成一版基准结果。",
   "validation-page": "已有同口径的粗算与基准结果，可查看偏差。",
@@ -3029,88 +3026,19 @@ function hourlyPricesFromQuarterPrices(quarterPrices) {
   return priceForecast.hourlyPricesFromQuarterPrices(quarterPrices);
 }
 
-function forecastQuarterPrice(project, model, context) {
-  return priceForecast.forecastQuarterPrice(project, model, context);
+function renderBackendForecastResults(state) {
+  const root = document.querySelector("#forecast-results-root");
+  if (!root) return;
+  const projectId = state.project?.id ?? null;
+  const html = forecastResultsView.buildView(state);
+  const sameProject = renderedForecastResults.projectId === projectId;
+  if (sameProject && renderedForecastResults.html === html) return;
+  const historyOpen = sameProject && root.querySelector("[data-forecast-history]")?.open;
+  root.innerHTML = html;
+  const history = root.querySelector("[data-forecast-history]");
+  if (history && historyOpen) history.open = true;
+  renderedForecastResults = { projectId, html };
 }
-
-function buildForecastPriceSeries(project, model, seed, growth) {
-  return priceForecast.buildForecastPriceSeries(project, model, seed, growth, {
-    provinceBenchmarks: PROVINCE_BENCHMARKS
-  });
-}
-
-function createForecastRunForModel(project, model, options) {
-  return priceForecast.createForecastRunForModel(project, model, {
-    ...options, id: makeId("run"), createdAt: new Date().toISOString(),
-    qualityGate: QUALITY_GATE, provinceBenchmarks: PROVINCE_BENCHMARKS
-  });
-}
-
-function formatForecastGranularity(run) {
-  return forecastRunFlow.formatForecastGranularity(run);
-}
-
-function countForecastPriceMissing(project, run) {
-  return priceForecast.countForecastPriceMissing(project, run);
-}
-
-function evaluateRunQuality(project, run) {
-  return priceForecast.evaluateRunQuality(project, run, QUALITY_GATE);
-}
-
-function canActivateRun(run, project = getActiveProject()) {
-  return forecastRunFlow.canActivateRun(run, project);
-}
-
-function statusLabel(run) {
-  return forecastRunFlow.statusLabel(run, getActiveProject());
-}
-
-function forecastRunFlowContext() {
-  return {
-    project: getActiveProject(),
-    documentRef: typeof document !== "undefined" ? document : null,
-    modelDefinitions: priceForecast.FORECAST_MODEL_DEFINITIONS,
-    services: {
-      prepareSupplyDemand: supplyDemandFlow.prepareSupplyDemand,
-      validateSupplyDemandRun: supplyDemandFlow.validateSupplyDemandRun,
-      createForecastRunForModel,
-      markDownstreamStale
-    },
-    actions: {
-      makeId,
-      nowIso: () => new Date().toISOString(),
-      setTopMeta,
-      renderAll,
-      promptForceReason: () => (
-        typeof window !== "undefined" && typeof window.prompt === "function"
-          ? window.prompt("请输入强制发布原因：", "初版阶段人工放行")
-          : "初版阶段人工放行"
-      )
-    }
-  };
-}
-
-function generateForecastRun() {
-  const generated = forecastRunFlow.generateForecastRun(forecastRunFlowContext());
-  if (generated) window.NE_PROJECT_BACKUP.captureFormState(document, ["#forecast-run-form"]);
-  return generated;
-}
-
-function setActiveRun(runId) {
-  return forecastRunFlow.setActiveRun({
-    ...forecastRunFlowContext(),
-    runId
-  });
-}
-
-function forceActivateRun(runId) {
-  return forecastRunFlow.forceActivateRun({
-    ...forecastRunFlowContext(),
-    runId
-  });
-}
-
 
 function renderForecastRuns() {
   const project = getActiveProject();
@@ -3119,16 +3047,8 @@ function renderForecastRuns() {
     backendForecastPanel.render();
   } else {
     supplyDemandFlow.disposeChart();
+    backendForecastPanel.dispose();
   }
-  forecastPage.applyForecastRunsView({
-    refs,
-    view: forecastPage.buildForecastRunsView({ project, qualityGate: QUALITY_GATE, statusLabel, formatForecastGranularity, canActivateRun,
-      validatePriceData: priceForecast.validateForecastPriceData, validateSupplyDemandRun: supplyDemandFlow.validateSupplyDemandRun })
-  });
-  forecastPage.bindForecastRunActions({
-    documentRef: typeof document !== "undefined" ? document : null,
-    handlers: { setActiveRun, forceActivateRun }
-  });
   if (["rough-page", "validation-page"].includes(appState.activePage)) roughPriceWorkspace.renderWorkspace({
     documentRef: typeof document !== "undefined" ? document : null,
     project, scenario: project ? getActiveScenario(project) : null, domain: roughPrice, inputState: scenarioModel,
@@ -4685,7 +4605,7 @@ function createEventBindingActions() {
     hasEnergyHistoryEntryReadiness, sanitizeEnergyStep2Choice, createProjectFromForm,
     syncCreateStorageFieldsUi, setCreateSaveMessage, setEnergyImportMessage,
     exportEnergyTemplate, importEnergyFromFile, applyProvinceTypicalCurve,
-    renderEnergyStep2ChoiceState, generateForecastRun, saveScenarioFromForm,
+    renderEnergyStep2ChoiceState, saveScenarioFromForm,
     switchActiveScenario, renameActiveScenario, duplicateActiveScenario, deleteActiveScenario,
     toggleBaselineLock, applyBatchParameter, syncScenarioFieldLocks, exportManualScenarioTemplate,
     importManualScenarioTemplate, renderProvinceLibrary, updateMarketTradeEnergyDisplay,

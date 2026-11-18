@@ -149,14 +149,7 @@
   .rough-fields { grid-template-columns: minmax(0, 1fr); }
 }
 
-.forecast-quality {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* Backend prediction keeps task progress separate from the local demonstration. */
+/* Backend forecast submission and status */
 .backend-forecast-panel {
   display: grid;
   gap: 12px;
@@ -185,7 +178,6 @@
 .backend-forecast-actions button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .backend-forecast-note { display: block; color: var(--muted); font-size: .76rem; line-height: 1.6; overflow-wrap: anywhere; }
 .backend-forecast-note:empty { display: none; }
-.forecast-demo-panel { min-width: 0; }
 @media (max-width: 760px) {
   .backend-forecast-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .backend-forecast-actions button { width: 100%; min-width: 0; min-height: 40px; }
@@ -193,6 +185,33 @@
 @media (max-width: 420px) {
   .backend-forecast-actions { grid-template-columns: minmax(0, 1fr); }
   .backend-forecast-head { flex-direction: column; }
+}
+
+.forecast-results-panel { min-width: 0; }
+#forecast-results-root { display: grid; gap: 12px; min-width: 0; }
+.forecast-result-models { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.forecast-result-model { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); }
+.forecast-result-model-head, .forecast-result-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 8px; }
+.forecast-result-model-head { justify-content: space-between; }
+.forecast-result-model h3 { margin: 0; font-size: .88rem; }
+.forecast-result-status { color: var(--muted); font-size: .76rem; }
+.forecast-result-status.is-returned { color: var(--green); }
+.forecast-result-meta { margin-top: 6px; color: var(--muted); font-size: .75rem; line-height: 1.55; overflow-wrap: anywhere; }
+.forecast-result-empty, .forecast-result-missing { color: var(--muted); }
+.forecast-result-empty { margin: 0; font-size: .82rem; }
+.forecast-result-table { min-width: 0; margin: 0; }
+.forecast-result-table table { min-width: 0; }
+.forecast-result-table caption { padding: 5px 8px 8px; color: var(--muted); font-size: .78rem; text-align: left; }
+.forecast-result-table th, .forecast-result-table td { font-variant-numeric: tabular-nums; }
+.forecast-result-table table[data-forecast-annual] th:not(:first-child),
+.forecast-result-table table[data-forecast-annual] td { text-align: right; }
+.forecast-result-history { min-width: 0; border-top: 1px solid var(--line); }
+.forecast-result-history summary { padding: 8px 0 2px; color: var(--muted); cursor: pointer; font-size: .78rem; }
+.forecast-result-history table { margin-top: 8px; }
+.forecast-result-history td:last-child { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .forecast-result-models { grid-template-columns: minmax(0, 1fr); }
+  .forecast-result-table th, .forecast-result-table td { padding-inline: 4px; }
 }
 
 /* Supply-demand configuration */

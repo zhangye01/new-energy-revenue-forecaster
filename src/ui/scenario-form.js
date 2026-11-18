@@ -436,15 +436,11 @@
       .replaceAll("'", "&#39;");
   }
 
-  function bindForecastScenarioEvents(input = {}) {
+  function bindScenarioEvents(input = {}) {
     const {
       refs = {},
       handlers = {}
     } = input;
-    refs.forecastRunForm?.addEventListener("submit", (event) => {
-      event.preventDefault();
-      handlers.generateForecastRun?.();
-    });
     refs.scenarioForm?.addEventListener("submit", (event) => {
       event.preventDefault();
       handlers.saveScenarioFromForm?.();
@@ -1064,7 +1060,7 @@
     applyScenarioManagerView,
     applyScenarioFieldLocks,
     applyScenarioSaveDraft,
-    bindForecastScenarioEvents,
+    bindScenarioEvents,
     bindScenarioDerivedFieldEvents,
     buildScenarioManagerView,
     buildScenarioSaveDraft,

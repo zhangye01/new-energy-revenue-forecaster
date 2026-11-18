@@ -11,7 +11,7 @@
   const MAX_STRUCTURE_DEPTH = 64;
   const formBaselines = new WeakMap();
   const selectedScenarios = new WeakMap();
-  const FORM_SELECTORS = ["#create-project-form", "#scenario-form", "#forecast-run-form", "#scenario-quick-name"];
+  const FORM_SELECTORS = ["#create-project-form", "#scenario-form", "#scenario-quick-name"];
   const NAVIGATION_CONTROLS = ["[data-page]", "[data-jump]", "[data-open-project]", "#create-to-energy-button",
     "#energy-to-history-button", "#account-profile-button", "#account-password-button", "#logout-button", "#settings-logout-button",
     "#duplicate-scenario-button", "#delete-scenario-button", "#toggle-baseline-lock-button", "#apply-batch-button", "#rename-scenario-button"].join(", ");
@@ -25,14 +25,14 @@
           field.type === "number" && field.value !== "" && Number.isFinite(Number(field.value)) ? Number(field.value) : String(field.value ?? "")]));
   }
 
-  function captureFormState(documentRef, selectors = FORM_SELECTORS.filter((selector) => selector !== "#forecast-run-form")) {
+  function captureFormState(documentRef) {
     if (!formBaselines.has(documentRef)) formBaselines.set(documentRef, new Map());
     const baselines = formBaselines.get(documentRef);
     const scenarioSelector = documentRef.querySelector("#scenario-selector");
     if (scenarioSelector) selectedScenarios.set(documentRef, scenarioSelector.value);
     FORM_SELECTORS.forEach((selector) => {
       const form = documentRef.querySelector(selector);
-      if (form && (!baselines.has(selector) || selectors.includes(selector))) baselines.set(selector, formSignature(form));
+      if (form) baselines.set(selector, formSignature(form));
     });
   }
 

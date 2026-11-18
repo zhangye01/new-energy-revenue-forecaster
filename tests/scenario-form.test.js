@@ -7,7 +7,7 @@ const {
   applyScenarioManagerView,
   applyScenarioFieldLocks,
   applyScenarioSaveDraft,
-  bindForecastScenarioEvents,
+  bindScenarioEvents,
   bindScenarioDerivedFieldEvents,
   buildScenarioManagerView,
   buildScenarioSaveDraft,
@@ -50,7 +50,6 @@ class FakeTarget {
 
 const scenarioEventCalls = [];
 const scenarioEventRefs = {
-  forecastRunForm: new FakeTarget(),
   scenarioForm: new FakeTarget(),
   scenarioSelector: new FakeTarget("base"),
   scenarioQuickName: new FakeTarget(),
@@ -70,10 +69,9 @@ const scenarioEventRefs = {
   importFeeTemplateButton: new FakeTarget(),
   provinceDefaultSelector: new FakeTarget("jiangsu")
 };
-bindForecastScenarioEvents({
+bindScenarioEvents({
   refs: scenarioEventRefs,
   handlers: {
-    generateForecastRun: () => scenarioEventCalls.push("generate"),
     saveScenarioFromForm: () => scenarioEventCalls.push("save"),
     switchActiveScenario: (id) => scenarioEventCalls.push(`switch:${id}`),
     renameActiveScenario: () => scenarioEventCalls.push("rename"),
@@ -87,7 +85,6 @@ bindForecastScenarioEvents({
     changeProvinceDefault: (key) => scenarioEventCalls.push(`province:${key}`)
   }
 });
-assert.equal(scenarioEventRefs.forecastRunForm.dispatch("submit").prevented, true);
 assert.equal(scenarioEventRefs.scenarioForm.dispatch("submit").prevented, true);
 scenarioEventRefs.scenarioSelector.dispatch("change");
 assert.equal(scenarioEventRefs.scenarioQuickName.dispatch("keydown", { key: "Escape" }).prevented, false);
@@ -108,7 +105,6 @@ scenarioEventRefs.exportFeeTemplateButton.dispatch("click");
 scenarioEventRefs.importFeeTemplateButton.dispatch("click");
 scenarioEventRefs.provinceDefaultSelector.dispatch("change");
 assert.deepEqual(scenarioEventCalls, [
-  "generate",
   "save",
   "switch:base",
   "rename",

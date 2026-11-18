@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261118m">
-    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118s">
+    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118t">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261118m">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
@@ -87,8 +87,8 @@
     </script>
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
-    <script src="./config.js?v=20261118h" defer></script>
-    <script src="./runtime.js?v=20261118n" defer></script>
+    <script src="./config.js?v=20261118t" defer></script>
+    <script src="./runtime.js?v=20261118t" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
@@ -116,7 +116,8 @@
     <script src="./src/ui/supply-demand-chart.js?v=20261118s" defer></script>
     <script src="./src/ui/supply-demand-workspace.js?v=20261118s" defer></script>
     <script src="./src/ui/supply-demand-flow.js?v=20261118s" defer></script>
-    <script src="./src/ui/forecast-page.js?v=20261118e" defer></script>
+    <script src="./src/ui/forecast-results-view.js?v=20261118t" defer></script>
+    <script src="./src/ui/forecast-page.js?v=20261118t" defer></script>
     <script src="./src/ui/forecast-run-flow.js?v=20261118e" defer></script>
     <script src="./src/ui/project-list.js?v=20261118d" defer></script>
     <script src="./src/ui/result-page.js?v=20261118i" defer></script>
@@ -124,7 +125,7 @@
     <script src="./src/ui/result-print.js?v=20261118g" defer></script>
     <script src="./src/ui/result-charts.js?v=20261113c" defer></script>
     <script src="./src/ui/scenario-charts.js?v=20261118i" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20261118r" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261118t" defer></script>
     <script src="./src/ui/scenario-visual-data.js?v=20261118i" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20261118e" defer></script>
     <script src="./src/ui/compare-charts.js?v=20261118i" defer></script>
@@ -138,7 +139,7 @@
     <script src="./src/ui/history-renderer.js?v=20261118n" defer></script>
     <script src="./src/ui/theme-controller.js?v=20261113c" defer></script>
     <script src="./src/ui/shell-events.js?v=20261113c" defer></script>
-    <script src="./src/ui/app-event-bindings.js?v=20261113c" defer></script>
+    <script src="./src/ui/app-event-bindings.js?v=20261118t" defer></script>
     <script src="./src/domain/workflow-status.js?v=20261118e" defer></script>
     <script src="./src/domain/scenario-config.js?v=20261118h" defer></script>
     <script src="./src/domain/rough-price.js?v=20261118p" defer></script>
@@ -152,8 +153,8 @@
     <script src="./src/domain/energy-import-flow.js?v=20261113c" defer></script>
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
-    <script src="./src/ui/project-backup.js?v=20261118q" defer></script>
-    <script src="./app.js?v=20261118s" defer></script>
+    <script src="./src/ui/project-backup.js?v=20261118t" defer></script>
+    <script src="./app.js?v=20261118t" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -926,7 +927,7 @@
               </article>
             </div>
             <div class="history-next-step-row">
-              <div class="hint" data-help="下一步">历史现货样本查看完成后，进入电价预测工作台生成并选择生效曲线。</div>
+              <div class="hint" data-help="下一步">进入电价预测工作台配置供需并提交预测。</div>
               <button type="button" class="primary-button next-step-button" data-jump="forecast-page">进入电价预测工作台</button>
             </div>
           </section>
@@ -937,90 +938,20 @@
           <section class="panel backend-forecast-panel" aria-labelledby="backend-forecast-heading">
             <div class="panel-head backend-forecast-head">
               <div class="backend-forecast-title">
-                <strong id="backend-forecast-heading">后台电价预测</strong>
-                <span data-help="后台预测流程" data-help-anchor="#backend-forecast-heading">保存供需配置后，将本次小时数据提交后台算法。返回结果通过周期、单位和完整性核对后，可设为生效版本，再进入收益参数补充与细化。任务与结果始终对应提交时的供需版本。</span>
+                <strong id="backend-forecast-heading">现货电价预测</strong>
+                <span data-help="后台预测流程" data-help-anchor="#backend-forecast-heading">提交已生成的小时供需后，后台计算并回传三个模型的结果。任务和结果对应提交时的供需版本。</span>
               </div>
-              <span id="backend-forecast-status" class="backend-forecast-status" role="status" aria-live="polite" aria-atomic="true">后台算法待接入</span>
+              <span id="backend-forecast-status" class="backend-forecast-status" role="status" aria-live="polite" aria-atomic="true">算法待联调</span>
             </div>
             <div class="backend-forecast-actions">
-              <button type="button" class="primary-button" id="backend-forecast-submit" disabled>提交后台预测</button>
+              <button type="button" class="primary-button" id="backend-forecast-submit" disabled>提交预测</button>
               <button type="button" class="ghost-button" id="backend-forecast-refresh" disabled>刷新任务状态</button>
-              <button type="button" class="ghost-button" id="backend-forecast-activate" disabled>设为生效</button>
             </div>
-            <small id="backend-forecast-note" class="backend-forecast-note">完成供需配置后提交，结果返回并生效后继续。</small>
+            <small id="backend-forecast-note" class="backend-forecast-note"></small>
           </section>
-          <section class="panel forecast-demo-panel">
-            <div class="panel-head"><strong id="forecast-model-scope">演示预测</strong><span data-help="演示预测口径" data-help-anchor="#forecast-model-scope">演示曲线用于验证操作流程与计算口径。供需配置仅用于溯源，训练窗口和误差指标均为模拟值。</span></div>
-            <form id="forecast-run-form" class="form-grid">
-              <label>算法类型
-                <select id="algo-family">
-                  <option value="all">三模型模拟：LSTM / XGBoost / Ensemble</option>
-                </select>
-              </label>
-              <label>算法版本
-                <input id="algo-version" type="text" value="1.0.0">
-              </label>
-              <label>特征版本
-                <input id="feature-version" type="text" value="1.0.0">
-              </label>
-              <label>数据快照ID
-                <input id="data-snapshot-id" type="text" value="snapshot-2026-12">
-              </label>
-              <label>模拟窗口起始
-                <input id="train-start" type="number" min="2010" max="2100" value="2018">
-              </label>
-              <label>模拟窗口结束
-                <input id="train-end" type="number" min="2010" max="2100" value="2025">
-              </label>
-              <label>随机种子
-                <input id="algo-seed" type="number" min="1" max="99999" value="2027">
-              </label>
-              <label>价格增长率 %
-                <input id="algo-growth" type="number" min="-99.9" step="0.1" value="0.5">
-              </label>
-              <div class="actions-row">
-                <button type="submit" class="primary-button">生成演示预测</button>
-              </div>
-            </form>
-            <div class="info-box forecast-quality">
-              <span id="forecast-quality-heading">演示质量状态</span>
-              <span data-help="预测质量门槛" data-help-anchor="#forecast-quality-heading" data-forecast-gate-help>质量门槛：MAPE ≤ 15%，sMAPE ≤ 18%，且价格曲线完整覆盖测算周期。</span>
-              <span id="forecast-gate-message">尚未生成预测版本</span>
-            </div>
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>run_id</th>
-                    <th>算法</th>
-                    <th>版本</th>
-                    <th>特征版本</th>
-                    <th>颗粒度</th>
-                    <th>模拟窗口</th>
-                    <th>MAPE</th>
-                    <th>sMAPE</th>
-                    <th>MAE</th>
-                    <th>RMSE</th>
-                    <th>状态</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody id="forecast-run-body"></tbody>
-              </table>
-            </div>
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>激活时间</th>
-                    <th>from_run</th>
-                    <th>to_run</th>
-                    <th>切换原因</th>
-                  </tr>
-                </thead>
-                <tbody id="forecast-activation-body"></tbody>
-              </table>
-            </div>
+          <section class="panel forecast-results-panel" aria-labelledby="forecast-results-heading">
+            <div class="panel-head"><strong id="forecast-results-heading">预测结果</strong></div>
+            <div id="forecast-results-root"></div>
           </section>
           <div class="history-next-step-row">
             <button type="button" class="primary-button next-step-button" id="backend-forecast-next" data-jump="scenario-page" disabled>进入收益参数补充与细化</button>
@@ -1942,7 +1873,7 @@
                 </article>
                 <article class="help-card">
                   <strong>电价预测工作台</strong>
-                  <p>配置测算周期供需，管理演示预测版本、质量指标与生效曲线。演示预测记录供需输入来源，价格仍由模拟模型生成。</p>
+                  <p>保存小时供需后提交后台预测。页面显示任务状态和三种模型的回传结果，并保留历史记录供回查。</p>
                 </article>
                 <article class="help-card">
                   <strong>收益参数补充与细化</strong>

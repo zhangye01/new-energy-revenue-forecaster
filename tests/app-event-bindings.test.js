@@ -55,7 +55,7 @@ const appState = {
 let policyHandlers = null;
 let compareHandlers = null;
 let energyHandlers = null;
-let forecastHandlers = null;
+let scenarioHandlers = null;
 let derivedInput = null;
 let resultHandlers = null;
 
@@ -107,9 +107,9 @@ bindAppEvents({
       }
     },
     scenarioForm: {
-      bindForecastScenarioEvents(input) {
-        calls.push("forecast-bind");
-        forecastHandlers = input.handlers;
+      bindScenarioEvents(input) {
+        calls.push("scenario-bind");
+        scenarioHandlers = input.handlers;
       },
       bindScenarioDerivedFieldEvents(input) {
         calls.push("derived-bind");
@@ -157,7 +157,6 @@ bindAppEvents({
     importEnergyFromFile: () => calls.push("import-energy"),
     applyProvinceTypicalCurve: () => calls.push("province-curve"),
     renderEnergyStep2ChoiceState: () => calls.push("render-energy-choice"),
-    generateForecastRun: () => calls.push("forecast"),
     saveScenarioFromForm: () => calls.push("save-scenario"),
     switchActiveScenario: () => calls.push("switch-scenario"),
     renameActiveScenario: () => calls.push("rename-scenario"),
@@ -187,7 +186,7 @@ assert.deepEqual(calls.slice(0, 10), [
   "compare-bind:true",
   "energy-handlers",
   "energy-bind:true",
-  "forecast-bind",
+  "scenario-bind",
   "derived-bind"
 ]);
 assert.equal(calls[10], "result-bind");
@@ -205,7 +204,7 @@ compareHandlers.setActiveCompareScenarioId("s2");
 energyHandlers.setEnergyStep2Choice("province");
 assert.equal(appState.energyStep2Choice, "province");
 
-forecastHandlers.changeProvinceDefault("zhejiang");
+scenarioHandlers.changeProvinceDefault("zhejiang");
 assert.equal(refs.provinceApplyMessage.textContent, "");
 
 assert.deepEqual(derivedInput.querySelector("#mechanism-ratio"), { selector: "#mechanism-ratio" });

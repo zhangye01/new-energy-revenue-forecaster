@@ -35,11 +35,11 @@ SeriesWithMode在单向时{mode:'net',...Series}；双向时{mode:'bidirectional
 
 供需堆积面积图读取已生成数据。分月视图将每个典型小时的电量按代表天数计入月合计。典型日视图展示所选月份的24小时。供给面积由风电、光伏、水电、非市场化出力和联络线受入构成，总需求线为省内负荷加联络线送出。悬停可查看各项电量及剩余需求。
 
-`NE_SUPPLY_DEMAND_TEMPLATE`负责工作簿生成和导入校验。`NE_SUPPLY_DEMAND_WORKSPACE.createController({root,getProject,onCommit,downloadCsv,onDraftChange})`返回`{render,hasUnsavedChanges,disposeChart}`。主控在保存时校验目标项目及供需配置，并在输入版本变化时更新预测生效状态。根节点`#supply-demand-root`位于预测表单之前。已生成结果仍可通过`downloadCsv(filename,rows)`导出。
+`NE_SUPPLY_DEMAND_TEMPLATE`负责工作簿生成和导入校验。`NE_SUPPLY_DEMAND_WORKSPACE.createController({root,getProject,onCommit,downloadCsv,onDraftChange})`返回`{render,hasUnsavedChanges,disposeChart}`。主控在保存时校验目标项目及供需配置，并在输入版本变化时更新预测生效状态。根节点`#supply-demand-root`位于预测任务面板之前。已生成结果仍可通过`downloadCsv(filename,rows)`导出。
 
 ## 预测集成与历史保护
 
-新增预测之前必须保存有效供需配置，未保存编辑不允许生成。每个新run保存紧凑供需配置快照、来源指纹/周期/单位和年度摘要；接口接收所生成的小时数据。现有模拟算法不宣称已训练/已消费供需特征，明显标注“供需输入已留存，当前演示价格模型尚未使用供需定价”。不自行虚构价格弹性或物理出清公式。
+提交预测前须保存有效供需配置，未保存的编辑须先确认。请求包含小时数据、供需配置和来源指纹。算法由后台执行，前台查询任务状态并只读展示三个模型的回传结果。后台未接通时显示“算法待联调”。历史模拟运行保留原数值和来源标识。
 
 供需配置数值变化或项目范围变化后，旧run和既有收入结果保留历史内容，不能继续冒充当前有效预测；需重新生成预测并测算。相同配置重复保存不造成无意义失效。保存草稿不替换已生效输入；有未保存草稿须明确提示。既有没有供需输入的历史项目仍可查看原预测/结果，首次生成新版预测须补配置。粗算快照、收入配置及历史年表不回写。
 

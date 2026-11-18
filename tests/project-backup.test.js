@@ -36,13 +36,11 @@ assert.equal(nodes['#storage-status-banner'].hidden, true);
 // Unsubmitted browser-only form values are guarded, without treating equivalent numbers as edits.
 const controls = {
   create: [{ id: 'create-capacity', type: 'number', value: '100' }],
-  scenario: [{ id: 'other-fee', type: 'number', value: '14.75' }, { id: 'derived', readOnly: true, value: '20' }],
-  forecast: [{ id: 'algo-seed', type: 'number', value: '2027' }]
+  scenario: [{ id: 'other-fee', type: 'number', value: '14.75' }, { id: 'derived', readOnly: true, value: '20' }]
 };
 const forms = {
   '#create-project-form': { querySelectorAll: () => controls.create },
-  '#scenario-form': { querySelectorAll: () => controls.scenario },
-  '#forecast-run-form': { querySelectorAll: () => controls.forecast }
+  '#scenario-form': { querySelectorAll: () => controls.scenario }
 };
 const formDoc = { querySelector: (selector) => forms[selector] };
 backup.captureFormState(formDoc);
@@ -53,11 +51,6 @@ controls.scenario[0].value = '14.7500'; controls.scenario[1].value = '40';
 assert.equal(backup.hasUnsubmittedFormChanges(formDoc), false, 'formatting and read-only derived fields do not cause permanent dirty warnings');
 controls.create[0].value = '';
 assert.equal(backup.hasUnsubmittedFormChanges(formDoc), true, 'blank invalid input is still an unsaved edit');
-controls.create[0].value = '100'; controls.forecast[0].value = '123';
-backup.captureFormState(formDoc);
-assert.equal(backup.hasUnsubmittedFormChanges(formDoc), true, 'unrelated renders do not approve unsubmitted forecast settings');
-backup.captureFormState(formDoc, ['#forecast-run-form']);
-assert.equal(backup.hasUnsubmittedFormChanges(formDoc), false, 'generating a forecast establishes a clean form state');
 
 const notifications = [], handlers = {};
 const bindingDoc = {

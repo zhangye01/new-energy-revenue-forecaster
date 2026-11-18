@@ -39,7 +39,7 @@
       "importEnergyFromFile", "applyProvinceTypicalCurve", "renderEnergyStep2ChoiceState"
     ],
     scenario: [
-      "generateForecastRun", "saveScenarioFromForm", "switchActiveScenario",
+      "saveScenarioFromForm", "switchActiveScenario",
       "renameActiveScenario", "duplicateActiveScenario", "deleteActiveScenario",
       "toggleBaselineLock", "applyBatchParameter", "syncScenarioFieldLocks",
       "exportManualScenarioTemplate", "importManualScenarioTemplate", "renderProvinceLibrary",
@@ -185,10 +185,9 @@
       })
     });
 
-    scenarioForm.bindForecastScenarioEvents({
+    scenarioForm.bindScenarioEvents({
       refs,
       handlers: {
-        generateForecastRun: actions.generateForecastRun,
         saveScenarioFromForm: actions.saveScenarioFromForm,
         switchActiveScenario: actions.switchActiveScenario,
         renameActiveScenario: actions.renameActiveScenario,
