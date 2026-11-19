@@ -86,7 +86,7 @@
     }
     const totalWithStorageSpotRevenue = totalWithoutStorageSpotRevenue + totalIncrementalRevenue;
     if (!Number.isFinite(totalWithStorageSpotRevenue)) return null;
-    return { annualRows, totalWithoutStorageSpotRevenue, totalWithStorageSpotRevenue, totalIncrementalRevenue };
+    return { annualRows, totalWithoutStorageSpotRevenue, totalWithStorageSpotRevenue, totalIncrementalRevenue, roundTripEfficiency: efficiency };
   }
 
   function emptyAnnualRow(year) {

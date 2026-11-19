@@ -219,12 +219,11 @@
   }
 
   function buildEnergyCurveText({ hasAnnualValues: annualReady, hasConfiguredTypicalCurve, sourceLabel } = {}) {
-    const subtitle = sourceLabel
-      ? `当前来源：${sourceLabel}；横轴为1-24时，图例区分1-12月。`
-      : "横轴为1-24时，纵轴为小时数，图例区分1-12月。";
-    let note = `左图展示测算周期内逐年总小时数；右图展示${sourceLabel || "典型年按月份拆解的24小时曲线"}。`;
+    const distribution = "横轴为 1–24 时。纵轴累加该月各日同一小时档的分布权重，按全年合计 8760 小时换算。";
+    const subtitle = sourceLabel ? `${sourceLabel}。${distribution}` : distribution;
+    let note = `左图展示测算周期内逐年总小时数。右图展示${sourceLabel || "典型年按月份拆解的 24 小时曲线"}。`;
     if (!annualReady) {
-      note = "请先完成逐年总量模板导入；完成后左图展示年度小时数。";
+      note = "导入逐年总量模板后，左图展示年度小时数。";
     } else if (!hasConfiguredTypicalCurve) {
       note = "逐年总量已导入。保存典型年曲线后，右图将展示其日内分布。";
     }
@@ -299,7 +298,7 @@
     if (chartModel.state === "empty") {
       if (refs.energyCurveNote) refs.energyCurveNote.textContent = chartModel.noteMessage;
       if (refs.energyCurveSubtitle) {
-        refs.energyCurveSubtitle.textContent = "按月份拆解典型年24小时曲线，支持后续替换为正式数据库结果。";
+        refs.energyCurveSubtitle.textContent = "导入典型年模板或调用项目所在省份的典型曲线后，可查看各月日内分布。";
       }
       setEnergyChartEmpty(annualChart, chartModel.annualMessage, tokens);
       setEnergyChartEmpty(typicalChart, chartModel.typicalMessage, tokens);

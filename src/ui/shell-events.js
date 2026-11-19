@@ -102,7 +102,6 @@
     on(refs.benchmarkZoomOutButton, "click", handlers.zoomBenchmarkOut);
     on(refs.benchmarkZoomResetButton, "click", handlers.resetBenchmarkZoom);
     if (typeof handlers.bindBenchmarkRangeDrag === "function") handlers.bindBenchmarkRangeDrag();
-    on(refs.pageHelpButton, "click", handlers.togglePageHelp);
     bindIndexedClicks(refs.overviewDots, handlers.goToOverviewSlide || (() => {}));
     on(refs.overviewDetailTrigger, "click", handlers.openOverviewPolicyDetail);
     on(refs.loginEntryButton, "click", handlers.openLoginModal);
@@ -176,7 +175,6 @@
       zoomBenchmarkOut: () => actions.adjustBenchmarkMapZoom?.(-benchmarkMapZoomStep),
       resetBenchmarkZoom: actions.resetBenchmarkMapZoom,
       bindBenchmarkRangeDrag: actions.bindBenchmarkRangeDrag,
-      togglePageHelp: actions.togglePageHelp,
       goToOverviewSlide: actions.goToOverviewSlide,
       openOverviewPolicyDetail: () => {
         actions.openOverviewPolicyDetail?.(appState.overviewSlideIndex);
@@ -198,9 +196,6 @@
       handleDocumentClick: (event) => {
         if (refs.accountModule && !refs.accountModule.hidden && !refs.accountModule.contains(event.target)) {
           actions.closeAccountDropdown?.();
-        }
-        if (refs.pageHelp && !refs.pageHelp.contains(event.target)) {
-          actions.closePageHelp?.();
         }
         if (refs.historyDatePanel && refs.historyDateToggle && !refs.historyDatePanel.hidden && !refs.historyDatePanel.contains(event.target) && !refs.historyDateToggle.contains(event.target)) {
           actions.setHistoryDatePanelOpen?.(false);
@@ -229,7 +224,6 @@
           actions.closeLoginModal?.();
         } else if (event.key === "Escape") {
           actions.closeAccountDropdown?.();
-          actions.closePageHelp?.();
         }
       },
       handleWindowError: (event) => {

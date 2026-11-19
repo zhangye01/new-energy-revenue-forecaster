@@ -313,10 +313,14 @@
     const tables = [incomeDetails?.table, turning?.table, storage?.table, buildYearTable(rows), ...operating.tables, ...dispatch.tables].filter(Boolean);
     const findings = [field("电价变化", turning?.finding || pricing.endpoints), field("收入表现", income.finding),
       ...(storage ? [field("配储收益", storage.finding)] : [])];
+    const source = versions.describeResult(result, run);
+    const synthetic = source.priceSourceType === "demo" || (source.priceSourceType === "unverified"
+      && source.runId && run?.id === source.runId && run.executionKind === "demo_simulation");
 
     return {
       title: "基准结果简报",
       projectName: origin.name || project?.name || "新能源项目",
+      ...(synthetic ? { syntheticCaseLabel: "合成案例 · 现货电价为模拟数据" } : {}),
       context,
       metrics: [
         field("周期全口径收入", asMoney(result.totalFullRevenue)),
@@ -328,7 +332,7 @@
       sections,
       figures: numberItems(figures, sections, "figure"),
       tables: numberItems(tables, sections, "table"),
-      versionId: versions.describeResult(result, run).versionId
+      versionId: source.versionId
     };
   }
 

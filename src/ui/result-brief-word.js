@@ -141,6 +141,7 @@
   function documentXml(brief, images) {
     const body = [
       paragraph(brief.title, "Title"), paragraph(brief.projectName, "Subtitle"),
+      brief.syntheticCaseLabel ? paragraph(brief.syntheticCaseLabel, "Caption", { keepNext: true }) : "",
       paragraph("项目概况", "Heading1"), labeledParagraphs(brief.context, "Fact"),
       paragraph("核心结论", "Heading1"), ...(brief.summary ? [paragraph(brief.summary)] : []), labeledParagraphs(brief.metrics, "Fact"),
       labeledParagraphs(brief.findings, "Finding"), reportSections(brief, images)

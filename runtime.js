@@ -39,7 +39,6 @@ const refs = {
   topTitle: document.querySelector("#top-title"),
   topSectionPath: document.querySelector("#top-section-path"),
   pageHelp: document.querySelector("#page-help"),
-  pageHelpButton: document.querySelector("#page-help-button"),
   pageHelpTitle: document.querySelector("#page-help-title"),
   pageHelpPurpose: document.querySelector("#page-help-purpose"),
   pageHelpMeaning: document.querySelector("#page-help-meaning"),

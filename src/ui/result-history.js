@@ -39,19 +39,23 @@
     }).join("");
   }
 
+  function sameSavedResult(left, right) {
+    if (left === right) return true;
+    const leftVersionId = left.resultVersion?.id;
+    const rightVersionId = right.resultVersion?.id;
+    if (leftVersionId || rightVersionId) return leftVersionId === rightVersionId;
+    return JSON.stringify(left.sourceContext ?? null) === JSON.stringify(right.sourceContext ?? null)
+      && JSON.stringify(left.annualRows) === JSON.stringify(right.annualRows);
+  }
+
   function collectArchiveEntries(project, scenarioId) {
     const entries = versions.listArchivedResults(project, scenarioId);
     const legacy = project?.legacyStorageResultsByScenario?.[scenarioId];
     if (!Array.isArray(legacy?.annualRows) || !legacy.annualRows.some((row) =>
       Number.isInteger(row?.year) && Number.isFinite(row.fullRevenue) && Number.isFinite(row.fullRevenuePrice))) return entries;
-    const legacyVersionId = legacy.resultVersion?.id;
-    const legacyRows = legacyVersionId ? "" : JSON.stringify(legacy.annualRows);
-    const legacySource = legacyVersionId ? "" : JSON.stringify(legacy.sourceContext ?? null);
-    const duplicate = entries.some(({ result }) => legacyVersionId
-      ? result.resultVersion?.id === legacyVersionId
-      : !result.resultVersion?.id && JSON.stringify(result.sourceContext ?? null) === legacySource
-        && JSON.stringify(result.annualRows) === legacyRows);
-    if (!duplicate) entries.push({ key: "legacy-storage", result: legacy, legacyStorage: true });
+    if (!entries.some(({ result }) => sameSavedResult(result, legacy))) {
+      entries.push({ key: "legacy-storage", result: legacy, legacyStorage: true });
+    }
     return entries;
   }
 
@@ -88,8 +92,8 @@
     const count = query("#result-history-count");
     if (!panel || !content || !count) return;
     const entries = collectArchiveEntries(project, scenario?.id);
-    if (view?.includeLastSaved && result?.annualRows?.length && !entries.some((entry) =>
-      entry.result === result || (result.resultVersion?.id && entry.result.resultVersion?.id === result.resultVersion.id))) {
+    if (view?.state === "ready" && view.isHistorical && result?.annualRows?.length
+      && !entries.some((entry) => sameSavedResult(entry.result, result))) {
       entries.unshift({ key: "last-saved", result });
     }
     const contextKey = JSON.stringify([project?.id, scenario?.id]);
@@ -103,7 +107,7 @@
     const options = entries.map(({ key, result: archived, legacyStorage }, index) => {
       const trace = versions.describeResult(archived);
       const label = legacyStorage ? `历史配储原测算 · ${trace.versionId || dateLabel(trace.generatedAt)}`
-        : `${dateLabel(trace.generatedAt)} · ${trace.versionId || `旧版存档 ${index + 1}`}`;
+        : `${key === "last-saved" ? "上次测算 · " : ""}${dateLabel(trace.generatedAt)} · ${trace.versionId || `旧版存档 ${index + 1}`}`;
       return `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`;
     });
     content.innerHTML = `<label class="result-history-picker"><span>查看版本</span><select>${options.join("")}</select></label><div data-history-detail></div>`;

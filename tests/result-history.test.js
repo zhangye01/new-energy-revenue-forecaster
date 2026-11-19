@@ -75,4 +75,31 @@ for (const duplicate of [legacy, first]) {
   assert.doesNotMatch(content.innerHTML, /legacy-storage/);
 }
 
+const staleProject = { ...project, id: project.id, resultHistoryByScenario: {} };
+const asHistorical = { state: "ready", isHistorical: true };
+const savedBefore = JSON.stringify(first);
+const renderLastSaved = (view = asHistorical) => history.render({
+  documentRef: { querySelector: (selector) => nodes[selector] },
+  project: staleProject, scenario, result: first, view,
+  downloadCsv: (name, rows) => downloads.push({ name, rows })
+});
+renderLastSaved();
+assert.equal(count.textContent, "1 份");
+assert.match(content.innerHTML, /last-saved.*上次测算/);
+select.value = "last-saved";
+panel.open = true;
+panel.ontoggle();
+assert.match(detail.innerHTML, /历史压力方案/);
+buttons["[data-history-annual]"].onclick();
+buttons["[data-history-hourly]"].onclick();
+assert.deepEqual(downloads.slice(-2).map(({ rows }) => rows), downloads.slice(0, 2).map(({ rows }) => rows));
+assert.deepEqual(staleProject.resultHistoryByScenario, {});
+assert.equal(JSON.stringify(first), savedBefore);
+renderLastSaved({state:"empty", isHistorical:true});
+assert.equal(count.textContent, "0 份");
+versions.archivePreviousResult(staleProject, scenario.id, first);
+renderLastSaved();
+assert.equal(count.textContent, "1 份");
+assert.doesNotMatch(content.innerHTML, /last-saved/);
+
 console.log("result history tests passed");

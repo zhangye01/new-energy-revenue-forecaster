@@ -41,6 +41,10 @@
   line-height: 1.55;
 }
 
+.scenario-ratio-preview-year {
+  min-width: 8rem;
+}
+
 .text-button {
   display: inline-flex;
   align-items: center;

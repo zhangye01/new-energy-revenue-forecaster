@@ -9,6 +9,7 @@
 }
 
 .context-help-auto { margin-inline-start: 4px; }
+.context-help[hidden] { display: none; }
 
 .context-help-button {
   width: 26px;

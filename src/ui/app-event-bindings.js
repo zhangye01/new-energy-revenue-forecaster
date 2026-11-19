@@ -14,13 +14,13 @@
     shell: [
       "toggleTheme", "renderBenchmarkMap", "schedulePersistAppData",
       "adjustBenchmarkMapZoom", "resetBenchmarkMapZoom", "bindBenchmarkRangeDrag",
-      "togglePageHelp", "goToOverviewSlide", "openOverviewPolicyDetail",
+      "goToOverviewSlide", "openOverviewPolicyDetail",
       "openLoginModal", "toggleSidebarGroup", "toggleAccountDropdown", "setHistoryDatePanelOpen"
     ],
     account: [
       "handleAccountManage", "handleAccountPassword", "handleLogout", "handleChangePassword",
       "closeLoginModal", "handleLoginSubmit", "closeOverviewPolicyDetail",
-      "closeAccountDropdown", "closePageHelp", "stopOverviewAutoplay"
+      "closeAccountDropdown", "stopOverviewAutoplay"
     ],
     lifecycle: [
       "disposeHistoryCharts", "disposeCompareCharts", "disposeResultCharts",

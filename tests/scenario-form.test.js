@@ -9,6 +9,7 @@ const {
   applyScenarioSaveDraft,
   bindScenarioEvents,
   bindScenarioDerivedFieldEvents,
+  updateScenarioRatioPreview,
   buildScenarioManagerView,
   buildScenarioSaveDraft,
   buildScenarioConfigFromForm,
@@ -16,7 +17,8 @@ const {
   refreshRefinementState,
   setScenarioMessage,
   updateScenarioStorageStatus,
-  loadScenarioToForm
+  loadScenarioToForm,
+  stageManualImport
 } = require("../src/ui/scenario-form");
 
 class FakeTarget {
@@ -128,6 +130,7 @@ const derivedFields = new Map([
   ["#mechanism-start-ym", new FakeTarget("2026-01")],
   ["#mechanism-duration-months", new FakeTarget("48")],
   ["#mechanism-end-ym", new FakeTarget()],
+  ["#scenario-ratio-preview-year", new FakeTarget()],
   ["#green-cert-realize-ratio", new FakeTarget()],
   ["#green-premium-realize-ratio", new FakeTarget()],
 ]);
@@ -152,6 +155,7 @@ derivedFields.get("#mechanism-start-ym").dispatch("input");
 assert.equal(derivedFields.get("#mechanism-end-ym").value, "2027-01", "the live calculation crosses years");
 derivedFields.get("#green-cert-realize-ratio").dispatch("input");
 derivedFields.get("#green-premium-realize-ratio").dispatch("change");
+derivedFields.get("#scenario-ratio-preview-year").dispatch("change");
 assert.deepEqual(derivedEventCalls, [
   "sync-locks",
   "market-trade",
@@ -159,8 +163,70 @@ assert.deepEqual(derivedEventCalls, [
   "market-trade",
   "market-trade",
   "env-space",
-  "env-space"
+  "env-space",
+  "market-trade"
 ]);
+
+const ratioProject = { id: "ratio-preview", startYear: 2028, forecastYears: 20 };
+const ratioScenario = { id: "scenario-ratio-test", config: { envValueMode: "manual", envManualValuesByYear: {} } };
+const ratioFields = new Map([
+  ["#scenario-ratio-preview-year", new FakeTarget()],
+  ["#scenario-ratio-preview-note", new FakeTarget()],
+  ["#mechanism-enabled", new FakeTarget("yes")],
+  ["#mechanism-ratio", new FakeTarget("40")],
+  ["#mechanism-start-ym", new FakeTarget("2028-04")],
+  ["#mechanism-duration-months", new FakeTarget("21")],
+  ["#green-cert-realize-ratio", new FakeTarget("55")],
+  ["#green-premium-realize-ratio", new FakeTarget("25")],
+  ["#env-value-mode", new FakeTarget("global")]
+]);
+const ratioRefs = {
+  marketTradeEnergyRatio: new FakeTarget(),
+  envValueSpaceRatio: new FakeTarget(),
+  envValueUsedRatio: { value: "", style: { removeProperty() {} } },
+  envValueMode: ratioFields.get("#env-value-mode")
+};
+const ratioPreview = { project: ratioProject, scenario: ratioScenario, refs: ratioRefs,
+  querySelector: (selector) => ratioFields.get(selector) || null };
+const previewYearPicker = ratioFields.get("#scenario-ratio-preview-year");
+const previewNote = ratioFields.get("#scenario-ratio-preview-note");
+updateScenarioRatioPreview(ratioPreview);
+assert.equal(previewYearPicker.value, "2028");
+assert.match(previewYearPicker.innerHTML, /2047年/);
+assert.equal(ratioRefs.marketTradeEnergyRatio.value, "70.0%");
+assert.equal(ratioRefs.envValueSpaceRatio.value, "70.0%");
+assert.equal(ratioRefs.envValueUsedRatio.value, "80.0%");
+assert.equal(previewNote.hidden, true);
+previewYearPicker.value = "2029";
+updateScenarioRatioPreview(ratioPreview);
+assert.equal(ratioRefs.marketTradeEnergyRatio.value, "60.0%");
+assert.equal(ratioRefs.envValueSpaceRatio.value, "60.0%");
+previewYearPicker.value = "2030";
+updateScenarioRatioPreview(ratioPreview);
+assert.equal(ratioRefs.marketTradeEnergyRatio.value, "100.0%");
+ratioFields.get("#mechanism-duration-months").value = "";
+updateScenarioRatioPreview(ratioPreview);
+assert.equal(ratioRefs.envValueSpaceRatio.value, "—");
+assert.match(previewNote.textContent, /机制开始年月和执行周期/);
+ratioFields.get("#mechanism-enabled").value = "no";
+updateScenarioRatioPreview(ratioPreview);
+assert.equal(ratioRefs.envValueSpaceRatio.value, "100.0%");
+assert.equal(previewNote.hidden, true);
+
+ratioFields.get("#env-value-mode").value = "manual";
+updateScenarioRatioPreview(ratioPreview);
+assert.equal(ratioRefs.envValueUsedRatio.value, "—", "a missing year cannot look like a confirmed zero");
+const ratioScenarioBefore = JSON.stringify(ratioScenario);
+assert.equal(stageManualImport({ ...ratioPreview, kind: "env", values: {
+  2028: { greenCertPrice: 24, greenCertRealizeRatio: 0.5, greenPremiumPrice: 36, greenPremiumRealizeRatio: 0.2 },
+  2030: { greenCertPrice: 24, greenCertRealizeRatio: 0.3, greenPremiumPrice: 36, greenPremiumRealizeRatio: 0.1 }
+} }).ok, true);
+updateScenarioRatioPreview(ratioPreview);
+assert.equal(ratioRefs.envValueUsedRatio.value, "40.0%", "selected year uses the pending table before saving");
+previewYearPicker.value = "2028";
+updateScenarioRatioPreview(ratioPreview);
+assert.equal(ratioRefs.envValueUsedRatio.value, "70.0%");
+assert.equal(JSON.stringify(ratioScenario), ratioScenarioBefore);
 
 function makeFields(initial = {}) {
   const fields = new Map();

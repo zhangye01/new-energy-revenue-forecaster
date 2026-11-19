@@ -94,6 +94,7 @@
     const capacityHours = series.capacityHours;
     const growthLabel = capacityHours ? "装机增速" : "增长率";
     return `<div class="sd-growth-panel" id="sd-growth-panel" data-sd-growth-panel><div class="sd-section-head"><h5>${label} · 逐年${growthLabel}（%）</h5>
+      <p data-help="逐年增速模板">先选要素、联络线方向或发电量构建方式，再下载模板。导入时，模板的要素、方向及装机或电量口径须与当前选择一致。</p>
       <div class="sd-actions">${button("download-growth-template", "下载增速模板", false, Boolean(disabled))}
         <label class="sd-file ghost-button"><input type="file" data-sd-growth-file accept="${EXCEL_ACCEPT}"${entry.conflict ? " disabled" : ""}><span>导入增速模板</span></label></div></div>
       ${feedback}
@@ -159,7 +160,7 @@
       return `<button class="sd-element-tab" type="button" role="tab" id="sd-tab-${element}" aria-controls="sd-element-panel" aria-selected="${selected}" tabindex="${selected ? 0 : -1}" data-sd-action="select-element" data-sd-element="${element}">${COLUMNS[element]}</button>`;
     }).join("");
     const tieControls = entry.activeElement === "tieLine" ? `<div class="sd-section-head sd-element-heading">
-      <div class="sd-actions"><label class="sd-inline-label">联络线口径<select data-sd-select="tieMode"${disabled}>${option("net", "净额", mode)}${option("bidirectional", "双向送受", mode)}</select></label>
+      <div class="sd-actions"><label class="sd-inline-label">联络线口径<select data-sd-select="tieMode"${disabled}>${option("net", "净额", mode)}${option("bidirectional", "双向送受", mode)}</select><span data-help="联络线口径">净额等于送出减受入，正数为送出，负数为受入。双向送受时，送出和受入分别填写非负值，增速模板也按方向分别导入。</span></label>
       ${mode === "bidirectional" ? `<label class="sd-inline-label">配置方向<select data-sd-select="tieDirection">${option("tieLineExport", "送出", entry.tieDirection)}${option("tieLineImport", "受入", entry.tieDirection)}</select></label>` : ""}</div>
     </div>` : "";
     return `<div class="sd-element-tabs" role="tablist" aria-label="供需要素">${tabs}</div>
@@ -209,7 +210,7 @@
     if (errors.length || !dataset?.ok) return `<div class="sd-alert">请核对已保存的供需配置。 ${escape(errors[0])}</div>`;
     const display = entry.previewOpen ? renderSavedDetails(entry, project, dataset) : "";
     return `<section class="sd-output" aria-labelledby="sd-results-heading" data-sd-saved-preview>
-      <div class="sd-saved-head"><div><h4 id="sd-results-heading">供需数据预览</h4><span>已生成 ${project.forecastYears} 年 · 每年288个典型小时 / 8760小时</span></div>
+      <div class="sd-saved-head"><div><h4 id="sd-results-heading">供需数据预览</h4><p data-help="供需导出">年度 CSV 为逐年汇总。典型小时 CSV 按每月 24 小时列出典型日，并附代表天数。全量小时 CSV 为每年 8760 小时的模型输入。</p><span>已生成 ${project.forecastYears} 年 · 每年288个典型小时 / 8760小时</span></div>
         <div class="sd-actions">${Object.keys(CSV_LABELS).map((key) => button("export-" + key, CSV_LABELS[key] + "CSV")).join("")}</div></div>
       ${renderSupplyChart(entry, project)}
       <details class="sd-preview"${entry.previewOpen ? " open" : ""} data-sd-preview><summary>查看已保存数据（MWh）</summary>${display}</details>

@@ -26,7 +26,7 @@
     { key: "mechanism_ratio", name: "机制电量占比", axisTitle: "机制电量占比（%）", axisUnit: "%", range: 100, step: 5, colorIndex: 4,
       note: "直接取 0% 至 100% 的机制电量占比，联动有效期内机制电量和市场化电量" },
     { key: "capture_spread", name: "捕获价差", axisTitle: "全周期捕获价差（元/MWh）", axisUnit: "元/MWh", range: 50, step: 10, colorIndex: 2,
-      note: "保持各年现货时均价，按小时出力调整现货价格，使电量加权的全周期捕获价差达到取点值，并重新测算配储套利" }
+      note: "这是压力情景。保持各年现货时均价，按小时出力调整现货价格，使全周期捕获价差达到取点值，并重算配储套利。调整后的小时价可能超出原曲线范围" }
   ];
   const inputNumber = new Intl.NumberFormat("zh-CN", { maximumSignificantDigits: 10 });
 

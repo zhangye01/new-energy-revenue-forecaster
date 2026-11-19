@@ -67,15 +67,15 @@ assert.deepEqual(buildEnergyCurveText({
   hasConfiguredTypicalCurve: false,
   sourceLabel: ""
 }), {
-  subtitle: "横轴为1-24时，纵轴为小时数，图例区分1-12月。",
-  note: "请先完成逐年总量模板导入；完成后左图展示年度小时数。"
+  subtitle: "横轴为 1–24 时。纵轴累加该月各日同一小时档的分布权重，按全年合计 8760 小时换算。",
+  note: "导入逐年总量模板后，左图展示年度小时数。"
 });
 
 assert.equal(buildEnergyCurveText({
   hasAnnualValues: true,
   hasConfiguredTypicalCurve: true,
   sourceLabel: "江苏典型曲线"
-}).note, "左图展示测算周期内逐年总小时数；右图展示江苏典型曲线。");
+}).note, "左图展示测算周期内逐年总小时数。右图展示江苏典型曲线。");
 
 assert.deepEqual(buildEnergyCurveChartViewModel(), {
   state: "empty",
@@ -115,7 +115,7 @@ assert.deepEqual(chartModel.annualRows, [
   { year: 2026, annualHours: 2300 },
   { year: 2027, annualHours: 0 }
 ]);
-assert.equal(chartModel.chartText.subtitle, "当前来源：江苏典型曲线；横轴为1-24时，图例区分1-12月。");
+assert.equal(chartModel.chartText.subtitle, "江苏典型曲线。横轴为 1–24 时。纵轴累加该月各日同一小时档的分布权重，按全年合计 8760 小时换算。");
 assert.equal(chartModel.annualEmptyMessage, "导入逐年总量后展示年度小时数。");
 
 function makeChart() {
@@ -145,7 +145,7 @@ applyEnergyCurveChartRender({
   tokens
 });
 assert.match(emptyRefs.energyCurveNote.textContent, /请先进入项目/);
-assert.match(emptyRefs.energyCurveSubtitle.textContent, /按月份拆解典型年24小时曲线/);
+assert.match(emptyRefs.energyCurveSubtitle.textContent, /可查看各月日内分布/);
 assert.equal(emptyAnnualChart.cleared, 1);
 assert.equal(emptyAnnualChart.options[0].option.graphic[0].style.text, "请先进入项目，再查看逐年上网电量小时数。");
 assert.equal(emptyTypicalChart.options[0].replace, true);
@@ -167,7 +167,7 @@ assert.equal(readyAnnualChart.cleared, 0);
 assert.deepEqual(readyAnnualChart.options[0].option.xAxis.data, ["2026", "2027"]);
 assert.equal(readyTypicalChart.options[0].option.series.length, 12);
 assert.match(readyRefs.energyCurveNote.textContent, /江苏典型曲线/);
-assert.match(readyRefs.energyCurveSubtitle.textContent, /当前来源：江苏典型曲线/);
+assert.match(readyRefs.energyCurveSubtitle.textContent, /^江苏典型曲线。/);
 
 // Returning to the energy page must restore a canvas resized while hidden.
 const frames = [];

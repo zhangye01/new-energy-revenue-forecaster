@@ -1,8 +1,4 @@
 /* Read-only result brief and measurement records. */
-.page-help[hidden] {
-  display: none;
-}
-
 .result-brief {
   width: min(100%, 1120px);
   margin-inline: auto;

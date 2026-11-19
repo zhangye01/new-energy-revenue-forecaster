@@ -24,6 +24,7 @@
   const actionMessages = new WeakMap();
   const manualImports = new WeakMap();
   const manualImportEpochs = new WeakMap();
+  const ratioPreviewPeriods = new WeakMap();
   const MANUAL_GROUPS = Object.freeze({
     lt: ["ltPricingMode", "ltManualPricesByYear", "交易策略损益"],
     env: ["envValueMode", "envManualValuesByYear", "环境价值"],
@@ -406,6 +407,84 @@
     return mechanismEndYm;
   }
 
+  function syncRatioPreviewYear(project, picker) {
+    const { id, startYear, forecastYears } = project || {};
+    const validPeriod = Number.isInteger(startYear) && Number.isInteger(forecastYears) && forecastYears > 0;
+    if (!picker) return validPeriod ? startYear : null;
+    const key = validPeriod ? JSON.stringify([id, startYear, forecastYears]) : "";
+    if (ratioPreviewPeriods.get(picker) !== key) {
+      const options = validPeriod ? Array.from({ length: forecastYears }, (_, offset) => {
+        const year = startYear + offset;
+        return `<option value="${year}">${year}年</option>`;
+      }) : ['<option value="">—</option>'];
+      picker.innerHTML = options.join("");
+      picker.value = validPeriod ? String(startYear) : "";
+      picker.disabled = !validPeriod;
+      ratioPreviewPeriods.set(picker, key);
+    }
+    const year = Number(picker.value);
+    return validPeriod && Number.isInteger(year) && year >= startYear && year < startYear + forecastYears ? year : null;
+  }
+
+  function readMarketRatioPreview(year, querySelector) {
+    const missing = (message) => ({ ratio: null, message });
+    if (year === null) return missing("");
+    const enabled = selectValue(querySelector, "#mechanism-enabled");
+    if (enabled === "no") return { ratio: 1, message: "" };
+    if (enabled !== "yes") return missing("选择是否纳入机制后可查看当年比例。");
+    const percent = textValue(querySelector, "#mechanism-ratio");
+    const ratio = readRatioValue(querySelector, "#mechanism-ratio", Number(percent) / 100);
+    if (percent === "" || !Number.isFinite(ratio) || ratio < 0 || ratio > 1) {
+      return missing("请填写有效的机制电量占比。");
+    }
+    const { mechanismStartYm, mechanismEndYm } = readMechanismTerm(querySelector);
+    if (!mechanismEndYm) return missing("填写有效的机制开始年月和执行周期后可查看当年比例。");
+    const activeMonths = getRevenueRules().mechanismActiveMonthsForYear(year, mechanismStartYm, mechanismEndYm);
+    return { ratio: 1 - ratio * (activeMonths / 12), message: "" };
+  }
+
+  function readEnvRatioPreview(project, scenario, year, mode, querySelector) {
+    if (year === null) return null;
+    if (mode === "manual") {
+      const config = { ...getScenarioConfigForForm(project, scenario), envValueMode: mode };
+      if (!getScenarioConfig().getEnvManualEntryForYear(project, config, year)) return null;
+      return getRevenueRules().getEnvValueAllocation(project, config, year).totalRatio;
+    }
+    if (mode !== "global") return null;
+    const ratios = ["#green-cert-realize-ratio", "#green-premium-realize-ratio"].map((selector) => {
+      const percent = textValue(querySelector, selector);
+      return percent === "" ? null : readRatioValue(querySelector, selector, Number(percent) / 100);
+    });
+    return ratios.every(Number.isFinite) ? ratios[0] + ratios[1] : null;
+  }
+
+  function updateScenarioRatioPreview({ project, scenario, refs = {}, querySelector } = {}) {
+    const picker = getField(querySelector, "#scenario-ratio-preview-year");
+    const year = syncRatioPreviewYear(scenario ? project : null, picker);
+    const market = readMarketRatioPreview(year, querySelector);
+    const used = readEnvRatioPreview(project, scenario, year, refs.envValueMode?.value, querySelector);
+    [refs.marketTradeEnergyRatio, refs.envValueSpaceRatio].forEach((field) => {
+      if (field) field.value = market.ratio === null ? "—" : asPercent(market.ratio);
+    });
+    if (refs.envValueUsedRatio) {
+      const field = refs.envValueUsedRatio;
+      field.value = used === null ? "—" : asPercent(used);
+      if (used > 1 + 0.000001) {
+        field.style.borderColor = "var(--red)";
+        field.style.background = "color-mix(in srgb, var(--red) 10%, var(--panel))";
+      } else {
+        field.style.removeProperty("border-color");
+        field.style.removeProperty("background");
+      }
+    }
+    const note = getField(querySelector, "#scenario-ratio-preview-note");
+    if (note) {
+      note.textContent = market.message;
+      note.hidden = !market.message;
+    }
+    return { year, marketRatio: market.ratio, envUsedRatio: used };
+  }
+
   function textValue(querySelector, selector) {
     return String(getField(querySelector, selector)?.value || "").trim();
   }
@@ -484,6 +563,9 @@
     } = input;
     querySelector("#mechanism-enabled")?.addEventListener("change", () => {
       handlers.syncScenarioFieldLocks?.();
+    });
+    querySelector("#scenario-ratio-preview-year")?.addEventListener("change", () => {
+      handlers.updateMarketTradeEnergyDisplay?.();
     });
     [
       "#mechanism-ratio",
@@ -1001,6 +1083,7 @@
     applyScenarioSaveDraft,
     bindScenarioEvents,
     bindScenarioDerivedFieldEvents,
+    updateScenarioRatioPreview,
     buildScenarioManagerView,
     buildScenarioSaveDraft,
     buildScenarioConfigFromForm,

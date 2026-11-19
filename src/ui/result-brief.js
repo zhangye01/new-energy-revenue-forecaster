@@ -101,6 +101,7 @@
     return `<section class="result-brief-section result-brief-overview" aria-labelledby="result-brief-project-title">
         <h3 id="result-brief-project-title">项目概况</h3>
         <p class="result-brief-project-name">${escapeHtml(brief.projectName)}</p>
+        ${brief.syntheticCaseLabel ? `<p class="result-brief-note" data-brief-synthetic-case>${escapeHtml(brief.syntheticCaseLabel)}</p>` : ""}
         ${definitionList(brief.context, "result-brief-context")}
       </section>
       <section class="result-brief-section result-brief-executive" aria-labelledby="result-brief-summary-title">

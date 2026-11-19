@@ -16,6 +16,7 @@
   const PENDING_STATUSES = new Set(["queued", "running", "validating"]);
   const POLL_INTERVAL_MS = 4000;
   const REQUEST_TIMEOUT_MS = 30000;
+  const canSubmit = (service) => typeof service?.submit === "function";
 
   function createBackendForecastPanel({ documentRef, getProject, getService, inspectInput, prepareInput,
     hasUsableRun = () => false, acceptTask = () => null, onTask = () => {}, isActive = () => true,
@@ -29,7 +30,7 @@
     function context() {
       const project = getProject();
       const service = getService();
-      const serviceReady = typeof service?.submit === "function" || typeof service?.refresh === "function";
+      const serviceReady = canSubmit(service) || typeof service?.refresh === "function";
       if (!project) return { project, service, serviceReady };
       let state = states.get(project);
       if (!state || state.service !== service) {
@@ -91,12 +92,16 @@
         note: error?.message || (typeof service?.refresh === "function" ? "任务状态会自动更新，也可手动刷新。" : "任务正在处理。"),
         next: usable ? "可沿用已生效电价，或等待本次预测。" : "本次电价可用后进入下一步。" };
       if (current && task.status === "failed") return { phase: "failed", label: BACKEND_STATUS_LABELS.failed,
-        note: error?.message || (typeof task.message === "string" && task.message.trim()) || "请重新提交预测。",
+        note: error?.message || (typeof task.message === "string" && task.message.trim())
+          || (canSubmit(service) ? "请重新提交预测。" : "暂时无法重新提交。"),
         next: usable ? "可使用当前电价继续。" : "电价可用后进入下一步。" };
       if (current && task.status === "succeeded") return { phase: "completed", label: BACKEND_STATUS_LABELS.succeeded,
         note: error?.message || state.acceptance?.errors?.[0] || "可查看下方各模型的年度均价。",
         next: state.acceptance?.ok && usable ? "已采用本次预测电价。" : usable ? "可沿用已生效电价进入下一步。" : "完整电价可用后进入下一步。" };
-      return { phase: error?.unavailable ? "unavailable" : "ready", label: error?.unavailable ? "暂时无法提交预测" : "待提交",
+      if (!canSubmit(service)) return { phase: "unavailable",
+        label: typeof service?.refresh === "function" ? "暂时无法提交预测" : "预测服务暂不可用",
+        note: error?.message || "小时供需已就绪。", next: usable ? "可使用当前电价继续。" : "生效电价可用后进入下一步。" };
+      return { phase: "ready", label: "待提交",
         note: error?.message || (usable ? "已有可用电价。" : "小时供需已就绪，可提交预测。"),
         next: usable ? "可使用当前电价继续。" : "电价可用后进入下一步。" };
     }
@@ -114,7 +119,7 @@
       if (nodes.note && nodes.note.textContent !== note) nodes.note.textContent = note;
       if (nodes["next-note"] && nodes["next-note"].textContent !== next) nodes["next-note"].textContent = next;
       if (nodes.submit) {
-        nodes.submit.disabled = !(input?.ok && !pending && !busy);
+        nodes.submit.disabled = !(canSubmit(service) && input?.ok && !pending && !busy);
         nodes.submit.textContent = current && !pending ? "重新提交预测" : "提交预测";
       }
       if (nodes.refresh) {
@@ -148,15 +153,8 @@
       if (!mounted || !isActive()) return;
       const action = intent === "lookup" ? "refresh" : intent;
       const { project, service, state, input, task, current, pending } = context();
-      if (!input?.ok || state.busy || (action === "submit" && pending)) return;
+      if (!input?.ok || state.busy || typeof service?.[action] !== "function" || (action === "submit" && pending)) return;
       const request = { projectId: project.id, inputFingerprint: input.fingerprint, expectedActiveRunId: project.activeRunId };
-      if (typeof service?.[action] !== "function") {
-        if (action === "submit") {
-          state.error = { fingerprint: request.inputFingerprint, unavailable: true, message: "预测服务暂不可用，请稍后重试。" };
-          update();
-        }
-        return;
-      }
       if (action === "refresh" && current) request.taskId = task.id;
       state.busy = intent;
       state.lookupFingerprint = request.inputFingerprint;
@@ -177,7 +175,8 @@
         if (response === null && action === "refresh") {
           state.task = null;
           state.acceptance = null;
-          if (intent !== "lookup") state.error = { fingerprint: request.inputFingerprint, message: "当前供需暂无预测任务，可提交预测。" };
+          if (intent !== "lookup") state.error = { fingerprint: request.inputFingerprint,
+            message: canSubmit(service) ? "当前供需暂无预测任务，可提交预测。" : "当前供需暂无预测任务。" };
           return;
         }
         if (!response || response.projectId !== project.id || typeof response.id !== "string" || !response.id.trim()

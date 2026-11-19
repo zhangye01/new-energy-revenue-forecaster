@@ -93,6 +93,7 @@ const caseProject = Object.freeze({
 });
 const caseState = { project: caseProject, current: false, serviceReady: false, caseRuns };
 const caseView = buildView(caseState);
+assert.match(forecastView.buildView(caseState).sourceHelp, /案例价源随项目备份带入.*当前测算采用 Ensemble.*年度均价.*逐时电价/);
 const caseCards = modelCards(caseView);
 assert.deepEqual(caseCards.map(([code]) => code), ["lstm", "xgboost", "ensemble"]);
 for (const [code, contents] of caseCards) {
@@ -120,6 +121,7 @@ assert.deepEqual(legendCodes(partialCase), ["lstm"]);
 const liveOverCase = buildView({ ...state, project: caseProject, caseRuns, task });
 assert.match(liveOverCase, /结果可查看/);
 assert.doesNotMatch(liveOverCase, /案例价源|272\.25|-8\.50/);
+assert.doesNotMatch(forecastView.buildView({ ...state, project: caseProject, caseRuns, task }).sourceHelp, /案例价源|当前测算采用/);
 assert.match(liveOverCase, /<th scope="row">2026<\/th><td>0\.00<\/td><td>150\.00<\/td><td class="forecast-result-missing">待返回<\/td>/);
 
 const publishedRuns = [{ ...runs[3], backendTaskId: "task-published", pricesByYear: { 2026: Array(8760).fill(-11) },
@@ -129,6 +131,7 @@ assert.match(restoredView, /forecast-result-annual" tabindex="0" aria-label="年
 assert.match(restoredView, /-11\.00/);
 assert.doesNotMatch(restoredView, /777\.00|>run-lstm</);
 assert.match(restoredView, /测算采用/);
+assert.match(forecastView.buildView({ ...state, serviceReady: false, project: historyProject, publishedRuns }).sourceHelp, /当前测算采用 LSTM/);
 const sameTaskView = buildView({ ...state, project: historyProject, publishedRuns, task: { ...task, id: "task-published" } });
 assert.match(sameTaskView, /-11\.00|测算采用/);
 assert.doesNotMatch(sameTaskView, /150\.00/);
@@ -141,7 +144,8 @@ const inconsistent = { ...task, results: [{ modelCode: "lstm", runId: "bad-nativ
 assert.doesNotMatch(buildView({ ...state, task: inconsistent }), /data-forecast-annual|结果可查看/);
 const invalidNative = { ...inconsistent.results[0], priceUnit: "CNY/MWh", pricesByYear: { 2026: Array(8759).fill(450) } };
 assert.doesNotMatch(buildView({ ...state, task: { ...task, results: [invalidNative] } }), /data-forecast-annual|结果可查看/);
-for (const [phase, label] of [["ready", "待提交"], ["input-required", "待提交"], ["pending", "待返回"], ["failed", "未返回"], ["completed", "未返回"]]) {
+for (const [phase, label] of [["ready", "待提交"], ["input-required", "待提交"], ["unavailable", "暂无结果"],
+  ["pending", "待返回"], ["failed", "未返回"], ["completed", "未返回"]]) {
   assert.equal(modelCards(buildView({ project, phase })).filter(([, content]) => content.includes(label)).length, 3);
 }
 
@@ -149,9 +153,10 @@ const panel = { hidden: true };
 const summary = { innerHTML: "" };
 const nodes = { "#forecast-storage-preview": panel, "#forecast-storage-summary": summary };
 let calculations = 0;
-const renderStorage = forecastView.createStorageSpotPreview({ querySelector: (selector) => nodes[selector] }, () => {
+const renderStorage = forecastView.createStorageSpotPreview({ querySelector: (selector) => nodes[selector] }, (equipment) => {
   calculations += 1;
-  return { totalWithoutStorageSpotRevenue: 120000, totalWithStorageSpotRevenue: 123456, totalIncrementalRevenue: 3456 };
+  return { totalWithoutStorageSpotRevenue: 120000, totalWithStorageSpotRevenue: 123456, totalIncrementalRevenue: 3456,
+    roundTripEfficiency: equipment.storageRoundTripEfficiency };
 });
 const storage = { ...project, hasStorage: true, storageRoundTripEfficiency: 0.88, energyData: { hourlyByYear: {} } };
 const storageRun = { pricesByYear: {} };
@@ -161,10 +166,12 @@ assert.match(summary.innerHTML, /等待生效的逐时现货电价/);
 renderStorage({ project: storage, run: storageRun });
 assert.match(summary.innerHTML, /无储现货收益.*12\.00 万元/);
 assert.match(summary.innerHTML, /配储现货增量.*0\.35 万元/);
+assert.match(summary.innerHTML, /本次采用储能往返效率 <strong data-storage-spot="efficiency">88%/);
 renderStorage({ project: storage, run: storageRun });
 assert.equal(calculations, 1);
 storage.storageRoundTripEfficiency = 0.9;
 renderStorage({ project: storage, run: storageRun });
+assert.match(summary.innerHTML, /data-storage-spot="efficiency">90%/);
 storage.energyData.hourlyByYear[2026] = [];
 renderStorage({ project: storage, run: storageRun });
 assert.equal(calculations, 3);

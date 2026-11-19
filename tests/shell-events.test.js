@@ -226,7 +226,6 @@ const appState = { overviewSlideIndex: 2, benchmarkMap: { level: "province" } };
 const appHandlers = createAppShellHandlers({
   refs: {
     accountModule: openTarget,
-    pageHelp: openTarget,
     historyDatePanel: openTarget,
     historyDateToggle: insideTarget,
     policyDetailModal: openTarget,
@@ -261,7 +260,6 @@ const appHandlers = createAppShellHandlers({
     openOverviewPolicyDetail: (index) => shellCalls.push(`policy:${index}`),
     setHistoryDatePanelOpen: (open) => shellCalls.push(`history-panel:${open}`),
     closeAccountDropdown: () => shellCalls.push("close-account"),
-    closePageHelp: () => shellCalls.push("close-help"),
     closeOverviewPolicyDetail: () => shellCalls.push("close-policy"),
     closeLoginModal: () => shellCalls.push("close-login"),
     stopOverviewAutoplay: () => shellCalls.push("stop-overview"),
@@ -303,7 +301,6 @@ assert.deepEqual(shellCalls, [
   "policy:2",
   "history-panel:false",
   "close-account",
-  "close-help",
   "history-panel:false",
   "close-policy",
   "top:error:normalized:boom",

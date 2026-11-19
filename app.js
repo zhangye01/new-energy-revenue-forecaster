@@ -1560,25 +1560,6 @@ function setPageStatus(project, pageId, state) {
   project.statuses[pageId] = state;
 }
 
-function closePageHelp() {
-  if (refs.pageHelp) {
-    refs.pageHelp.classList.remove("open");
-  }
-  if (refs.pageHelpButton) {
-    refs.pageHelpButton.setAttribute("aria-expanded", "false");
-  }
-}
-
-function togglePageHelp(event) {
-  if (event) {
-    event.stopPropagation();
-  }
-  if (!refs.pageHelp || !refs.pageHelpButton) return;
-  const opening = !refs.pageHelp.classList.contains("open");
-  refs.pageHelp.classList.toggle("open", opening);
-  refs.pageHelpButton.setAttribute("aria-expanded", opening ? "true" : "false");
-}
-
 function getPageHelpContent(pageId, title, group) {
   const preset = PAGE_HELP_MAP[pageId];
   if (preset) return preset;
@@ -1798,26 +1779,27 @@ function renderTopbar() {
   const title = PAGE_TITLES[pageId] || "新能源平台";
   const group = PAGE_GROUPS[pageId] || "平台概览";
   const help = getPageHelpContent(pageId, title, group);
+  const path = `${group} / ${title}`;
+  if (refs.topSectionPath?.textContent !== path) window.NE_CONTEXT_HELP?.setContextHelpOpen(refs.pageHelp, false);
   if (refs.pageHelp) refs.pageHelp.hidden = pageId === "results-page";
   if (refs.topTitle) {
     refs.topTitle.textContent = title;
   }
   if (refs.topSectionPath) {
-    refs.topSectionPath.textContent = `${group} / ${title}`;
+    refs.topSectionPath.textContent = path;
   }
   if (refs.pageHelpTitle) {
     refs.pageHelpTitle.textContent = `${title}说明`;
   }
   if (refs.pageHelpPurpose) {
-    refs.pageHelpPurpose.textContent = `设置目的：${help.purpose}`;
+    refs.pageHelpPurpose.textContent = help.purpose;
   }
   if (refs.pageHelpMeaning) {
-    refs.pageHelpMeaning.textContent = `页面意义：${help.meaning}`;
+    refs.pageHelpMeaning.textContent = help.meaning;
   }
   if (refs.pageHelpGuide) {
-    refs.pageHelpGuide.textContent = `操作指导：${help.guide}`;
+    refs.pageHelpGuide.textContent = help.guide;
   }
-  closePageHelp();
 }
 
 function renderSettings() {
@@ -3014,7 +2996,9 @@ function renderBackendForecastResults(state) {
   const ready = !supplyDemandFlow.hasUnsavedChanges() && !supplyDemandFlow.hasPendingDraft(state.project);
   const publishedRuns = ready ? forecastRunFlow.getPublishedBackendResults(state.project) : [];
   const caseRuns = ready && !publishedRuns.length ? forecastRunFlow.getArchivedCaseRuns(state.project) : [];
-  const { html, chart } = forecastResultsView.buildView({ ...state, caseRuns, publishedRuns });
+  const { html, chart, sourceHelp } = forecastResultsView.buildView({ ...state, caseRuns, publishedRuns });
+  const helpText = document.querySelector("#forecast-result-source-help-text");
+  if (helpText && helpText.textContent !== sourceHelp) helpText.textContent = sourceHelp;
   const chartKey = chart ? JSON.stringify(chart) : "";
   const sameProject = renderedForecastResults.projectId === projectId;
   const visible = sameProject ? renderedForecastResults.visible : {};
@@ -3531,38 +3515,15 @@ function loadScenarioToForm(project, scenario) {
   updateFeeManualStatus(project, scenario);
 }
 
-function readScenarioMechanismDraft(scenario) {
-  const ratioInput = Number(document.querySelector("#mechanism-ratio")?.value);
-  return {
-    mechanismEnabled: document.querySelector("#mechanism-enabled")?.value === "yes",
-    mechanismRatio: Number.isFinite(ratioInput)
-      ? clamp(ratioInput / 100, 0, 1)
-      : clamp(Number(scenario?.config?.mechanismRatio || 0), 0, 1)
-  };
-}
-
 function updateMarketTradeEnergyDisplay(project = getActiveProject(), scenario = null) {
-  if (!refs.marketTradeEnergyRatio) {
-    return;
-  }
-  const activeScenario = scenario || (project ? getActiveScenario(project) : null);
-  if (!project || !activeScenario) {
-    refs.marketTradeEnergyRatio.value = "-";
-    updateEnvValueSpaceDisplay(project, activeScenario, 0);
-    return;
-  }
-  const mechanismDraft = readScenarioMechanismDraft(activeScenario);
-  const marketTradeRatio = mechanismDraft.mechanismEnabled ? clamp(1 - mechanismDraft.mechanismRatio, 0, 1) : 1;
-  refs.marketTradeEnergyRatio.value = asPercent(marketTradeRatio);
-  updateEnvValueSpaceDisplay(project, activeScenario, marketTradeRatio);
+  scenarioForm.updateScenarioRatioPreview({
+    project, scenario: scenario || (project ? getActiveScenario(project) : null), refs,
+    querySelector: (selector) => document.querySelector(selector)
+  });
 }
 
 function getEnvValueMode(config) {
   return scenarioConfig.getEnvValueMode(config);
-}
-
-function getEnvManualEntryForYear(project, config, year) {
-  return scenarioConfig.getEnvManualEntryForYear(project, config, year);
 }
 
 function getEnvValueAllocation(project, config, year = null) {
@@ -3585,37 +3546,6 @@ function readEnvValueAllocationDraft() {
     greenPremiumRatio,
     totalRatio: greenCertRatio + greenPremiumRatio
   };
-}
-
-function updateEnvValueSpaceDisplay(project = getActiveProject(), scenario = null, marketTradeRatio = null) {
-  if (!refs.envValueSpaceRatio && !refs.envValueUsedRatio) return;
-  const activeScenario = scenario || (project ? getActiveScenario(project) : null);
-  const mechanismDraft = activeScenario ? readScenarioMechanismDraft(activeScenario) : null;
-  const hasMarketTradeRatio = marketTradeRatio !== null && marketTradeRatio !== undefined && Number.isFinite(Number(marketTradeRatio));
-  const maxRatio = hasMarketTradeRatio
-    ? clamp(Number(marketTradeRatio), 0, 1)
-    : mechanismDraft
-      ? (mechanismDraft.mechanismEnabled ? clamp(1 - mechanismDraft.mechanismRatio, 0, 1) : 1)
-      : 0;
-  let draft = readEnvValueAllocationDraft();
-  const selectedEnvMode = refs.envValueMode?.value || getEnvValueMode(activeScenario?.config);
-  if (selectedEnvMode === "manual") {
-    const firstYear = Number.isInteger(project?.startYear) ? project.startYear : null;
-    draft = firstYear !== null && getEnvManualEntryForYear(project, activeScenario?.config, firstYear)
-      ? getEnvValueAllocation(project, activeScenario?.config, firstYear)
-      : { totalRatio: 0 };
-  }
-  if (refs.envValueSpaceRatio) refs.envValueSpaceRatio.value = project && activeScenario ? asPercent(maxRatio) : "-";
-  if (refs.envValueUsedRatio) {
-    refs.envValueUsedRatio.value = project && activeScenario ? asPercent(draft.totalRatio) : "-";
-    if (draft.totalRatio > 1 + 0.000001) {
-      refs.envValueUsedRatio.style.borderColor = "var(--red)";
-      refs.envValueUsedRatio.style.background = "color-mix(in srgb, var(--red) 10%, var(--panel))";
-    } else {
-      refs.envValueUsedRatio.style.removeProperty("border-color");
-      refs.envValueUsedRatio.style.removeProperty("background");
-    }
-  }
 }
 
 function updateEnvManualStatus(project = getActiveProject(), scenario = null) {
@@ -3651,7 +3581,6 @@ function syncEnvValueControls(project = getActiveProject(), scenario = null, loc
     envValueMode: getEnvValueMode(activeScenario?.config)
   });
   updateEnvManualStatus(project, activeScenario);
-  updateEnvValueSpaceDisplay(project, activeScenario);
 }
 
 function getFeeConfigMode(config) {
@@ -3761,6 +3690,7 @@ function syncLtPricingControls(project = getActiveProject(), scenario = null, lo
 
 function setScenarioFormDisabled(disabled) {
   refs.scenarioForm.querySelectorAll("input, select, button").forEach((element) => {
+    if (element.hasAttribute?.("data-context-help-button")) return;
     if (element.id === "market-trade-energy-ratio") {
       element.disabled = true;
       return;
@@ -4024,27 +3954,28 @@ function getSavedResultContext(options = {}) {
 }
 
 function renderResultRecords({ project, scenario, result, state }) {
-  const canRead = result?.annualRows?.length && !["incomplete_result", "invalid_source_prices"].includes(state.reason);
-  const view = { state: canRead ? "ready" : "empty", isHistorical: !state.current, includeLastSaved: state.reason === "legacy_storage_revenue" };
+  const canRead = Array.isArray(result?.annualRows) && result.annualRows.length > 0
+    && !["incomplete_result", "invalid_source_prices"].includes(state.reason);
+  const view = { state: canRead ? "ready" : "empty", isHistorical: !state.current };
   resultHistory.render({ documentRef: document, project, scenario, result, view, downloadCsv });
   if (refs.runCalcButton) refs.runCalcButton.disabled = !project || !scenario;
   if (refs.exportAnnualButton) refs.exportAnnualButton.disabled = !state.current;
   if (refs.exportHourlyButton) refs.exportHourlyButton.disabled = !state.current || result?.hourlyPreview?.length !== 8760;
 }
 
-function renderResultBrief({ project, scenario, result, state }) {
+function renderResultBrief({ project, scenario, result, run, state }) {
   const root = refs.resultBriefContent;
   if (!root) return;
   const status = state.current ? "" : state.reason === "legacy_storage_revenue" ? state.message
     : "当前显示上次测算结果。请在收益参数补充与细化中重新测算。";
-  if (renderedResultBrief?.result === result && renderedResultBrief.status === status &&
+  if (renderedResultBrief?.result === result && renderedResultBrief.run === run && renderedResultBrief.status === status &&
       renderedResultBrief.project === project && renderedResultBrief.scenario === scenario) return;
   disposeResultCharts();
   const canRead = result && !["incomplete_result", "invalid_source_prices"].includes(state.reason);
   const verifiedConfig = state.current || state.reason === "stale_run" ? scenario.config : null;
   const origin = resultVersions.getArchivedCalculationContext(result)?.project || project;
   const labels = origin ? { province: getProvinceName(origin.province), assetType: getAssetTypeLabel(origin.assetType), siteType: getSiteTypeLabel(origin.siteType) } : {};
-  const brief = canRead ? resultBrief.buildBrief({ project, scenario, result, verifiedConfig, labels }) : null;
+  const brief = canRead ? resultBrief.buildBrief({ project, scenario, result, run, verifiedConfig, labels }) : null;
   const message = !result ? "请在收益参数补充与细化中发起基准测算。" : "当前没有可用于简报的测算结果，请在收益参数补充与细化中重新测算。";
   resultBriefView.render({ root, brief, message });
   if (refs.resultBriefMessage) {
@@ -4052,7 +3983,7 @@ function renderResultBrief({ project, scenario, result, state }) {
     refs.resultBriefMessage.textContent = brief ? status : "";
   }
   if (refs.exportBriefWordButton) refs.exportBriefWordButton.disabled = !brief || !state.current;
-  renderedResultBrief = { project, scenario, result, status, brief };
+  renderedResultBrief = { project, scenario, result, run, status, brief };
   if (brief) disposeBriefCharts = resultBriefCharts.mountCharts(root, brief, { echarts: window.echarts, windowRef: window });
 }
 
@@ -4358,11 +4289,11 @@ function createEventBindingStateAccessors() {
 function createEventBindingActions() {
   return appEventBindings.createAppActionRegistry({
     toggleTheme, renderBenchmarkMap, schedulePersistAppData, adjustBenchmarkMapZoom,
-    resetBenchmarkMapZoom, bindBenchmarkRangeDrag, togglePageHelp, goToOverviewSlide,
+    resetBenchmarkMapZoom, bindBenchmarkRangeDrag, goToOverviewSlide,
     openOverviewPolicyDetail, openLoginModal, toggleSidebarGroup, toggleAccountDropdown,
     setHistoryDatePanelOpen, handleAccountManage, handleAccountPassword, handleLogout,
     handleChangePassword, closeLoginModal, handleLoginSubmit, closeOverviewPolicyDetail,
-    closeAccountDropdown, closePageHelp, stopOverviewAutoplay, disposeHistoryCharts,
+    closeAccountDropdown, stopOverviewAutoplay, disposeHistoryCharts,
     disposeCompareCharts, disposeResultCharts, persistAppDataNow, normalizeUserFacingError,
     hasUnpersistedAppData: () => !allowStorageReload && (hasUnsubmittedInputs() || appDataSnapshotStore.hasUnpersistedChanges(buildAppDataSnapshot())),
     setTopMeta, sanitizeHistoryAnalysis, renderPolicyPanel, renderHistoryPrices,
@@ -4376,7 +4307,7 @@ function createEventBindingActions() {
     switchActiveScenario, renameActiveScenario, duplicateActiveScenario, deleteActiveScenario,
     toggleBaselineLock, applyBatchParameter, syncScenarioFieldLocks, exportManualScenarioTemplate,
     importManualScenarioTemplate, updateMarketTradeEnergyDisplay,
-    updateEnvValueSpaceDisplay, runCalculation, exportAnnualCsv, exportHourlyCsv,
+    updateEnvValueSpaceDisplay: updateMarketTradeEnergyDisplay, runCalculation, exportAnnualCsv, exportHourlyCsv,
     exportBriefWord
   });
 }

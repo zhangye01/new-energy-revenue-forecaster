@@ -62,7 +62,7 @@ assert.equal((documentXml.match(/>附录<\/w:t>/g) || []).length, 1);
 assert.match(textParagraph("附录"), /w:pStyle w:val="Heading1"/);
 assert.match(textParagraph("分年经营表现"), /w:pStyle w:val="Heading2"/);
 assert.match(textParagraph("图 2　年度度电净价趋势"), /w:pStyle w:val="ExhibitTitle"/);
-assert.doesNotMatch(documentXml, /result-fixture-123|run-fixture-1|按结算电量折算|测算口径与版本/);
+assert.doesNotMatch(documentXml, /result-fixture-123|run-fixture-1|按结算电量折算|测算口径与版本|合成案例/);
 assert.equal((documentXml.match(/<w:tbl>/g) || []).length, 2);
 assert.equal((documentXml.match(/<w:tblHeader\/>/g) || []).length, 2);
 assert.deepEqual(part("word/media/figure-1.png"), Buffer.from(pngs.price, "base64"));
@@ -84,8 +84,11 @@ const annual = {
   ...brief.tables[0], number: 10,
   rows: Array.from({ length: 20 }, (_, index) => [String(2028 + index), "17,221.77"])
 };
-const extendedDoc = xlsx.CFB.read(buildDocx({ ...brief, summary: undefined, figures: [], tables: [monthly, annual], sections: [] }, [], options), { type: "array" });
+const extendedDoc = xlsx.CFB.read(buildDocx({ ...brief, syntheticCaseLabel: "合成案例 · 现货电价为模拟数据",
+  summary: undefined, figures: [], tables: [monthly, annual], sections: [] }, [], options), { type: "array" });
 const extendedXml = Buffer.from(xlsx.CFB.find(extendedDoc, "/word/document.xml").content).toString("utf8");
+assert.equal((extendedXml.match(/合成案例 · 现货电价为模拟数据/g) || []).length, 1);
+assert.match(extendedXml, /w:pStyle w:val="Subtitle".*合成案例 · 现货电价为模拟数据.*项目概况/);
 assert.match(extendedXml, /表 9　首年配储分月表现.*表 10　年度测算结果/);
 assert.match(extendedXml, /核心结论<\/w:t><\/w:r><\/w:p><w:p><w:pPr><w:pStyle w:val="Fact"\/>/);
 assert.doesNotMatch(extendedXml, /<w:pageBreakBefore\/>/);

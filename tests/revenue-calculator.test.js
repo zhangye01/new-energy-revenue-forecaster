@@ -170,7 +170,7 @@ const storagePreview = calculateStorageSpotPreview(storageProject, storageScenar
 const newStorageResult = calculateScenarioResult(storageProject, storageScenario, storageRun);
 assert.deepEqual(storagePreview, {
   annualRows: [2026, 2027].map((year) => ({ year, withoutStorageSpotRevenue: 100, withStorageSpotRevenue: 240, incrementalRevenue: 140 })),
-  totalWithoutStorageSpotRevenue: 200, totalWithStorageSpotRevenue: 480, totalIncrementalRevenue: 280
+  totalWithoutStorageSpotRevenue: 200, totalWithStorageSpotRevenue: 480, totalIncrementalRevenue: 280, roundTripEfficiency: 0.8
 });
 newStorageResult.annualRows.forEach((row, index) => {
   assert.equal(row.storageDispatch.revenueMode, "spot_increment_only");
@@ -181,8 +181,11 @@ newStorageResult.annualRows.forEach((row, index) => {
 });
 assert.deepEqual({ storageProject, storageScenario, storageRun }, storageBefore, "自动测算与正式测算都保留原输入");
 const { storageRoundTripEfficiency, ...legacyEquipment } = storageProject;
-assert.equal(calculateStorageSpotPreview(legacyEquipment, storageScenario, storageRun).totalIncrementalRevenue, 370,
+const legacyPreview = calculateStorageSpotPreview(legacyEquipment, storageScenario, storageRun);
+assert.equal(legacyPreview.totalIncrementalRevenue, 370,
   "旧项目在补录设备效率前沿用原方案效率");
+assert.equal(legacyPreview.roundTripEfficiency, 0.95);
+assert.equal(calculateStorageSpotPreview(legacyEquipment, { config: {} }, storageRun).roundTripEfficiency, 0.9);
 assert.equal(calculateStorageSpotPreview(storageProject, storageScenario, { pricesByYear: { 2026: storagePrices } }), null,
   "测算周期还有年份缺少价格时不展示不完整的合计");
 const missingSecondYear = { ...storageProject, energyData: { hourlyByYear: { 2026: storageHours[2026] } } };

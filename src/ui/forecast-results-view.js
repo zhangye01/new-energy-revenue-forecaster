@@ -11,6 +11,8 @@
   const MODELS = new Map([["lstm", "LSTM"], ["xgboost", "XGBoost"], ["ensemble", "Ensemble"]]);
   const HOURS_PER_YEAR = 8760;
   const formatPrice = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatEfficiency = new Intl.NumberFormat("zh-CN", { style: "percent", maximumFractionDigits: 6 });
+  const PRICE_HELP = "图表展示年度均价。基准测算使用生效价源的逐时电价。";
 
   function modelCode(result) {
     const code = result?.modelCode ?? result?.algorithmFamily;
@@ -73,10 +75,14 @@
     return typeof value === "string" && value.trim() ? utils.escapeHtml(value) : "—";
   }
 
-  function renderModel({ code, label, result, prices }, activeRunId, fromCase, pendingText) {
-    const runId = result?.runId ?? result?.id;
+  function isAdopted(model, activeRunId) {
+    return Boolean(activeRunId && (model.result?.runId ?? model.result?.id) === activeRunId && model.prices.some(Number.isFinite));
+  }
+
+  function renderModel(model, activeRunId, fromCase, pendingText) {
+    const { code, label, result, prices } = model;
     const available = prices.some(Number.isFinite);
-    const adopted = available && typeof runId === "string" && runId && activeRunId === runId;
+    const adopted = isAdopted(model, activeRunId);
     const status = available ? (fromCase ? "案例价源" : "结果可查看") : pendingText;
     const version = typeof result?.algorithmVersion === "string" && result.algorithmVersion.trim()
       ? `<span>版本 ${textValue(result.algorithmVersion)}</span>` : "";
@@ -209,7 +215,8 @@
   }
 
   function emptyResultLabel(phase) {
-    if (["input-required", "ready", "unavailable"].includes(phase)) return "待提交";
+    if (["input-required", "ready"].includes(phase)) return "待提交";
+    if (phase === "unavailable") return "暂无结果";
     if (["failed", "completed"].includes(phase)) return "未返回";
     return "待返回";
   }
@@ -226,7 +233,7 @@
   }
 
   function buildView({ project, task, current, serviceReady, phase, caseRuns, publishedRuns } = {}) {
-    if (!project) return { html: '<p class="forecast-result-empty">请先选择项目。</p>', chart: null };
+    if (!project) return { html: '<p class="forecast-result-empty">请先选择项目。</p>', chart: null, sourceHelp: PRICE_HELP };
     const years = expectedYears(project);
     const returned = serviceReady && current && task?.status === "succeeded" ? task.results : null;
     const publishedTask = task?.id && publishedRuns?.some((run) => run.backendTaskId === task.id);
@@ -244,9 +251,12 @@
       code, label, prices: prices.map((price) => Number.isFinite(price) ? price : null)
     }));
     const chart = series.length ? { years, series } : null;
+    const adopted = models.find((model) => isAdopted(model, activeRunId));
+    const caseSource = chart && fromCase ? "案例价源随项目备份带入，属于合成曲线。" : "";
+    const adoptedSource = adopted ? `当前测算采用 ${adopted.label} 的曲线。` : "";
     const html = `<div class="forecast-result-models">${models.map((model) => renderModel(model, activeRunId, fromCase, pendingText)).join("")}</div>
       ${chart ? renderChart(chart) : ""}${renderAnnual(models, years, pendingText)}${renderHistory(project, currentRunIds)}`;
-    return { html, chart };
+    return { html, chart, sourceHelp: `${caseSource}${adoptedSource}${PRICE_HELP}` };
   }
 
   function renderStorageSummary(result) {
@@ -256,7 +266,8 @@
       ["increment", "配储现货增量", result.totalIncrementalRevenue]
     ];
     return `<div class="forecast-result-models">${metrics.map(([key, label, value]) => `
-      <div class="forecast-result-model"><h3>${label}</h3><strong class="forecast-storage-value" data-storage-spot="${key}">${formatPrice.format(value / 10000)} 万元</strong></div>`).join("")}</div>`;
+      <div class="forecast-result-model"><h3>${label}</h3><strong class="forecast-storage-value" data-storage-spot="${key}">${formatPrice.format(value / 10000)} 万元</strong></div>`).join("")}</div>
+      <p class="forecast-result-meta">本次采用储能往返效率 <strong data-storage-spot="efficiency">${formatEfficiency.format(result.roundTripEfficiency)}</strong></p>`;
   }
 
   function createStorageSpotPreview(documentRef, calculate) {

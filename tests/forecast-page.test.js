@@ -83,18 +83,18 @@ async function testUnconfiguredAndHistoricalContinuation() {
 
   harness.project = project;
   panel.render();
-  assert.equal(nodes.status.textContent, "待提交");
-  assert.equal(nodes.submit.disabled, false);
+  assert.equal(nodes.status.textContent, "预测服务暂不可用");
+  assert.equal(nodes.submit.disabled, true);
   assert.equal(nodes.refresh.disabled, true);
   assert.equal(nodes.refresh.hidden, true);
   assert.equal(nodes.next.disabled, true);
   assert.equal(nodes.activate.handlers.click, undefined);
   assert.deepEqual(harness.scheduler.delays(), []);
   nodes.submit.click();
-  assert.equal(nodes.status.textContent, "暂时无法提交预测");
-  assert.equal(nodes.note.textContent, "预测服务暂不可用，请稍后重试。");
+  assert.equal(nodes.status.textContent, "预测服务暂不可用");
+  assert.equal(nodes.note.textContent, "小时供需已就绪。");
   assert.equal(harness.taskView.task, null);
-  assert.equal(nodes.submit.disabled, false);
+  assert.equal(nodes.submit.disabled, true);
 
   harness.usable = true;
   panel.render();
@@ -320,6 +320,9 @@ async function testRecoverAndAcceptCompletedTask() {
   harness.service = { refresh(request) { requests.push(request); return response; } };
   harness.acceptance = () => ({ ok: false, errors: ["缺少完整的小时电价。"] });
   panel.render();
+  assert.equal(nodes.status.textContent, "暂时无法提交预测");
+  assert.equal(nodes.submit.disabled, true);
+  assert.equal(nodes.refresh.disabled, false);
   scheduler.run(0);
   assert.equal(nodes.status.textContent, "正在查询任务…");
   assert.equal(nodes.submit.disabled, true);
