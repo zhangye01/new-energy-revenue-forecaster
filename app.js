@@ -128,6 +128,7 @@ const backendForecastPanel = forecastPage.createBackendForecastPanel({
   hasUsableRun: (project) => !supplyDemandFlow.hasUnsavedChanges() && !supplyDemandFlow.hasPendingDraft(project)
     && hasActiveActivatableRun(project),
   isActive: () => appState.activePage === "forecast-page",
+  acceptTask: acceptBackendForecastTask,
   onTask: renderBackendForecastResults
 });
 const createEmptyEnergyDataState = projectModel.createEmptyEnergyDataState;
@@ -3025,13 +3026,28 @@ function hourlyPricesFromQuarterPrices(quarterPrices) {
   return priceForecast.hourlyPricesFromQuarterPrices(quarterPrices);
 }
 
+function acceptBackendForecastTask(input) {
+  if (getActiveProject() !== input.project) return { ok: false, changed: false, errors: ["当前项目已切换。"] };
+  const result = forecastRunFlow.acceptBackendTask({
+    ...input,
+    services: { prepareSupplyDemand: supplyDemandFlow.prepareSupplyDemand, markDownstreamStale },
+    actions: { makeId, nowIso: () => new Date().toISOString() }
+  });
+  if (result.changed) {
+    schedulePersistAppData();
+    renderStatuses();
+  }
+  return result;
+}
+
 function renderBackendForecastResults(state) {
   const root = document.querySelector("#forecast-results-root");
   if (!root) return;
   const projectId = state.project?.id ?? null;
-  const caseRuns = !supplyDemandFlow.hasUnsavedChanges() && !supplyDemandFlow.hasPendingDraft(state.project)
-    ? forecastRunFlow.getArchivedCaseRuns(state.project) : [];
-  const html = forecastResultsView.buildView({ ...state, caseRuns });
+  const ready = !supplyDemandFlow.hasUnsavedChanges() && !supplyDemandFlow.hasPendingDraft(state.project);
+  const publishedRuns = ready ? forecastRunFlow.getPublishedBackendResults(state.project) : [];
+  const caseRuns = ready && !publishedRuns.length ? forecastRunFlow.getArchivedCaseRuns(state.project) : [];
+  const html = forecastResultsView.buildView({ ...state, caseRuns, publishedRuns });
   const sameProject = renderedForecastResults.projectId === projectId;
   if (sameProject && renderedForecastResults.html === html) return;
   const historyOpen = sameProject && root.querySelector("[data-forecast-history]")?.open;

@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261119c">
-    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119h">
+    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119k">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261118m">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
@@ -97,7 +97,7 @@
     <script src="./src/domain/energy-profiles.js?v=20261113c" defer></script>
     <script src="./src/domain/app-utils.js?v=20261113c" defer></script>
     <script src="./src/domain/supply-demand.js?v=20261119j" defer></script>
-    <script src="./src/domain/price-forecast.js?v=20261119a" defer></script>
+    <script src="./src/domain/price-forecast.js?v=20261119k" defer></script>
     <script src="./src/domain/result-versions.js?v=20261118i" defer></script>
     <script src="./src/domain/revenue-rules.js?v=20261118r" defer></script>
     <script src="./src/domain/export-builders.js?v=20261118i" defer></script>
@@ -116,9 +116,9 @@
     <script src="./src/ui/supply-demand-chart.js?v=20261119g" defer></script>
     <script src="./src/ui/supply-demand-workspace.js?v=20261119j" defer></script>
     <script src="./src/ui/supply-demand-flow.js?v=20261118s" defer></script>
-    <script src="./src/ui/forecast-results-view.js?v=20261119d" defer></script>
-    <script src="./src/ui/forecast-page.js?v=20261118t" defer></script>
-    <script src="./src/ui/forecast-run-flow.js?v=20261119d" defer></script>
+    <script src="./src/ui/forecast-results-view.js?v=20261119k" defer></script>
+    <script src="./src/ui/forecast-page.js?v=20261119k" defer></script>
+    <script src="./src/ui/forecast-run-flow.js?v=20261119k" defer></script>
     <script src="./src/ui/project-list.js?v=20261119a" defer></script>
     <script src="./src/ui/result-page.js?v=20261118i" defer></script>
     <script src="./src/ui/result-runner.js?v=20261118f" defer></script>
@@ -154,7 +154,7 @@
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261119j" defer></script>
-    <script src="./app.js?v=20261119d" defer></script>
+    <script src="./app.js?v=20261119k" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -934,21 +934,29 @@
             <div class="panel-head backend-forecast-head">
               <div class="backend-forecast-title">
                 <strong id="backend-forecast-heading">现货电价预测</strong>
-                <span data-help="后台预测流程" data-help-anchor="#backend-forecast-heading">提交已生成的小时供需后，后台计算并回传三个模型的结果。任务和结果对应提交时的供需版本。</span>
+                <span data-help="预测流程" data-help-anchor="#backend-forecast-heading">生成供需数据后提交预测。可查看任务进度及三个模型的结果；当前供需对应的完整价格通过校验并生效后，可继续补充收益参数。</span>
               </div>
-              <span id="backend-forecast-status" class="backend-forecast-status" role="status" aria-live="polite" aria-atomic="true">算法待联调</span>
             </div>
-            <div class="backend-forecast-actions">
-              <button type="button" class="primary-button" id="backend-forecast-submit" disabled>提交预测</button>
-              <button type="button" class="ghost-button" id="backend-forecast-refresh" disabled>刷新任务状态</button>
+            <div class="backend-forecast-workflow">
+              <div class="backend-forecast-actions">
+                <button type="button" class="primary-button" id="backend-forecast-submit" disabled>提交预测</button>
+              </div>
+              <div class="backend-forecast-task">
+                <div class="backend-forecast-task-head">
+                  <span class="backend-forecast-task-label">任务状态</span>
+                  <span id="backend-forecast-status" class="backend-forecast-status" role="status" aria-live="polite" aria-atomic="true">待生成供需</span>
+                  <button type="button" class="ghost-button" id="backend-forecast-refresh" disabled hidden>刷新任务状态</button>
+                </div>
+                <small id="backend-forecast-note" class="backend-forecast-note" aria-live="polite" aria-atomic="true"></small>
+              </div>
             </div>
-            <small id="backend-forecast-note" class="backend-forecast-note"></small>
           </section>
           <section class="panel forecast-results-panel" aria-labelledby="forecast-results-heading">
             <div class="panel-head"><strong id="forecast-results-heading">预测结果</strong></div>
             <div id="forecast-results-root"></div>
           </section>
-          <div class="history-next-step-row">
+          <div class="forecast-next-step">
+            <span id="backend-forecast-next-note" class="forecast-next-note" aria-live="polite" aria-atomic="true"></span>
             <button type="button" class="primary-button next-step-button" id="backend-forecast-next" data-jump="scenario-page" disabled>进入收益参数补充与细化</button>
           </div>
         </section>

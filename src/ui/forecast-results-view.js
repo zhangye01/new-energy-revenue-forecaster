@@ -28,19 +28,33 @@
     return Array.from({ length: forecastYears }, (_, index) => startYear + index);
   }
 
-  function annualPrice(result, year) {
-    const summary = result?.annualPrices?.[year];
-    if (Number.isFinite(summary)) return summary;
-    const hourly = result?.pricesByYear?.[year];
-    if (!Array.isArray(hourly) || hourly.length !== HOURS_PER_YEAR) return undefined;
+  function meanPrice(series, count) {
+    if (!Array.isArray(series) || series.length !== count) return undefined;
     let scale = 0;
-    for (const price of hourly) {
+    for (const price of series) {
       if (!Number.isFinite(price)) return undefined;
       scale = Math.max(scale, Math.abs(price));
     }
     if (!scale) return 0;
-    const normalizedSum = hourly.reduce((sum, price) => sum + price / scale, 0);
-    return normalizedSum / HOURS_PER_YEAR * scale;
+    const normalizedSum = series.reduce((sum, price) => sum + price / scale, 0);
+    return normalizedSum / count * scale;
+  }
+
+  function annualPrice(result, year) {
+    if (result?.pricesByYear !== undefined) return meanPrice(result.pricesByYear?.[year], HOURS_PER_YEAR);
+    if (result?.quarterPricesByYear !== undefined) return meanPrice(result.quarterPricesByYear?.[year], HOURS_PER_YEAR * 4);
+    const summary = result?.annualPrices?.[year];
+    return Number.isFinite(summary) ? summary : undefined;
+  }
+
+  function validDisplayPrice(result, task) {
+    const unit = result.priceUnit ?? task?.priceUnit;
+    const calendar = result.calendar ?? task?.calendar;
+    const granularity = result.granularityMinutes ?? task?.granularityMinutes;
+    return !isHistoricalSimulation(result)
+      && (unit === undefined || unit === "CNY/MWh")
+      && (calendar === undefined || calendar === "fixed_365_days")
+      && (granularity === undefined || [15, 60].includes(granularity));
   }
 
   function resultsByModel(results, isEligible) {
@@ -58,11 +72,11 @@
     return typeof value === "string" && value.trim() ? utils.escapeHtml(value) : "—";
   }
 
-  function renderModel({ code, label, result, prices }, project, fromCase) {
+  function renderModel({ code, label, result, prices }, activeRunId, fromCase, pendingText) {
     const runId = result?.runId ?? result?.id;
     const available = prices.some(Number.isFinite);
-    const adopted = available && typeof runId === "string" && runId && project.activeRunId === runId;
-    const status = available ? (fromCase ? "案例价源" : "已返回") : "待返回";
+    const adopted = available && typeof runId === "string" && runId && activeRunId === runId;
+    const status = available ? (fromCase ? "案例价源" : "结果可查看") : pendingText;
     const version = typeof result?.algorithmVersion === "string" && result.algorithmVersion.trim()
       ? `<span>版本 ${textValue(result.algorithmVersion)}</span>` : "";
     const meta = available ? `${version}${adopted ? "<span>测算采用</span>" : ""}` : "";
@@ -72,13 +86,13 @@
     </article>`;
   }
 
-  function renderAnnual(models, years) {
+  function renderAnnual(models, years, pendingText) {
     if (!models.some(({ prices }) => prices.some(Number.isFinite))) return "";
-    return `<div class="table-scroll forecast-result-table"><table data-forecast-annual>
+    return `<div class="table-scroll forecast-result-table forecast-result-annual" tabindex="0" aria-label="年度现货均价"><table data-forecast-annual>
       <caption>年度现货均价（元/MWh）</caption>
       <thead><tr><th scope="col">年份</th>${models.map(({ label }) => `<th scope="col">${label}</th>`).join("")}</tr></thead>
       <tbody>${years.map((year, index) => `<tr><th scope="row">${year}</th>${models.map(({ prices }) => Number.isFinite(prices[index])
-        ? `<td>${formatPrice.format(prices[index])}</td>` : '<td class="forecast-result-missing">待返回</td>').join("")}</tr>`).join("")}</tbody>
+        ? `<td>${formatPrice.format(prices[index])}</td>` : `<td class="forecast-result-missing">${pendingText}</td>`).join("")}</tr>`).join("")}</tbody>
     </table></div>`;
   }
 
@@ -99,21 +113,40 @@
     </details>`;
   }
 
-  function buildView({ project, task, current, serviceReady, caseRuns } = {}) {
-    if (!project) return '<p class="forecast-result-empty">请先选择项目。</p>';
-    const years = expectedYears(project);
-    const returned = serviceReady && current && task?.status === "succeeded" ? task.results : null;
-    const backendByModel = resultsByModel(returned, (run) => !isHistoricalSimulation(run));
-    const fromCase = !backendByModel.size;
-    const byModel = fromCase ? resultsByModel(caseRuns, isHistoricalSimulation) : backendByModel;
-    const models = Array.from(MODELS, ([code, label]) => {
+  function emptyResultLabel(phase) {
+    if (["input-required", "ready", "unavailable"].includes(phase)) return "待提交";
+    if (["failed", "completed"].includes(phase)) return "未返回";
+    return "待返回";
+  }
+
+  function modelPrices(byModel, years) {
+    return Array.from(MODELS, ([code, label]) => {
       const result = byModel.get(code);
       return { code, label, result, prices: years.map((year) => annualPrice(result, year)) };
     });
-    const currentRunIds = new Set(models.filter(({ prices }) => prices.some(Number.isFinite))
+  }
+
+  function hasVisiblePrices(models) {
+    return models.some(({ prices }) => prices.some(Number.isFinite));
+  }
+
+  function buildView({ project, task, current, serviceReady, phase, caseRuns, publishedRuns } = {}) {
+    if (!project) return '<p class="forecast-result-empty">请先选择项目。</p>';
+    const years = expectedYears(project);
+    const returned = serviceReady && current && task?.status === "succeeded" ? task.results : null;
+    const publishedTask = task?.id && publishedRuns?.some((run) => run.backendTaskId === task.id);
+    const liveModels = publishedTask ? [] : modelPrices(resultsByModel(returned, (run) => validDisplayPrice(run, task)), years);
+    const showLive = hasVisiblePrices(liveModels);
+    const backendModels = showLive ? liveModels : modelPrices(resultsByModel(publishedRuns, validDisplayPrice), years);
+    const fromCase = !hasVisiblePrices(backendModels);
+    const models = fromCase ? modelPrices(resultsByModel(caseRuns, isHistoricalSimulation), years) : backendModels;
+    const activeRunId = !showLive ? project.activeRunId : null;
+    const pendingText = emptyResultLabel(phase);
+    const visibleRuns = !showLive ? models : [];
+    const currentRunIds = new Set(visibleRuns.filter(({ prices }) => prices.some(Number.isFinite))
       .map(({ result }) => result?.runId ?? result?.id).filter(Boolean));
-    return `<div class="forecast-result-models">${models.map((model) => renderModel(model, project, fromCase)).join("")}</div>
-      ${renderAnnual(models, years)}${renderHistory(project, currentRunIds)}`;
+    return `<div class="forecast-result-models">${models.map((model) => renderModel(model, activeRunId, fromCase, pendingText)).join("")}</div>
+      ${renderAnnual(models, years, pendingText)}${renderHistory(project, currentRunIds)}`;
   }
 
   return Object.freeze({ buildView });

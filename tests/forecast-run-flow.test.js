@@ -1,11 +1,17 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const supplyDomain = require("../src/domain/supply-demand");
+const forecast = require("../src/domain/price-forecast");
+const { calculateScenarioResult } = require("../src/domain/revenue-calculator");
 const {
+  acceptBackendTask,
+  buildRestoredForecastBinding,
   canActivateRun,
   forceActivateRun,
   formatForecastGranularity,
   generateForecastRun,
+  getPublishedBackendResults,
   hasActiveActivatableRun,
   readForecastFormInput,
   setActiveRun,
@@ -329,5 +335,102 @@ validSignedRun.pricesByYear[2026][0] = -100;
 validSignedRun.pricesByYear[2026][1] = 0;
 assert.equal(canActivateRun(validSignedRun, { startYear: 2026, forecastYears: 1 }), true);
 assert.equal(canActivateRun(validSignedRun, { startYear: 2026, forecastYears: 2 }), false);
+
+const backendCalls = [];
+const backendProject = {
+  id: "backend-input", province: "jiangsu", startYear: 2026, forecastYears: 1, capacityMw: 1,
+  activeRunId: "archive", priceRuns: [curveRun({ id: "archive", status: "publishable" })],
+  statuses: { "forecast-page": "in_progress", "scenario-page": "not_started" },
+  roughPrice: { snapshots: [{ id: "original-rough" }] },
+  resultsByScenario: { test: { id: "original-result" } },
+  energyData: { hourlyByYear: { 2026: Array(8760).fill(1) } }
+};
+const savedSupply = supplyDomain.createConfig(backendProject);
+for (const series of Object.values(savedSupply.elements)) series.baseEnergyMwh = 0;
+backendProject.supplyDemand = { config: savedSupply };
+const prepared = { ok: true, config: savedSupply, dataset: supplyDomain.buildDataset(backendProject, savedSupply) };
+const task = {
+  id: "backend-task", projectId: backendProject.id, inputFingerprint: prepared.dataset.fingerprint,
+  status: "succeeded", activeRunId: "backend-xgboost", priceUnit: "CNY/MWh", calendar: "fixed_365_days", granularityMinutes: 60,
+  results: [
+    { modelCode: "lstm", runId: "backend-lstm", annualPrices: { 2026: -15 } },
+    { modelCode: "xgboost", runId: "backend-xgboost", pricesByYear: { 2026: [-5, 0, ...Array(8758).fill(129)] } },
+    { modelCode: "ensemble", runId: "backend-ensemble", granularityMinutes: 15,
+      quarterPricesByYear: { 2026: [-30, 0, 10, 20, ...Array(35036).fill(130)] } }
+  ]
+};
+const accept = (value, target = backendProject, overrides = {}) => acceptBackendTask({
+  project: target, task: value, expectedActiveRunId: target.activeRunId,
+  services: createServices(backendCalls, { prepareSupplyDemand: () => prepared }), actions: createActions(backendCalls), ...overrides
+});
+const originalArchive = JSON.stringify(backendProject.priceRuns[0]);
+const oldRoughAndBaseline = JSON.stringify([backendProject.roughPrice, backendProject.resultsByScenario]);
+assert.deepEqual(accept(task), { ok: true, changed: true, errors: [] });
+assert.equal(backendProject.activeRunId, "backend-xgboost", "the server publication wins even when Ensemble is present");
+assert.equal(backendProject.statuses["forecast-page"], "completed");
+assert.equal(backendProject.statuses["scenario-page"], "in_progress");
+assert.deepEqual(backendCalls, ["stale:backend-input:forecast-page"]);
+assert.deepEqual(backendProject.priceRuns.map(({ id }) => id), ["backend-xgboost", "backend-ensemble", "archive"]);
+assert.equal(backendProject.priceRuns[0].executionKind, "real_model");
+assert.equal(backendProject.priceRuns[0].supplyDemandInput.fingerprint, prepared.dataset.fingerprint);
+assert.notEqual(backendProject.priceRuns[0].pricesByYear[2026], task.results[1].pricesByYear[2026]);
+assert.equal(backendProject.priceRuns[1].pricesByYear[2026][0], 0);
+assert.equal(backendProject.priceRuns[1].quarterPricesByYear[2026].length, 35040);
+assert.equal(JSON.stringify(backendProject.priceRuns.at(-1)), originalArchive);
+assert.equal(JSON.stringify([backendProject.roughPrice, backendProject.resultsByScenario]), oldRoughAndBaseline);
+assert.equal(hasActiveActivatableRun(backendProject, { validateSupplyDemandRun: forecast.validateSupplyDemandRun }), true);
+const realResult = calculateScenarioResult(backendProject, { id: "scenario", config: {} }, backendProject.priceRuns[0]);
+assert.equal(realResult.annualRows[0].spotRevenue, 8758 * 129 - 5, "the published hourly prices feed actual revenue");
+
+const reloaded = JSON.parse(JSON.stringify(backendProject));
+assert.deepEqual(getPublishedBackendResults(reloaded).map((run) => run.id ?? run.runId),
+  ["backend-xgboost", "backend-ensemble", "backend-lstm"], "published models and annual-only companions reopen without an adapter");
+const restoredBinding = buildRestoredForecastBinding(reloaded, "restored-backend-project");
+assert.ok(restoredBinding);
+const restoredBackend = { ...reloaded, id: "restored-backend-project", restoredForecastBinding: restoredBinding };
+assert.deepEqual(getPublishedBackendResults(restoredBackend).map((run) => run.id ?? run.runId),
+  ["backend-xgboost", "backend-ensemble", "backend-lstm"]);
+
+assert.deepEqual(accept(task, backendProject, { expectedActiveRunId: "archive" }), { ok: true, changed: false, errors: [] });
+assert.deepEqual(accept({ ...task, results: [...task.results].reverse() }), { ok: true, changed: false, errors: [] });
+assert.equal(backendProject.activationLogs.length, 1);
+assert.deepEqual(backendCalls, ["stale:backend-input:forecast-page"]);
+const acceptedSnapshot = JSON.stringify(backendProject);
+const tampered = structuredClone(task);
+tampered.results[1].pricesByYear[2026][0] = 999;
+assert.match(accept(tampered).errors[0], /与已保存版本不一致/);
+assert.equal(JSON.stringify(backendProject), acceptedSnapshot);
+
+for (const [change, error] of [
+  [(value) => { value.projectId = "wrong-project"; }, /与当前项目不一致/],
+  [(value) => { value.activeRunId = "backend-lstm"; }, /尚未发布.*完整小时电价/],
+  [(value) => { value.activeRunId = null; }, /尚未发布.*完整小时电价/],
+  [(value) => { value.inputFingerprint = "old-supply"; }, /与后台结果不一致/],
+  [(value) => { value.results.length = 2; }, /完整返回三种/],
+  [(value) => { value.results[2].modelCode = "xgboost"; }, /模型标识/],
+  [(value) => { value.results[0].runId = "archive"; }, /与已保存版本不一致/],
+  [(value) => { value.results[1].priceUnit = "CNY/kWh"; }, /单位.*无效/],
+  [(value) => { delete value.results[1].pricesByYear[2026][8]; }, /完整测算周期/],
+  [(value) => { value.results[2].pricesByYear = { 2026: Array(8760).fill(1) }; }, /折算值不一致/]
+]) {
+  const invalid = structuredClone(task);
+  change(invalid);
+  const outcome = accept(invalid);
+  assert.equal(outcome.ok, false);
+  assert.match(outcome.errors[0], error);
+  assert.equal(JSON.stringify(backendProject), acceptedSnapshot, "rejected returns never change the saved project");
+}
+const storage = { ...backendProject, hasStorage: true, activeRunId: "archive", priceRuns: [backendProject.priceRuns.at(-1)] };
+assert.match(accept(task, storage).errors[0], /独立于项目配储参数/);
+const storageTask = structuredClone(task);
+storageTask.results[1].marketPriceBasis = forecast.MARKET_PRICE_BASIS;
+assert.deepEqual(accept(storageTask, storage), { ok: true, changed: true, errors: [] });
+assert.equal(hasActiveActivatableRun(storage, { validateSupplyDemandRun: forecast.validateSupplyDemandRun }), true);
+assert.deepEqual(getPublishedBackendResults(storage).map((run) => run.id ?? run.runId),
+  ["backend-xgboost", "backend-ensemble", "backend-lstm"], "display-only companions need no storage eligibility marker");
+const oldTask = { ...task, activeRunId: "old-server-version" };
+assert.match(accept(oldTask, backendProject, { expectedActiveRunId: "archive" }).errors[0], /有效价源已更新/);
+assert.equal(forecast.validateSupplyDemandRun(backendProject, { ...backendProject.priceRuns[0], supplyDemandInput: undefined }).ok, false);
+assert.equal(forecast.validateSupplyDemandRun(backendProject, { ...backendProject.priceRuns[0], priceUnit: "CNY/kWh" }).ok, false);
 
 console.log("forecast run flow tests passed");

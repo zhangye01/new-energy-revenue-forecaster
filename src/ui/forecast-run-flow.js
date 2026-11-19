@@ -12,6 +12,10 @@
     root.window.NE_FORECAST_RUN_FLOW = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function (priceForecast) {
+  const BACKEND_MODELS = new Map(priceForecast.FORECAST_MODEL_DEFINITIONS.map((model) => [model.family, model]));
+  const BACKUP_UNSAFE_IDS = new Set(["__proto__", "constructor", "prototype"]);
+  const validId = (id) => typeof id === "string" && Boolean(id.trim()) && !BACKUP_UNSAFE_IDS.has(id);
+
   function forecastParameterError(options = {}, isRun = false) {
     const hasWindow = !isRun || options.trainStart !== undefined || options.trainEnd !== undefined;
     if (hasWindow && (![options.trainStart, options.trainEnd].every((year) => Number.isInteger(year) && year >= 2010 && year <= 2100))) {
@@ -29,6 +33,7 @@
 
   function canActivateRun(run, project = null) {
     return ["publishable", "publishable_warn", "publishable_forced"].includes(run?.status)
+      && (run.executionKind !== "real_model" || !project?.hasStorage || run.marketPriceBasis === priceForecast.MARKET_PRICE_BASIS)
       && !forecastParameterError(run, true) && priceForecast.validateForecastPriceData(project, run).ok;
   }
 
@@ -73,6 +78,142 @@
       && run.algorithmVersion === active.algorithmVersion && run.supplyDemandInput?.projectId === source.projectId
       && run.supplyDemandInput.fingerprint === source.fingerprint && canActivateRun(run, project)
       && priceForecast.validateSupplyDemandRun(sourceProject, run).ok));
+  }
+
+  function getPublishedBackendResults(project) {
+    const active = getActiveRun(project);
+    if (active?.executionKind !== "real_model" || !canActivateRun(active, project)
+        || !priceForecast.validateSupplyDemandRun(project, active).ok) return [];
+    const source = active.supplyDemandInput;
+    const sourceProject = source.projectId === project.id ? project : { ...project, id: source.projectId };
+    const companions = project.priceRuns.filter((run) => run !== active && run?.executionKind === "real_model"
+      && run.backendTaskId === active.backendTaskId && run.supplyDemandInput?.fingerprint === source.fingerprint
+      && priceForecast.validateForecastPriceData(project, run).ok && priceForecast.validateSupplyDemandRun(sourceProject, run).ok);
+    const summaries = Array.isArray(active.backendDisplayResults) ? active.backendDisplayResults : [];
+    return [active, ...companions, ...summaries];
+  }
+
+  function backendModelRows(task) {
+    if (!Array.isArray(task.results) || task.results.length !== BACKEND_MODELS.size) {
+      throw new Error("后台尚未完整返回三种预测模型的结果。");
+    }
+    const rowsByModel = new Map(), seenIds = new Set();
+    for (const result of task.results) {
+      const code = result?.modelCode ?? result?.algorithmFamily;
+      const model = typeof code === "string" && BACKEND_MODELS.get(code.trim().toLowerCase());
+      const id = result?.runId ?? result?.id;
+      if (!model || !validId(id) || rowsByModel.has(model.family) || seenIds.has(id)
+          || (result.executionKind !== undefined && result.executionKind !== "real_model")
+          || result.supplyDemandInput?.featureConsumption === "not_used_by_demo_model") {
+        throw new Error("后台模型标识、运行编号或价格来源无效。");
+      }
+      seenIds.add(id);
+      rowsByModel.set(model.family, { model, id, result, complete: result.pricesByYear !== undefined || result.quarterPricesByYear !== undefined });
+    }
+    return [...BACKEND_MODELS.keys()].map((code) => rowsByModel.get(code));
+  }
+
+  function backendAnnualSummary(project, task, { model, id, result }) {
+    const years = Array.from({ length: project.forecastYears }, (_, index) => project.startYear + index);
+    const prices = result.annualPrices;
+    const unit = result.priceUnit ?? task.priceUnit;
+    const calendar = result.calendar ?? task.calendar;
+    if ((unit !== undefined && unit !== "CNY/MWh") || (calendar !== undefined && calendar !== "fixed_365_days")
+        || !prices || typeof prices !== "object" || Array.isArray(prices) || Object.keys(prices).length !== years.length
+        || years.some((year) => !Number.isFinite(prices[year]))) {
+      throw new Error(`${model.name} 的年度现货均价未完整覆盖测算周期。`);
+    }
+    return {
+      modelCode: model.family, runId: id, annualPrices: Object.fromEntries(years.map((year) => [year, prices[year]])),
+      ...(typeof result.algorithmVersion === "string" ? { algorithmVersion: result.algorithmVersion } : {})
+    };
+  }
+
+  function samePriceArrays(before, after) {
+    if (!after) return before === after;
+    const years = Object.keys(after);
+    return Boolean(before) && Object.keys(before).length === years.length && years.every((year) => {
+      const known = before[year], incoming = after[year];
+      return Array.isArray(known) && known.length === incoming.length && incoming.every((value, index) => value === known[index]);
+    });
+  }
+
+  function sameBackendRun(before, after) {
+    const metadata = ["executionKind", "status", "backendTaskId", "algorithmFamily", "algorithmVersion",
+      "marketPriceBasis", "priceUnit", "calendar", "granularityMinutes", "pointsPerYear"];
+    return metadata.every((key) => before[key] === after[key])
+      && before.supplyDemandInput?.fingerprint === after.supplyDemandInput.fingerprint
+      && before.supplyDemandInput?.featureConsumption === after.supplyDemandInput.featureConsumption
+      && JSON.stringify(before.backendDisplayResults) === JSON.stringify(after.backendDisplayResults)
+      && samePriceArrays(before.pricesByYear, after.pricesByYear)
+      && samePriceArrays(before.quarterPricesByYear, after.quarterPricesByYear);
+  }
+
+  function prepareBackendPublication(project, task, services, actions) {
+    if (!task || task.status !== "succeeded" || !validId(task.id) || task.projectId !== project.id) {
+      throw new Error("后台预测任务与当前项目不一致。");
+    }
+    const rows = backendModelRows(task);
+    const selected = rows.find(({ id }) => task.activeRunId === id);
+    if (!selected?.complete) throw new Error("后台尚未发布可用于收益测算的完整小时电价。");
+    const basis = selected.result.marketPriceBasis ?? task.marketPriceBasis;
+    if (project.hasStorage && basis !== priceForecast.MARKET_PRICE_BASIS) {
+      throw new Error("后台有效价源尚未确认独立于项目配储参数，暂无法用于配储收益测算。");
+    }
+    const prepared = services.prepareSupplyDemand?.(project);
+    if (!prepared?.ok || !prepared.dataset || prepared.dataset.source?.inputFingerprint !== task.inputFingerprint) {
+      throw new Error("当前供需版本与后台结果不一致，请重新提交预测。");
+    }
+    const source = priceForecast.snapshotBackendSupplyDemandInput(project, prepared);
+    const createdAt = typeof task.completedAt === "string" && task.completedAt.trim()
+      ? task.completedAt : (actions.nowIso?.() || new Date().toISOString());
+    const runs = rows.filter(({ complete }) => complete)
+      .map(({ result, model }) => priceForecast.createBackendPriceRun(project, task, result, model, source, createdAt));
+    const active = runs.find(({ id }) => id === task.activeRunId);
+    if (!priceForecast.validateSupplyDemandRun(project, active).ok) {
+      throw new Error("当前供需版本与后台结果不一致，请重新提交预测。");
+    }
+    const summaries = rows.filter(({ complete }) => !complete).map((row) => backendAnnualSummary(project, task, row));
+    if (summaries.length) active.backendDisplayResults = summaries;
+    return { runs, active };
+  }
+
+  function acceptBackendTask({ project, task, expectedActiveRunId, services = {}, actions = {} } = {}) {
+    if (!project) return { ok: false, changed: false, errors: ["请先选择项目。"] };
+    const oldRunId = project.activeRunId ?? null;
+    if (oldRunId !== (expectedActiveRunId ?? null) && oldRunId !== task?.activeRunId) {
+      return { ok: false, changed: false, errors: ["有效价源已更新，请刷新后台预测结果。"] };
+    }
+    try {
+      const { runs, active } = prepareBackendPublication(project, task, services, actions);
+      const previous = Array.isArray(project.priceRuns) ? project.priceRuns : [];
+      const previousById = new Map(previous.map((run) => [run?.id, run]));
+      if (active.backendDisplayResults?.some(({ runId }) => previousById.has(runId))) {
+        throw new Error("后台重复返回的运行与已保存版本不一致。");
+      }
+      const newRuns = runs.filter((run) => {
+        const existing = previousById.get(run.id);
+        if (existing && !sameBackendRun(existing, run)) throw new Error("后台重复返回的运行与已保存版本不一致。");
+        return !existing;
+      });
+      const priceRuns = newRuns.length ? [...newRuns, ...previous] : previous;
+      if (oldRunId !== active.id) {
+        const next = { ...project, priceRuns, activeRunId: active.id, statuses: { ...project.statuses },
+          activationLogs: Array.isArray(project.activationLogs) ? [...project.activationLogs] : [] };
+        addActivationLog({ project: next, fromRunId: oldRunId, toRunId: active.id, reason: "后台发布有效价源", actions });
+        services.markDownstreamStale?.(next, "forecast-page");
+        markForecastReady(next, { validateSupplyDemandRun: priceForecast.validateSupplyDemandRun });
+        project.priceRuns = priceRuns;
+        project.activeRunId = active.id;
+        project.statuses = next.statuses;
+        project.activationLogs = next.activationLogs;
+      } else if (newRuns.length) {
+        project.priceRuns = priceRuns;
+      }
+      return { ok: true, changed: Boolean(newRuns.length || oldRunId !== active.id), errors: [] };
+    } catch (error) {
+      return { ok: false, changed: false, errors: [error?.message || "后台返回的电价结果校验失败。"] };
+    }
   }
 
   function buildRestoredForecastBinding(project, targetProjectId) {
@@ -293,6 +434,7 @@
   }
 
   return Object.freeze({
+    acceptBackendTask,
     addActivationLog,
     buildRestoredForecastBinding,
     canActivateRun,
@@ -301,6 +443,7 @@
     formatForecastGranularity,
     generateForecastRun,
     getArchivedCaseRuns,
+    getPublishedBackendResults,
     hasActiveActivatableRun,
     readForecastFormInput,
     setActiveRun,

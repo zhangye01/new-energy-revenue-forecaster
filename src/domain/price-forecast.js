@@ -21,6 +21,7 @@
   }
 
   const MARKET_PRICE_BASIS = "project_storage_independent_v1";
+  const BACKEND_SUPPLY_MARKER = "backend_input_snapshot_verified_v1";
   const FORECAST_MODEL_DEFINITIONS = Object.freeze([
     Object.freeze({
       family: "lstm",
@@ -369,7 +370,7 @@
     return { config, dataset, fingerprint, source };
   }
 
-  function snapshotSupplyDemandInput(project, input) {
+  function snapshotSupplyDemandInput(project, input, featureConsumption = "not_used_by_demo_model") {
     const { config, dataset, fingerprint, source } = validateSupplyDemandDataset(project, input);
     return {
       version: 1,
@@ -380,10 +381,64 @@
       calendar: source.calendar,
       units: { energy: source.energyUnit, averagePower: source.averagePowerUnit, intervalHours: source.intervalHours },
       hoursPerYear: source.hoursPerYear,
-      featureConsumption: "not_used_by_demo_model",
+      featureConsumption,
       configSnapshot: JSON.parse(JSON.stringify(config)),
       annualSummary: JSON.parse(JSON.stringify(dataset.annualRows))
     };
+  }
+
+  function snapshotBackendSupplyDemandInput(project, input) {
+    return snapshotSupplyDemandInput(project, input, BACKEND_SUPPLY_MARKER);
+  }
+
+  function backendPriceArrays(project, result, granularityMinutes) {
+    const quarterHour = granularityMinutes === 15;
+    const pointsPerYear = quarterHour ? 35040 : 8760;
+    const native = quarterHour ? result.quarterPricesByYear : result.pricesByYear;
+    const years = Array.from({ length: project.forecastYears }, (_, index) => project.startYear + index);
+    if (!isSupplyObject(native) || Object.keys(native).length !== years.length ||
+        years.some((year) => countInvalidPricePoints(native[year], pointsPerYear))) {
+      throw new Error(`后台价格缺少完整测算周期内的 ${pointsPerYear} 点/年序列。`);
+    }
+    const nativeCopy = Object.fromEntries(years.map((year) => [year, [...native[year]]]));
+    if (!quarterHour) return { pointsPerYear, pricesByYear: nativeCopy };
+    const pricesByYear = Object.fromEntries(years.map((year) => [year, hourlyPricesFromQuarterPrices(nativeCopy[year])]));
+    if (result.pricesByYear !== undefined && (!isSupplyObject(result.pricesByYear) ||
+        Object.keys(result.pricesByYear).length !== years.length || years.some((year) =>
+          countInvalidPricePoints(result.pricesByYear[year], 8760) ||
+          result.pricesByYear[year].some((value, index) => value !== pricesByYear[year][index])))) {
+      throw new Error("后台小时价格与15分钟价格的折算值不一致。");
+    }
+    return { pointsPerYear, pricesByYear, quarterPricesByYear: nativeCopy };
+  }
+
+  function createBackendPriceRun(project, task, result, model, source, createdAt) {
+    const priceUnit = result.priceUnit ?? task.priceUnit;
+    const calendar = result.calendar ?? task.calendar;
+    const granularityMinutes = result.granularityMinutes ?? task.granularityMinutes;
+    const marketPriceBasis = result.marketPriceBasis ?? task.marketPriceBasis ?? null;
+    if (priceUnit !== "CNY/MWh" || calendar !== "fixed_365_days" || ![15, 60].includes(granularityMinutes)) {
+      throw new Error(`${model.name} 返回的价格单位、模型日历或时间粒度无效。`);
+    }
+    if (granularityMinutes === 60 && result.quarterPricesByYear !== undefined) {
+      throw new Error(`${model.name} 的价格序列与声明的小时粒度不一致。`);
+    }
+    if (marketPriceBasis !== null && typeof marketPriceBasis !== "string") {
+      throw new Error(`${model.name} 返回的市场电价口径无效。`);
+    }
+    const prices = backendPriceArrays(project, result, granularityMinutes);
+    if (result.pointsPerYear !== undefined && result.pointsPerYear !== prices.pointsPerYear) {
+      throw new Error(`${model.name} 返回的年度价格点数无效。`);
+    }
+    const run = {
+      id: result.runId ?? result.id, backendTaskId: task.id, createdAt, status: "publishable",
+      executionKind: "real_model", algorithmFamily: model.family, algorithmName: model.name, algorithmLabel: model.label,
+      ...(typeof result.algorithmVersion === "string" ? { algorithmVersion: result.algorithmVersion } : {}),
+      marketPriceBasis,
+      priceUnit, calendar, granularityMinutes, ...prices, supplyDemandInput: source
+    };
+    if (!validateForecastPriceData(project, run).ok) throw new Error(`${model.name} 的小时价格折算结果无效。`);
+    return run;
   }
 
   function normalizeRestoredForecastBinding(projectId, binding) {
@@ -397,7 +452,8 @@
     const config = project?.supplyDemand?.config;
     const saved = run?.supplyDemandInput;
     const hasSource = run != null && Object.hasOwn(run, "supplyDemandInput");
-    if (!config && !hasSource) return { ok: true, errors: [], legacy: true };
+    const backend = run?.executionKind === "real_model";
+    if (!config && !hasSource && !backend) return { ok: true, errors: [], legacy: true };
     if (!config) return { ok: false, errors: ["当前项目缺少供需配置，请先核对并保存。"] };
     if (!supplyDemand) return { ok: false, errors: ["供需输入模块尚未加载。"] };
     const errors = supplyDemand.validateConfig(project, config);
@@ -406,7 +462,9 @@
     if (!isSupplyObject(saved) || saved.version !== 1 || saved.calendar !== "fixed_365_days"
         || saved.hoursPerYear !== 8760 || !isSupplyObject(saved.units)
         || saved.units.energy !== "MWh" || saved.units.averagePower !== "MW" || saved.units.intervalHours !== 1
-        || saved.featureConsumption !== "not_used_by_demo_model") {
+        || saved.featureConsumption !== (backend ? BACKEND_SUPPLY_MARKER : "not_used_by_demo_model")
+        || (backend && (typeof run.backendTaskId !== "string" || !run.backendTaskId.trim()
+          || run.priceUnit !== "CNY/MWh" || run.calendar !== saved.calendar))) {
       return { ok: false, errors: ["供需来源的版本、日历、单位或模型使用标记无效，请重新生成电价预测。"] };
     }
     const snapshotErrors = supplyDemand.validateConfig(project, saved.configSnapshot);
@@ -497,6 +555,8 @@
     validateForecastPriceData,
     evaluateRunQuality,
     snapshotSupplyDemandInput,
+    snapshotBackendSupplyDemandInput,
+    createBackendPriceRun,
     validateSupplyDemandDataset,
     validateSupplyDemandRun,
     normalizeRestoredForecastBinding,
