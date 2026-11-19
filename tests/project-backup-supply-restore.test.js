@@ -59,6 +59,7 @@ function createProject(sandbox) {
   const foreign = runWithSupplySnapshot(sandbox, { ...project, id: "unrelated-source" }, config, "unrelated-price");
   const alternate = clone(active);
   alternate.id = "same-source-other-run";
+  alternate.algorithmFamily = "lstm";
   project.supplyDemand = { version: 1, config, generatedAt: NOW, inputFingerprint: active.supplyDemandInput.fingerprint };
   project.priceRuns = [active, alternate, foreign];
   project.activeRunId = active.id;
@@ -73,6 +74,7 @@ async function run() {
   const backup = sandbox.NE_PROJECT_BACKUP;
   const rough = sandbox.NE_ROUGH_PRICE;
   const forecast = sandbox.NE_PRICE_FORECAST;
+  const displayedCaseIds = (project) => Array.from(sandbox.NE_FORECAST_RUN_FLOW.getArchivedCaseRuns(project), ({ id }) => id);
 
   function activate(project) {
     if (!state.projects.some((item) => item.id === project.id)) state.projects.push(project);
@@ -110,6 +112,7 @@ async function run() {
   const first = restore(original, [], "unused");
   assert.equal(first.id, original.id, "first restore keeps the source project identity");
   assert.equal(sandbox.hasActiveActivatableRun(first), true);
+  assert.deepEqual(displayedCaseIds(first), ["market-price-before-restore", "same-source-other-run"]);
   assert.equal(rough.baselineResultState(first, first.scenarios[0], first.resultsByScenario[originalScenario.id]).current, true);
 
   const recovered = restore(original, [first], "native-restore-copy");
@@ -123,6 +126,13 @@ async function run() {
   assert.equal(forecast.validateSupplyDemandRun(recovered, recovered.priceRuns.find((run) => run.id === "same-source-other-run")).ok,
     false, "a restore binding applies to the validated active run only");
   assert.equal(forecast.validateSupplyDemandRun(recovered, recovered.priceRuns.find((run) => run.id === "unrelated-price")).ok, false);
+  assert.deepEqual(displayedCaseIds(recovered), displayedCaseIds(first), "the companion case curve is viewable without granting activation");
+  const damagedCompanion = clone(recovered);
+  damagedCompanion.priceRuns[1].supplyDemandInput.annualSummary[0].load += 1;
+  assert.deepEqual(displayedCaseIds(damagedCompanion), ["market-price-before-restore"]);
+  const ordinarySimulation = clone(first);
+  ordinarySimulation.priceRuns[0].algorithmVersion = "1.0.0";
+  assert.deepEqual(displayedCaseIds(ordinarySimulation), []);
 
   const recoveredScenario = recovered.scenarios[0];
   const recoveredRough = recovered.roughPrice.snapshots[0];
@@ -161,6 +171,7 @@ async function run() {
   assert.equal(sandbox.sanitizeProject(changedIdentity, 0).activeRunId, null, "a saved binding cannot transfer to an arbitrary project");
   const changedInput = clone(persistedRecovery);
   changedInput.supplyDemand.config.elements.load.baseEnergyMwh += 1;
+  assert.deepEqual(displayedCaseIds(changedInput), []);
   assert.equal(sandbox.sanitizeProject(changedInput, 0).activeRunId, null, "the recovered price still requires its exact supply input");
 
   for (const [label, mutate] of [

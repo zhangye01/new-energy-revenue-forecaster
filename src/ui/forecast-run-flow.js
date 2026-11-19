@@ -60,6 +60,21 @@
     return canActivateRun(run, project) && !supplyDemandRunError(project, run, services);
   }
 
+  function getArchivedCaseRuns(project) {
+    const active = getActiveRun(project);
+    const source = active?.supplyDemandInput;
+    if (active?.executionKind !== "demo_simulation" || typeof active.algorithmVersion !== "string"
+        || !active.algorithmVersion.startsWith("synthetic-case-") || !source?.fingerprint
+        || !canActivateRun(active, project) || !priceForecast.validateSupplyDemandRun(project, active).ok) return [];
+
+    // A restored copy binds the active run only. Check its companion curves under the original identity for display.
+    const sourceProject = source.projectId === project.id ? project : { ...project, id: source.projectId };
+    return project.priceRuns.filter((run) => run === active || (run?.executionKind === active.executionKind
+      && run.algorithmVersion === active.algorithmVersion && run.supplyDemandInput?.projectId === source.projectId
+      && run.supplyDemandInput.fingerprint === source.fingerprint && canActivateRun(run, project)
+      && priceForecast.validateSupplyDemandRun(sourceProject, run).ok));
+  }
+
   function buildRestoredForecastBinding(project, targetProjectId) {
     const run = getActiveRun(project);
     const saved = run?.supplyDemandInput;
@@ -285,6 +300,7 @@
     forecastParameterError,
     formatForecastGranularity,
     generateForecastRun,
+    getArchivedCaseRuns,
     hasActiveActivatableRun,
     readForecastFormInput,
     setActiveRun,

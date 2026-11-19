@@ -3029,7 +3029,9 @@ function renderBackendForecastResults(state) {
   const root = document.querySelector("#forecast-results-root");
   if (!root) return;
   const projectId = state.project?.id ?? null;
-  const html = forecastResultsView.buildView(state);
+  const caseRuns = !supplyDemandFlow.hasUnsavedChanges() && !supplyDemandFlow.hasPendingDraft(state.project)
+    ? forecastRunFlow.getArchivedCaseRuns(state.project) : [];
+  const html = forecastResultsView.buildView({ ...state, caseRuns });
   const sameProject = renderedForecastResults.projectId === projectId;
   if (sameProject && renderedForecastResults.html === html) return;
   const historyOpen = sameProject && root.querySelector("[data-forecast-history]")?.open;

@@ -43,12 +43,12 @@
     return normalizedSum / HOURS_PER_YEAR * scale;
   }
 
-  function currentResults(task, current, serviceReady) {
+  function resultsByModel(results, isEligible) {
     const byModel = new Map();
-    if (!serviceReady || !current || task?.status !== "succeeded" || !Array.isArray(task.results)) return byModel;
-    for (const result of task.results) {
+    if (!Array.isArray(results)) return byModel;
+    for (const result of results) {
       const code = modelCode(result);
-      if (!MODELS.has(code) || isHistoricalSimulation(result)) continue;
+      if (!MODELS.has(code) || !isEligible(result)) continue;
       byModel.set(code, byModel.has(code) ? null : result);
     }
     return byModel;
@@ -58,16 +58,16 @@
     return typeof value === "string" && value.trim() ? utils.escapeHtml(value) : "—";
   }
 
-  function renderModel({ code, label, result, prices }, project) {
+  function renderModel({ code, label, result, prices }, project, fromCase) {
     const runId = result?.runId ?? result?.id;
     const available = prices.some(Number.isFinite);
     const adopted = available && typeof runId === "string" && runId && project.activeRunId === runId;
-    const status = available ? "已返回" : "待返回";
+    const status = available ? (fromCase ? "案例价源" : "已返回") : "待返回";
     const version = typeof result?.algorithmVersion === "string" && result.algorithmVersion.trim()
       ? `<span>版本 ${textValue(result.algorithmVersion)}</span>` : "";
     const meta = available ? `${version}${adopted ? "<span>测算采用</span>" : ""}` : "";
     return `<article class="forecast-result-model" data-forecast-model="${code}">
-      <div class="forecast-result-model-head"><h3>${label}</h3><span class="forecast-result-status${available ? " is-returned" : ""}">${status}</span></div>
+      <div class="forecast-result-model-head"><h3>${label}</h3><span class="forecast-result-status${available && !fromCase ? " is-returned" : ""}">${status}</span></div>
       ${meta ? `<div class="forecast-result-meta">${meta}</div>` : ""}
     </article>`;
   }
@@ -99,17 +99,20 @@
     </details>`;
   }
 
-  function buildView({ project, task, current, serviceReady } = {}) {
+  function buildView({ project, task, current, serviceReady, caseRuns } = {}) {
     if (!project) return '<p class="forecast-result-empty">请先选择项目。</p>';
     const years = expectedYears(project);
-    const byModel = currentResults(task, current, serviceReady);
+    const returned = serviceReady && current && task?.status === "succeeded" ? task.results : null;
+    const backendByModel = resultsByModel(returned, (run) => !isHistoricalSimulation(run));
+    const fromCase = !backendByModel.size;
+    const byModel = fromCase ? resultsByModel(caseRuns, isHistoricalSimulation) : backendByModel;
     const models = Array.from(MODELS, ([code, label]) => {
       const result = byModel.get(code);
       return { code, label, result, prices: years.map((year) => annualPrice(result, year)) };
     });
     const currentRunIds = new Set(models.filter(({ prices }) => prices.some(Number.isFinite))
       .map(({ result }) => result?.runId ?? result?.id).filter(Boolean));
-    return `<div class="forecast-result-models">${models.map((model) => renderModel(model, project)).join("")}</div>
+    return `<div class="forecast-result-models">${models.map((model) => renderModel(model, project, fromCase)).join("")}</div>
       ${renderAnnual(models, years)}${renderHistory(project, currentRunIds)}`;
   }
 

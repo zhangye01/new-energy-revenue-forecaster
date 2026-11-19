@@ -56,4 +56,56 @@ assert.match(history, /<th scope="row">其他模型<\/th><td>来源待核对<\/t
 assert.doesNotMatch(history, />run-lstm</);
 assert.equal(JSON.stringify(historyProject), before);
 
+function makeCaseRun(algorithmFamily, price) {
+  const pricesByYear = Object.fromEntries([2026, 2027, 2028].map((year) =>
+    [year, Object.freeze(Array(8760).fill(price))]));
+  return Object.freeze({
+    id: `case-${algorithmFamily}`,
+    algorithmFamily,
+    executionKind: "demo_simulation",
+    algorithmVersion: "synthetic-case",
+    pricesByYear: Object.freeze(pricesByYear)
+  });
+}
+
+function modelCards(html) {
+  return Array.from(html.matchAll(/<article[^>]*data-forecast-model="([a-z]+)"[^>]*>([\s\S]*?)<\/article>/g),
+    ([, code, contents]) => [code, contents]);
+}
+
+const caseRuns = Object.freeze([
+  makeCaseRun("lstm", -8.5), makeCaseRun("xgboost", 0), makeCaseRun("ensemble", 272.25)
+]);
+const caseProject = Object.freeze({
+  ...project, activeRunId: "case-ensemble", priceRuns: Object.freeze([...runs, ...caseRuns])
+});
+const caseState = { project: caseProject, current: false, serviceReady: false, caseRuns };
+const caseView = buildView(caseState);
+const caseCards = modelCards(caseView);
+assert.deepEqual(caseCards.map(([code]) => code), ["lstm", "xgboost", "ensemble"]);
+for (const [code, contents] of caseCards) {
+  assert.match(contents, /案例价源/, `${code} is explicitly labelled as a case price source`);
+  assert.doesNotMatch(contents, /已返回/, `${code} is not a backend response`);
+  assert.equal(contents.includes("测算采用"), code === "ensemble");
+}
+assert.match(caseView, /<table\b[^>]*data-forecast-annual/);
+assert.match(caseView, /<th scope="row">2026<\/th><td>-8\.50<\/td><td>0\.00<\/td><td>272\.25<\/td>/);
+assert.match(caseView, /<th scope="row">2028<\/th><td>-8\.50<\/td><td>0\.00<\/td><td>272\.25<\/td>/);
+assert.match(caseView, /data-forecast-history[\s\S]*legacy&lt;&amp;&gt;/);
+assert.doesNotMatch(caseView, />case-(lstm|xgboost|ensemble)</, "shown case prices should not be repeated in archive rows");
+assert.doesNotMatch(caseView, /<button|<input|<select/);
+
+const incompleteCaseRun = { ...caseRuns[2], pricesByYear: { 2026: Array(8759).fill(272.25) } };
+const partialCase = buildView({ ...caseState, caseRuns: [caseRuns[0], incompleteCaseRun] });
+assert.match(partialCase, /<th scope="row">2026<\/th><td>-8\.50<\/td>/);
+assert.deepEqual(modelCards(partialCase).filter(([, contents]) => contents.includes("案例价源")).map(([code]) => code),
+  ["lstm"], "only an available case model gets the label");
+assert.doesNotMatch(partialCase, /测算采用/);
+assert.match(partialCase, />case-ensemble</, "saved case models that are not displayed remain in the archive");
+
+const liveOverCase = buildView({ ...state, project: caseProject, caseRuns, task });
+assert.match(liveOverCase, /已返回/);
+assert.doesNotMatch(liveOverCase, /案例价源|272\.25|-8\.50/);
+assert.match(liveOverCase, /<th scope="row">2026<\/th><td>0\.00<\/td><td>150\.00<\/td><td class="forecast-result-missing">待返回<\/td>/);
+
 console.log("Forecast result view tests passed.");
