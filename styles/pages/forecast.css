@@ -222,7 +222,7 @@
 .sd-workspace h4 { font-size: .88rem; }
 .sd-workspace h5 { font-size: .83rem; }
 .sd-section-head, .sd-saved-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
-.sd-period, .sd-preview-empty, .sd-saved-head > span, .sd-file-name { color: var(--muted); font-size: .78rem; line-height: 1.6; }
+.sd-period, .sd-preview-empty, .sd-saved-head > div:first-child > span, .sd-file-name { color: var(--muted); font-size: .78rem; line-height: 1.6; }
 .sd-period { display: block; margin-top: 5px; }
 .sd-state { padding: 5px 8px; border-radius: 5px; background: var(--info-bg); color: var(--blue); font-size: .75rem; white-space: nowrap; }
 .sd-element-tabs {
@@ -296,31 +296,8 @@
 .sd-growth-panel .sd-actions { align-items: end; }
 .sd-growth-panel .sd-actions input[type="number"] { max-width: 100px; }
 .sd-growth-panel .sd-file { display: inline-flex; color: var(--blue); }
-.sd-growth-panel .sd-color-muted { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .sd-number-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px 9px; }
-.sd-color-muted, .sd-curve-empty, .sd-month-total, .sd-curve-chart { color: var(--muted); font-size: .76rem; }
-.sd-curve-empty { margin: 0; }
-.sd-month-total { display: grid; gap: 6px; margin-bottom: 9px; }
-.sd-month-total-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
-.sd-month-total-grid > span { display: grid; gap: 2px; padding: 5px 7px; border-radius: 5px; background: var(--panel); }
-.sd-month-total-grid strong { color: var(--ink); font-size: .75rem; overflow-wrap: anywhere; }
-.sd-month-total-grid .sd-month-current { background: var(--info-bg); }
-.sd-monthly-shares summary { width: fit-content; cursor: pointer; color: var(--blue); font-size: .78rem; font-weight: 650; }
-.sd-monthly-shares summary span { margin-left: 6px; color: var(--muted); font-weight: 400; }
-.sd-monthly-shares[open] .sd-month-total-grid { margin-top: 8px; color: var(--muted); font-size: .76rem; }
-.sd-curve-chart { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 8px 10px; }
-.sd-curve-bars { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 3px; height: 88px; margin: 6px 0 2px; padding: 0; list-style: none; }
-.sd-curve-bars li { display: flex; align-items: flex-end; border-bottom: 1px solid var(--line); }
-.sd-curve-bars li i { width: 100%; height: var(--sd-bar); border-radius: 2px 2px 0 0; background: var(--blue); opacity: .72; }
-.sd-curve-bars li:hover i { opacity: 1; }
-.sd-curve-bars.sd-negative li { align-items: flex-start; border: 0; border-top: 1px solid var(--line); }
-.sd-curve-axis { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 3px; white-space: nowrap; }
-.sd-curve-axis span:first-child { grid-column: 1 / span 3; }
-.sd-curve-axis span:nth-child(2) { grid-column: 7 / span 3; }
-.sd-curve-axis span:nth-child(3) { grid-column: 13 / span 3; }
-.sd-curve-axis span:nth-child(4) { grid-column: 19 / span 3; }
-.sd-curve-axis span:last-child { grid-column: 22 / span 3; text-align: right; }
-.sd-import-preview ul { margin: -3px 0 0; padding-left: 1.35em; }
+.sd-color-muted { color: var(--muted); font-size: .76rem; }
 .sd-file { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
 .sd-file input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .sd-file input::file-selector-button { cursor: pointer; }
@@ -332,6 +309,8 @@
 .sd-table th:first-child { text-align: left; }
 .sd-table thead th { position: sticky; top: 0; background: var(--panel-soft); color: var(--muted); z-index: 1; }
 .sd-output { min-width: 0; border-top: 1px solid var(--line); padding-top: 13px; }
+.sd-saved-head > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.sd-saved-head h4 { font-size: .94rem; }
 .sd-supply-chart-panel { margin-top: 12px; }
 .sd-supply-chart-controls label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: .76rem; white-space: nowrap; }
 .sd-supply-chart-controls label[hidden] { display: none; }
@@ -347,8 +326,7 @@
   .sd-element-tabs { gap: 5px; }
   .sd-element-tab { min-height: 44px; padding-inline: 8px; }
   .sd-element-panel { gap: 10px; padding: 10px; }
-  .sd-number-grid, .sd-month-total-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .sd-curve-bars, .sd-curve-axis { gap: 2px; }
+  .sd-number-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .sd-table th, .sd-table td { padding: 7px; }
   .sd-saved-head .sd-actions { gap: 5px; }
 }

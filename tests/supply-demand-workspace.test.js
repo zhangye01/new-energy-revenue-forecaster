@@ -119,11 +119,9 @@ async function uploadMonthlyOverride(x, p, key, year, weights) {
   await x.upload(`${year}-${key}-分月.xlsx`, { ok: true, config, changedRows: 1, changes: [{ label: key }] });
 }
 
-function monthlyPreview(html) {
-  const preview = html.match(/<details\b[^>]*data-sd-monthly-preview[^>]*>([\s\S]*?)<\/details>/)?.[1];
-  assert.ok(preview, "monthly values have a compact read-only disclosure");
-  assert.doesNotMatch(preview, /<input\b|<select\b|<textarea\b/);
-  return preview;
+function assertNoElementPreviews(html) {
+  assert.doesNotMatch(html, /data-sd-monthly-preview|data-sd-curve-preview|sd-curve-bars|sd-month-total|data-sd-growth-total|data-sd-select="curveMonth"/,
+    "element editors contain inputs and template controls without generated previews");
 }
 
 async function testGrowthWorkbook() {
@@ -174,12 +172,13 @@ async function testGrowthWorkbook() {
   assert.equal(JSON.stringify(p), before, "import only stages changes, including after switching the active element");
   assert.match(x.root.innerHTML, /value="20000" data-sd-series="wind"/);
   const review = x.root.innerHTML.match(/<section\b[^>]*data-sd-import-preview[^>]*>([\s\S]*?)<\/section>/)?.[1];
-  assert.ok(review, "successful growth imports have a visible review");
+  assert.ok(review, "successful growth imports have concise read feedback");
   assert.match(review, /负荷增速&lt;&amp;&gt;\.xlsx/);
   assert.match(review, /省内负荷/);
-  assert.match(review, /2028[\s\S]*0\s*%/);
-  assert.match(review, /2029[\s\S]*8\s*%/);
+  assert.match(review, /2\s*(?:年|行|项)/);
+  assert.doesNotMatch(review, /<ul\b|<li\b|<table\b|2028[\s\S]*0\s*%|2029[\s\S]*8\s*%/);
   assert.doesNotMatch(review, /月典型日分时|分月占比/, "growth review cannot masquerade as a curve import");
+  assertNoElementPreviews(x.root.innerHTML);
   x.click("download-template");
   assert.deepEqual(x.downloads.at(-1).config, changed);
   assert.equal(changed.elements.wind.baseEnergyMwh, 20000);
@@ -236,7 +235,8 @@ async function main() {
   }
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-select="curveSeries"|data-sd-select="tieMode"/);
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-input="month-share"/);
-  monthlyPreview(initial.root.innerHTML);
+  assertNoElementPreviews(initial.root.innerHTML);
+  assert.doesNotMatch(initial.root.innerHTML, /data-sd-saved-preview|供需数据预览/);
   initial.edit("month-share", 100, { sdMonth: "1" });
   assert.equal(initial.controller.hasUnsavedChanges(), false, "obsolete monthly edit events cannot create a draft");
   assert.deepEqual(fresh, original);
@@ -259,7 +259,13 @@ async function main() {
   assert.deepEqual(initial.statuses, [true, true]);
   assert.match(initial.root.innerHTML, /data-sd-import-preview/);
   assert.match(initial.root.innerHTML, /假设&lt;&amp;&gt;\.xlsx/);
-  assert.match(initial.root.innerHTML, /省内负荷 · 1月典型日分时/);
+  const curveReadFeedback = initial.root.innerHTML.match(/<section\b[^>]*data-sd-import-preview[^>]*>([\s\S]*?)<\/section>/)?.[1];
+  assert.ok(curveReadFeedback);
+  assert.match(curveReadFeedback, /默认典型年/);
+  assert.match(curveReadFeedback, /1\s*(?:行|项)/);
+  assert.doesNotMatch(curveReadFeedback, /<ul\b|<li\b|<table\b|省内负荷 · 1月典型日分时/);
+  assertNoElementPreviews(initial.root.innerHTML);
+  assert.doesNotMatch(initial.root.innerHTML, /data-sd-saved-preview|供需数据预览/, "valid imported drafts are not generated output");
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-input="base"[^>]*data-sd-series="tieLine"/);
   initial.chooseElement("tieLine");
   assert.match(initial.root.innerHTML, /value="-600" data-sd-series="tieLine"/);
@@ -283,6 +289,11 @@ async function main() {
   assert.equal(fresh.supplyDemand.inputFingerprint, domain.fingerprint(fresh, valid));
   assert.deepEqual(fresh.supplyDemand.config, valid);
   assert.notEqual(fresh.supplyDemand.config, valid);
+  assert.equal((initial.root.innerHTML.match(/data-sd-saved-preview/g) || []).length, 1);
+  assert.match(initial.root.innerHTML, /data-sd-saved-preview[\s\S]*供需数据预览[\s\S]*data-sd-supply-chart/);
+  assert.ok(initial.root.innerHTML.indexOf("data-sd-saved-preview") > initial.root.innerHTML.indexOf('data-sd-action="generate"'),
+    "generated previews sit below the unified generate action");
+  assertNoElementPreviews(initial.root.innerHTML);
   assert.match(initial.root.innerHTML, /供需堆积面积图[\s\S]*data-sd-supply-chart/);
   assert.match(initial.root.innerHTML, /<option value="monthly" selected>分月/);
   const { supplyDemand, ...projectWithoutSupply } = fresh;
@@ -319,7 +330,7 @@ async function main() {
   assert.equal(JSON.stringify(history), historyBefore);
 
   const chartProject = project("display-chart");
-  const chartRoot = new Root(), drawn = [];
+  const chartRoot = new Root(), drawn = [], chartEvents = {};
   const monthLabel = { hidden: true }, fallback = { hidden: true };
   const plot = { clientWidth: 680, hidden: false, ownerDocument: { defaultView: {
     getComputedStyle() { return { getPropertyValue: (key) => key === "--ink" ? "#444444" : "" }; }
@@ -337,7 +348,8 @@ async function main() {
       assert.equal(target, plot);
       assert.equal(options.renderer, "canvas");
       chartCount += 1;
-      return { setOption(value) { drawn.push(value); }, resize() {}, dispose() { disposed += 1; } };
+      return { setOption(value) { drawn.push(value); }, on(name, listener) { chartEvents[name] = listener; },
+        resize() {}, dispose() { disposed += 1; } };
     } },
     supplyChart: { buildOption(dataset, settings) { return { load: dataset.annualRows[0].load, ...settings }; } }
   });
@@ -346,14 +358,19 @@ async function main() {
   chartProject.supplyDemand = savedState(chartProject);
   const chartBefore = JSON.stringify(chartProject);
   chartController.render();
-  assert.deepEqual(drawn.at(-1), { load: 120000, year: 2027, month: 1, granularity: "monthly", tokens: { ink: "#444444" }, width: 680 });
+  assert.deepEqual(drawn.at(-1), { load: 120000, year: 2027, month: 1, granularity: "monthly", legendSelection: {}, tokens: { ink: "#444444" }, width: 680 });
+  assert.equal(typeof chartEvents.legendselectchanged, "function");
+  const legendSelection = { "风电出力": false, "光伏出力": true };
+  chartEvents.legendselectchanged({ selected: legendSelection });
+  assert.equal(chartController.hasUnsavedChanges(), false, "legend visibility does not create an input draft");
+  assert.equal(JSON.stringify(chartProject), chartBefore, "legend toggles never change saved data");
   chartRoot.fire("input", { sdInput: "base", sdSeries: "load" }, { value: "180000" });
   assert.equal(drawn.length, 1, "typing into the draft does not repaint the saved chart");
   chartRoot.fire("change", { sdSelect: "previewYear" }, { value: "2028" });
   chartRoot.fire("change", { sdSelect: "previewGranularity" }, { value: "typical" });
   assert.equal(monthLabel.hidden, false);
   chartRoot.fire("change", { sdSelect: "previewMonth" }, { value: "7" });
-  assert.deepEqual(drawn.at(-1), { load: 120000, year: 2028, month: 7, granularity: "typical", tokens: { ink: "#444444" }, width: 680 });
+  assert.deepEqual(drawn.at(-1), { load: 120000, year: 2028, month: 7, granularity: "typical", legendSelection, tokens: { ink: "#444444" }, width: 680 });
   assert.equal(chartCount, 1, "filters update the current instance");
   assert.equal(summaries, 1);
   assert.equal(JSON.stringify(chartProject), chartBefore, "chart filters show saved data and never commit project changes");
@@ -362,10 +379,12 @@ async function main() {
   assert.equal(chartController.hasUnsavedChanges(), true, "disposing the chart preserves edits");
   chartController.render();
   assert.equal(chartCount, 2);
+  assert.deepEqual(drawn.at(-1).legendSelection, legendSelection, "legend visibility survives filter changes and chart remounts");
   assert.equal(summaries, 1, "reopening the page uses its cached typical summary");
   chartProject.startYear += 1;
   chartController.render();
   assert.doesNotMatch(chartRoot.innerHTML, /data-sd-supply-chart/);
+  assert.doesNotMatch(chartRoot.innerHTML, /data-sd-saved-preview/, "invalid saved periods cannot present generated preview as current");
   assert.equal(disposed, 2);
 
   const hybrid = project("hybrid", 3);
@@ -380,9 +399,8 @@ async function main() {
   hybridFixture.click("growth-fill");
   assert.match(hybridFixture.root.innerHTML, /已填入 1 个空白年份/);
   hybridFixture.select("curveYear", 2029);
-  assert.match(hybridFixture.root.innerHTML, /2029 年分月电量（MWh）/);
   assert.match(hybridFixture.root.innerHTML, /沿用默认/);
-  assert.match(hybridFixture.root.innerHTML, /sd-curve-bars/);
+  assertNoElementPreviews(hybridFixture.root.innerHTML);
   await uploadMonthlyOverride(hybridFixture, hybrid, "load", 2029, [0, 1 / 6, ...Array(10).fill(1 / 12)]);
   assert.match(hybridFixture.root.innerHTML, /本年已调整 · 分月已调整/);
   hybridFixture.click("download-template");
@@ -394,11 +412,9 @@ async function main() {
   assert.equal(combined.elements.load.curveOverridesByYear[2029].monthlyWeights[0], 0);
   combined.elements.load.curveOverridesByYear[2029].hourlyWeightsByMonth = { 7: [1, ...Array(23).fill(0)] };
   await hybridFixture.upload("2029年分时.xlsx", { ok: true, config: combined, changedRows: 1, changes: [{ label: "省内负荷", month: 7 }] });
-  hybridFixture.select("curveMonth", 7);
   assert.equal(hybridFixture.reads.at(-1).options.year, 2029);
   assert.equal(hybridFixture.reads.at(-1).options.baseConfig.elements.load.baseEnergyMwh, 130000);
-  assert.match(hybridFixture.root.innerHTML, /本月分时已调整/);
-  assert.match(hybridFixture.root.innerHTML, /典型日分时曲线（MWh）/);
+  assertNoElementPreviews(hybridFixture.root.innerHTML);
   assert.equal(JSON.stringify(hybrid), hybridBefore, "annual and curve edits share an isolated draft until save");
   hybridFixture.click("generate");
   assert.deepEqual(hybrid.supplyDemand.config, combined);
@@ -460,7 +476,7 @@ async function main() {
     const html = elementFixture.root.innerHTML;
     assert.equal((html.match(/data-sd-input="base"/g) || []).length, 1, "each tab shows only its own base input");
     assert.doesNotMatch(html, /data-sd-input="month-share"/);
-    monthlyPreview(html);
+    assertNoElementPreviews(html);
     assert.match(html, new RegExp(`data-sd-input="base"[^>]*data-sd-series="${key}"`));
     const selected = (html.match(/<button\b[^>]*data-sd-action="select-element"[^>]*>/g) || []).filter((tag) => tag.includes('aria-selected="true"'));
     assert.equal(selected.length, 1);
@@ -472,15 +488,12 @@ async function main() {
   elementFixture.click("growth-open", { sdSeries: "load" });
   elementFixture.edit("growth-rate", 6, { sdSeries: "load", sdYear: "2028" });
   elementFixture.edit("growth-rate", 7, { sdSeries: "load", sdYear: "2029" });
-  assert.match(elementFixture.root.innerHTML, /data-sd-growth-total/);
-  assert.match(elementFixture.root.innerHTML, /147,446\.00/, "projected totals compound the edited annual growth rates");
+  assertNoElementPreviews(elementFixture.root.innerHTML);
   elementFixture.select("curveYear", 2029);
-  elementFixture.select("curveMonth", 7);
   await uploadMonthlyOverride(elementFixture, byElement, "load", 2029, [0, 1 / 6, ...Array(10).fill(1 / 12)]);
   elementFixture.chooseElement("wind");
   assert.match(elementFixture.root.innerHTML, /value="12000" data-sd-series="wind"/);
   assert.match(elementFixture.root.innerHTML, /<option value="2029" selected/);
-  assert.match(elementFixture.root.innerHTML, /<option value="7" selected/);
   assert.match(elementFixture.root.innerHTML, /data-sd-curve-origin>沿用默认/);
   elementFixture.edit("base", 20000, { sdSeries: "wind" });
   elementFixture.click("growth-open", { sdSeries: "wind" });
@@ -490,7 +503,7 @@ async function main() {
   elementFixture.chooseElement("solar");
   elementFixture.chooseElement("load");
   assert.match(elementFixture.root.innerHTML, /value="130000" data-sd-series="load"/);
-  assert.match(monthlyPreview(elementFixture.root.innerHTML), /1月[\s\S]*?0%/);
+  assertNoElementPreviews(elementFixture.root.innerHTML);
   assert.match(elementFixture.root.innerHTML, /本年已调整 · 分月已调整/);
   elementFixture.click("growth-open", { sdSeries: "load" });
   assert.match(elementFixture.root.innerHTML, /value="6"[^>]*data-sd-series="load"[^>]*data-sd-year="2028"/);
@@ -508,29 +521,35 @@ async function main() {
   assert.equal(JSON.stringify(byElement), elementBefore, "switching elements keeps all edits isolated until explicit generation");
   elementFixture.chooseElement("wind");
   assert.match(elementFixture.root.innerHTML, /value="20000" data-sd-series="wind"/);
-  assert.match(monthlyPreview(elementFixture.root.innerHTML), /2月[\s\S]*?0%/);
+  assertNoElementPreviews(elementFixture.root.innerHTML);
   elementFixture.click("generate");
   assert.deepEqual(byElement.supplyDemand.config, elementDraft, "a single commit saves both element drafts");
+  assert.match(elementFixture.openSavedPreview(), /<th scope="row">2029<\/th><td>147,446\.00<\/td>/,
+    "generated annual output compounds edited growth rates correctly");
+  for (const key of keys) {
+    elementFixture.chooseElement(key);
+    assertNoElementPreviews(elementFixture.root.innerHTML);
+    assert.equal((elementFixture.root.innerHTML.match(/data-sd-saved-preview/g) || []).length, 1,
+      "all tabs share one saved-data preview after generation");
+  }
 
   const liveTotalsProject = project("live-totals", 3);
   liveTotalsProject.supplyDemand = savedState(liveTotalsProject);
-  const liveTotalsBefore = JSON.stringify(liveTotalsProject), liveRoot = new Root();
-  const totals = { 2028: { textContent: "" }, 2029: { textContent: "" } };
-  liveRoot.querySelector = (selector) => {
-    const match = selector.match(/data-sd-growth-total="(\d+)"/);
-    return match ? totals[match[1]] : null;
-  };
-  const liveController = workspace.createController({ root: liveRoot, getProject: () => liveTotalsProject, domain });
-  liveController.render();
-  liveRoot.fire("click", { sdAction: "growth-open", sdSeries: "load" });
-  liveRoot.fire("input", { sdInput: "base", sdSeries: "load" }, { value: "200000" });
-  assert.match(totals[2028].textContent, /210,000\.00/);
-  assert.match(totals[2029].textContent, /220,500\.00/);
-  liveRoot.fire("input", { sdInput: "growth-rate", sdSeries: "load", sdYear: "2028" }, { value: "10" });
-  assert.match(totals[2028].textContent, /220,000\.00/);
-  assert.match(totals[2029].textContent, /231,000\.00/, "editing a growth rate refreshes later projected totals without rerendering inputs");
+  const liveTotalsBefore = JSON.stringify(liveTotalsProject), live = fixture(liveTotalsProject);
+  live.openGrowth("load");
+  live.edit("base", 200000, { sdSeries: "load" });
+  live.edit("growth-rate", 10, { sdSeries: "load", sdYear: "2028" });
+  assertNoElementPreviews(live.root.innerHTML);
+  assert.match(live.openSavedPreview(), /<th scope="row">2029<\/th><td>132,300\.00<\/td>/,
+    "pending edits do not replace the saved annual preview");
   assert.equal(JSON.stringify(liveTotalsProject), liveTotalsBefore);
-  assert.equal(liveController.hasUnsavedChanges(), true);
+  assert.equal(live.controller.hasUnsavedChanges(), true);
+  live.click("generate");
+  assert.equal(live.commits.length, 1);
+  assert.match(live.root.innerHTML, /<th scope="row">2028<\/th><td>220,000\.00<\/td>/);
+  assert.match(live.root.innerHTML, /<th scope="row">2029<\/th><td>231,000\.00<\/td>/,
+    "saved annual preview updates only after generation");
+  assertNoElementPreviews(live.root.innerHTML);
 
   const directional = project("directions"), directions = fixture(directional);
   const directionalConfig = completeConfig(directional);

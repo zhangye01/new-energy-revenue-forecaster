@@ -61,7 +61,7 @@
     };
   }
 
-  function buildOption(dataset, { year, month = 1, granularity = "monthly", tokens = {}, width } = {}) {
+  function buildOption(dataset, { year, month = 1, granularity = "monthly", tokens = {}, width, legendSelection } = {}) {
     if (granularity !== "monthly" && granularity !== "typical") return null;
     const monthly = granularity === "monthly";
     const points = chartRows(dataset, year, month, monthly);
@@ -76,11 +76,13 @@
       lineStyle: { color, width: 1 }, itemStyle: { color }, areaStyle: { color, opacity: 0.72 },
       data: points.map((point) => point[key])
     }));
+    const legendNames = [...supplySeries.map(({ name }) => name), DEMAND_LABEL];
+    const selected = Object.fromEntries(legendNames.map((name) => [name, legendSelection?.[name] !== false]));
     return {
       animation: false,
       aria: { enabled: true, label: { description: `${heading}供需。堆积面积为分项供给，折线为省内负荷与联络线送出合计。` } },
       grid: { top: 55, right: 22, bottom: 13, left: 10, containLabel: true },
-      legend: { type: "scroll", left: 10, right: 12, top: 3, selectedMode: false,
+      legend: { type: "scroll", left: 10, right: 12, top: 3, selectedMode: "multiple", selected,
         itemWidth: 13, itemHeight: 9, itemGap: 12, textStyle: { color: colors.ink, fontSize: 11 },
         pageTextStyle: { color: colors.muted }, pageIconColor: colors.ink, pageIconInactiveColor: colors.lineStrong },
       tooltip: { trigger: "axis", triggerOn: "mousemove|click", confine: true, borderColor: colors.lineStrong,

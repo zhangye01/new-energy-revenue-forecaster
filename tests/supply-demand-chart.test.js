@@ -43,6 +43,17 @@ assert.deepEqual(monthly.series.map(({ id }) => id), ["wind", "solar", "hydro", 
 assert.ok(monthly.series.slice(0, 5).every(({ stack, areaStyle, type }) => stack === "supply" && areaStyle && type === "line"));
 assert.equal(monthly.series[5].areaStyle, undefined);
 assert.equal(monthly.series[5].stack, undefined);
+assert.equal(monthly.legend.selectedMode, "multiple");
+assert.deepEqual(monthly.legend.selected, {
+  风电出力: true, 光伏出力: true, 水电出力: true, 非市场化出力: true, 联络线受入: true, 总需求: true
+});
+const legendSelection = Object.freeze({ 风电出力: false, 光伏出力: true, 总需求: false, 其他要素: false });
+const filtered = buildOption(netDataset, { year: 2028, legendSelection });
+assert.deepEqual(filtered.legend.selected, { ...monthly.legend.selected, 风电出力: false, 总需求: false });
+assert.notStrictEqual(filtered.legend.selected, legendSelection);
+assert.deepEqual(filtered.series, monthly.series, "legend state only affects display selection");
+assert.equal(filtered.tooltip.formatter([{ dataIndex: 0 }]), monthly.tooltip.formatter([{ dataIndex: 0 }]));
+assert.deepEqual(legendSelection, { 风电出力: false, 光伏出力: true, 总需求: false, 其他要素: false });
 assert.equal(typical.xAxis.axisLabel.interval(23), true);
 assert.equal(typical.xAxis.axisLabel.interval(22), false);
 close(data(typical, "tieLineImport")[0], 1);

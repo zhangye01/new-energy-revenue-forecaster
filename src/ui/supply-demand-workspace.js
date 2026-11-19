@@ -22,14 +22,12 @@
   ];
   const CSV_LABELS = { annual: "年度", typical: "典型小时", hourly: "8760小时" };
   const MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
-  const HOURS = Array.from({ length: 24 }, (_, index) => index);
   const ERROR_LIMIT = 8;
   const EXCEL_ACCEPT = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const escape = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
   const energy = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
-  const share = new Intl.NumberFormat("zh-CN", { style: "percent", maximumFractionDigits: 3 });
 
   function years(project) {
     if (!Number.isInteger(project?.startYear) || !Number.isInteger(project?.forecastYears) || project.forecastYears < 1 || project.forecastYears > 30) return [];
@@ -70,20 +68,15 @@
     return rates.every((rate) => rate === rates[0]) ? `${rates[0]}%` : "已逐年配置";
   }
 
-  function growthTotalLabel(project, series, year) {
-    const total = yearTotal(project, series, year);
-    return total === null ? "电量待推算" : `${energy.format(total)} MWh`;
-  }
-
   function growthPanel(project, entry, key, label, series, disabled) {
     if (entry.growthSeries !== key) return "";
-    const preview = entry.staged?.imported?.seriesKey === key ? renderImportPreview(entry) : "";
+    const feedback = entry.staged?.imported?.seriesKey === key ? renderImportFeedback(entry) : "";
     return `<div class="sd-growth-panel" id="sd-growth-panel" data-sd-growth-panel><div class="sd-section-head"><h5>${label} · 逐年增长率（%）</h5>
       <div class="sd-actions">${button("download-growth-template", "下载增速模板", false, Boolean(disabled))}
         <label class="sd-file ghost-button"><input type="file" data-sd-growth-file accept="${EXCEL_ACCEPT}"${entry.conflict ? " disabled" : ""}><span>导入增速模板</span></label></div></div>
-      ${preview}
+      ${feedback}
       <div class="sd-actions"><label>统一增速 %${numberInput("growth-fill", entry.growthFills[key], `${label}统一增速`, `min="-100"${disabled}`)}</label>${button("growth-fill", "填入空白年份", false, Boolean(disabled))}</div>
-      <div class="sd-number-grid">${years(project).slice(1).map((year) => `<div><label>${year}年${numberInput("growth-rate", series.growthRatesByYear[year], `${label}${year}年增长率`, `min="-100" data-sd-series="${key}" data-sd-year="${year}"${disabled}`)}</label><span class="sd-color-muted" data-sd-growth-total="${year}">${growthTotalLabel(project, series, year)}</span></div>`).join("")}</div></div>`;
+      <div class="sd-number-grid">${years(project).slice(1).map((year) => `<label>${year}年${numberInput("growth-rate", series.growthRatesByYear[year], `${label}${year}年增长率`, `min="-100" data-sd-series="${key}" data-sd-year="${year}"${disabled}`)}</label>`).join("")}</div></div>`;
   }
 
   function renderAnnualInputs(project, entry, config, key, label, disabled) {
@@ -100,81 +93,29 @@
       ${growthPanel(project, entry, key, label, series, disabled)}</section>`;
   }
 
-  function yearTotal(project, series, year) {
-    let total = series.baseEnergyMwh;
-    if (!Number.isFinite(total)) return null;
-    for (let index = project.startYear + 1; index <= year; index += 1) {
-      const growth = series.growthRatesByYear[index];
-      if (!Number.isFinite(growth) || growth < -100) return null;
-      total *= 1 + growth / 100;
-    }
-    return Number.isFinite(total) ? total : null;
-  }
-
-  function curvePreview(project, entry, config, domain) {
-    const series = getSeries(config, selectedSeries(entry, config));
-    const curve = domain.getCurve(series, entry.curveYear);
-    const month = entry.curveMonth, hourly = curve.hourlyWeightsByMonth?.[month] || [];
-    const annual = entry.curveYear === null ? null : yearTotal(project, series, entry.curveYear);
-    const monthValid = !domain.validateShares(curve.monthlyWeights, 12, "分月占比");
-    const hourValid = !domain.validateShares(hourly, 24, "典型日分时占比");
-    const monthEnergy = annual !== null && monthValid ? annual * curve.monthlyWeights[month - 1] / curve.monthlyWeights.reduce((a, b) => a + b, 0) : null;
-    const typicalEnergy = monthEnergy === null ? null : monthEnergy / domain.MONTH_DAYS[month - 1];
-    const rows = entry.curveYear !== null && (annual !== null && monthValid)
-      ? `<div class="sd-month-total"><span>${entry.curveYear} 年分月电量（MWh）</span><div class="sd-month-total-grid">${MONTHS.map((value) => `<span${value === month ? ' class="sd-month-current"' : ""}>${value}月 <strong>${energy.format(annual * curve.monthlyWeights[value - 1] / curve.monthlyWeights.reduce((a, b) => a + b, 0))}</strong></span>`).join("")}</div></div>` : "";
-    const unit = typicalEnergy === null ? "%" : "MWh";
-    const hourlyZero = typicalEnergy === 0;
-    if (!hourValid && !hourlyZero) return `${rows}<p class="sd-curve-empty">${month} 月典型日分时曲线待通过 Excel 补充。</p>`;
-    const total = hourValid ? hourly.reduce((a, b) => a + b, 0) : 1;
-    const values = HOURS.map((hour) => (hourlyZero ? 0 : hourly[hour] / total) * (typicalEnergy ?? 100));
-    const peak = Math.max(...values.map(Math.abs));
-    const points = values.map((value, hour) => {
-      const time = `${String(hour).padStart(2, "0")}:00`;
-      const number = `${value.toLocaleString("zh-CN", { maximumFractionDigits: 6 })} ${unit}`;
-      return `<li title="${time} · ${number}" aria-label="${time} ${number}"><i style="--sd-bar:${peak ? (Math.abs(value) / peak * 100).toFixed(4) : 0}%"></i></li>`;
-    }).join("");
-    return `${rows}<div class="sd-curve-chart"><div class="sd-section-head"><h5>${month} 月典型日分时曲线（${unit}）</h5>${typicalEnergy === null ? "" : `<span>典型日 ${energy.format(typicalEnergy)} MWh</span>`}</div><ol class="sd-curve-bars${typicalEnergy < 0 ? " sd-negative" : ""}" aria-label="${month} 月典型日 24 小时">${points}</ol><div class="sd-curve-axis" aria-hidden="true"><span>0 时</span><span>6 时</span><span>12 时</span><span>18 时</span><span>23 时</span></div></div>`;
-  }
-
-  function curveOrigin(series, year, month) {
+  function curveOrigin(series, year) {
     if (year === null) return "默认典型年";
     const override = series.curveOverridesByYear?.[year];
     if (!override) return "沿用默认";
     const monthText = override.monthlyWeights ? "分月已调整" : "分月沿用默认";
-    const hourText = override.hourlyWeightsByMonth?.[month] ? "本月分时已调整" : "本月分时沿用默认";
+    const hourText = Object.keys(override.hourlyWeightsByMonth || {}).length ? "分时已调整" : "分时沿用默认";
     return `本年已调整 · ${monthText} · ${hourText}`;
   }
 
-  function monthlyCurvePreview(monthly) {
-    const filled = monthly.filter(Number.isFinite);
-    const total = filled.reduce((sum, value) => sum + value, 0);
-    const status = filled.length ? `合计 ${share.format(total)}${filled.length === 12 ? "" : " · 待补齐"}` : "待导入";
-    const values = MONTHS.map((month) => {
-      const value = monthly[month - 1];
-      return `<span>${month}月 <strong>${Number.isFinite(value) ? share.format(value) : "—"}</strong></span>`;
-    }).join("");
-    return `<details class="sd-monthly-shares" data-sd-monthly-preview><summary>查看分月占比 <span>${status}</span></summary>
-      <div class="sd-month-total-grid">${values}</div></details>`;
-  }
-
-  function renderCurves(project, entry, config, domain, key, disabled) {
+  function renderCurves(project, entry, config, key, disabled) {
     const series = getSeries(config, key);
-    const curve = domain.getCurve(series, entry.curveYear);
     const override = series.curveOverridesByYear?.[entry.curveYear];
-    return `<section class="sd-section"><div class="sd-section-head"><h4 id="sd-curve-heading">典型年曲线</h4><span class="sd-state" data-sd-curve-origin>${curveOrigin(series, entry.curveYear, entry.curveMonth)}</span></div>
+    return `<section class="sd-section"><div class="sd-section-head"><h4 id="sd-curve-heading">典型年曲线</h4><span class="sd-state" data-sd-curve-origin>${curveOrigin(series, entry.curveYear)}</span></div>
       <p data-help="分月与分时占比" data-help-anchor="#sd-curve-heading">分月和分时均通过 Excel 模板导入。分月 12 个占比合计 100%，每月典型日 24 个小时占比也分别合计 100%。默认曲线跨年复用，可单独导入指定年份。模板包含所选范围的全部要素，空白保留现值，填 0 更新为零。</p>
       <div class="sd-actions sd-curve-controls">
         <label>范围<select data-sd-select="curveYear"${disabled}>${option("default", "默认典型年", entry.curveYear === null ? "default" : "")}${years(project).map((year) => option(year, `${year}年`, entry.curveYear)).join("")}</select></label>
         ${button("download-template", "下载 Excel 曲线模板", false, Boolean(disabled))}
         <label class="sd-file ghost-button"><input type="file" data-sd-template-file accept="${EXCEL_ACCEPT}"${entry.conflict ? " disabled" : ""}><span>导入 Excel 曲线</span></label>
         ${button("restore-curve", "恢复默认", false, !override || Boolean(disabled))}</div>
-      ${monthlyCurvePreview(curve.monthlyWeights || [])}
-      <div class="sd-actions sd-curve-controls"><label>分时预览<select data-sd-select="curveMonth">${MONTHS.map((month) => option(month, `${month}月`, entry.curveMonth)).join("")}</select></label></div>
-      <div data-sd-curve-preview>${curvePreview(project, entry, config, domain)}</div>
     </section>`;
   }
 
-  function renderElementEditor(project, entry, config, domain, disabled) {
+  function renderElementEditor(project, entry, config, disabled) {
     const key = selectedSeries(entry, config), mode = config.elements.tieLine.mode;
     const label = key === "tieLine" ? COLUMNS[key] : DIRECTIONAL_COLUMNS[key];
     const tabs = ELEMENT_TABS.map((element) => {
@@ -187,7 +128,7 @@
     </div>` : "";
     return `<div class="sd-element-tabs" role="tablist" aria-label="供需要素">${tabs}</div>
       <div class="sd-element-panel" role="tabpanel" id="sd-element-panel" aria-labelledby="sd-tab-${entry.activeElement}">
-        ${tieControls}${renderAnnualInputs(project, entry, config, key, label, disabled)}${renderCurves(project, entry, config, domain, key, disabled)}
+        ${tieControls}${renderAnnualInputs(project, entry, config, key, label, disabled)}${renderCurves(project, entry, config, key, disabled)}
       </div>`;
   }
 
@@ -219,7 +160,7 @@
           <label>粒度<select data-sd-select="previewGranularity">${option("monthly", "分月", entry.previewGranularity)}${option("typical", "典型日", entry.previewGranularity)}</select></label>
           <label data-sd-chart-month${entry.previewGranularity !== "typical" && !entry.previewOpen ? " hidden" : ""}>月份<select data-sd-select="previewMonth">${MONTHS.map((month) => option(month, `${month}月`, entry.previewMonth)).join("")}</select></label>
         </div></div>
-      <p data-help="供需堆积面积图" data-help-anchor="#sd-supply-chart-heading">面积为风电、光伏、水电、非市场化出力及联络线受入。需求线为省内负荷加联络线送出。图表读取已生成数据，悬停可查看各项电量。</p>
+      <p data-help="供需堆积面积图" data-help-anchor="#sd-supply-chart-heading">面积为风电、光伏、水电、非市场化出力及联络线受入。需求线为省内负荷加联络线送出。点击图例可隐藏或恢复相应曲线。悬停的合计始终按全部要素计算。</p>
       <div class="sd-supply-chart" data-sd-supply-chart role="img" aria-label="已生成供需数据，供给堆积面积及总需求"></div>
       <p class="sd-color-muted sd-supply-chart-feedback" data-sd-chart-fallback role="status" hidden>图表暂不可用，可查看或导出已保存数据。</p>
     </section>`;
@@ -231,10 +172,12 @@
     const errors = savedErrors.length ? savedErrors : dataset?.errors || [];
     if (errors.length || !dataset?.ok) return `<div class="sd-alert">请核对已保存的供需配置。 ${escape(errors[0])}</div>`;
     const display = entry.previewOpen ? renderSavedDetails(entry, project, dataset) : "";
-    return `<div class="sd-saved-head"><span>已生成 ${project.forecastYears} 年 · 每年288个典型小时 / 8760小时</span>
+    return `<section class="sd-output" aria-labelledby="sd-results-heading" data-sd-saved-preview>
+      <div class="sd-saved-head"><div><h4 id="sd-results-heading">供需数据预览</h4><span>已生成 ${project.forecastYears} 年 · 每年288个典型小时 / 8760小时</span></div>
         <div class="sd-actions">${Object.keys(CSV_LABELS).map((key) => button("export-" + key, CSV_LABELS[key] + "CSV")).join("")}</div></div>
       ${renderSupplyChart(entry, project)}
-      <details class="sd-preview"${entry.previewOpen ? " open" : ""} data-sd-preview><summary>查看已保存数据（MWh）</summary>${display}</details>`;
+      <details class="sd-preview"${entry.previewOpen ? " open" : ""} data-sd-preview><summary>查看已保存数据（MWh）</summary>${display}</details>
+    </section>`;
   }
 
   function statusLabel(entry, saved, savedErrors, draft) {
@@ -245,23 +188,19 @@
     return savedErrors.length ? "待核对" : saved ? "已保存" : "待配置";
   }
 
-  function renderImportPreview(entry) {
+  function renderImportFeedback(entry) {
     const imported = entry.staged?.imported;
     if (!imported) return "";
-    const { name, year, seriesKey, changedRows, changes, legacy } = imported;
+    const { name, year, seriesKey, changedRows, legacy } = imported;
     const growth = Boolean(seriesKey);
     const scope = growth ? `${COLUMNS[seriesKey] || DIRECTIONAL_COLUMNS[seriesKey]}逐年增速` : year === null ? "默认典型年" : `${year} 年`;
     const summary = growth ? (changedRows ? `已载入 ${changedRows} 年增速变更` : "模板与当前增速一致")
       : `${changedRows ? `已载入 ${changedRows} 行曲线变更` : "模板与当前曲线一致"}${legacy ? " · 仅载入旧模板的曲线" : ""}`;
-    const shownRows = (changes || []).slice(0, ERROR_LIMIT);
-    const preview = shownRows.length ? `<ul>${shownRows.map((change) => `<li>${escape(typeof change === "string" ? change
-      : growth ? `${change.year} 年 · ${change.value}%`
-          : [change.label, change.month ? `${change.month}月典型日分时` : "分月占比"].filter(Boolean).join(" · "))}</li>`).join("")}</ul>` : "";
-    return `<section class="sd-section sd-import-preview" data-sd-import-preview><div class="sd-section-head"><h5>${scope}导入预览</h5><span class="sd-file-name">${escape(name)}</span></div>
-      <span>${summary}</span>${preview}</section>`;
+    return `<section class="sd-section" data-sd-import-preview><div class="sd-section-head"><h5>${scope}模板</h5><span class="sd-file-name">${escape(name)}</span></div>
+      <span>${summary}</span></section>`;
   }
 
-  function markup(project, entry, domain, config, savedErrors, savedDataset) {
+  function markup(project, entry, config, savedErrors, savedDataset) {
     const saved = project.supplyDemand?.config, draft = project.supplyDemand?.draft;
     const status = statusLabel(entry, saved, savedErrors.length ? savedErrors : savedDataset?.errors || [], draft);
     const canGenerate = Boolean((entry.staged || draft) && !entry.loading && !entry.conflict);
@@ -269,16 +208,16 @@
     const savedMarkup = renderSaved(entry, project, savedErrors, savedDataset);
     const disabled = entry.loading || entry.conflict ? " disabled" : "";
     const importedSeries = entry.staged?.imported?.seriesKey;
-    const previewInEditor = importedSeries === entry.growthSeries && importedSeries === selectedSeries(entry, config);
+    const feedbackInEditor = importedSeries === entry.growthSeries && importedSeries === selectedSeries(entry, config);
     return `<div class="panel sd-workspace"><div class="sd-section-head">
       <div><h3 id="sd-workspace-heading">测算周期供需配置</h3><span class="sd-period">${periodLabel(project)} · ${project.forecastYears}年</span></div>
       <span class="sd-state" data-sd-dirty>${status}</span></div>
-      ${renderElementEditor(project, entry, config, domain, disabled)}
-      ${previewInEditor ? "" : renderImportPreview(entry)}${renderNotice(entry)}
+      ${renderElementEditor(project, entry, config, disabled)}
+      ${feedbackInEditor ? "" : renderImportFeedback(entry)}${renderNotice(entry)}
       ${entry.conflict ? '<div class="sd-alert">当前项目周期或已保存供需配置已更新。请放弃草稿后继续配置。</div>' : ""}
       <div class="sd-actions">${button("generate", "校验并生成供需数据", true, !canGenerate)}
         <span data-sd-discard-wrap${canDiscard ? "" : " hidden"}>${button("discard", entry.loading ? "取消读取" : "放弃草稿")}</span></div>
-      ${savedMarkup ? `<section class="sd-output">${savedMarkup}</section>` : ""}</div>`;
+      ${savedMarkup}</div>`;
   }
 
   function createController(options = {}) {
@@ -300,8 +239,8 @@
       let entry = entries.get(project);
       if (!entry || entry.projectId !== project.id) {
         entry = { projectId: project.id, staged: null, loading: null, conflict: false, message: "", errors: [],
-          previewYear: project.startYear, previewMonth: 1, previewGranularity: "monthly", previewOpen: false, dataset: null, chartDataset: null,
-          activeElement: "load", tieDirection: "tieLineExport", growthSeries: null, growthFills: {}, curveYear: null, curveMonth: 1 };
+          previewYear: project.startYear, previewMonth: 1, previewGranularity: "monthly", previewOpen: false, legendSelection: {},
+          dataset: null, chartDataset: null, activeElement: "load", tieDirection: "tieLineExport", growthSeries: null, growthFills: {}, curveYear: null };
         entries.set(project, entry);
       }
       const current = source(project);
@@ -369,9 +308,12 @@
           const tokens = Object.fromEntries(Object.entries(tokenKeys).map(([key, cssKey]) =>
             [key, style?.getPropertyValue(`--${cssKey}`).trim()]).filter(([, value]) => value));
           const option = builder.buildOption(dataset, { year: entry.previewYear, month: entry.previewMonth,
-            granularity: entry.previewGranularity, tokens, width: currentWidth });
+            granularity: entry.previewGranularity, legendSelection: entry.legendSelection, tokens, width: currentWidth });
           if (!option) { unavailable(); return; }
-          chart ||= engine.init(plot, null, { renderer: "canvas" });
+          if (!chart) {
+            chart = engine.init(plot, null, { renderer: "canvas" });
+            chart.on?.("legendselectchanged", ({ selected }) => { entry.legendSelection = { ...selected }; });
+          }
           width = currentWidth;
           chart.setOption(option, true);
         } catch {
@@ -424,7 +366,7 @@
       const saved = project.supplyDemand?.config;
       const savedErrors = saved ? domain.validateConfig(project, saved) : [];
       const savedDataset = saved && !savedErrors.length ? loadChartDataset(project, entry, saved) : null;
-      root.innerHTML = markup(project, entry, domain, config, savedErrors, savedDataset);
+      root.innerHTML = markup(project, entry, config, savedErrors, savedDataset);
       if (savedDataset?.ok) mountChart(entry, savedDataset);
       if (!bound && root.addEventListener) {
         root.addEventListener("input", onInput);
@@ -518,9 +460,6 @@
       } else if (selected === "tieDirection" && ["tieLineExport", "tieLineImport"].includes(value)) {
         entry.tieDirection = value;
         render();
-      } else if (selected === "curveMonth" && MONTHS.includes(Number(value))) {
-        entry.curveMonth = Number(value);
-        render();
       } else if (selected === "previewYear" && years(project).includes(Number(value))) {
         entry.previewYear = Number(value);
         redrawSavedPreview(entry, project);
@@ -555,13 +494,7 @@
       if (discard) discard.hidden = false;
       const message = root.querySelector("[data-sd-message]");
       if (message) { message.textContent = ""; message.classList?.remove("sd-alert"); }
-      const series = getSeries(config, key), laterYears = years(project).slice(1);
-      setText(`[data-sd-growth-for="${key}"]`, growthStatus(laterYears, series));
-      if (entry.growthSeries === key) {
-        laterYears.forEach((year) => setText(`[data-sd-growth-total="${year}"]`, growthTotalLabel(project, series, year)));
-      }
-      const preview = root.querySelector("[data-sd-curve-preview]");
-      if (preview) preview.innerHTML = curvePreview(project, entry, config, domain);
+      setText(`[data-sd-growth-for="${key}"]`, growthStatus(years(project).slice(1), getSeries(config, key)));
       onDraftChange();
     }
 
@@ -631,8 +564,8 @@
         return;
       }
       stage(project, entry, clone(result.config), { name: file.name, ...scope,
-        changedRows: result.changedRows, changes: clone(result.changes || []), legacy: result.legacy === true });
-      notice(entry, growth ? "模板校验通过，请核对增速后生成供需数据。" : "模板校验通过，请核对曲线后保存。");
+        changedRows: result.changedRows, legacy: result.legacy === true });
+      notice(entry, "模板校验通过，已载入配置草稿。");
       refreshDraft();
     }
 
