@@ -54,4 +54,25 @@ assert.match(detail.innerHTML, /旧版归档缺少原测算输入记录/);
 assert.doesNotMatch(detail.innerHTML, /data-history-(annual|hourly)/);
 assert.match(detail.innerHTML, /300\.00/);
 
+const archivedStorage = { annualRows: [{ year: 2028, fullRevenue: 123456.78, fullRevenuePrice: 89.5 }] };
+const legacyProject = { ...project, id: "legacy-storage-project",
+  resultHistoryByScenario: {}, legacyStorageResultsByScenario: { [scenario.id]: archivedStorage } };
+const originalStorage = JSON.stringify(legacyProject.legacyStorageResultsByScenario);
+const renderHistory = (project) => history.render({ documentRef: { querySelector: (selector) => nodes[selector] }, project, scenario });
+renderHistory(legacyProject);
+assert.equal(count.textContent, "1 份");
+assert.match(content.innerHTML, /历史配储原测算/);
+select.value = "legacy-storage";
+panel.open = true;
+panel.ontoggle();
+assert.match(detail.innerHTML, /全口径收入 元/);
+assert.match(detail.innerHTML, /89\.50.*123,456\.78/);
+assert.doesNotMatch(detail.innerHTML, /data-history-(annual|hourly)/);
+assert.equal(JSON.stringify(legacyProject.legacyStorageResultsByScenario), originalStorage);
+for (const duplicate of [legacy, first]) {
+  renderHistory({ ...project, legacyStorageResultsByScenario: { [scenario.id]: JSON.parse(JSON.stringify(duplicate)) } });
+  assert.equal(count.textContent, "2 份", "相同的旧配储结果只显示一个存档入口");
+  assert.doesNotMatch(content.innerHTML, /legacy-storage/);
+}
+
 console.log("result history tests passed");

@@ -36,7 +36,6 @@ const supplyDemandFlowModule = window.NE_SUPPLY_DEMAND_FLOW;
 const revenueRules = window.NE_REVENUE_RULES;
 const revenueCalculator = window.NE_REVENUE_CALCULATOR;
 const resultCalculation = window.NE_RESULT_CALCULATION;
-const resultReport = window.NE_RESULT_REPORT;
 const resultVersions = window.NE_RESULT_VERSIONS;
 const compareAnalysis = window.NE_COMPARE_ANALYSIS;
 const historyAnalysis = window.NE_HISTORY_ANALYSIS;
@@ -65,11 +64,12 @@ const forecastRunFlow = window.NE_FORECAST_RUN_FLOW;
 const roughPrice = window.NE_ROUGH_PRICE;
 const roughPriceWorkspace = window.NE_ROUGH_PRICE_WORKSPACE;
 const projectListView = window.NE_PROJECT_LIST_VIEW;
-const resultPage = window.NE_RESULT_PAGE;
 const resultHistory = window.NE_RESULT_HISTORY;
 const resultRunner = window.NE_RESULT_RUNNER;
-const resultPrint = window.NE_RESULT_PRINT;
-const resultCharts = window.NE_RESULT_CHARTS;
+const resultBrief = window.NE_RESULT_BRIEF;
+const resultBriefView = window.NE_RESULT_BRIEF_VIEW;
+const resultBriefCharts = window.NE_RESULT_BRIEF_CHARTS;
+const resultBriefWord = window.NE_RESULT_BRIEF_WORD;
 const scenarioForm = window.NE_SCENARIO_FORM;
 const compareCharts = window.NE_COMPARE_CHARTS;
 const comparePage = window.NE_COMPARE_PAGE;
@@ -83,11 +83,12 @@ const appStorage = window.NE_APP_STORAGE;
 const appPersistence = window.NE_APP_PERSISTENCE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!supplyDemandFlowModule || !energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !scriptLoader || !policyPanel || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastResultsView || !forecastRunFlow || !roughPrice || !roughPriceWorkspace || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioForm || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
+if (!supplyDemandFlowModule || !energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !scriptLoader || !policyPanel || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastResultsView || !forecastRunFlow || !roughPrice || !roughPriceWorkspace || !projectListView || !resultRunner || !scenarioForm || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
 if (!resultVersions || !resultHistory) throw new Error("应用初始化失败：缺少结果版本模块");
+if (!resultBrief || !resultBriefView || !resultBriefCharts || !resultBriefWord) throw new Error("应用初始化失败：缺少基准结果简报模块");
 
 const {
   makeId,
@@ -165,7 +166,6 @@ const ENERGY_MODE_SET = new Set(["hourly_8760", "annual_hours", "typical_curve_8
 const LT_PRICING_MODE_SET = new Set(["auto", "manual"]);
 const ENV_VALUE_MODE_SET = new Set(["global", "manual"]);
 const FEE_CONFIG_MODE_SET = new Set(["global", "manual"]);
-const RESULT_REPORT_VIEW_SET = new Set(["annual", "price", "detail"]);
 const MAP_LEVEL_SET = new Set(["nation", "province"]);
 const ENERGY_MONTH_DAY_COUNTS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 const ENERGY_HOUR_LABELS = Array.from({ length: 24 }, (_, hour) => `${hour}时`);
@@ -259,7 +259,8 @@ let createFormSyncedProjectId = null;
 let energyAnnualChart = null;
 let energyCurveChart = null;
 let energyCurveResizeBound = false;
-let activeResultReportView = "annual";
+let renderedResultBrief = null;
+let disposeBriefCharts = null;
 let activeSensitivityFactorKey = "";
 let activeCompareScenarioId = "";
 const compareSensitivitySettings = {
@@ -269,7 +270,6 @@ const compareSensitivitySettings = {
   topN: 8,
   selectedKeys: []
 };
-let resultChartsResizeBound = false;
 let compareChartsResizeBound = false;
 let historyChartsResizeBound = false;
 let historyChartsRefreshTimer = null;
@@ -282,12 +282,6 @@ const compareChartInstances = {
   scenarioRanking: null,
   scenarioBridge: null,
   scenarioTrend: null
-};
-const resultChartInstances = {
-  annualStack: null,
-  pricePath: null,
-  waterfall: null,
-  contribution: null
 };
 const historyChartInstances = {
   monthTrend: null,
@@ -1663,18 +1657,6 @@ function normalizeUserFacingError(errorLike) {
   return message.replace(/^Uncaught\s+/i, "").trim() || "系统出现异常，请刷新页面后重试。";
 }
 
-function updatePrintReportHeader(project, scenario, result = project?.resultsByScenario?.[scenario?.id]) {
-  if (!refs.printProjectName || !refs.printScenarioName || !refs.printPeriodRange || !refs.printGeneratedTime) {
-    return;
-  }
-  const period = resultPage.savedResultPeriod(result) || getForecastPeriodDisplayRange(project);
-  refs.printProjectName.textContent = project?.name || "-";
-  refs.printScenarioName.textContent = scenario?.name || "-";
-  refs.printPeriodRange.textContent = period;
-  refs.printGeneratedTime.textContent = new Date().toLocaleString("zh-CN", { hour12: false });
-  resultPrint.renderVersionTrace(document.querySelector("#print-result-trace"), project, result);
-}
-
 function resolveVisiblePageId(pageId) {
   return PAGE_VIEW_ALIAS[pageId] || pageId;
 }
@@ -1761,6 +1743,7 @@ function runActivePageEntryEffects(pageId) {
   if (pageId === "create-page" || pageId === "energy-page") {
     scrollCreateWorkspaceToStep(pageId);
   }
+  if (pageId === "results-page") refs.mainArea?.scrollTo?.({ top: 0 });
 }
 
 function queueActivePageCharts(pageId) {
@@ -1821,6 +1804,7 @@ function renderTopbar() {
   const title = PAGE_TITLES[pageId] || "新能源平台";
   const group = PAGE_GROUPS[pageId] || "平台概览";
   const help = getPageHelpContent(pageId, title, group);
+  if (refs.pageHelp) refs.pageHelp.hidden = pageId === "results-page";
   if (refs.topTitle) {
     refs.topTitle.textContent = title;
   }
@@ -3505,13 +3489,9 @@ function disposeCompareCharts() {
 }
 
 function disposeResultCharts() {
-  Object.keys(resultChartInstances).forEach((key) => {
-    const chart = resultChartInstances[key];
-    if (chart && !chart.isDisposed()) {
-      chart.dispose();
-    }
-    resultChartInstances[key] = null;
-  });
+  disposeBriefCharts?.();
+  disposeBriefCharts = null;
+  renderedResultBrief = null;
 }
 
 function disposeHistoryCharts() {
@@ -3829,7 +3809,7 @@ function renderWorkflowContext() {
   const project = WORKFLOW_PAGES.includes(appState.activePage) ? getActiveProject() : null;
   const visiblePageId = resolveVisiblePageId(appState.activePage);
   const page = refs.pages.find((node) => node.id === visiblePageId);
-  workflowContext.hidden = !project || !page;
+  workflowContext.hidden = !project || !page || appState.activePage === "results-page";
   if (workflowContext.hidden) return;
   if (workflowContext.parentElement !== page) page.prepend(workflowContext);
   const scenario = getActiveScenario(project);
@@ -4029,8 +4009,9 @@ function calculateScenarioResult(project, scenario, run) {
 function runCalculation() {
   const project = getActiveProject();
   if (!project) return;
-  if (scenarioForm.hasPendingManualImports([project])) {
-    setTopMeta("请先在收益参数补充与细化页确认保存或放弃已暂存的年表，再发起基准测算。");
+  if (scenarioForm.hasPendingManualImports([project]) ||
+      (appState.activePage === "scenario-page" && window.NE_PROJECT_BACKUP.hasUnsubmittedFormChanges(document, ["#scenario-form"]))) {
+    setTopMeta("请先确认并保存细化参数，或放弃暂存年表，再发起基准测算。");
     return;
   }
   const scenario = getActiveScenario(project);
@@ -4050,118 +4031,55 @@ function runCalculation() {
     validateResult: (project, scenario, result) => compareAnalysis.isResultComplete(project, scenario, result, { includeHourly: true }),
     countScenariosForCompare,
     setTopMeta,
-    renderAll
+    renderAll: appState.activePage === "scenario-page" ? () => setActivePage("results-page") : renderAll
   });
 }
 
-function setResultReportView(view) {
-  activeResultReportView = resultPage.applyResultReportView({
-    refs,
-    view,
-    allowedViews: RESULT_REPORT_VIEW_SET
-  });
-  queueResultChartsResize();
+function getSavedResultContext(options = {}) {
+  const project = getActiveProject();
+  const scenario = project ? getActiveScenario(project) : null;
+  const result = project?.resultsByScenario?.[scenario?.id];
+  const run = project?.priceRuns?.find((item) => item.id === result?.sourceContext?.runId);
+  return { project, scenario, result, run, state: getValidatedResultState(project, scenario, result, options) };
 }
 
-function resultChartTokens() {
-  return resultCharts.buildResultChartTokens(compareThemeTokens());
+function renderResultRecords({ project, scenario, result, state }) {
+  const canRead = result?.annualRows?.length && !["incomplete_result", "invalid_source_prices"].includes(state.reason);
+  const view = { state: canRead ? "ready" : "empty", isHistorical: !state.current };
+  resultHistory.render({ documentRef: document, project, scenario, result, view, downloadCsv });
+  if (refs.runCalcButton) refs.runCalcButton.disabled = !project || !scenario;
+  if (refs.exportAnnualButton) refs.exportAnnualButton.disabled = !state.current;
+  if (refs.exportHourlyButton) refs.exportHourlyButton.disabled = !state.current || result?.hourlyPreview?.length !== 8760;
 }
 
-function getResultChartNode(key) {
-  const nodeMap = {
-    annualStack: refs.resultAnnualStackChart,
-    pricePath: refs.resultPricePathChart,
-    waterfall: refs.resultWaterfallChart,
-    contribution: refs.resultContributionChart
-  };
-  return nodeMap[key] || null;
-}
-
-function ensureResultChart(key) {
-  const node = getResultChartNode(key);
-  if (!node || !window.echarts) return null;
-  const existing = resultChartInstances[key];
-  if (existing && !existing.isDisposed()) return existing;
-  const chart = window.echarts.init(node, null, { renderer: "canvas" });
-  resultChartInstances[key] = chart;
-  resultChartsResizeBound = chartLifecycle.bindWindowResizeOnce({
-    windowRef: window,
-    isBound: resultChartsResizeBound,
-    resize: () => chartLifecycle.resizeCharts(resultChartInstances)
-  });
-  return chart;
-}
-
-function queueResultChartsResize() {
-  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
-  chartLifecycle.queueDoubleFrame({
-    windowRef: window,
-    callback: () => chartLifecycle.resizeCharts(resultChartInstances)
-  });
-}
-
-function renderResultChartsPlaceholder(message) {
-  if (resolveVisiblePageId(appState.activePage) !== "results-page") return;
-  const tokens = resultChartTokens();
-  const option = resultCharts.buildResultPlaceholderOption(message, tokens);
-  ["annualStack", "pricePath", "waterfall", "contribution"].forEach((key) => {
-    const chart = ensureResultChart(key);
-    if (!chart) return;
-    chart.clear();
-    chart.setOption(option, true);
-  });
-}
-
-function renderResultCharts(verifiedConfig, result) {
-  if (resolveVisiblePageId(appState.activePage) !== "results-page") return;
-  const rows = result?.annualRows || [];
-  if (!rows.length) {
-    renderResultChartsPlaceholder("请先发起基准测算");
-    return;
+function renderResultBrief({ project, scenario, result, run, state }) {
+  const root = refs.resultBriefContent;
+  if (!root) return;
+  const status = state.current ? "" : state.message;
+  if (renderedResultBrief?.result === result && renderedResultBrief.status === status &&
+      renderedResultBrief.project === project && renderedResultBrief.scenario === scenario) return;
+  disposeResultCharts();
+  const canRead = result && !["incomplete_result", "invalid_source_prices"].includes(state.reason);
+  const verifiedConfig = state.current || state.reason === "stale_run" ? scenario.config : null;
+  const origin = resultVersions.getArchivedCalculationContext(result)?.project || project;
+  const labels = origin ? { province: getProvinceName(origin.province), assetType: getAssetTypeLabel(origin.assetType), siteType: getSiteTypeLabel(origin.siteType) } : {};
+  const brief = canRead ? resultBrief.buildBrief({ project, scenario, result, run, verifiedConfig, labels }) : null;
+  const message = !result ? "请在收益参数补充与细化中发起基准测算。" : status || "当前测算结果缺少简报所需的年度数据，请重新测算。";
+  resultBriefView.render({ root, brief, message });
+  if (refs.resultBriefMessage) {
+    refs.resultBriefMessage.hidden = !brief || !status;
+    refs.resultBriefMessage.textContent = brief ? status : "";
   }
-
-  const tokens = resultChartTokens();
-  const chartData = resultReport.buildResultChartData(result, verifiedConfig);
-  const options = resultCharts.buildResultChartOptions(chartData, tokens, {
-    yearInterval: resultCharts.yearLabelInterval(rows)
-  });
-  Object.entries(options).forEach(([key, option]) => {
-    const chart = ensureResultChart(key);
-    if (chart) chart.setOption(option, true);
-  });
-
-  queueResultChartsResize();
-}
-
-function resetResultDom() {
-  resultPage.resetResultDom(refs);
+  if (refs.exportBriefWordButton) refs.exportBriefWordButton.disabled = !brief || !state.current;
+  renderedResultBrief = { project, scenario, result, status, brief };
+  if (brief) disposeBriefCharts = resultBriefCharts.mountCharts(root, brief, { echarts: window.echarts, windowRef: window });
 }
 
 function renderResults() {
-  resetResultDom();
-  setResultReportView(activeResultReportView);
-  const state = resultPage.buildResultPageRenderState({
-    project: getActiveProject(),
-    getActiveScenario,
-    getBaselineResultState: getValidatedResultState,
-    buildResultSummaryData: resultReport.buildResultSummaryData,
-    getForecastPeriodDisplayRange,
-    getAssetTypeLabel,
-    getSiteTypeLabel,
-    getStorageConfigText,
-    getEnvValueMode,
-    getFeeConfigMode
-  });
-  const { project, scenario, result, view } = state;
-  updatePrintReportHeader(project, scenario);
-
-  resultPage.applyResultPageViewModel({ refs, view });
-  if (appState.activePage === "results-page") resultHistory.render({ documentRef: document, project, scenario, result, view, downloadCsv });
-  if (view.chartPlaceholder) {
-    renderResultChartsPlaceholder(view.chartPlaceholder);
-    return;
-  }
-  renderResultCharts(state.verifiedConfig, result);
+  const page = appState.activePage;
+  if (page !== "results-page" && renderedResultBrief) disposeResultCharts();
+  if (page === "results-page") renderResultBrief(getSavedResultContext());
+  if (page === "scenario-page") renderResultRecords(getSavedResultContext());
 }
 
 function createCompareRenderers() {
@@ -4315,46 +4233,45 @@ function getValidatedResultState(project, scenario, result, options = {}) {
 }
 
 function getCurrentExportContext(options = {}) {
-  const project = getActiveProject();
-  const scenario = project ? getActiveScenario(project) : null;
-  const result = project?.resultsByScenario?.[scenario?.id];
-  const state = getValidatedResultState(project, scenario, result, options);
-  if (!state.current) { setTopMeta(state.message); return null; }
-  return { project, scenario, result };
+  const context = getSavedResultContext(options);
+  if (!context.state.current) { setTopMeta(context.state.message); return null; }
+  return context;
 }
 
 function exportResultCsv(kind) {
   const context = getCurrentExportContext({ includeHourly: kind === "hourly" });
   if (!context) return;
-  const { project, scenario, result } = context;
+  const { project, scenario, result, run } = context;
   const hourly = kind === "hourly";
   const filename = hourly ? exportBuilders.buildHourlyResultExportFilename : exportBuilders.buildAnnualResultExportFilename;
   const rows = hourly ? exportBuilders.buildHourlyResultExportRows : exportBuilders.buildAnnualResultExportRows;
-  const run = project.priceRuns?.find((item) => item.id === result.sourceContext?.runId);
   downloadCsv(filename(project, scenario, result), rows(result, { includeSource: true, run, verifiedConfig: scenario.config }));
 }
 
 function exportAnnualCsv() { exportResultCsv("annual"); }
 function exportHourlyCsv() { exportResultCsv("hourly"); }
 
-function printScenarioReport() {
+function exportBriefWord() {
+  if (appState.activePage !== "results-page") return;
   const context = getCurrentExportContext();
-  if (!context) return;
-  const { project, scenario, result } = context;
-  resultPrint.printScenarioReport({
-    project,
-    scenario,
-    result,
-    appState,
-    refs,
-    documentRef: typeof document !== "undefined" ? document : null,
-    windowRef: typeof window !== "undefined" ? window : null,
-    resultChartInstances,
-    setTopMeta,
-    updatePrintReportHeader,
-    setActivePage,
-    renderAll
-  });
+  const rendered = renderedResultBrief;
+  if (!context || !rendered?.brief || rendered.result !== context.result) return;
+  try {
+    const figures = resultBriefCharts.renderImages(rendered.brief, { echarts: window.echarts, documentRef: document });
+    const bytes = resultBriefWord.buildDocx(rendered.brief, figures, { xlsx: window.XLSX });
+    const url = URL.createObjectURL(new Blob([bytes], { type: resultBriefWord.MIME_TYPE }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = resultBriefWord.filename(rendered.brief);
+    document.body.appendChild(anchor);
+    try { anchor.click(); } finally {
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  } catch (error) {
+    console.error("导出基准结果简报失败", error);
+    setTopMeta("暂时无法生成 Word 简报，请刷新后重试。", "error");
+  }
 }
 
 function renderWorkflowViews() {
@@ -4423,8 +4340,7 @@ function createEventBindingModules() {
     historyPage,
     comparePage,
     energyWorkspace,
-    scenarioForm,
-    resultPage
+    scenarioForm
   };
 }
 
@@ -4475,7 +4391,7 @@ function createEventBindingActions() {
     disposeCompareCharts, disposeResultCharts, persistAppDataNow, normalizeUserFacingError,
     hasUnpersistedAppData: () => !allowStorageReload && (hasUnsubmittedInputs() || appDataSnapshotStore.hasUnpersistedChanges(buildAppDataSnapshot())),
     setTopMeta, sanitizeHistoryAnalysis, renderPolicyPanel, renderHistoryPrices,
-    exportHistoryChartData, setActivePage, setResultReportView, queueResultChartsResize,
+    exportHistoryChartData, setActivePage,
     sanitizeCompareView, sanitizeCompareSensitivitySettings, renderCompareWorkspaceState,
     renderCompare, queueCompareChartsResize, getActiveProject, isProjectCreateCompleted,
     hasEnergyHistoryEntryReadiness, sanitizeEnergyStep2Choice, createProjectFromForm,
@@ -4486,7 +4402,7 @@ function createEventBindingActions() {
     toggleBaselineLock, applyBatchParameter, syncScenarioFieldLocks, exportManualScenarioTemplate,
     importManualScenarioTemplate, updateMarketTradeEnergyDisplay,
     updateEnvValueSpaceDisplay, runCalculation, exportAnnualCsv, exportHourlyCsv,
-    printScenarioReport
+    exportBriefWord
   });
 }
 

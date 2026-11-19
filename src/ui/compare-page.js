@@ -255,7 +255,7 @@
     setText(refs.compareSensitivityVariableSummary, "默认启用全部变量");
     setText(refs.compareBaselineLabel, "等待基准方案结果");
     setText(refs.compareScenarioLabel, "等待方案结果");
-    setText(refs.compareSensitivityMessage, "请先在基准结果总览完成基准方案测算，再查看敏感性分析。");
+    setText(refs.compareSensitivityMessage, "请先在收益参数补充与细化中完成基准方案测算，再查看敏感性分析。");
     setText(refs.compareScenarioMessage, "仅纳入当前有效且电量口径一致的结果；过期方案请重新测算。");
     syncCompareSensitivityControls();
   }
@@ -279,7 +279,7 @@
       renderPlaceholder = () => {}
     } = input;
     if (excludedCount > 0) setText(refs.compareScenarioMessage, `${excludedCount} 个已保存结果暂未纳入，请先重新测算基准方案。`);
-    setHtml(refs.compareBody, `<tr><td colspan="7">暂无当前有效的基准结果，请在基准结果总览重新测算；历史或过期结果不参与排名。</td></tr>`);
+    setHtml(refs.compareBody, `<tr><td colspan="7">暂无当前有效的基准结果。请在收益参数补充与细化中重新测算。</td></tr>`);
     renderPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, "请先生成当前口径的基准结果。");
     renderPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, "请先生成当前口径的基准结果。");
     renderPlaceholder("scenarioRanking", refs.compareRankingChart, "暂无方案结果，无法生成收益排名。");

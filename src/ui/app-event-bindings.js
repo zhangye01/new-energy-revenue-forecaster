@@ -27,7 +27,7 @@
       "persistAppDataNow", "hasUnpersistedAppData", "normalizeUserFacingError", "setTopMeta"
     ],
     history: ["sanitizeHistoryAnalysis", "renderPolicyPanel", "renderHistoryPrices", "exportHistoryChartData"],
-    navigation: ["setActivePage", "setResultReportView", "queueResultChartsResize"],
+    navigation: ["setActivePage"],
     compare: [
       "sanitizeCompareView", "sanitizeCompareSensitivitySettings",
       "renderCompareWorkspaceState", "renderCompare", "queueCompareChartsResize"
@@ -45,7 +45,7 @@
       "exportManualScenarioTemplate", "importManualScenarioTemplate",
       "updateMarketTradeEnergyDisplay", "updateEnvValueSpaceDisplay"
     ],
-    result: ["runCalculation", "exportAnnualCsv", "exportHourlyCsv", "printScenarioReport"]
+    result: ["runCalculation", "exportAnnualCsv", "exportHourlyCsv", "exportBriefWord"]
   });
 
   function createActionRegistry(groups = {}) {
@@ -94,8 +94,7 @@
       historyPage,
       comparePage,
       energyWorkspace,
-      scenarioForm,
-      resultPage
+      scenarioForm
     } = modules;
 
     shellEvents.bindAppShellEvents({
@@ -130,11 +129,7 @@
     shellEvents.bindAppNavigationEvents({
       refs,
       documentRef,
-      actions: {
-        setActivePage: actions.setActivePage,
-        setResultReportView: actions.setResultReportView,
-        queueResultChartsResize: actions.queueResultChartsResize
-      }
+      actions: { setActivePage: actions.setActivePage }
     });
 
     comparePage.bindCompareEvents({
@@ -208,15 +203,10 @@
       }
     });
 
-    resultPage.bindResultActionEvents({
-      refs,
-      handlers: {
-        runCalculation: actions.runCalculation,
-        exportAnnualCsv: actions.exportAnnualCsv,
-        exportHourlyCsv: actions.exportHourlyCsv,
-        printScenarioReport: actions.printScenarioReport
-      }
-    });
+    refs.runCalcButton?.addEventListener("click", actions.runCalculation);
+    refs.exportAnnualButton?.addEventListener("click", actions.exportAnnualCsv);
+    refs.exportHourlyButton?.addEventListener("click", actions.exportHourlyCsv);
+    refs.exportBriefWordButton?.addEventListener("click", actions.exportBriefWord);
   }
 
   return Object.freeze({

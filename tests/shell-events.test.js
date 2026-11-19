@@ -112,36 +112,25 @@ assert.deepEqual(calls, [
 
 const navCalls = [];
 const jumpButton = new FakeTarget({ jump: "results-page" });
-const disclosure = new FakeTarget();
 const navigationDocument = {
   querySelectorAll(selector) {
     if (selector === "[data-jump]") return [jumpButton];
-    if (selector === ".result-disclosure") return [disclosure];
     return [];
   }
 };
 const navigationRefs = {
-  navItems: [new FakeTarget({ page: "energy-page" })],
-  resultReportTabs: [new FakeTarget({ resultView: "detail" })]
+  navItems: [new FakeTarget({ page: "energy-page" })]
 };
 bindNavigationEvents({
   refs: navigationRefs,
   documentRef: navigationDocument,
-  handlers: {
-    setActivePage: (pageId) => navCalls.push(`page:${pageId}`),
-    setResultReportView: (view) => navCalls.push(`result:${view}`),
-    queueResultChartsResize: () => navCalls.push("resize-result")
-  }
+  handlers: { setActivePage: (pageId) => navCalls.push(`page:${pageId}`) }
 });
 navigationRefs.navItems[0].dispatch("click");
 jumpButton.dispatch("click");
-navigationRefs.resultReportTabs[0].dispatch("click");
-disclosure.dispatch("toggle");
 assert.deepEqual(navCalls, [
   "page:energy-page",
-  "page:results-page",
-  "result:detail",
-  "resize-result"
+  "page:results-page"
 ]);
 
 assert.deepEqual(resolveActivePageRequest({

@@ -33,10 +33,12 @@ appActions.renderCompare();
 appActions.runCalculation();
 assert.deepEqual(appActionCalls, ["theme", "login", "compare", "run"]);
 assert.equal(Object.prototype.hasOwnProperty.call(appActions, "setTopMeta"), true);
-assert.equal(Object.prototype.hasOwnProperty.call(appActions, "printScenarioReport"), true);
+assert.equal(Object.prototype.hasOwnProperty.call(appActions, "exportBriefWord"), true);
 
 const calls = [];
-const refs = {};
+const resultHandlers = {};
+const refs = Object.fromEntries(["runCalcButton", "exportAnnualButton", "exportHourlyButton", "exportBriefWordButton"]
+  .map((name) => [name, { addEventListener(event, handler) { resultHandlers[name] = { event, handler }; } }]));
 const documentRef = {
   querySelector(selector) {
     calls.push(`query:${selector}`);
@@ -55,7 +57,6 @@ let compareHandlers = null;
 let energyHandlers = null;
 let scenarioHandlers = null;
 let derivedInput = null;
-let resultHandlers = null;
 
 bindAppEvents({
   refs,
@@ -112,12 +113,6 @@ bindAppEvents({
         calls.push("derived-bind");
         derivedInput = input;
       }
-    },
-    resultPage: {
-      bindResultActionEvents(input) {
-        calls.push("result-bind");
-        resultHandlers = input.handlers;
-      }
     }
   },
   state: {
@@ -128,8 +123,6 @@ bindAppEvents({
   },
   actions: {
     setActivePage: () => calls.push("set-page"),
-    setResultReportView: () => calls.push("set-result-view"),
-    queueResultChartsResize: () => calls.push("resize-result"),
     schedulePersistAppData: () => calls.push("persist"),
     sanitizeHistoryAnalysis: () => ({}),
     renderPolicyPanel: () => calls.push("render-policy"),
@@ -168,7 +161,7 @@ bindAppEvents({
     runCalculation: () => calls.push("run-calc"),
     exportAnnualCsv: () => calls.push("annual-csv"),
     exportHourlyCsv: () => calls.push("hourly-csv"),
-    printScenarioReport: () => calls.push("print-report")
+    exportBriefWord: () => calls.push("export-word")
   }
 });
 
@@ -184,7 +177,6 @@ assert.deepEqual(calls.slice(0, 10), [
   "scenario-bind",
   "derived-bind"
 ]);
-assert.equal(calls[10], "result-bind");
 
 policyHandlers.setPolicyFilters({ provinceKey: "shanghai" });
 assert.deepEqual(appState.policyFilters, { provinceKey: "shanghai" });
@@ -203,12 +195,15 @@ scenarioHandlers.saveScenarioFromForm();
 
 assert.deepEqual(derivedInput.querySelector("#mechanism-ratio"), { selector: "#mechanism-ratio" });
 derivedInput.handlers.updateEnvValueSpaceDisplay();
-resultHandlers.printScenarioReport();
+for (const { event, handler } of Object.values(resultHandlers)) {
+  assert.equal(event, "click");
+  handler();
+}
 
 assert.ok(calls.includes("set-factor:factor-b"));
 assert.ok(calls.includes("set-scenario:s2"));
 assert.ok(calls.includes("save-scenario"));
 assert.ok(calls.includes("env-ratio"));
-assert.ok(calls.includes("print-report"));
+assert.deepEqual(calls.slice(-4), ["run-calc", "annual-csv", "hourly-csv", "export-word"]);
 
 console.log("app event bindings tests passed");

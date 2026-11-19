@@ -289,7 +289,7 @@ resetComparePageState({
 });
 assert.equal(refs.compareBody.innerHTML, "");
 assert.equal(refs.compareSensitivityResponseLabel.textContent, "等待变量选择");
-assert.equal(refs.compareSensitivityMessage.textContent, "请先在基准结果总览完成基准方案测算，再查看敏感性分析。");
+assert.equal(refs.compareSensitivityMessage.textContent, "请先在收益参数补充与细化中完成基准方案测算，再查看敏感性分析。");
 assert.equal(metricCalls.length, 8);
 assert.equal(metricCalls[2].value, "0 项");
 assert.equal(synced, true);

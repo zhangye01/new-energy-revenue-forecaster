@@ -34,12 +34,6 @@
     documentRef?.querySelectorAll?.("[data-jump]").forEach((button) => {
       on(button, "click", () => handlers.setActivePage?.(button.dataset.jump));
     });
-    (refs.resultReportTabs || []).forEach((button) => {
-      on(button, "click", () => handlers.setResultReportView?.(button.dataset.resultView));
-    });
-    documentRef?.querySelectorAll?.(".result-disclosure").forEach((node) => {
-      on(node, "toggle", handlers.queueResultChartsResize);
-    });
   }
 
   function hasPageRequirement(requiredPages, pageId) {
@@ -268,11 +262,7 @@
     bindNavigationEvents({
       refs: input.refs,
       documentRef: input.documentRef,
-      handlers: {
-        setActivePage: input.actions?.setActivePage,
-        setResultReportView: input.actions?.setResultReportView,
-        queueResultChartsResize: input.actions?.queueResultChartsResize
-      }
+      handlers: { setActivePage: input.actions?.setActivePage }
     });
   }
 

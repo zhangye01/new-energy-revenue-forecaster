@@ -1,0 +1,56 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const xlsx = require("../vendor/xlsx.full.min.js");
+const { buildDocx, filename, MIME_TYPE } = require("../src/ui/result-brief-word");
+
+const pngs = {
+  price: "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAFElEQVR4nGMUjZ/CAAZMEIqBgQEAEk0BDNY5qfgAAAAASUVORK5CYII=",
+  income: "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAFElEQVR4nGOUqMhmAAMmCMXAwAAAEY8A/y1ckygAAAAASUVORK5CYII="
+};
+const images = ["income", "price"].map((key) => ({ key, dataUrl: `data:image/png;base64,${pngs[key]}` }));
+const brief = {
+  title: "基准结果简报",
+  projectName: "江苏/沿海 & 风电 <储能>",
+  versionId: "result-fixture-123",
+  context: [{ label: "测算周期", value: "2028–2047 年" }],
+  summary: "全周期收入 34.29 亿元。",
+  metrics: [{ label: "周期平均度电净价", value: "459.72 元/MWh" }],
+  figures: [
+    { key: "price", title: "年度度电净价趋势", caption: "度电净价计入各项收益和费用。" },
+    { key: "income", title: "全周期收入构成", caption: "各项按全周期金额汇总。" }
+  ],
+  tables: [
+    { key: "storage", title: "配储收益对比", headers: ["项目", "金额"], rows: [["配储全口径增量", "12,200.73"]] },
+    { key: "annual", title: "年度测算结果", headers: ["年份", "收入（万元）"], rows: [["2028", "16,575.31"], ["2047", "17,221.77"]] }
+  ],
+  assumptions: [{ label: "度电净价", value: "按结算电量折算。" }],
+  trace: [{ label: "测算版本", value: "result-fixture-123" }, { label: "电价曲线版本", value: "run-fixture-1" }]
+};
+const options = { xlsx, nowIso: () => "2026-11-19T08:00:00.000Z" };
+
+const original = JSON.stringify(brief);
+const bytes = buildDocx(brief, images, options);
+assert.ok(bytes instanceof Uint8Array);
+assert.equal(JSON.stringify(brief), original);
+assert.equal(MIME_TYPE, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+assert.equal(filename(brief), "江苏-沿海 & 风电 -储能--基准结果简报-result-fixture-123.docx");
+const document = xlsx.CFB.read(bytes, { type: "array" });
+const part = (path) => Buffer.from(xlsx.CFB.find(document, `/${path}`).content);
+const documentXml = part("word/document.xml").toString("utf8");
+assert.match(documentXml, /w:pStyle w:val="Title"/);
+assert.match(documentXml, /江苏\/沿海 &amp; 风电 &lt;储能&gt;/);
+assert.match(documentXml, /459\.72 元\/MWh/);
+assert.match(documentXml, /12,200\.73/);
+assert.match(documentXml, /17,221\.77/);
+assert.match(documentXml, /result-fixture-123/);
+assert.match(documentXml, /run-fixture-1/);
+assert.equal((documentXml.match(/<w:tblHeader\/>/g) || []).length, 2);
+assert.deepEqual(part("word/media/figure-1.png"), Buffer.from(pngs.price, "base64"));
+assert.deepEqual(part("word/media/figure-2.png"), Buffer.from(pngs.income, "base64"));
+assert.match(part("word/_rels/document.xml.rels").toString("utf8"), /Id="rId4"[^>]+Target="media\/figure-2\.png"/);
+assert.match(part("word/footer1.xml").toString("utf8"), /result-fixture-123/);
+assert.match(part("docProps/core.xml").toString("utf8"), /2026-11-19T08:00:00\.000Z/);
+assert.throws(() => buildDocx(brief, images.slice(1), options), /图表「全周期收入构成」未生成有效图片/);
+assert.throws(() => buildDocx(brief, [{ key: "price", dataUrl: "data:image/png;base64,aGVsbG8=" }], options), /图表「年度度电净价趋势」未生成有效图片/);
+console.log("result brief Word tests passed");

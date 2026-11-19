@@ -32,7 +32,8 @@
 | `price-forecast.js` | 三模型模拟现货电价、预测质量校核及供需输入来源留存 |
 | `revenue-rules.js` | 机制月份、交易策略收敛、环境价值、综合费用规则 |
 | `revenue-calculator.js` | 场景全口径收入主计算 |
-| `result-report.js` | 基准结果总览的数据摘要和图表数据 |
+| `result-report.js` | 收入构成和关键收益项的汇总 |
+| `result-brief.js` | 从已保存结果生成网页与 Word 共用的简报数据 |
 | `compare-sensitivity.js` | 真实参数扰动与年度等价收益重算，和8760引擎对账 |
 | `compare-analysis.js` | 多方案对比、敏感性分析数据、对比页 frame 状态和选择态回写 |
 | `history-analysis.js` | 固定省级模拟样本、15 分钟日期切片及月度趋势、分时热力、价格持续、日内价差统计和导出 |
@@ -67,9 +68,9 @@
 | `forecast-page.js` | 后台预测提交、任务状态查询和输入版本隔离 |
 | `forecast-results-view.js` | 三种模型的回传结果和历史预测记录的只读展示 |
 | `forecast-run-flow.js` | 旧预测运行兼容和已生效价格运行可用性校验 |
-| `result-page.js` | 基准结果总览报告文案、指标卡、明细表、渲染状态和进入多方案对比的操作按钮 |
-| `result-print.js` | 基准结果总览打印前展开、图表刷新和打印后恢复控制 |
-| `result-charts.js` | 基准结果总览四张 ECharts 图的 option 构造和图表 token 扩展 |
+| `result-brief.js` | 基准结果简报的只读项目概况、结论、图表、表格和版本信息 |
+| `result-brief-charts.js` | 网页与 Word 共用的图表配置和图片输出 |
+| `result-brief-word.js` | 在浏览器中生成带原生文字、表格和嵌入图表的 `.docx` |
 | `scenario-form.js` | 收益参数补充与细化页表单读写和场景配置构造 |
 | `manual-scenario-flow.js` | 交易策略、环境价值、综合费用三类逐年手工模板的导出、导入和状态回写流程 |
 | `compare-charts.js` | 多方案对比和敏感性分析图表 option、对比页主题 token 构造 |
@@ -105,8 +106,9 @@
   -> project.resultsByScenario[scenarioId]
 
 结果展示与对比
-  -> result-report / compare-analysis / history-analysis
-  -> app.js 渲染 ECharts 与表格
+  -> result-brief 读取已保存结果
+  -> 网页简报与 Word 共用简报数据和图表配置
+  -> compare-analysis 读取可用方案的已保存结果
 ```
 
 ## 5. 后续拆分优先级
@@ -116,7 +118,6 @@
 优先拆出以下模块：
 
 ```text
-src/ui/result-page.js
 src/ui/compare-page.js
 src/ui/scenario-page.js
 src/ui/chart-theme.js
@@ -127,7 +128,7 @@ src/storage/app-storage.js
 
 ### P1：整理样式边界
 
-当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/components/data-display.css` 放置面板辅助、指标卡和表格样式，`styles/components/forms.css` 放置表单字段与表单栅格样式，`styles/components/buttons.css` 放置按钮变体与行内操作样式，`styles/components/workflow.css` 放置跨流程跳转条样式，`styles/components/auth.css` 放置登录与账号设置辅助样式，`styles/components/context-help.css` 放置可悬停、点击和键盘访问的上下文说明样式，`styles/pages/home.css` 放置首页政策轮播、标杆地图和政策卡片样式，`styles/pages/projects.css` 放置项目列表页样式，`styles/pages/create.css` 放置创建项目页样式，`styles/pages/help.css` 放置帮助文档页样式，`styles/pages/energy.css` 放置结算电量配置页样式，`styles/pages/scenario.css` 放置收益参数补充与细化页样式，`styles/pages/results.css` 放置基准结果总览与打印报告样式，`styles/pages/compare.css` 放置多方案对比页样式，`styles/pages/history.css` 放置历史电价页样式，`styles/responsive.css` 放置跨页面响应式兜底，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 只保留最终覆盖入口，不应继续承载业务样式。
+当前已拆出 `styles/theme.css` 放置 `:root` 与主题变量，`styles/base.css` 放置 reset、壳层、导航、顶栏、页面和面板基础样式，`styles/components/data-display.css` 放置面板辅助、指标卡和表格样式，`styles/components/forms.css` 放置表单字段与表单栅格样式，`styles/components/buttons.css` 放置按钮变体与行内操作样式，`styles/components/workflow.css` 放置跨流程跳转条样式，`styles/components/auth.css` 放置登录与账号设置辅助样式，`styles/components/context-help.css` 放置可悬停、点击和键盘访问的上下文说明样式，`styles/pages/home.css` 放置首页政策轮播、标杆地图和政策卡片样式，`styles/pages/projects.css` 放置项目列表页样式，`styles/pages/create.css` 放置创建项目页样式，`styles/pages/help.css` 放置帮助文档页样式，`styles/pages/energy.css` 放置结算电量配置页样式，`styles/pages/scenario.css` 放置收益参数补充与细化页样式，`styles/pages/results.css` 放置基准结果简报与测算记录样式，`styles/pages/compare.css` 放置多方案对比页样式，`styles/pages/history.css` 放置历史电价页样式，`styles/responsive.css` 放置跨页面响应式兜底，并由架构检查确保它们先于 `styles.css` 加载。`styles.css` 只保留最终覆盖入口，不应继续承载业务样式。
 
 在没有构建工具前，可以继续用多个 `<link rel="stylesheet">` 按顺序加载；新增主题令牌与全局密度基线必须进入 `styles/theme.css`，新增壳层基础样式必须进入 `styles/base.css`，新增通用组件样式必须进入 `styles/components/`，新增页面样式必须进入 `styles/pages/`，新增跨页面移动端兜底必须进入 `styles/responsive.css`。页面和组件优先复用 `--page-gutter`、`--panel-padding`、`--component-gap`、`--control-height` 等共享密度令牌，避免重新散布尺寸常量。
 

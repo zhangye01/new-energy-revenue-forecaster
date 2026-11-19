@@ -43,8 +43,9 @@ assert.equal(sandbox.confirm(), true);
 assert.equal(sandbox.prompt(), "");
 
 (async () => {
-  const result = await runAppBootstrapSmoke();
-  assert.equal(result.scriptCount, 66);
+  const result = await runAppBootstrapSmoke({ sandbox });
+  assert.equal(typeof sandbox.NE_RESULT_BRIEF.buildBrief, "function");
+  assert.equal(typeof sandbox.NE_RESULT_BRIEF_WORD.buildDocx, "function");
   assert.equal(result.activePage, "home-page");
   console.log("app bootstrap smoke tests passed");
 })().catch((error) => {

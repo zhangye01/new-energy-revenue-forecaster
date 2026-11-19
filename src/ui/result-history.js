@@ -28,14 +28,35 @@
       trace.priceSourceLabel, trace.runId].filter(Boolean).join(" · ");
   }
 
-  function annualRowsHtml(rows) {
+  function annualRowsHtml(rows, legacyStorage) {
     const money = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
     const cell = (value, scale = 1) => Number.isFinite(value) ? money.format(value / scale) : "—";
-    return rows.filter((row) => Number.isInteger(row?.year)).map((row) =>
-      `<tr><th scope="row">${row.year}</th><td>${cell(row.energyMwh)}</td><td>${cell(row.spotAvgPrice)}</td><td>${cell(row.capturePrice)}</td><td>${cell(row.fullRevenuePrice)}</td><td>${cell(row.fullRevenue, 10000)}</td></tr>`).join("");
+    return rows.filter((row) => Number.isInteger(row?.year)).map((row) => {
+      const fields = legacyStorage
+        ? [cell(row.fullRevenuePrice), cell(row.fullRevenue)]
+        : [cell(row.energyMwh), cell(row.spotAvgPrice), cell(row.capturePrice), cell(row.fullRevenuePrice), cell(row.fullRevenue, 10000)];
+      return `<tr><th scope="row">${row.year}</th>${fields.map((value) => `<td>${value}</td>`).join("")}</tr>`;
+    }).join("");
   }
 
-  function renderArchiveDetail(detail, project, scenario, result, downloadCsv) {
+  function collectArchiveEntries(project, scenarioId) {
+    const entries = versions.listArchivedResults(project, scenarioId);
+    const legacy = project?.legacyStorageResultsByScenario?.[scenarioId];
+    if (!Array.isArray(legacy?.annualRows) || !legacy.annualRows.some((row) =>
+      Number.isInteger(row?.year) && Number.isFinite(row.fullRevenue) && Number.isFinite(row.fullRevenuePrice))) return entries;
+    const legacyVersionId = legacy.resultVersion?.id;
+    const legacyRows = legacyVersionId ? "" : JSON.stringify(legacy.annualRows);
+    const legacySource = legacyVersionId ? "" : JSON.stringify(legacy.sourceContext ?? null);
+    const duplicate = entries.some(({ result }) => legacyVersionId
+      ? result.resultVersion?.id === legacyVersionId
+      : !result.resultVersion?.id && JSON.stringify(result.sourceContext ?? null) === legacySource
+        && JSON.stringify(result.annualRows) === legacyRows);
+    if (!duplicate) entries.push({ key: "legacy-storage", result: legacy, legacyStorage: true });
+    return entries;
+  }
+
+  function renderArchiveDetail(detail, project, scenario, entry, downloadCsv) {
+    const { result, legacyStorage } = entry;
     const trace = versions.describeResult(result);
     const context = versions.getArchivedCalculationContext(result);
     const annualReady = context && analysis.isResultComplete(context.project, context.scenario, result);
@@ -44,10 +65,11 @@
     const note = !context ? "旧版归档缺少原测算输入记录，可在此查阅已保留的年表。"
       : !annualReady ? "归档年表未通过对账，请核对原始存档。"
       : !hourlyReady ? "首年小时明细未通过对账。" : "";
-    const rows = Array.isArray(result.annualRows) ? annualRowsHtml(result.annualRows) : "";
+    const rows = annualRowsHtml(result.annualRows, legacyStorage);
+    const intermediateColumns = legacyStorage ? "" : '<th scope="col">电量 MWh</th><th scope="col">现货均价 元/MWh</th><th scope="col">捕获价 元/MWh</th>';
     detail.innerHTML = `<p class="result-version-trace">${[name, trace.versionId || "旧版未编号", dateLabel(trace.generatedAt), trace.priceSourceLabel, trace.runId].filter(Boolean).map(escapeHtml).join(" · ")}</p>
       ${note ? `<p class="hint">${note}</p>` : ""}
-      ${rows ? `<div class="table-scroll"><table aria-label="历史版本年度结果"><thead><tr><th scope="col">年份</th><th scope="col">电量 MWh</th><th scope="col">现货均价 元/MWh</th><th scope="col">捕获价 元/MWh</th><th scope="col">综合价 元/MWh</th><th scope="col">全口径收入 万元</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+      ${rows ? `<div class="table-scroll"><table aria-label="历史版本年度结果"><thead><tr><th scope="col">年份</th>${intermediateColumns}<th scope="col">综合价 元/MWh</th><th scope="col">全口径收入 ${legacyStorage ? "元" : "万元"}</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
       <div class="actions-row">${annualReady ? '<button class="ghost-button" type="button" data-history-annual>导出历史年度 CSV</button>' : ""}${hourlyReady ? '<button class="ghost-button" type="button" data-history-hourly>导出历史首年8760小时 CSV</button>' : ""}</div>`;
     const settings = { includeSource: true, historical: true };
     const archivedScenario = { ...scenario, name };
@@ -65,7 +87,7 @@
     const content = query("#result-history-content");
     const count = query("#result-history-count");
     if (!panel || !content || !count) return;
-    const entries = versions.listArchivedResults(project, scenario?.id);
+    const entries = collectArchiveEntries(project, scenario?.id);
     const contextKey = JSON.stringify([project?.id, scenario?.id]);
     const sameContext = panel.dataset.context === contextKey;
     const previous = sameContext && panel.dataset.selectedArchive;
@@ -74,9 +96,10 @@
     panel.hidden = !entries.length;
     count.textContent = `${entries.length} 份`;
     if (!entries.length) { content.innerHTML = ""; panel.ontoggle = null; return; }
-    const options = entries.map(({ key, result: archived }, index) => {
+    const options = entries.map(({ key, result: archived, legacyStorage }, index) => {
       const trace = versions.describeResult(archived);
-      const label = `${dateLabel(trace.generatedAt)} · ${trace.versionId || `旧版存档 ${index + 1}`}`;
+      const label = legacyStorage ? `历史配储原测算 · ${trace.versionId || dateLabel(trace.generatedAt)}`
+        : `${dateLabel(trace.generatedAt)} · ${trace.versionId || `旧版存档 ${index + 1}`}`;
       return `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`;
     });
     content.innerHTML = `<label class="result-history-picker"><span>查看版本</span><select>${options.join("")}</select></label><div data-history-detail></div>`;
@@ -86,7 +109,7 @@
     if (entries.some(({ key }) => key === previous)) select.value = previous;
     const refresh = () => {
       const entry = entries.find(({ key }) => key === select.value);
-      if (panel.open && entry) renderArchiveDetail(detail, project, scenario, entry.result, downloadCsv);
+      if (panel.open && entry) renderArchiveDetail(detail, project, scenario, entry, downloadCsv);
     };
     select.onchange = () => { panel.dataset.selectedArchive = select.value; refresh(); };
     panel.ontoggle = refresh;

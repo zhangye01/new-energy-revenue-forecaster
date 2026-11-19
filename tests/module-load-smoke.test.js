@@ -21,7 +21,7 @@ const html = [
 ].join("\n");
 
 assert.equal(isBrowserModuleScript("config.js"), true);
-assert.equal(isBrowserModuleScript("src/ui/result-page.js"), true);
+assert.equal(isBrowserModuleScript("src/ui/result-brief.js"), true);
 assert.equal(isBrowserModuleScript("vendor/echarts.min.js"), false);
 assert.equal(isBrowserModuleScript("app.js"), false);
 assert.deepEqual(collectBrowserModuleScripts(html), [
