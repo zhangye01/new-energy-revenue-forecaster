@@ -26,8 +26,10 @@ const brief = {
     { key: "storage", number: 1, title: "配储收益对比", note: "两种配置使用同一现货价。", headers: ["项目", "金额"], rows: [["配储全口径增量", "12,200.73"]] }
   ],
   sections: [
-    { key: "income", title: "收入构成与配储", intro: ["配储单独列示。"], blocks: [{ kind: "figure", key: "income" }, { kind: "table", key: "storage" }] },
-    { key: "annual", title: "分年经营表现", intro: [], blocks: [{ kind: "figure", key: "price" }, { kind: "table", key: "annual" }] }
+    { key: "income", title: "收入构成与配储", intro: ["配储单独列示。", "第二段解释主要贡献。"],
+      blocks: [{ kind: "figure", key: "unavailable" }, { kind: "figure", key: "income" }, { kind: "table", key: "storage" }] },
+    { key: "appendix-price", title: "分年经营表现", appendix: true, intro: [], blocks: [{ kind: "figure", key: "price" }] },
+    { key: "annual", title: "逐年测算明细", appendix: true, intro: ["这里保留两年明细。"], blocks: [{ kind: "table", key: "annual" }] }
   ],
   assumptions: [{ label: "度电净价", value: "按结算电量折算。" }],
   trace: [{ label: "测算版本", value: "result-fixture-123" }, { label: "电价曲线版本", value: "run-fixture-1" }]
@@ -50,7 +52,16 @@ assert.match(documentXml, /459\.72 元\/MWh/);
 assert.match(documentXml, /12,200\.73/);
 assert.match(documentXml, /17,221\.77/);
 assert.match(documentXml, /独立配储收益和逐时套利构成配储增收/);
-assert.match(documentXml, /收入构成与配储.*配储单独列示.*图 1　全周期收入构成.*表 1　配储收益对比.*两种配置使用同一现货价.*分年经营表现.*图 2　年度度电净价趋势.*表 2　年度测算结果/);
+assert.match(documentXml, /收入构成与配储.*配储单独列示.*图 1　全周期收入构成.*表 1　配储收益对比.*两种配置使用同一现货价.*附录.*分年经营表现.*图 2　年度度电净价趋势.*逐年测算明细.*表 2　年度测算结果/);
+const paragraphs = Array.from(documentXml.matchAll(/<w:p>(.*?)<\/w:p>/g), ([, body]) => body);
+const textParagraph = (text) => paragraphs.find((body) => body.includes(`>${text}</w:t>`));
+assert.match(textParagraph("配储单独列示。"), /<w:keepNext\/>/);
+assert.match(textParagraph("第二段解释主要贡献。"), /<w:keepNext\/>/);
+assert.match(textParagraph("这里保留两年明细。"), /<w:keepNext\/>/);
+assert.equal((documentXml.match(/>附录<\/w:t>/g) || []).length, 1);
+assert.match(textParagraph("附录"), /w:pStyle w:val="Heading1"/);
+assert.match(textParagraph("分年经营表现"), /w:pStyle w:val="Heading2"/);
+assert.match(textParagraph("图 2　年度度电净价趋势"), /w:pStyle w:val="ExhibitTitle"/);
 assert.doesNotMatch(documentXml, /result-fixture-123|run-fixture-1|按结算电量折算|测算口径与版本/);
 assert.equal((documentXml.match(/<w:tbl>/g) || []).length, 2);
 assert.equal((documentXml.match(/<w:tblHeader\/>/g) || []).length, 2);
@@ -73,9 +84,10 @@ const annual = {
   ...brief.tables[0], number: 10,
   rows: Array.from({ length: 20 }, (_, index) => [String(2028 + index), "17,221.77"])
 };
-const extendedDoc = xlsx.CFB.read(buildDocx({ ...brief, figures: [], tables: [monthly, annual], sections: [] }, [], options), { type: "array" });
+const extendedDoc = xlsx.CFB.read(buildDocx({ ...brief, summary: undefined, figures: [], tables: [monthly, annual], sections: [] }, [], options), { type: "array" });
 const extendedXml = Buffer.from(xlsx.CFB.find(extendedDoc, "/word/document.xml").content).toString("utf8");
 assert.match(extendedXml, /表 9　首年配储分月表现.*表 10　年度测算结果/);
+assert.match(extendedXml, /核心结论<\/w:t><\/w:r><\/w:p><w:p><w:pPr><w:pStyle w:val="Fact"\/>/);
 assert.doesNotMatch(extendedXml, /<w:pageBreakBefore\/>/);
 const [monthlyXml, annualXml] = Array.from(extendedXml.matchAll(/<w:tbl>(.*?)<\/w:tbl>/g), ([, table]) => table);
 const widths = Array.from(monthlyXml.matchAll(/<w:gridCol w:w="(\d+)"\/>/g), ([, width]) => Number(width));

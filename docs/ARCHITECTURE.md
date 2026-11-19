@@ -36,6 +36,7 @@
 | `result-brief.js` | 从已保存结果生成网页与 Word 共用的简报数据 |
 | `result-brief-operating.js` | 按已保存的年度结果与首年逐时明细汇总结算电量和现货电价图表 |
 | `result-brief-dispatch.js` | 按已保存的结果汇总机制差价结算和配储运行图表 |
+| `result-brief-turning-point.js` | 对照关键年份的年度结果，按可核对的收益项拆解度电净价变动 |
 | `compare-sensitivity.js` | 真实参数扰动与年度等价收益重算，和8760引擎对账 |
 | `compare-analysis.js` | 多方案对比、敏感性分析数据、对比页 frame 状态和选择态回写 |
 | `history-analysis.js` | 固定省级模拟样本、15 分钟日期切片及月度趋势、分时热力、价格持续、日内价差统计和导出 |

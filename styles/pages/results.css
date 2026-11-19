@@ -40,7 +40,9 @@
   border-bottom: 1px solid var(--line);
 }
 
-.result-brief-section h3 {
+.result-brief-section h3,
+.result-brief-chapter-title,
+.result-brief-appendix > h3 {
   color: var(--text);
   font-size: clamp(1.04rem, 1.25vw, 1.19rem);
   font-weight: 760;
@@ -144,6 +146,21 @@
   border-bottom: 0;
 }
 
+.result-brief-appendix {
+  padding-top: 22px;
+}
+
+.result-brief-appendix > h3 {
+  padding: 10px 14px;
+  color: var(--text);
+  background: var(--panel-soft);
+  border-radius: 5px;
+}
+
+.result-brief-appendix .result-brief-chapter-title {
+  font-size: 1rem;
+}
+
 .result-brief-intro {
   display: grid;
   gap: 6px;
@@ -169,7 +186,7 @@
 @media (min-width: 1280px) {
   .result-brief-figure-pair {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: end;
+    align-items: start;
   }
 
   .result-brief-figure-pair .result-brief-block {
@@ -181,7 +198,7 @@
   }
 }
 
-.result-brief-block h4 {
+.result-brief-block-title {
   color: var(--text);
   font-size: 0.94rem;
   font-weight: 720;
@@ -202,10 +219,6 @@
   line-height: 1.6;
 }
 
-.result-brief .result-brief-figure .result-brief-note {
-  margin-top: 3px;
-}
-
 .result-brief-chart {
   width: 100%;
   height: clamp(280px, 34vw, 360px);
@@ -221,7 +234,7 @@
   height: 350px;
 }
 
-.result-brief-chart[data-brief-chart="first-price-bridge"] {
+.result-brief-chart:is([data-brief-chart="first-price-bridge"], [data-brief-chart="turning-point-bridge"]) {
   height: 388px;
 }
 

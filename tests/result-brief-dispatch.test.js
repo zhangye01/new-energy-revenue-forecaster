@@ -29,20 +29,25 @@ const original = JSON.stringify(result);
 
 const exhibits = buildDispatchExhibits(result);
 assert.deepEqual(exhibits.storageBlocks, [
-  { kind: "figure", key: "annual-storage" }, { kind: "figure", key: "monthly-storage" }, { kind: "table", key: "monthly-storage-detail" }
+  { kind: "figure", key: "annual-storage" }, { kind: "table", key: "monthly-storage-detail" }
 ]);
 assert.deepEqual(exhibits.incomeBlocks, [{ kind: "table", key: "mechanism-settlement" }]);
+assert.equal(exhibits.figures.length, 1);
 const annual = exhibits.figures.find(({ key }) => key === "annual-storage");
 assert.deepEqual(annual.labels, [String(year), String(year + 1)]);
 assert.deepEqual(annual.series.map(({ values }) => values), [[2.2, -1], [0.8, 2]]);
-const monthly = exhibits.figures.find(({ key }) => key === "monthly-storage");
-assert.equal(monthly.labels.length, 12);
-assert.deepEqual(monthly.series.map(({ values }) => values.slice(0, 3)), [[100, 0, 0], [0, 88, 0]]);
 const detail = exhibits.tables.find(({ key }) => key === "monthly-storage-detail");
 assert.equal(detail.rows.length, 13);
 assert.deepEqual(detail.rows.slice(0, 2), [["1月", "100.00", "0.00", "-1.20"], ["2月", "0.00", "88.00", "3.40"]]);
 assert.deepEqual(detail.rows.at(-1), ["首年合计", "100.00", "88.00", "2.20"]);
-assert.deepEqual(exhibits.tables.find(({ key }) => key === "mechanism-settlement").rows, [[String(year), "35.00", "700.00", "-4.00"]]);
+assert.deepEqual(exhibits.tables.find(({ key }) => key === "mechanism-settlement").rows, [
+  [String(year), "35.00", "700.00", "-4.00"], [String(year + 1), "0.00", "0.00", "0.00"]
+]);
+const thirdYear = { ...secondYear, year: year + 2 };
+const ended = buildDispatchExhibits({ annualRows: [thirdYear, secondYear, firstYear] });
+assert.deepEqual(ended.tables[0].rows.map((row) => row[0]), [String(year), String(year + 1)]);
+const missingAdjacent = buildDispatchExhibits({ annualRows: [thirdYear, firstYear] });
+assert.deepEqual(missingAdjacent.tables[0].rows.map((row) => row[0]), [String(year)]);
 assert.equal(JSON.stringify(result), original);
 
 const duplicateHour = hourlyPreview.slice();

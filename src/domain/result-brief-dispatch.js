@@ -15,9 +15,9 @@
   const agrees = (left, right) => Math.abs(left - right) <= Math.max(0.00001, Math.abs(right) * 1e-9);
   const hourlyMetrics = ["chargeMwh", "dischargeMwh", "incrementalRevenue"];
 
-  function monthlyStorage(result, firstYear) {
+  function monthlyStorageTable(result, firstYear) {
     const hours = result.hourlyPreview;
-    if (!Array.isArray(hours) || hours.length !== hoursInYear || !valuesPresent(firstYear.storageDispatch, hourlyMetrics)) return [];
+    if (!Array.isArray(hours) || hours.length !== hoursInYear || !valuesPresent(firstYear.storageDispatch, hourlyMetrics)) return null;
 
     const accumulate = (target, item) => {
       target.chargeMwh += item.chargeMwh;
@@ -31,30 +31,21 @@
       const hour = hours[index];
       const item = hour?.storageDispatch;
       if (hour?.time !== calculator.hourIndexToTimestamp(firstYear.year, index)
-        || !valuesPresent(item, hourlyMetrics) || item.chargeMwh < 0 || item.dischargeMwh < 0) return [];
+        || !valuesPresent(item, hourlyMetrics) || item.chargeMwh < 0 || item.dischargeMwh < 0) return null;
       const month = Number(hour.time.slice(5, 7));
       accumulate(months[month - 1], item);
     }
 
     const total = months.reduce(accumulate, emptyMonth());
-    if (!hourlyMetrics.every((key) => agrees(total[key], firstYear.storageDispatch[key]))) return [];
+    if (!hourlyMetrics.every((key) => agrees(total[key], firstYear.storageDispatch[key]))) return null;
 
     const formatRow = (label, item) => [
       label, formatNumber(item.chargeMwh), formatNumber(item.dischargeMwh), formatNumber(item.incrementalRevenue / 10000)
     ];
-    return [
-      {
-        key: "monthly-storage", kind: "columns", title: "首年月度配储充放电", unit: "MWh", labels: monthLabels.slice(),
-        series: [
-          { name: "充电量", values: months.map((item) => item.chargeMwh) },
-          { name: "放电量", values: months.map((item) => item.dischargeMwh) }
-        ]
-      },
-      {
-        key: "monthly-storage-detail", title: "首年月度配储运行", headers: ["月份", "充电量（MWh）", "放电量（MWh）", "现货套利净收益（万元）"],
-        rows: [...months.map((item, index) => formatRow(monthLabels[index], item)), formatRow("首年合计", total)]
-      }
-    ];
+    return {
+      key: "monthly-storage-detail", title: "首年月度配储运行", headers: ["月份", "充电量（MWh）", "放电量（MWh）", "现货套利净收益（万元）"],
+      rows: [...months.map((item, index) => formatRow(monthLabels[index], item)), formatRow("首年合计", total)]
+    };
   }
 
   function annualStorage(rows) {
@@ -81,11 +72,13 @@
       && (row.mechanismRatio > 0 || agrees(row.mechanismRevenue, 0)))) return null;
     const activeRows = rows.filter((row) => row.mechanismRatio > 0);
     if (!activeRows.length) return null;
+    const firstInactiveYear = rows.find(({ year }) => year === activeRows.at(-1).year + 1);
+    const displayedRows = firstInactiveYear ? [...activeRows, firstInactiveYear] : activeRows;
 
     return {
       key: "mechanism-settlement", title: "机制电量与差价结算",
       headers: ["年份", "机制电量占比（%）", "机制电量（MWh）", "差价结算（万元）"],
-      rows: activeRows.map((row) => [
+      rows: displayedRows.map((row) => [
         String(row.year), formatNumber(row.mechanismRatio * 100), formatNumber(row.energyMwh * row.mechanismRatio),
         formatNumber(row.mechanismRevenue / 10000)
       ])
@@ -112,11 +105,10 @@
     if (annual) {
       figures.push(annual);
       storageBlocks.push({ kind: "figure", key: annual.key });
-      const [monthly, detail] = monthlyStorage(result, rows[0]);
-      if (monthly) {
-        figures.push(monthly);
+      const detail = monthlyStorageTable(result, rows[0]);
+      if (detail) {
         tables.push(detail);
-        storageBlocks.push({ kind: "figure", key: monthly.key }, { kind: "table", key: detail.key });
+        storageBlocks.push({ kind: "table", key: detail.key });
       }
     }
     return exhibits;

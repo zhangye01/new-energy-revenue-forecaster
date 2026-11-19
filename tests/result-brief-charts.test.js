@@ -27,6 +27,9 @@ assert.equal(trend.legend.selectedMode, false);
 assert.equal(trend.dataZoom, undefined);
 assert.equal(trend.series.every(({ silent }) => silent), true);
 assert.deepEqual(trend.series.map(({ data }) => data), price.series.map(({ values }) => values));
+const focus = buildOption({ ...price, focusYear: "2029" }, 800);
+assert.deepEqual(focus.series[0].markLine.data, [{ xAxis: "2029" }]);
+assert.equal(focus.series[1].markLine, undefined);
 
 const full = buildOption(income, 800);
 const narrow = buildOption(income, 360);
@@ -62,6 +65,13 @@ const yearlyStorage = { key: "annual-storage", kind: "columns", labels: ["2028",
 const yearlyOption = buildOption(yearlyStorage, 800);
 assert.equal(yearlyOption.yAxis.scale, false);
 assert.deepEqual(yearlyOption.series.map(({ type, data }) => [type, data]), [["bar", [2, -3]], ["bar", [0, 6]]]);
+const monthlyCapture = buildOption({ key: "monthly-capture", kind: "monthly-capture", labels: ["1月", "2月"],
+  energyUnit: "万 MWh", spreadUnit: "元/MWh", series: [{ name: "结算电量", values: [2, 0] },
+    { name: "捕获价差", values: [-1.25, null] }] }, 800);
+assert.deepEqual(monthlyCapture.yAxis.map(({ name }) => name), ["万 MWh", "元/MWh"]);
+assert.deepEqual(monthlyCapture.series.map(({ type, data, yAxisIndex }) => [type, data, yAxisIndex]),
+  [["bar", [2, 0], 0], ["line", [-1.25, null], 1]]);
+assert.equal(monthlyCapture.legend.selectedMode, false);
 
 const created = [];
 const echarts = {

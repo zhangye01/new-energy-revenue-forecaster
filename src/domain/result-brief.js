@@ -6,12 +6,13 @@
     isCommonJs ? require("./result-report") : root.NE_RESULT_REPORT,
     isCommonJs ? require("./result-versions") : root.NE_RESULT_VERSIONS,
     isCommonJs ? require("./result-brief-operating") : root.NE_RESULT_BRIEF_OPERATING,
-    isCommonJs ? require("./result-brief-dispatch") : root.NE_RESULT_BRIEF_DISPATCH
+    isCommonJs ? require("./result-brief-dispatch") : root.NE_RESULT_BRIEF_DISPATCH,
+    isCommonJs ? require("./result-brief-turning-point") : root.NE_RESULT_BRIEF_TURNING_POINT
   );
   if (isCommonJs) module.exports = api;
   root.NE_RESULT_BRIEF = api;
   if (root.window && root.window !== root) root.window.NE_RESULT_BRIEF = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (report, versions, operatingExhibits, dispatchExhibits) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (report, versions, operatingExhibits, dispatchExhibits, turningPointExhibits) {
   const moneyNumber = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const energyNumber = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 });
   const asMoneyWan = (value) => moneyNumber.format(value / 10000);
@@ -26,18 +27,14 @@
   const sum = (rows, key) => rows.reduce((total, row) => total + row[key], 0);
   const agrees = (left, right) => Math.abs(left - right) <= Math.max(0.00001, Math.abs(right) * 1e-9);
 
-  function directionText(value) {
-    return value < 0 ? "下降" : "上升";
-  }
-
   function asMoney(value) {
     return Math.abs(value) >= 100000000 ? `${moneyNumber.format(value / 100000000)} 亿元` : `${asMoneyWan(value)} 万元`;
   }
 
-  function buildYearTable(rows, key = "annual", title = "年度测算结果") {
+  function buildYearTable(rows) {
     return {
-      key,
-      title,
+      key: "annual",
+      title: "年度测算结果",
       headers: ["年份", "结算电量（MWh）", "捕获电价（元/MWh）", "度电净价（元/MWh）", "全口径收入（万元）"],
       rows: rows.map((row) => [
         String(row.year),
@@ -76,22 +73,23 @@
     tableRows.push(amounts("其中独立配储收益", "independentSupplementRevenue"));
     const table = {
       key: "storage",
-      title: "配储收益对比",
+      title: "有储与无储收入对比",
       headers: ["项目", `首年 ${rows[0].year}（万元）`, "全周期（万元）"],
       rows: tableRows,
       note: hasArbitrageBreakdown ? "现货套利增量为放电收入减去充电机会成本。独立配储收益单独计入。" : "独立配储收益与现货套利分别计入。"
     };
     const lift = withoutStorage > 0 ? `，相当于无储收入的 ${asPercent(increase / withoutStorage)}` : "";
     const unitLift = totalEnergy > 0 ? `，按储前结算电量折合 ${asPrice(increase / totalEnergy)}` : "";
-    const intro = [`配储全期收益增量为 ${asMoney(increase)}${lift}${unitLift}。其中现货套利 ${asMoney(arbitrage)}，独立配储收益 ${asMoney(supplements)}。`];
+    const intro = [`同一条现货价格曲线下，配储全期收入增量为 ${asMoney(increase)}${lift}${unitLift}。其中现货净套利 ${asMoney(arbitrage)}，独立配储收益 ${asMoney(supplements)}。`];
+    const operationsIntro = [];
     if (dispatch.every((item) => valuesPresent(item, ["chargeMwh", "dischargeMwh"]))) {
       const efficiency = Number.isFinite(first.roundTripEfficiency) ? `往返效率 ${asPercent(first.roundTripEfficiency)}，` : "";
-      intro.push(`首年${efficiency}充电 ${asEnergy(first.chargeMwh)}、放电 ${asEnergy(first.dischargeMwh)}。全期累计充电 ${asEnergy(sum(dispatch, "chargeMwh"))}、放电 ${asEnergy(sum(dispatch, "dischargeMwh"))}。`);
+      operationsIntro.push(`首年${efficiency}充电 ${asEnergy(first.chargeMwh)}、放电 ${asEnergy(first.dischargeMwh)}。全期累计充电 ${asEnergy(sum(dispatch, "chargeMwh"))}、放电 ${asEnergy(sum(dispatch, "dischargeMwh"))}。`);
     }
-    return { table, intro, finding: `全期收益增量 ${asMoney(increase)}${lift}。` };
+    return { table, intro, operationsIntro, finding: `全期收入增量 ${asMoney(increase)}${lift}。` };
   }
 
-  function priceFigure(rows, includesSpot) {
+  function priceFigure(rows, { includesSpot, change, detail }) {
     const series = [
       { name: "度电净价", values: rows.map((row) => row.fullRevenuePrice) },
       { name: "捕获电价", values: rows.map((row) => row.capturePrice) }
@@ -99,7 +97,7 @@
     if (includesSpot) series.push({ name: "现货均价", values: rows.map((row) => row.spotAvgPrice) });
     return {
       key: "price", kind: "trend", title: "年度电价对比",
-      years: rows.map((row) => String(row.year)), series
+      years: rows.map((row) => String(row.year)), series, caption: detail, focusYear: change ? String(change.after.year) : undefined
     };
   }
 
@@ -127,18 +125,19 @@
     };
   }
 
-  function buildIncomeDetails(result, items, storage) {
+  function buildIncomeDetails(result, items, composition) {
     if (!items.length) return null;
     const nonzero = items.filter((item) => item.amount !== 0 || item.colorKey === "spot");
+    const adjustments = nonzero.filter((item) => item.colorKey !== "spot");
     const contributionTable = ({ label, amount }) => [label, asMoneyWan(amount),
       result.totalEnergy > 0 ? moneyNumber.format(amount / result.totalEnergy) : "—",
       result.totalFullRevenue > 0 ? moneyNumber.format(amount / result.totalFullRevenue * 100) : "—"];
     return {
-      figure: {
-        key: "income", kind: "contribution", title: "全周期收入构成",
-        caption: storage ? "各项按全周期金额汇总。配储收益包含现货套利增量及独立配储收益。" : "各项按全周期金额汇总。正值为增收，负值为扣减。",
-        items: nonzero.map(({ label, amount, colorKey }) => ({ label, value: amount / 10000, colorKey }))
-      },
+      figure: adjustments.length ? {
+        key: "income", kind: "contribution", title: "全周期现货之外的收入增减",
+        caption: composition,
+        items: adjustments.map(({ label, amount, colorKey }) => ({ label, value: amount / 10000, colorKey }))
+      } : null,
       table: {
         key: "income-details", title: "收入项目及度电贡献",
         headers: ["项目", "金额（万元）", "度电贡献（元/MWh）", "占全口径收入（%）"],
@@ -160,52 +159,19 @@
     return largest;
   }
 
-  function unitDrivers(row) {
-    if (!valuesPresent(row, resultComponentKeys)) return null;
-    const parts = [
-      field("捕获电价", row.capturePrice),
-      field("差价机制结算", row.mechanismRevenue / row.energyMwh),
-      field("交易策略损益", row.ltPnlRevenue / row.energyMwh),
-      field("环境价值兑现", row.envRevenue / row.energyMwh),
-      field("配储收益", row.storageSupplementRevenue / row.energyMwh),
-      field("费用及其他净收入", (row.otherIncome - row.comprehensiveFee) / row.energyMwh)
-    ];
-    return agrees(sum(parts, "value"), row.fullRevenuePrice) ? parts : null;
-  }
-
-  function explainPriceChange(change) {
-    if (!change) return null;
-    const { before, after, delta } = change;
-    const event = `${before.year} 至 ${after.year} 年度电净价${directionText(delta)} ${asPrice(Math.abs(delta))}，为相邻年份间的最大变动。`;
-    const prior = unitDrivers(before);
-    const current = unitDrivers(after);
-    if (!prior || !current) return { event, explanation: "" };
-    const leading = current.map(({ label, value }, index) => field(label, value - prior[index].value))
-      .filter(({ value }) => value * delta > 0 && Math.abs(value) >= 0.005)
-      .sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 2);
-    const contributions = leading.map(({ label, value }) => `${label}${value < 0 ? "减少" : "增加"} ${asPrice(Math.abs(value))}`);
-    return { event, explanation: contributions.length ? `主要来自${contributions.join("、")}。` : "" };
-  }
-
-  function pricingOverview(rows, result) {
+  function pricingOverview(rows) {
     const first = rows[0];
     const last = rows.at(-1);
     const includesSpot = rows.every((row) => Number.isFinite(row.spotAvgPrice));
-    const averageSpot = includesSpot ? `全期现货时均价 ${asPrice(sum(rows, "spotAvgPrice") / rows.length)}，` : "";
     const annualEnergy = sum(rows, "energyMwh");
     const capture = annualEnergy > 0 ? rows.reduce((total, row) => total + row.energyMwh * row.capturePrice, 0) / annualEnergy : null;
-    const detail = capture === null ? `${averageSpot}全期平均度电净价 ${asPrice(result.avgFullRevenuePrice)}。`
-      : `${averageSpot}加权捕获电价 ${asPrice(capture)}，平均度电净价 ${asPrice(result.avgFullRevenuePrice)}。`;
-    const change = largestPriceChange(rows);
-    const explanation = explainPriceChange(change);
+    const comparisons = [includesSpot ? `全期现货时均价 ${asPrice(sum(rows, "spotAvgPrice") / rows.length)}` : "",
+      capture !== null ? `全期加权捕获电价 ${asPrice(capture)}` : ""].filter(Boolean);
+    const detail = comparisons.length ? `${comparisons.join("，")}。` : "";
     const endpoints = rows.length > 1
       ? `首年度电净价 ${asPrice(first.fullRevenuePrice)}，末年 ${asPrice(last.fullRevenuePrice)}。`
       : `首年捕获电价 ${asPrice(first.capturePrice)}，度电净价 ${asPrice(first.fullRevenuePrice)}。`;
-    return {
-      includesSpot, change,
-      intro: [detail, explanation ? `${endpoints}${explanation.event}${explanation.explanation}` : endpoints],
-      finding: explanation?.event || endpoints
-    };
+    return { includesSpot, change: largestPriceChange(rows), detail, endpoints };
   }
 
   function buildIncomeOverview(rows, totalRevenue, items) {
@@ -217,12 +183,13 @@
       ? `最高值为 ${asMoney(peak.fullRevenue)}，${repeats(peak) ? "首次出现在" : "出现在"} ${peak.year} 年。最低值为 ${asMoney(low.fullRevenue)}，${repeats(low) ? "首次出现在" : "出现在"} ${low.year} 年。`
       : "";
     const spot = items.find((item) => item.colorKey === "spot");
-    const spotShare = spot && totalRevenue > 0 ? `现货市场收入 ${asMoney(spot.amount)}，占全期全口径收入的 ${asPercent(spot.amount / totalRevenue)}。` : "";
+    const otherNet = spot ? totalRevenue - spot.amount : 0;
+    const spotShare = spot ? `现货市场收入 ${asMoney(spot.amount)}，其余各项合计 ${asMoney(otherNet)}。` : "";
     const positive = items.filter((item) => item.colorKey !== "spot" && item.amount > 0).sort((a, b) => b.amount - a.amount)[0];
     const negative = items.filter((item) => item.colorKey !== "spot" && item.amount < 0).sort((a, b) => a.amount - b.amount)[0];
     const drivers = [positive ? `${positive.label}是现货收入之外的主要增收项，贡献 ${asMoney(positive.amount)}。` : "",
       negative ? `${negative.label}是主要扣减项，减少收入 ${asMoney(Math.abs(negative.amount))}。` : ""].join("");
-    return { peak, low, intro: [`${average}${range}`, `${spotShare}${drivers}`].filter(Boolean), finding: spotShare || `${average}${range}` };
+    return { trend: `${average}${range}`, composition: `${spotShare}${drivers}`, finding: spotShare || `${average}${range}` };
   }
 
   function buildAnnualIncomeFigure(rows) {
@@ -231,35 +198,40 @@
   }
 
   function numberItems(items, sections, kind) {
-    return sections.flatMap(({ blocks }) => blocks.filter((block) => block.kind === kind))
-      .map(({ key }, index) => ({ ...items.find((item) => item.key === key), number: index + 1 }));
+    const byKey = new Map(items.map((item) => [item.key, item]));
+    return sections.flatMap(({ blocks }) => blocks.filter((block) => block.kind === kind && byKey.has(block.key)))
+      .map(({ key }, index) => ({ ...byKey.get(key), number: index + 1 }));
   }
 
-  function buildSections(rows, { pricing, bridge, income, incomeDetails, storage, keyYears, operating, dispatch }) {
-    const first = rows[0];
-    const last = rows.at(-1);
+  function mechanismMovesWithPrice(change) {
+    if (!change) return false;
+    const { before, after } = change;
+    return Math.abs(after.mechanismRevenue / after.energyMwh - before.mechanismRevenue / before.energyMwh) >= 0.005;
+  }
+
+  function buildSections({ pricing, bridge, income, incomeDetails, storage, turning, operating, dispatch }) {
+    const annualEnergy = operating.sections.find(({ key }) => key === "settlement");
+    const spotDetails = operating.sections.find(({ key }) => key === "spot-detail");
+    const explainMechanism = Boolean(turning && mechanismMovesWithPrice(pricing.change));
     const sections = [
-      ...operating.sections.filter(({ key }) => key === "settlement"),
-      { key: "price", title: "电价表现与形成", intro: pricing.intro,
-        blocks: [figureBlock("price"), ...(bridge ? [figureBlock(bridge.key)] : [])] },
-      ...operating.sections.filter(({ key }) => key !== "settlement"),
-      { key: "income", title: "收入走势与构成", intro: income.intro,
-        blocks: [figureBlock("annual-income"), ...(incomeDetails ? [figureBlock("income"), tableBlock("income-details")] : []),
-          ...dispatch.incomeBlocks,
-          ...(keyYears ? [tableBlock("key-years")] : [])] }
+      { key: "results", title: "年度测算结果", intro: [`${income.trend}${pricing.endpoints}`],
+        blocks: [figureBlock("price"), figureBlock("annual-income"), ...(annualEnergy?.blocks || []),
+          ...(incomeDetails?.figure ? [figureBlock(incomeDetails.figure.key)] : []),
+          ...(incomeDetails ? [tableBlock(incomeDetails.table.key)] : [])] }
     ];
-    if (storage) sections.push({ key: "storage", title: "配储收益分析", intro: storage.intro,
-      blocks: [tableBlock("storage"), ...dispatch.storageBlocks] });
-    sections.push({ key: "annual", title: "逐年测算明细", intro: rows.length > 1
-      ? [`首年结算电量 ${asEnergy(first.energyMwh)}，末年 ${asEnergy(last.energyMwh)}。`] : [], blocks: [tableBlock("annual")] });
+    if (turning) sections.push({ key: "turning-point", title: "关键年份变化", intro: turning.intro,
+      blocks: [...(turning.figure ? [figureBlock(turning.figure.key)] : []), tableBlock(turning.table.key),
+        ...(explainMechanism ? dispatch.incomeBlocks : [])] });
+    if (storage) sections.push({ key: "storage", title: "配储收入增量", intro: storage.intro, blocks: [tableBlock(storage.table.key)] });
+    const priceBlocks = [...(spotDetails?.blocks || []), ...(bridge ? [figureBlock(bridge.key)] : [])];
+    if (priceBlocks.length) sections.push({ key: "appendix-price", appendix: true, title: "首年电价与电量明细",
+      intro: spotDetails?.intro || [], blocks: priceBlocks });
+    if (!explainMechanism && dispatch.incomeBlocks.length) sections.push({ key: "appendix-mechanism", appendix: true,
+      title: "机制差价结算明细", intro: [], blocks: dispatch.incomeBlocks });
+    if (storage && dispatch.storageBlocks.length) sections.push({ key: "appendix-storage", appendix: true,
+      title: "配储运行明细", intro: storage.operationsIntro, blocks: dispatch.storageBlocks });
+    sections.push({ key: "annual", appendix: true, title: "逐年测算明细", intro: [], blocks: [tableBlock("annual")] });
     return sections;
-  }
-
-  function buildKeyYears(rows, change, { peak, low }) {
-    if (rows.length < 6) return null;
-    const years = new Set([rows[0].year, rows.at(-1).year, peak.year, low.year, change?.before.year, change?.after.year]);
-    return { ...buildYearTable(rows.filter((row) => years.has(row.year)), "key-years", "代表年份表现"),
-      note: "列示首末年、收入高低点及最大相邻年度电价变动涉及年份。" };
   }
 
   function buildBrief(input = {}) {
@@ -290,26 +262,26 @@
     ];
     const storage = buildStorageData(rows, result.totalEnergy);
     const items = contributionItems(result, verifiedConfig, Boolean(storage));
-    const incomeDetails = buildIncomeDetails(result, items, storage);
+    const income = buildIncomeOverview(rows, result.totalFullRevenue, items);
+    const incomeDetails = buildIncomeDetails(result, items, income.composition);
     const firstItems = contributionItems({ ...result, annualRows: [first], totalFullRevenue: first.fullRevenue }, verifiedConfig, Boolean(storage));
     const bridge = firstYearBridge(first, firstItems);
-    const pricing = pricingOverview(rows, result);
-    const income = buildIncomeOverview(rows, result.totalFullRevenue, items);
-    const keyYears = buildKeyYears(rows, pricing.change, income);
+    const pricing = pricingOverview(rows);
+    const turning = turningPointExhibits.buildTurningPoint({ change: pricing.change });
     const saved = { ...result, annualRows: rows };
     const operating = operatingExhibits.buildOperatingExhibits(saved);
     const dispatch = dispatchExhibits.buildDispatchExhibits(saved);
-    const sections = buildSections(rows, { pricing, bridge, income, incomeDetails, storage, keyYears, operating, dispatch });
-    const figures = [priceFigure(rows, pricing.includesSpot), bridge, buildAnnualIncomeFigure(rows), incomeDetails?.figure,
+    const sections = buildSections({ pricing, bridge, income, incomeDetails, storage, turning, operating, dispatch });
+    const figures = [priceFigure(rows, pricing), bridge, buildAnnualIncomeFigure(rows), incomeDetails?.figure, turning?.figure,
       ...operating.figures, ...dispatch.figures].filter(Boolean);
-    const tables = [incomeDetails?.table, keyYears, storage?.table, buildYearTable(rows), ...operating.tables, ...dispatch.tables].filter(Boolean);
-    const findings = [field("电价变化", pricing.finding), field("收入表现", income.finding), ...(storage ? [field("配储收益", storage.finding)] : [])];
+    const tables = [incomeDetails?.table, turning?.table, storage?.table, buildYearTable(rows), ...operating.tables, ...dispatch.tables].filter(Boolean);
+    const findings = [field("电价变化", turning?.finding || pricing.endpoints), field("收入表现", income.finding),
+      ...(storage ? [field("配储收益", storage.finding)] : [])];
 
     return {
       title: "基准结果简报",
       projectName: origin.name || project?.name || "新能源项目",
       context,
-      summary: `${period}累计全口径收入 ${asMoney(result.totalFullRevenue)}，周期平均度电净价 ${asPrice(result.avgFullRevenuePrice)}。`,
       metrics: [
         field("周期全口径收入", asMoney(result.totalFullRevenue)),
         field("周期平均度电净价", asPrice(result.avgFullRevenuePrice)),

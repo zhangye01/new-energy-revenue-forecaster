@@ -41,6 +41,11 @@
 
   function priceOption(figure, width) {
     const compact = width < 550;
+    const turningMarker = figure.focusYear ? {
+      silent: true, symbol: "none", lineStyle: { color: "#76899e", type: "dashed" },
+      label: { position: "insideEndTop", rotate: 0, formatter: `${figure.focusYear} 年`, color: INK, fontSize: 10 },
+      data: [{ xAxis: figure.focusYear }]
+    } : undefined;
     return {
       ...OPTIONS,
       color: PRICE_COLORS,
@@ -59,7 +64,8 @@
       series: figure.series.map((series, index) => ({
         name: series.name, type: "line", data: series.values, silent: true,
         symbol: ["circle", "emptyCircle", "diamond"][index] || "none", symbolSize: figure.years.length > 20 ? 4 : 6,
-        lineStyle: { width: index === 0 ? 3 : 2, type: ["solid", "dashed", "dotted"][index] || "dotted" }
+        lineStyle: { width: index === 0 ? 3 : 2, type: ["solid", "dashed", "dotted"][index] || "dotted" },
+        ...(index === 0 && turningMarker ? { markLine: turningMarker } : {})
       }))
     };
   }
@@ -227,11 +233,35 @@
     };
   }
 
+  function monthlyCaptureOption(figure, width) {
+    const [energy, spread] = figure.series;
+    const xAxis = categoryAxis(figure.labels, width, true);
+    if (width >= 450) xAxis.axisLabel.interval = 0;
+    const label = { ...AXIS_LABEL, formatter: (value) => NUMBER_FORMAT.format(value) };
+    return {
+      ...OPTIONS,
+      color: [TOTAL_COLOR, "#a36c30"],
+      grid: { top: 61, bottom: 35, left: 61, right: 56 },
+      legend: { top: 8, right: 10, selectedMode: false, textStyle: { color: INK, fontSize: 11 } },
+      xAxis: { ...xAxis, axisLine: { ...AXIS_LINE, onZero: false } },
+      yAxis: [
+        { type: "value", name: figure.energyUnit, nameTextStyle: { ...AXIS_NAME, color: TOTAL_COLOR }, axisLabel: label, splitLine: SPLIT_LINE },
+        { type: "value", name: figure.spreadUnit, nameTextStyle: { ...AXIS_NAME, color: "#855522" }, axisLabel: label, splitLine: { show: false } }
+      ],
+      series: [
+        { name: energy.name, type: "bar", data: energy.values, silent: true, barMaxWidth: 28, itemStyle: { opacity: 0.82 }, yAxisIndex: 0 },
+        { name: spread.name, type: "line", data: spread.values, silent: true, connectNulls: false, symbol: "circle",
+          symbolSize: 5, lineStyle: { width: 2 }, yAxisIndex: 1 }
+      ]
+    };
+  }
+
   function buildOption(figure, width) {
     if (figure.kind === "trend") return priceOption(figure, width);
     if (figure.kind === "bridge") return bridgeOption(figure, width);
     if (figure.kind === "annual") return annualOption(figure, width);
     if (figure.kind === "columns" || figure.kind === "lines") return seriesOption(figure, width);
+    if (figure.kind === "monthly-capture") return monthlyCaptureOption(figure, width);
     return incomeOption(figure, width);
   }
 

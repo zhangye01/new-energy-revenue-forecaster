@@ -98,7 +98,7 @@
     const size = `cx="${cx}" cy="${cy}"`;
     const figureLabel = `图 ${number ?? id}`;
     const imageRun = `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent ${size}/><wp:docPr id="${id}" name="${figureLabel}" descr="${xml(title)}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="${figureLabel}.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext ${size}/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
-    return `${paragraph(`${figureLabel}　${title}`, "Heading2")}<w:p><w:pPr><w:pStyle w:val="Figure"/>${caption ? "<w:keepNext/>" : ""}<w:jc w:val="center"/></w:pPr>${imageRun}</w:p>${caption ? paragraph(caption, "Caption") : ""}`;
+    return `${paragraph(`${figureLabel}　${title}`, "ExhibitTitle")}<w:p><w:pPr><w:pStyle w:val="Figure"/>${caption ? "<w:keepNext/>" : ""}<w:jc w:val="center"/></w:pPr>${imageRun}</w:p>${caption ? paragraph(caption, "Caption") : ""}`;
   }
 
   function tableWeights({ headers, rows }) {
@@ -114,8 +114,8 @@
 
   function reportTableXml(reportTable) {
     const note = reportTable.note ? paragraph(reportTable.note, "Caption", { keepNext: true }) : "";
-    const keepTogether = reportTable.key === "annual" && reportTable.rows.length <= 25;
-    return paragraph(`表 ${reportTable.number}　${reportTable.title}`, "Heading2") + note +
+    const keepTogether = reportTable.rows.length <= 8 || (reportTable.key === "annual" && reportTable.rows.length <= 25);
+    return paragraph(`表 ${reportTable.number}　${reportTable.title}`, "ExhibitTitle") + note +
       table([reportTable.headers, ...reportTable.rows], tableWeights(reportTable), keepTogether);
   }
 
@@ -124,14 +124,17 @@
     if (!brief.sections?.length) return [...images.map(picture), ...tables.map(reportTableXml)].join("");
     const figuresByKey = new Map(images.map((image) => [image.key, image]));
     const tablesByKey = new Map(tables.map((entry) => [entry.key, entry]));
-    return brief.sections.map((section) => {
-      const intro = (section.intro || []).map((text, index) => paragraph(text, "Normal", { keepNext: index === 0 }));
+    const appendixStart = brief.sections.findIndex(({ appendix }) => appendix);
+    return brief.sections.map((section, index) => {
+      const appendixHeading = index === appendixStart ? paragraph("附录", "Heading1") : "";
       const blocks = section.blocks.map(({ kind, key }) => {
         if (kind === "figure" && figuresByKey.has(key)) return picture(figuresByKey.get(key));
         if (kind === "table" && tablesByKey.has(key)) return reportTableXml(tablesByKey.get(key));
         return "";
-      });
-      return [paragraph(section.title, "Heading1"), ...intro, ...blocks].join("");
+      }).filter(Boolean);
+      const intro = (section.intro || []).map((text) => paragraph(text, "Normal", { keepNext: blocks.length > 0 }));
+      const heading = paragraph(section.title, section.appendix ? "Heading2" : "Heading1");
+      return [appendixHeading, heading, ...intro, ...blocks].join("");
     }).join("");
   }
 
@@ -139,7 +142,7 @@
     const body = [
       paragraph(brief.title, "Title"), paragraph(brief.projectName, "Subtitle"),
       paragraph("项目概况", "Heading1"), labeledParagraphs(brief.context, "Fact"),
-      paragraph("核心结论", "Heading1"), paragraph(brief.summary), labeledParagraphs(brief.metrics, "Fact"),
+      paragraph("核心结论", "Heading1"), ...(brief.summary ? [paragraph(brief.summary)] : []), labeledParagraphs(brief.metrics, "Fact"),
       labeledParagraphs(brief.findings, "Finding"), reportSections(brief, images)
     ].join("");
     return `${XML_HEADER}<w:document xmlns:w="${WORD_NS}" xmlns:r="${DOC_RELS}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${body}<w:sectPr><w:footerReference w:type="default" r:id="${REL.footer}"/><w:pgSz w:w="${PAGE_WIDTH}" w:h="${PAGE_HEIGHT}"/><w:pgMar w:top="960" w:right="${SIDE_MARGIN}" w:bottom="960" w:left="${SIDE_MARGIN}" w:header="440" w:footer="480" w:gutter="0"/></w:sectPr></w:body></w:document>`;
@@ -150,7 +153,8 @@
     const styles = [
       ["Normal", "Normal", 22, 0, 132], ["Title", "Title", 52, 0, 120, true, true],
       ["Subtitle", "Subtitle", 29, 0, 156, false, true], ["Heading1", "heading 1", 32, 220, 100, true, true, 0],
-      ["Heading2", "heading 2", 26, 140, 75, true, true, 1], ["Caption", "Caption", 18, 30, 86],
+      ["Heading2", "heading 2", 28, 180, 85, true, true, 1], ["ExhibitTitle", "Exhibit title", 26, 140, 75, true, true],
+      ["Caption", "Caption", 18, 30, 86],
       ["Fact", "Brief fact", 21, 0, 32], ["Finding", "Brief finding", 22, 100, 72],
       ["Figure", "Figure", 20, 0, 0], ["TableText", "Table text", 19, 0, 0],
       ["TableHeader", "Table header", 19, 0, 0, true], ["ReportFooter", "Report footer", 17, 0, 0]

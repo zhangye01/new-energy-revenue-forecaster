@@ -20,25 +20,25 @@
     return `${number}${escapeHtml(item.title)}`;
   }
 
-  function figureHtml(figure) {
+  function figureHtml(figure, heading = "h4") {
     const key = escapeAttribute(figure.key);
     return `<figure class="result-brief-block result-brief-figure">
       <figcaption id="result-brief-figure-${key}">
-        <h4>${numberedTitle(figure, "图")}</h4>
-        ${figure.caption ? `<p class="result-brief-note">${escapeHtml(figure.caption)}</p>` : ""}
+        <${heading} class="result-brief-block-title">${numberedTitle(figure, "图")}</${heading}>
       </figcaption>
       <div class="result-brief-chart" data-brief-chart="${key}" role="img" aria-labelledby="result-brief-figure-${key}"></div>
+      ${figure.caption ? `<p class="result-brief-note">${escapeHtml(figure.caption)}</p>` : ""}
     </figure>`;
   }
 
-  function tableHtml(table) {
+  function tableHtml(table, heading = "h4") {
     const key = escapeAttribute(table.key);
     const headingId = `result-brief-table-${key}`;
     const headers = table.headers.map((text) => `<th scope="col">${escapeHtml(text)}</th>`).join("");
     const rows = table.rows.map(([label, ...values]) => `<tr><th scope="row">${escapeHtml(label)}</th>${values.map((value) =>
       `<td>${escapeHtml(value)}</td>`).join("")}</tr>`).join("");
     return `<section class="result-brief-block">
-      <h4 id="${headingId}">${numberedTitle(table, "表")}</h4>
+      <${heading} class="result-brief-block-title" id="${headingId}">${numberedTitle(table, "表")}</${heading}>
       <div class="table-scroll result-brief-table" data-brief-table="${key}">
         <table aria-labelledby="${headingId}"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>
       </div>
@@ -46,7 +46,8 @@
     </section>`;
   }
 
-  function chapterBlocks(blocks, figures, tables) {
+  function chapterBlocks({ blocks = [], appendix }, figures, tables) {
+    const heading = appendix ? "h5" : "h4";
     const content = [];
     for (const { kind, key } of blocks) {
       const isFigure = kind === "figure";
@@ -54,8 +55,8 @@
       const item = entries.get(key);
       if (!item) continue;
       entries.delete(key);
-      content.push({ chart: isFigure && (item.kind === "columns" || item.kind === "lines"),
-        html: (isFigure ? figureHtml : tableHtml)(item) });
+      content.push({ chart: isFigure && ["trend", "annual", "columns", "lines"].includes(item.kind),
+        html: (isFigure ? figureHtml : tableHtml)(item, heading) });
     }
     const layout = [];
     for (let index = 0; index < content.length; index += 1) {
@@ -71,17 +72,26 @@
   function chaptersHtml(brief) {
     const figures = new Map(brief.figures.map((figure) => [figure.key, figure]));
     const tables = new Map(brief.tables.map((table) => [table.key, table]));
-    if (!brief.sections?.length) return [...figures.values()].map(figureHtml).join("") + [...tables.values()].map(tableHtml).join("");
-    return brief.sections.map((section) => {
+    if (!brief.sections?.length) return [...figures.values()].map((figure) => figureHtml(figure)).join("") +
+      [...tables.values()].map((table) => tableHtml(table)).join("");
+    const chapters = brief.sections.map((section) => {
       const headingId = `result-brief-chapter-${escapeAttribute(section.key)}`;
+      const heading = section.appendix ? "h4" : "h3";
       const intro = (section.intro || []).map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
-      const blocks = chapterBlocks(section.blocks || [], figures, tables);
+      const blocks = chapterBlocks(section, figures, tables);
       return `<section class="result-brief-section result-brief-chapter" aria-labelledby="${headingId}">
-        <h3 id="${headingId}">${escapeHtml(section.title)}</h3>
+        <${heading} id="${headingId}" class="result-brief-chapter-title">${escapeHtml(section.title)}</${heading}>
         ${intro ? `<div class="result-brief-intro">${intro}</div>` : ""}
         ${blocks}
       </section>`;
-    }).join("");
+    });
+    const appendixIndex = brief.sections.findIndex(({ appendix }) => appendix);
+    if (appendixIndex < 0) return chapters.join("");
+    return `${chapters.slice(0, appendixIndex).join("")}
+      <section class="result-brief-appendix" aria-labelledby="result-brief-appendix-title">
+        <h3 id="result-brief-appendix-title">附录</h3>
+        ${chapters.slice(appendixIndex).join("")}
+      </section>`;
   }
 
   function buildHtml(brief, message) {
@@ -95,7 +105,7 @@
       </section>
       <section class="result-brief-section result-brief-executive" aria-labelledby="result-brief-summary-title">
         <h3 id="result-brief-summary-title">核心结论</h3>
-        <p class="result-brief-summary">${escapeHtml(brief.summary)}</p>
+        ${brief.summary ? `<p class="result-brief-summary">${escapeHtml(brief.summary)}</p>` : ""}
         ${definitionList(brief.metrics, "result-brief-metrics")}
         ${definitionList(brief.findings, "result-brief-findings")}
       </section>

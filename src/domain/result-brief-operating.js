@@ -12,7 +12,6 @@
 })(typeof globalThis !== "undefined" ? globalThis : window, function ({ hourIndexToTimestamp }, { closeAmount }) {
   const HOURS_PER_YEAR = 8760;
   const MONTHS = Array.from({ length: 12 }, (_, index) => `${index + 1} 月`);
-  const QUARTERS = ["一季度", "二季度", "三季度", "四季度"];
   const TIME_BLOCKS = ["00–05 时", "06–11 时", "12–17 时", "18–23 时"];
   const integer = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
   const decimal = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -60,6 +59,11 @@
     return group.energyMwh > 0 ? group.spotRevenue / group.energyMwh : null;
   }
 
+  function captureSpread(group) {
+    const captured = capturePrice(group);
+    return captured === null || !group.hours ? null : captured - marketMean(group);
+  }
+
   function annualEnergyFigure(annual, totalEnergy) {
     if (annual.length < 2 || !annual.every((row, index) => Number.isInteger(row?.year) && Number.isFinite(row.energyMwh) &&
         row.energyMwh >= 0 && (index === 0 || row.year === annual[index - 1].year + 1)) ||
@@ -68,13 +72,33 @@
       unit: "万 MWh", series: [{ name: "结算电量", values: annual.map((row) => row.energyMwh / 10000) }] };
   }
 
-  function monthlyFigures(months) {
-    return [
-      { key: "monthly-energy", title: "首年月度结算电量", kind: "columns", labels: MONTHS, unit: "万 MWh",
-        series: [{ name: "结算电量", values: months.map((month) => month.energyMwh / 10000) }] },
-      { key: "monthly-price", title: "首年月度现货均价与捕获电价", kind: "lines", labels: MONTHS, unit: "元/MWh",
-        series: [{ name: "现货均价", values: months.map(marketMean) }, { name: "捕获电价", values: months.map(capturePrice) }] }
-    ];
+  function monthlyCaptureFigure(months) {
+    return {
+      key: "monthly-capture", title: "首年月度电量与捕获价差", kind: "monthly-capture", labels: MONTHS,
+      energyUnit: "万 MWh", spreadUnit: "元/MWh", caption: "捕获价差为各月捕获电价减去同月现货均价。",
+      series: [
+        { name: "结算电量", values: months.map((month) => month.energyMwh / 10000) },
+        { name: "捕获价差", values: months.map(captureSpread) }
+      ]
+    };
+  }
+
+  function monthlyFinding(months, totals, first) {
+    if (!(totals.energyMwh > 0) || !closeAmount(capturePrice(totals), first.capturePrice)) return "";
+    let distribution = 0;
+    let withinMonth = 0;
+    for (const month of months) {
+      const energyShare = month.energyMwh / totals.energyMwh;
+      distribution += (energyShare - month.hours / totals.hours) * marketMean(month);
+      withinMonth += energyShare * (captureSpread(month) ?? 0);
+    }
+    const difference = first.capturePrice - first.spotAvgPrice;
+    if (!closeAmount(distribution + withinMonth, difference) ||
+        Math.max(Math.abs(distribution), Math.abs(withinMonth)) < 0.005) return "";
+    const comparison = Math.abs(difference) < 0.005 ? "与现货时均价基本持平"
+      : `较现货时均价${difference > 0 ? "高" : "低"} ${asPrice(Math.abs(difference))} 元/MWh`;
+    const signed = (value) => `${value >= 0.005 ? "+" : ""}${asPrice(value)}`;
+    return `首年捕获电价${comparison}。电量在各月的分布贡献 ${signed(distribution)} 元/MWh，各月内部的捕获价差贡献 ${signed(withinMonth)} 元/MWh。`;
   }
 
   function durationFigure(sortedPrices) {
@@ -90,23 +114,12 @@
     return [label, energy(group.energyMwh), rate(group.energyMwh, totalEnergy)];
   }
 
-  function buildQuarterTable(quarters, totalEnergy) {
-    return {
-      key: "quarterly-energy", title: "首年季度电量分布",
-      headers: ["季度", "结算电量（MWh）", "电量占比（%）", "日均电量（MWh）"],
-      rows: quarters.map((quarter, index) => [...energyRow(QUARTERS[index], quarter, totalEnergy), energy(quarter.energyMwh * 24 / quarter.hours)])
-    };
-  }
-
   function buildMonthlyTable(months) {
     return {
       key: "monthly-price-energy", title: "首年月度电量与电价",
       headers: ["月份", "结算电量（MWh）", "现货均价（元/MWh）", "捕获电价（元/MWh）", "捕获价差（元/MWh）"],
-      rows: months.map((month, index) => {
-        const mean = marketMean(month);
-        const capture = capturePrice(month);
-        return [MONTHS[index], energy(month.energyMwh), asPrice(mean), asPrice(capture), asPrice(capture === null ? null : capture - mean)];
-      })
+      rows: months.map((month, index) => [MONTHS[index], energy(month.energyMwh), asPrice(marketMean(month)),
+        asPrice(capturePrice(month)), asPrice(captureSpread(month))])
     };
   }
 
@@ -144,15 +157,17 @@
     };
   }
 
-  function hourlyExhibits({ hourly, totals }) {
+  function hourlyExhibits({ hourly, totals }, first) {
     const monthIndex = (row) => Number(row.time.slice(-11, -9)) - 1;
     const months = groupHours(hourly, MONTHS.length, monthIndex);
-    const quarters = groupHours(hourly, QUARTERS.length, (row) => Math.floor(monthIndex(row) / 3));
     const timeBlocks = groupHours(hourly, TIME_BLOCKS.length, (row) => Math.floor(Number(row.time.slice(-5, -3)) / 6));
     const sortedPrices = hourly.map((row) => row.spotPrice).sort((a, b) => a - b);
+    const monthly = totals.energyMwh > 0 ? monthlyCaptureFigure(months) : null;
     return {
-      figures: [...monthlyFigures(months), durationFigure(sortedPrices)],
-      tables: [buildQuarterTable(quarters, totals.energyMwh), buildMonthlyTable(months), buildBandsTable(hourly, sortedPrices, totals), buildTimeTable(timeBlocks, totals.energyMwh)]
+      figures: [...(monthly ? [monthly] : []), durationFigure(sortedPrices)],
+      tables: [buildMonthlyTable(months), buildBandsTable(hourly, sortedPrices, totals), buildTimeTable(timeBlocks, totals.energyMwh)],
+      monthly,
+      finding: monthlyFinding(months, totals, first)
     };
   }
 
@@ -160,14 +175,13 @@
     const annual = Array.isArray(result?.annualRows) ? result.annualRows.slice().sort((a, b) => a?.year - b?.year) : [];
     const annualEnergy = annualEnergyFigure(annual, result?.totalEnergy);
     const saved = validFirstYearHours(result?.hourlyPreview, annual[0]);
-    const { figures, tables } = saved ? hourlyExhibits(saved) : { figures: [], tables: [] };
+    const { figures, tables, monthly, finding } = saved ? hourlyExhibits(saved, annual[0]) : { figures: [], tables: [] };
     if (annualEnergy) figures.unshift(annualEnergy);
     const sections = [];
-    const settlement = [...(annualEnergy ? [figureBlock(annualEnergy.key)] : []),
-      ...(saved ? [figureBlock("monthly-energy"), tableBlock("quarterly-energy")] : [])];
-    if (settlement.length) sections.push({ key: "settlement", title: "结算电量", intro: [], blocks: settlement });
-    if (saved) sections.push({ key: "spot-detail", title: "首年现货与电量分布", intro: [], blocks: [
-      figureBlock("monthly-price"), tableBlock("monthly-price-energy"), figureBlock("duration-price"), tableBlock("price-bands"), tableBlock("time-blocks")
+    if (annualEnergy) sections.push({ key: "settlement", title: "结算电量", intro: [], blocks: [figureBlock(annualEnergy.key)] });
+    if (saved) sections.push({ key: "spot-detail", title: "首年现货与电量分布", intro: finding ? [finding] : [], blocks: [
+      ...(monthly ? [figureBlock(monthly.key)] : []), tableBlock("monthly-price-energy"),
+      figureBlock("duration-price"), tableBlock("price-bands"), tableBlock("time-blocks")
     ] });
     return { figures, tables, sections };
   }

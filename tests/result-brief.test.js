@@ -49,12 +49,15 @@ assert.equal(brief.projectName, "测算时的项目");
 assert.equal(brief.context.find(({ label }) => label === "测算方案").value, "测算时的方案");
 assert.equal(brief.context.find(({ label }) => label === "项目类型").value, "江苏 · 风电 · 海上");
 assert.equal(brief.versionId, result.resultVersion.id);
-assert.match(brief.summary, /132\.00 万元.*330\.00 元\/MWh/);
+assert.deepEqual(brief.metrics.slice(0, 2).map(({ value }) => value), ["132.00 万元", "330.00 元/MWh"]);
 assert.equal(brief.trace, undefined);
 assert.equal(brief.assumptions, undefined);
-assert.match(brief.findings.find(({ label }) => label === "电价变化").value, /2030 至 2031 年度电净价下降 10\.00/);
-assert.match(brief.sections.find(({ key }) => key === "price").intro.join(""), /现货时均价 302\.50.*捕获电价 305\.00.*差价机制结算减少 20\.00/);
-assert.match(brief.sections.find(({ key }) => key === "storage").intro.join(""), /无储收入的 4\.76%.*15\.00 元\/MWh.*首年往返效率 88\.00%.*充电 100 MWh/);
+assert.match(brief.findings.find(({ label }) => label === "电价变化").value, /2030 至 2031 年.*335\.00 降至 325\.00.*减少 10\.00/);
+assert.match(brief.figures.find(({ key }) => key === "price").caption, /现货时均价 302\.50.*捕获电价 305\.00/);
+assert.match(brief.sections.find(({ key }) => key === "turning-point").intro.join(""), /差价机制结算贡献 -20\.00/);
+assert.match(brief.sections.find(({ key }) => key === "storage").intro.join(""), /无储收入的 4\.76%.*15\.00 元\/MWh/);
+assert.match(brief.sections.find(({ key }) => key === "appendix-storage").intro.join(""), /首年往返效率 88\.00%.*充电 100 MWh/);
+assert.deepEqual(brief.sections.filter(({ appendix }) => !appendix).map(({ key }) => key), ["results", "turning-point", "storage"]);
 assert.deepEqual(brief.tables.find(({ key }) => key === "storage").rows, [
   ["有储全口径收入", "67.00", "132.00"], ["无储全口径收入", "64.00", "126.00"], ["配储全口径增量", "3.00", "6.00"],
   ["其中现货套利增量", "2.20", "4.40"], ["放电收入", "4.20", "8.40"], ["充电机会成本", "2.00", "4.00"],
@@ -70,14 +73,16 @@ const bridge = brief.figures.find(({ key }) => key === "first-price-bridge").ite
 assert.equal(bridge.at(-1).role, "end");
 assert.equal(bridge.slice(0, -1).reduce((sum, item) => sum + item.value, 0), bridge.at(-1).value);
 assert.deepEqual(brief.figures.map(({ key, number }) => [key, number]), [
-  ["annual-energy", 1], ["price", 2], ["first-price-bridge", 3], ["annual-income", 4], ["income", 5], ["annual-storage", 6]
+  ["price", 1], ["annual-income", 2], ["annual-energy", 3], ["income", 4], ["turning-point-bridge", 5],
+  ["first-price-bridge", 6], ["annual-storage", 7]
 ]);
 assert.deepEqual(brief.tables.map(({ key, number }) => [key, number]), [
-  ["income-details", 1], ["mechanism-settlement", 2], ["storage", 3], ["annual", 4]
+  ["income-details", 1], ["turning-point", 2], ["mechanism-settlement", 3], ["storage", 4], ["annual", 5]
 ]);
 assert.deepEqual(brief.tables.find(({ key }) => key === "income-details").rows.at(-1), ["全口径收入合计", "132.00", "330.00", "100.00"]);
 const components = brief.figures.find(({ key }) => key === "income").items;
-assert.equal(components.reduce((sum, item) => sum + item.value, 0), 132);
+assert.equal(components.reduce((sum, item) => sum + item.value, 0), 10);
+assert.ok(!components.some(({ colorKey }) => colorKey === "spot"));
 assert.equal(components.find(({ label }) => label === "三项费用").value, -4);
 assert.equal(JSON.stringify({ project, scenario, result }), before, "生成简报不修改历史输入和结果");
 
@@ -89,8 +94,8 @@ assert.equal(legacy.projectName, project.name);
 assert.equal(legacy.versionId, "");
 assert.match(legacy.context.find(({ label }) => label === "测算周期").value, /^2030 年$/);
 assert.deepEqual(legacy.tables.map(({ key, number }) => [key, number]), [["income-details", 1], ["mechanism-settlement", 2], ["annual", 3]]);
-assert.match(legacy.sections.find(({ key }) => key === "income").intro.join(""), /费用与其他净收入合计/);
-assert.doesNotMatch(legacy.sections.find(({ key }) => key === "income").intro.join(""), /三项费用/, "历史结果不从当前参数拆分费用");
+assert.match(legacy.figures.find(({ key }) => key === "income").caption, /费用与其他净收入合计/);
+assert.doesNotMatch(legacy.figures.find(({ key }) => key === "income").caption, /三项费用/, "历史结果不从当前参数拆分费用");
 const partial = buildBrief({ project, scenario, result: {
   annualRows: [{ ...row, storageDispatch: { ...row.storageDispatch, withStorageFullRevenue: 100 }, spotAvgPrice: undefined, mechanismRevenue: undefined }],
   totalFullRevenue: 670000, totalEnergy: 2000, avgFullRevenuePrice: 335
@@ -121,8 +126,8 @@ assert.match(root.innerHTML, /data-brief-chart="price"/);
 assert.match(root.innerHTML, /data-brief-chart="income"/);
 assert.match(root.innerHTML, /data-brief-table="annual"/);
 const visible = root.innerHTML.replace(/<[^>]*>/g, "");
-assert.match(visible, /图 2\s*年度电价对比/);
-assert.match(visible, /表 4\s*年度测算结果/);
+assert.match(visible, /图 1\s*年度电价对比/);
+assert.match(visible, /配储收入增量[\s\S]*附录[\s\S]*表 5\s*年度测算结果/);
 assert.doesNotMatch(root.innerHTML, /result-archived-example|测算口径|演示现货曲线/);
 assert.doesNotMatch(root.innerHTML, /<(?:script|button|a\s|input|select|details)\b/i, "简报正文仅展示图文和表格");
 render({ root, brief: null, message: "恢复后 <请重新测算>" });
