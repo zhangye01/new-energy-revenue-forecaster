@@ -19,8 +19,6 @@
     throw new Error("收入测算初始化失败：缺少收入规则或配储调度模块");
   }
 
-  const DEFAULT_STORAGE_EFFICIENCY = 0.9;
-
   function dayOfYearToMonthDay(dayOfYear) {
     const monthLengths = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let day = dayOfYear;
@@ -42,6 +40,53 @@
 
   function defaultGetHourlyEnergyForCalculation(project, year) {
     return project?.energyData?.hourlyByYear?.[year] || [];
+  }
+
+  function annualSpotRevenue(prices, hourlyHours, capacityMw) {
+    let revenue = 0;
+    for (let hour = 0; hour < prices.length; hour += 1) {
+      revenue += hourlyHours[hour] * capacityMw * prices[hour];
+    }
+    return revenue;
+  }
+
+  function dispatchAnnualStorage(project, prices, hourlyHours, efficiency, includeHourly = false) {
+    return dispatch.calculateHourlyDispatch({
+      prices, generationMwh: hourlyHours.map((hours) => hours * project.capacityMw),
+      powerMw: project.storagePowerMw, durationH: project.storageDurationH,
+      roundTripEfficiency: efficiency, includeHourly
+    });
+  }
+
+  function calculateStorageSpotPreview(project, scenario, run, options = {}) {
+    if (!project?.hasStorage || !priceForecast.validateForecastPriceData(project, run).ok) return null;
+    const efficiency = dispatch.resolveStorageEfficiency(project, scenario?.config);
+    const equipment = [project.capacityMw, project.storagePowerMw, project.storageDurationH];
+    if (!equipment.every((value) => Number.isFinite(value) && value > 0) || !dispatch.isStorageEfficiency(efficiency)) return null;
+    const getHours = options.getHourlyEnergyForCalculation ?? defaultGetHourlyEnergyForCalculation;
+    const annualRows = [];
+    let totalWithoutStorageSpotRevenue = 0;
+    let totalIncrementalRevenue = 0;
+    try {
+      for (let index = 0; index < project.forecastYears; index += 1) {
+        const year = project.startYear + index;
+        const hours = getHours(project, year, index + 1);
+        if (!Array.isArray(hours) || hours.length !== 8760) return null;
+        const prices = run.pricesByYear[year];
+        const { incrementalRevenue } = dispatchAnnualStorage(project, prices, hours, efficiency);
+        const withoutStorageSpotRevenue = annualSpotRevenue(prices, hours, project.capacityMw);
+        const withStorageSpotRevenue = withoutStorageSpotRevenue + incrementalRevenue;
+        if (!Number.isFinite(withStorageSpotRevenue)) return null;
+        annualRows.push({ year, withoutStorageSpotRevenue, withStorageSpotRevenue, incrementalRevenue });
+        totalWithoutStorageSpotRevenue += withoutStorageSpotRevenue;
+        totalIncrementalRevenue += incrementalRevenue;
+      }
+    } catch (_) {
+      return null;
+    }
+    const totalWithStorageSpotRevenue = totalWithoutStorageSpotRevenue + totalIncrementalRevenue;
+    if (!Number.isFinite(totalWithStorageSpotRevenue)) return null;
+    return { annualRows, totalWithoutStorageSpotRevenue, totalWithStorageSpotRevenue, totalIncrementalRevenue };
   }
 
   function emptyAnnualRow(year) {
@@ -108,11 +153,7 @@
       const annualHours = hourlyHours.reduce((sum, value) => sum + value, 0);
       const energyMwh = annualHours * project.capacityMw;
       const spotAvgPrice = prices.reduce((sum, value) => sum + value, 0) / 8760;
-      let spotRevenue = 0;
-      for (let i = 0; i < 8760; i += 1) {
-        const hourlyEnergy = hourlyHours[i] * project.capacityMw;
-        spotRevenue += hourlyEnergy * prices[i];
-      }
+      const spotRevenue = annualSpotRevenue(prices, hourlyHours, project.capacityMw);
       const capturePrice = energyMwh > 0 ? spotRevenue / energyMwh : 0;
       const captureSpread = capturePrice - spotAvgPrice;
 
@@ -132,19 +173,9 @@
       const greenCertRevenue = nonMechanismEnergy * envAllocation.greenCertRatio * envAllocation.greenCertPrice;
       const greenPremiumRevenue = nonMechanismEnergy * envAllocation.greenPremiumRatio * envAllocation.greenPremiumPrice;
       const envRevenue = greenCertRevenue + greenPremiumRevenue;
-      const storageSupplementPerMwh = project.hasStorage
-        ? Number(cfg.storageCapacityCompPrice || 0)
-          + Number(cfg.storageAncillaryRevenuePrice || 0)
-          + Number(cfg.storageOtherRevenuePrice || 0)
-        : 0;
-      const independentSupplementRevenue = energyMwh * storageSupplementPerMwh;
-      const efficiency = cfg.storageRoundTripEfficiency ?? DEFAULT_STORAGE_EFFICIENCY;
-      const dispatchResult = project.hasStorage ? dispatch.calculateHourlyDispatch({
-        prices, generationMwh: hourlyHours.map((hours) => hours * project.capacityMw),
-        powerMw: project.storagePowerMw, durationH: project.storageDurationH,
-        roundTripEfficiency: efficiency, includeHourly: year === startYear
-      }) : null;
-      const storageSupplementRevenue = independentSupplementRevenue + (dispatchResult?.incrementalRevenue ?? 0);
+      const efficiency = dispatch.resolveStorageEfficiency(project, cfg);
+      const dispatchResult = project.hasStorage ? dispatchAnnualStorage(project, prices, hourlyHours, efficiency, year === startYear) : null;
+      const storageSupplementRevenue = dispatchResult?.incrementalRevenue ?? 0;
 
       const feeConfig = rules.getFeeConfigForYear(project, cfg, year);
       const comprehensiveFeePerMwh = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee + feeConfig.otherFee;
@@ -177,11 +208,12 @@
         fullRevenue,
         fullRevenuePrice,
         ...(dispatchResult ? { storageDispatch: {
-          version: dispatch.ALGORITHM_VERSION, powerMw: project.storagePowerMw, durationH: project.storageDurationH,
+          version: dispatch.ALGORITHM_VERSION, revenueMode: dispatch.SPOT_REVENUE_MODE,
+          powerMw: project.storagePowerMw, durationH: project.storageDurationH,
           capacityMwh: project.storagePowerMw * project.storageDurationH, roundTripEfficiency: efficiency,
           chargeMwh: dispatchResult.chargeMwh, dischargeMwh: dispatchResult.dischargeMwh,
           chargeOpportunityCost: dispatchResult.chargeOpportunityCost, dischargeRevenue: dispatchResult.dischargeRevenue,
-          incrementalRevenue: dispatchResult.incrementalRevenue, independentSupplementRevenue,
+          incrementalRevenue: dispatchResult.incrementalRevenue, independentSupplementRevenue: 0,
           withoutStorageSpotRevenue: spotRevenue, withStorageSpotRevenue: spotRevenue + dispatchResult.incrementalRevenue,
           withoutStorageFullRevenue: fullRevenue - storageSupplementRevenue, withStorageFullRevenue: fullRevenue
         } } : {}),
@@ -195,7 +227,6 @@
           mechanismRatio * (cfg.mechanismPrice - mechanismReferencePrice)
           + (1 - mechanismRatio) * ltPnlPrice
           + marketTradeRatio * envValuePerMwh
-          + storageSupplementPerMwh
           - comprehensiveFeePerMwh
           + feeConfig.otherIncome;
         hourlyPreview = [];
@@ -228,7 +259,7 @@
       { label: "差价机制结算", amount: first.mechanismRevenue, tone: first.mechanismRevenue >= 0 ? "green" : "red" },
       { label: "交易策略损益", amount: first.ltPnlRevenue, tone: first.ltPnlRevenue >= 0 ? "green" : "red" },
       { label: "环境价值兑现", amount: first.envRevenue, tone: "orange" },
-      { label: "配储补充收益", amount: first.storageSupplementRevenue, tone: "green" },
+      { label: "配储现货增量", amount: first.storageSupplementRevenue, tone: "green" },
       { label: "综合费用", amount: -first.comprehensiveFee, tone: "red" },
       { label: "其他收入项", amount: first.otherIncome, tone: "green" }
     ];
@@ -249,6 +280,10 @@
 
   return Object.freeze({
     calculateScenarioResult,
-    hourIndexToTimestamp
+    calculateStorageSpotPreview,
+    hourIndexToTimestamp,
+    isStorageEfficiency: dispatch.isStorageEfficiency,
+    resolveStorageEfficiency: dispatch.resolveStorageEfficiency,
+    STORAGE_SPOT_REVENUE_MODE: dispatch.SPOT_REVENUE_MODE
   });
 });

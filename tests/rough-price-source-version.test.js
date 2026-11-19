@@ -65,6 +65,14 @@ assert.equal(Object.hasOwn(snapshot.calculationConfig.envManualValuesByYear[2026
 assert.notEqual(snapshot.config, scenario.config);
 assert.notEqual(snapshot.calculationConfig, snapshot.config);
 assert.equal(rough.baselineResultState(project, scenario, result).current, true);
+const oldStorageResult = copy(result);
+delete oldStorageResult.sourceContext.storageRoundTripEfficiency;
+delete oldStorageResult.annualRows[0].storageDispatch.revenueMode;
+oldStorageResult.annualRows[0].storageDispatch.independentSupplementRevenue = 100;
+const oldStorageBefore = JSON.stringify(oldStorageResult);
+assert.equal(rough.baselineResultState(project, scenario, oldStorageResult).reason, "legacy_storage_revenue");
+assert.equal(rough.baselineResultState({ ...project, storageRoundTripEfficiency: 0.92 }, scenario, oldStorageResult).reason, "legacy_storage_revenue");
+assert.equal(JSON.stringify(oldStorageResult), oldStorageBefore);
 assert.equal(rough.compareBaselineResult(project, scenario, snapshot, result).ok, true);
 const displayedSource = rough.compareBaselineResult(project, scenario, snapshot, result).source;
 displayedSource.storageContext.storagePowerMw = 1;

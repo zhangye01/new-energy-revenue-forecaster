@@ -18,7 +18,11 @@
   }
 
   const LEGACY_FEE_VALUE_KEYS = scenarioConfig.LEGACY_FEE_VALUE_KEYS;
-  const LEGACY_CONFIG_KEYS = new Set([...scenarioConfig.LEGACY_ENV_VALUE_KEYS, ...LEGACY_FEE_VALUE_KEYS]);
+  const LEGACY_STORAGE_CONFIG_KEYS = [
+    "storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice",
+    "storageOtherRevenuePrice", "storageRoundTripEfficiency"
+  ];
+  const LEGACY_CONFIG_KEYS = new Set([...scenarioConfig.LEGACY_ENV_VALUE_KEYS, ...LEGACY_FEE_VALUE_KEYS, ...LEGACY_STORAGE_CONFIG_KEYS]);
   const FALLBACK_PROVINCE_DEFAULTS = Object.freeze({
     mechanismEnabled: true,
     mechanismRatio: 0.36,
@@ -120,9 +124,8 @@
     };
   }
 
-  // Efficiency defaults in the calculation/form view, not during hydration:
-  // opening a historical scenario must not add fields to its saved assumptions.
-  const CONFIG_KEYS = new Set([...Object.keys(defaultScenarioConfig()), "storageRoundTripEfficiency"]);
+  // Historical storage fields stay readable for saved inputs and rough estimates.
+  const CONFIG_KEYS = new Set(Object.keys(defaultScenarioConfig()).filter((key) => !LEGACY_STORAGE_CONFIG_KEYS.includes(key)));
   const ANNUAL_CONFIG_KEYS = new Set(["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"]);
   const CONFIRMATION_REVIEW_VERSION = 1;
   const CONFIRMATION_SOURCES = new Set(["explicit", "rough_edit"]);
@@ -157,7 +160,7 @@
 
   function isConfigConfirmed(scenario, key, value = scenario?.config?.[key]) {
     if (key === "otherNetIncome") return isOtherNetIncomeConfirmed(scenario, value);
-    return (CONFIG_KEYS.has(key) || LEGACY_FEE_VALUE_KEYS.includes(key))
+    return (CONFIG_KEYS.has(key) || LEGACY_FEE_VALUE_KEYS.includes(key) || LEGACY_STORAGE_CONFIG_KEYS.includes(key))
       // A partly edited historical table does not prove that its remaining years
       // were reviewed. Require explicit table confirmation regardless of old migrations.
       && (!ANNUAL_CONFIG_KEYS.has(key) || scenario?.confirmedConfigSources?.[key] === "explicit")
@@ -273,6 +276,7 @@
         confirmedConfigSources: cloneConfigValue(scenario.confirmedConfigSources || {}) };
     }
     for (const key of LEGACY_CONFIG_KEYS) {
+      if (!project.hasStorage && LEGACY_STORAGE_CONFIG_KEYS.includes(key)) continue;
       if (Object.hasOwn(scenario.confirmedConfig || {}, key)) next.confirmedConfig[key] = cloneConfigValue(scenario.confirmedConfig[key]);
       if (Object.hasOwn(scenario.confirmedConfigSources || {}, key)) next.confirmedConfigSources[key] = cloneConfigValue(scenario.confirmedConfigSources[key]);
     }

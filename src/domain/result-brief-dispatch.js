@@ -48,6 +48,10 @@
     };
   }
 
+  function usesSpotStorage(rows) {
+    return rows.length > 0 && rows.every((row) => row.storageDispatch?.revenueMode === calculator.STORAGE_SPOT_REVENUE_MODE);
+  }
+
   function annualStorage(rows) {
     const required = ["withStorageFullRevenue", "withoutStorageFullRevenue", "incrementalRevenue", "independentSupplementRevenue"];
     if (!rows.every((row) => {
@@ -56,13 +60,12 @@
         && agrees(item.withStorageFullRevenue - item.withoutStorageFullRevenue, item.incrementalRevenue + item.independentSupplementRevenue);
     })) return null;
 
+    const spotOnly = usesSpotStorage(rows);
+    const series = [{ name: spotOnly ? "配储现货增量" : "现货套利净收益", values: rows.map((row) => row.storageDispatch.incrementalRevenue / 10000) }];
+    if (!spotOnly) series.push({ name: "独立配储收益", values: rows.map((row) => row.storageDispatch.independentSupplementRevenue / 10000) });
     return {
-      key: "annual-storage", kind: "columns", title: "年度配储收益构成", unit: "万元",
-      labels: rows.map((row) => String(row.year)),
-      series: [
-        { name: "现货套利净收益", values: rows.map((row) => row.storageDispatch.incrementalRevenue / 10000) },
-        { name: "独立配储收益", values: rows.map((row) => row.storageDispatch.independentSupplementRevenue / 10000) }
-      ]
+      key: "annual-storage", kind: "columns", title: spotOnly ? "年度配储现货增量" : "年度配储收益构成", unit: "万元",
+      labels: rows.map((row) => String(row.year)), series
     };
   }
 
@@ -114,5 +117,5 @@
     return exhibits;
   }
 
-  return Object.freeze({ buildDispatchExhibits });
+  return Object.freeze({ buildDispatchExhibits, usesSpotStorage });
 });

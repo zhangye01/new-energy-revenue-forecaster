@@ -79,7 +79,7 @@ async function testUnconfiguredAndHistoricalContinuation() {
   harness.project = null;
   panel.render();
   assert.equal(nodes.status.textContent, "请选择项目");
-  assert.deepEqual(harness.taskView, { project: null, task: null, current: false, serviceReady: false, phase: "no-project" });
+  assert.deepEqual(harness.taskView, { project: null, task: null, current: false, serviceReady: false, phase: "no-project", usable: false });
 
   harness.project = project;
   panel.render();
@@ -100,7 +100,7 @@ async function testUnconfiguredAndHistoricalContinuation() {
   panel.render();
   assert.equal(nodes.next.disabled, false);
   assert.equal(nodes["next-note"].textContent, "可使用当前电价继续。");
-  assert.deepEqual(harness.taskView, { project, task: null, current: false, serviceReady: false, phase: "unavailable" });
+  assert.deepEqual(harness.taskView, { project, task: null, current: false, serviceReady: false, phase: "unavailable", usable: true });
   harness.usable = false;
   harness.input = { ok: false, errors: ["供需输入待确认。"] };
   panel.render();
@@ -249,7 +249,7 @@ async function testStaleTasksAndRouteChanges() {
   const project2 = { id: "project-2" };
   harness.project = project2;
   panel.render();
-  assert.deepEqual(harness.taskView, { project: project2, task: null, current: false, serviceReady: true, phase: "ready" });
+  assert.deepEqual(harness.taskView, { project: project2, task: null, current: false, serviceReady: true, phase: "ready", usable: false });
   harness.project = project;
   panel.render();
   assert.equal(harness.taskView.task.id, "task-2");
@@ -266,7 +266,7 @@ async function testStaleTasksAndRouteChanges() {
   panel.render();
   resolveSubmit(task("queued", { id: "task-3", inputFingerprint: "supply-2" }));
   await settle();
-  assert.deepEqual(harness.taskView, { project: project2, task: null, current: false, serviceReady: true, phase: "ready" });
+  assert.deepEqual(harness.taskView, { project: project2, task: null, current: false, serviceReady: true, phase: "ready", usable: false });
   harness.project = project;
   panel.render();
   assert.equal(harness.taskView.task.id, "task-3");

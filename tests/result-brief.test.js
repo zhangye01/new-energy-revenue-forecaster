@@ -86,6 +86,29 @@ assert.ok(!components.some(({ colorKey }) => colorKey === "spot"));
 assert.equal(components.find(({ label }) => label === "三项费用").value, -4);
 assert.equal(JSON.stringify({ project, scenario, result }), before, "生成简报不修改历史输入和结果");
 
+const spotRows = result.annualRows.map((item) => ({
+  ...item, storageSupplementRevenue: 22000, fullRevenue: item.fullRevenue - 8000,
+  fullRevenuePrice: (item.fullRevenue - 8000) / item.energyMwh,
+  storageDispatch: {
+    ...item.storageDispatch, revenueMode: "spot_increment_only", independentSupplementRevenue: 0,
+    withStorageFullRevenue: item.fullRevenue - 8000,
+    withoutStorageSpotRevenue: item.spotRevenue, withStorageSpotRevenue: item.spotRevenue + 22000
+  }
+}));
+const spotBrief = buildBrief({ project, scenario, result: {
+  ...result, annualRows: spotRows, totalFullRevenue: 1304000, avgFullRevenuePrice: 326
+} });
+const spotTable = spotBrief.tables.find(({ key }) => key === "storage");
+assert.equal(spotTable.title, "有储与无储现货收益对比");
+assert.deepEqual(spotTable.rows, [
+  ["无储现货收益", "60.00", "122.00"], ["有储现货收益", "62.20", "126.40"], ["配储现货增量", "2.20", "4.40"],
+  ["放电收入", "4.20", "8.40"], ["充电机会成本", "2.00", "4.00"]
+]);
+assert.match(spotBrief.sections.find(({ key }) => key === "storage").intro[0], /折合 11\.00 元\/MWh/);
+assert.deepEqual(spotBrief.figures.find(({ key }) => key === "annual-storage").series, [
+  { name: "配储现货增量", values: [2.2, 2.2] }
+]);
+
 const legacy = buildBrief({
   project: { ...project, hasStorage: false }, scenario,
   result: { annualRows: [{ ...row, storageDispatch: undefined }], totalFullRevenue: 670000, totalEnergy: 2000, avgFullRevenuePrice: 335 }

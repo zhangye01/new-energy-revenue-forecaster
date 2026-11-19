@@ -249,5 +249,39 @@
     return { html, chart };
   }
 
-  return Object.freeze({ buildView, mountChart });
+  function renderStorageSummary(result) {
+    const metrics = [
+      ["without", "无储现货收益", result.totalWithoutStorageSpotRevenue],
+      ["with", "有储现货收益", result.totalWithStorageSpotRevenue],
+      ["increment", "配储现货增量", result.totalIncrementalRevenue]
+    ];
+    return `<div class="forecast-result-models">${metrics.map(([key, label, value]) => `
+      <div class="forecast-result-model"><h3>${label}</h3><strong class="forecast-storage-value" data-storage-spot="${key}">${formatPrice.format(value / 10000)} 万元</strong></div>`).join("")}</div>`;
+  }
+
+  function createStorageSpotPreview(documentRef, calculate) {
+    const panel = documentRef?.querySelector("#forecast-storage-preview");
+    const summary = documentRef?.querySelector("#forecast-storage-summary");
+    let cache = null;
+    return function render({ project, scenario, run }) {
+      if (!panel || !summary) return;
+      panel.hidden = !project?.hasStorage;
+      if (panel.hidden) { cache = null; return; }
+      let html = '<p class="forecast-result-empty">等待生效的逐时现货电价。</p>';
+      if (run) {
+        const years = expectedYears(project);
+        const inputs = [project, run, project.capacityMw, project.storagePowerMw, project.storageDurationH,
+          project.storageRoundTripEfficiency ?? scenario?.config?.storageRoundTripEfficiency,
+          ...years.flatMap((year) => [year, project.energyData?.hourlyByYear?.[year], run.pricesByYear?.[year]])];
+        if (!cache || cache.inputs.length !== inputs.length || !inputs.every((value, index) => value === cache.inputs[index])) {
+          cache = { inputs, result: calculate(project, scenario, run) };
+        }
+        html = cache.result ? renderStorageSummary(cache.result)
+          : '<p class="forecast-result-empty">请核对储能设备参数和全周期逐时发电量。</p>';
+      }
+      if (summary.innerHTML !== html) summary.innerHTML = html;
+    };
+  }
+
+  return Object.freeze({ buildView, mountChart, createStorageSpotPreview });
 });

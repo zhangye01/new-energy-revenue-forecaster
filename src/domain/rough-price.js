@@ -499,18 +499,16 @@
       validateNumber(config, "ltTargetPnl", "目标交易策略损益");
       validateNumber(config, "ltConvergeSpeed", "交易策略损益收敛步长", 0);
     }
-    if (project.hasStorage) {
+    if (project.hasStorage && !forBaseline) {
       [
-        ...(!forBaseline ? [["storageArbitragePrice", "配储套利收益"]] : []),
+        ["storageArbitragePrice", "配储套利收益"],
         ["storageCapacityCompPrice", "配储容量补偿"],
         ["storageAncillaryRevenuePrice", "配储辅助服务收益"],
         ["storageOtherRevenuePrice", "配储其他收益"]
       ].forEach(([key, label]) => validateNumber(config, key, label, 0));
-      const efficiency = config.storageRoundTripEfficiency;
-      if (forBaseline && efficiency != null &&
-          (!Number.isFinite(efficiency) || efficiency <= 0 || efficiency > 1)) {
-        errors.push("配储往返效率应大于0%且不超过100%。");
-      }
+    }
+    if (project.hasStorage && forBaseline && !calculator.isStorageEfficiency(calculator.resolveStorageEfficiency(project, config))) {
+      errors.push("配储往返效率应大于0%且不超过100%，请先核对项目基础信息。");
     }
     const completeness = [
       [scenarioConfig.getLtPricingMode(config), scenarioConfig.getLtManualCompleteness(project, config), "交易策略损益"],
@@ -728,10 +726,14 @@
 
   function stampBaselineResult(project, scenario, run, result) {
     if (!isObject(result) || !project?.id || !scenario?.id || !run?.id) return result;
+    const sourceContext = inputSourceContext(project, scenario);
+    if (project.hasStorage && result.annualRows?.[0]?.storageDispatch?.revenueMode === calculator.STORAGE_SPOT_REVENUE_MODE) {
+      sourceContext.storageRoundTripEfficiency = calculator.resolveStorageEfficiency(project, scenario.config);
+    }
     return {
       ...result,
       sourceContext: {
-        ...inputSourceContext(project, scenario),
+        ...sourceContext,
         runId: run.id,
         generatedAt: new Date().toISOString()
       }
@@ -763,6 +765,15 @@
     }
     if (!resultVersions.matchesSavedPriceSource(project, result)) {
       return state(false, "invalid_source_prices", "电价版本内容与保存的测算记录不一致，请核对曲线后重新测算。");
+    }
+    if (project?.hasStorage && Array.isArray(result.annualRows) && result.annualRows.some((row) => !row?.storageDispatch ||
+      (row.storageDispatch.revenueMode !== calculator.STORAGE_SPOT_REVENUE_MODE &&
+        Number.isFinite(row.storageDispatch.independentSupplementRevenue) && row.storageDispatch.independentSupplementRevenue !== 0))) {
+      return state(false, "legacy_storage_revenue", "当前显示上次测算结果，包含原配储收益。请重新发起基准测算，更新方案对比。");
+    }
+    if (project?.hasStorage && (source.storageRoundTripEfficiency === undefined ? project.storageRoundTripEfficiency != null :
+        source.storageRoundTripEfficiency !== calculator.resolveStorageEfficiency(project, scenario.config))) {
+      return state(false, "stale_context", "配储设备参数已变化，当前展示历史结果，请重新发起基准测算。");
     }
     if (source.runId !== project?.activeRunId) {
       return state(false, "stale_run", "生效现货预测已变化，当前展示旧预测版本的结果，请重新发起基准测算。");

@@ -190,11 +190,7 @@ const loadHarness = makeFields();
 const loadRefs = {
   ltPricingMode: { value: "" },
   envValueMode: { value: "" },
-  feeConfigMode: { value: "" },
-  storageArbitragePrice: { value: "" },
-  storageCapacityCompPrice: { value: "" },
-  storageAncillaryRevenuePrice: { value: "" },
-  storageOtherRevenuePrice: { value: "" }
+  feeConfigMode: { value: "" }
 };
 
 loadScenarioToForm({
@@ -247,7 +243,6 @@ assert.equal(loadHarness.fields.get("#green-cert-realize-ratio").value, "40");
 assert.equal(loadHarness.fields.get("#other-net-income").value, -1, "legacy other income 2 and fee 3 display a net of -1");
 assert.equal(loadRefs.ltPricingMode.value, "manual");
 assert.equal(loadRefs.feeConfigMode.value, "manual");
-assert.equal(loadRefs.storageArbitragePrice.value, 18);
 
 const lockHarness = makeFields({
   "#mechanism-enabled": "no",
@@ -260,37 +255,25 @@ const lockHarness = makeFields({
   "#mechanism-end-ym": "2029-12"
 });
 const lockRefs = {
-  scenarioStorageRevenueSection: new FakeTarget(),
-  storageArbitragePrice: new FakeTarget("18"),
-  storageCapacityCompPrice: new FakeTarget("7"),
-  storageAncillaryRevenuePrice: new FakeTarget("10"),
-  storageOtherRevenuePrice: new FakeTarget("3"),
   scenarioLockHint: new FakeTarget()
 };
 applyScenarioFieldLocks({
   refs: lockRefs,
   querySelector: lockHarness.querySelector,
-  locked: false,
-  canUseStorageRevenue: false
+  locked: false
 });
 assert.equal(lockHarness.fields.get("#mechanism-ratio").disabled, true);
 assert.equal(lockHarness.fields.get("#mechanism-duration-months").disabled, true);
-assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, true);
-assert.equal(lockRefs.storageArbitragePrice.disabled, true);
-assert.equal(lockRefs.storageArbitragePrice.value, "18", "hiding storage controls must preserve their loaded values");
 assert.equal(lockRefs.scenarioLockHint.textContent, "当前方案可编辑。");
 
 lockHarness.fields.get("#mechanism-enabled").value = "yes";
 applyScenarioFieldLocks({
   refs: lockRefs,
   querySelector: lockHarness.querySelector,
-  locked: true,
-  canUseStorageRevenue: true
+  locked: true
 });
 assert.equal(lockHarness.fields.get("#mechanism-price").disabled, true);
 assert.equal(lockHarness.fields.get("#mechanism-duration-months").disabled, true);
-assert.equal(lockRefs.scenarioStorageRevenueSection.hidden, false);
-assert.equal(lockRefs.storageCapacityCompPrice.disabled, true);
 assert.equal(lockRefs.scenarioLockHint.textContent, "当前方案已锁定，请切换方案或解锁。");
 
 const envHarness = makeFields({
@@ -377,16 +360,8 @@ const saveHarness = makeFields({
   "#ancillary-fee": "14",
   "#other-net-income": "-1"
 });
-saveHarness.querySelector("#storage-round-trip-efficiency").value = "90";
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const config = buildScenarioConfigFromForm({
-  project: { siteType: "offshore", hasStorage: true },
-  refs: {
-    storageArbitragePrice: { value: "18" },
-    storageCapacityCompPrice: { value: "7" },
-    storageAncillaryRevenuePrice: { value: "10" },
-    storageOtherRevenuePrice: { value: "3" }
-  },
   querySelector: saveHarness.querySelector,
   clamp,
   ltPricingMode: "manual",
@@ -414,20 +389,16 @@ assert.equal(config.greenPremiumRealizeRatio, 0.2);
 assert.equal(Object.hasOwn(config, "carbonEnabled"), false);
 assert.equal(Object.hasOwn(config, "carbonRealizeRatio"), false);
 assert.equal(config.otherNetIncome, -1);
-assert.equal(config.storageArbitragePrice, 18);
-assert.equal(config.storageRoundTripEfficiency, 0.9);
+assert.equal(Object.keys(config).some((key) => key.startsWith("storage")), false);
 assert.deepEqual(config.ltManualPricesByYear, { 2026: 8 });
 assert.deepEqual(config.feeManualValuesByYear, { 2026: { marketOpFee: 6 } });
 
 const inlandConfig = buildScenarioConfigFromForm({
-  project: { siteType: "onshore", hasStorage: false },
   querySelector: saveHarness.querySelector,
   clamp,
-  envAllocationDraft: {},
-  refs: {}
+  envAllocationDraft: {}
 });
 assert.equal(Object.hasOwn(inlandConfig, "carbonPrice"), false);
-assert.equal(inlandConfig.storageArbitragePrice, 0);
 assert.equal(inlandConfig.greenCertRealizeRatio, 0);
 
 const saveProject = {
@@ -457,11 +428,7 @@ const saveDraft = buildScenarioSaveDraft({
   refs: {
     ltPricingMode: { value: "manual" },
     envValueMode: { value: "global" },
-    feeConfigMode: { value: "manual" },
-    storageArbitragePrice: { value: "18" },
-    storageCapacityCompPrice: { value: "7" },
-    storageAncillaryRevenuePrice: { value: "10" },
-    storageOtherRevenuePrice: { value: "3" }
+    feeConfigMode: { value: "manual" }
   },
   querySelector: makeFields({
     "#scenario-name": "基准场景",
@@ -482,8 +449,7 @@ const saveDraft = buildScenarioSaveDraft({
         "#market-op-fee": "6",
     "#grid-assess-fee": "7",
     "#ancillary-fee": "14",
-    "#other-net-income": "-1",
-    "#storage-round-trip-efficiency": "90"
+    "#other-net-income": "-1"
   }).querySelector,
   clamp,
   scenarioConfig,
@@ -575,13 +541,10 @@ const numericHarness = makeFields({
   "#lt-year1-pnl": "0", "#lt-target-pnl": "0", "#lt-converge-speed": "0",
   "#green-cert-price": "0", "#green-cert-realize-ratio": "0",
   "#green-premium-price": "0", "#green-premium-realize-ratio": "0",
-  "#market-op-fee": "0", "#grid-assess-fee": "0", "#ancillary-fee": "0", "#other-net-income": "0",
-  "#storage-round-trip-efficiency": "90"
+  "#market-op-fee": "0", "#grid-assess-fee": "0", "#ancillary-fee": "0", "#other-net-income": "0"
 });
 const numericRefs = {
-  ltPricingMode: { value: "auto" }, envValueMode: { value: "global" }, feeConfigMode: { value: "global" },
-  storageArbitragePrice: { value: "0" }, storageCapacityCompPrice: { value: "0" },
-  storageAncillaryRevenuePrice: { value: "0" }, storageOtherRevenuePrice: { value: "0" }
+  ltPricingMode: { value: "auto" }, envValueMode: { value: "global" }, feeConfigMode: { value: "global" }
 };
 const numericOptions = {
   project: saveProject, scenario: saveScenario, refs: numericRefs, querySelector: numericHarness.querySelector,
@@ -598,7 +561,7 @@ durationInput.value = "1";
 assert.equal(buildScenarioSaveDraft(numericOptions).config.mechanismEndYm, "2026-01");
 durationInput.value = "24";
 for (const [selector, field] of numericHarness.fields) {
-  if (["#scenario-name", "#mechanism-enabled", "#mechanism-start-ym", "#mechanism-duration-months", "#mechanism-end-ym", "#mechanism-reference-mode", "#storage-round-trip-efficiency"].includes(selector)) continue;
+  if (["#scenario-name", "#mechanism-enabled", "#mechanism-start-ym", "#mechanism-duration-months", "#mechanism-end-ym", "#mechanism-reference-mode"].includes(selector)) continue;
   for (const emptyValue of ["", "  "]) {
     field.value = emptyValue;
     const invalidDraft = buildScenarioSaveDraft(numericOptions);
@@ -610,26 +573,11 @@ for (const [selector, field] of numericHarness.fields) {
   }
   field.value = "0";
 }
-for (const key of ["storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"]) {
-  numericRefs[key].value = "";
-  assert.equal(buildScenarioSaveDraft(numericOptions).ok, false, `${key} requires an explicit value for storage projects`);
-  numericRefs[key].value = "0";
-}
-for (const invalidEfficiency of ["", " ", "0", "-1", "100.1", "Infinity", "invalid"]) {
-  numericHarness.querySelector("#storage-round-trip-efficiency").value = invalidEfficiency;
-  assert.equal(buildScenarioSaveDraft(numericOptions).ok, false, "efficiency must be in (0,100]");
-}
-numericHarness.querySelector("#storage-round-trip-efficiency").value = "100";
-assert.equal(buildScenarioSaveDraft(numericOptions).config.storageRoundTripEfficiency, 1);
-numericHarness.querySelector("#storage-round-trip-efficiency").value = "90";
-numericRefs.storageArbitragePrice.value = "";
-assert.equal(buildScenarioSaveDraft(numericOptions).ok, true, "historical rough-only arbitrage is not required for refinement");
 numericHarness.fields.get("#mechanism-enabled").value = "no";
 durationInput.value = "";
 numericHarness.fields.get("#mechanism-price").value = "";
 numericHarness.fields.get("#mechanism-ratio").value = "";
 numericHarness.fields.get("#same-type-spread").value = "";
-numericRefs.storageArbitragePrice.value = "";
 assert.equal(buildScenarioSaveDraft({ ...numericOptions, project: { ...saveProject, siteType: "onshore", hasStorage: false } }).ok, true,
   "inactive mechanism and absent storage fields do not require re-entry");
 assert.equal(buildScenarioSaveDraft({ ...numericOptions, project: { ...saveProject, hasStorage: false } }).ok, true,
@@ -725,7 +673,7 @@ const managerView = buildScenarioManagerView({
 assert.match(managerView.selectorHtml, /基准&lt;场景&gt;（基准） \[已锁定\]/);
 assert.match(managerView.listHtml, /基准&lt;场景&gt;/);
 assert.match(managerView.listHtml, /当前 \/ 基准 \/ 已锁定/);
-assert.match(managerView.listHtml, /9.0/);
+assert.equal((managerView.listHtml.match(/<td>/g) || []).length, 18, "one row has nine cells after removing the manual storage summary");
 assert.match(managerView.listHtml, /<td>27\.0<\/td>\s*<td>-1\.0<\/td>/);
 assert.match(managerView.listHtml, /<td>27\.0<\/td>\s*<td>3\.0<\/td>/);
 assert.equal(managerView.deleteDisabled, true);
@@ -815,7 +763,7 @@ assert.equal(editingRefinement.fields.ancillaryFee, "missing");
 assert.equal(editingRefinement.fields.marketOpFee, "confirmed", "unchanged values stay carried forward");
 const addedCapabilities = buildRefinementState({ project: { ...refinementProject, hasStorage: true, siteType: "offshore" }, scenario: inactiveScenario });
 assert.equal(addedCapabilities.fields.storageArbitragePrice, undefined, "rough-only arbitrage is excluded from refinement confirmation");
-assert.equal(addedCapabilities.fields.storageRoundTripEfficiency, "pending", "suggested efficiency must be confirmed");
+assert.equal(addedCapabilities.fields.storageRoundTripEfficiency, undefined, "equipment efficiency belongs to project creation");
 assert.equal(addedCapabilities.fields.carbonEnabled, undefined, "legacy carbon cannot add a confirmation field");
 assert.equal(addedCapabilities.fields.mechanismPrice, undefined, "disabled mechanism values do not require repeat input");
 const newlyEnabled = buildRefinementState({ project: { ...refinementProject, siteType: "offshore" }, scenario: inactiveScenario,
@@ -853,7 +801,7 @@ assert.equal(switchedGlobal.fields.otherNetIncome, "pending");
 // Native details are collapsed only for confirmed groups; edits and missing
 // annual data reopen the relevant group without losing saved input precision.
 const refinementNodes = new Map();
-for (const id of ["mechanism", "trade", "environment", "fees", "storage"]) {
+for (const id of ["mechanism", "trade", "environment", "fees"]) {
   refinementNodes.set(`[data-refinement-group="${id}"]`, { dataset: {}, open: true, hidden: false });
   refinementNodes.set(`[data-refinement-status="${id}"]`, { textContent: "" });
 }
@@ -865,7 +813,6 @@ const refinementUi = { project: refinementProject, scenario: refinementScenario,
 refreshRefinementState({ ...refinementUi, resetOpen: true });
 assert.equal(refinementNodes.get('[data-refinement-group="fees"]').open, false);
 assert.equal(refinementNodes.get('[data-refinement-status="fees"]').textContent, "已确认，可展开细化");
-assert.equal(refinementNodes.get('[data-refinement-group="storage"]').hidden, true);
 refinementNodes.get("#other-net-income").value = "";
 refreshRefinementState(refinementUi);
 assert.equal(refinementNodes.get('[data-refinement-group="fees"]').open, true);
@@ -945,37 +892,39 @@ setScenarioMessage({ scenario: refinementScenario, refs: { scenarioMessage: relo
 loadScenarioToForm({ scenario: refinementScenario, refs: { scenarioMessage: reloadMessage }, querySelector: () => null });
 assert.equal(reloadMessage.textContent, "方案已保存。", "a newer success notice must survive a saved-value reload");
 
-// A display-only efficiency default becomes stored only on an explicit save.
-// The old manual arbitrage assumption remains immutable in refinement.
+// Saving unrelated income details must preserve all historical storage inputs and review evidence.
 const storageProject = { siteType: "onshore", hasStorage: true, startYear: 2026, forecastYears: 1, statuses: {} };
 const storageScenario = modelForConfirmation.createBaselineScenario(storageProject);
-storageScenario.config.storageArbitragePrice = 18.123456789012345;
+const legacyStorageConfig = {
+  storageRoundTripEfficiency: 0.912345678901234, storageArbitragePrice: 18.123456789012345, storageCapacityCompPrice: 7.25,
+  storageAncillaryRevenuePrice: 5, storageOtherRevenuePrice: null
+};
+Object.assign(storageScenario.config, legacyStorageConfig);
+storageScenario.confirmedConfig = { storageCapacityCompPrice: 7.25 };
+storageScenario.confirmedConfigSources = { storageCapacityCompPrice: "explicit" };
 const storageOriginal = JSON.stringify(storageScenario);
 const storageFields = makeFields();
 const storageRefs = Object.fromEntries([
-  ["ltPricingMode", "lt-pricing-mode"], ["envValueMode", "env-value-mode"], ["feeConfigMode", "fee-config-mode"],
-  ["storageArbitragePrice", "storage-arbitrage-price"], ["storageCapacityCompPrice", "storage-capacity-comp-price"],
-  ["storageAncillaryRevenuePrice", "storage-ancillary-revenue-price"], ["storageOtherRevenuePrice", "storage-other-revenue-price"]
+  ["ltPricingMode", "lt-pricing-mode"], ["envValueMode", "env-value-mode"], ["feeConfigMode", "fee-config-mode"]
 ].map(([key, id]) => [key, storageFields.querySelector(`#${id}`)]));
 loadScenarioToForm({ project: storageProject, scenario: storageScenario, refs: storageRefs, querySelector: storageFields.querySelector });
-assert.equal(storageFields.querySelector("#storage-round-trip-efficiency").value, "90");
+assert.equal(storageFields.fields.has("#storage-round-trip-efficiency"), false);
 assert.equal(JSON.stringify(storageScenario), storageOriginal, "opening refinement must not mutate old values or confirmations");
-assert.equal(buildRefinementState({ project: storageProject, scenario: storageScenario }).fields.storageRoundTripEfficiency, "pending");
+const storageRefinement = buildRefinementState({ project: storageProject, scenario: storageScenario });
+assert.equal(storageRefinement.groups.some(({ id }) => id === "storage"), false);
+assert.equal(Object.keys(storageRefinement.fields).some((key) => key.startsWith("storage")), false);
 const storageOptions = { project: storageProject, scenario: storageScenario, refs: storageRefs,
   querySelector: storageFields.querySelector, scenarioConfig, clamp,
   readEnvValueAllocationDraft: () => ({ greenCertRatio: 1, greenPremiumRatio: 0, totalRatio: 1 }) };
-storageRefs.storageArbitragePrice.value = "999";
+storageFields.querySelector("#market-op-fee").value = "27.5";
 const storageDraft = buildScenarioSaveDraft(storageOptions);
 assert.equal(storageDraft.ok, true, storageDraft.message);
-assert.deepEqual(storageDraft.config, { ...storageScenario.config, storageRoundTripEfficiency: 0.9 });
 assert.equal(applyScenarioSaveDraft({ ...storageOptions, draft: storageDraft }).ok, true);
-assert.equal(modelForConfirmation.isConfigConfirmed(storageScenario, "storageRoundTripEfficiency"), true);
-assert.equal(modelForConfirmation.isConfigConfirmed(storageScenario, "storageArbitragePrice"), false);
-const preciseEfficiency = 0.912345678901234;
-storageScenario.config.storageRoundTripEfficiency = preciseEfficiency;
-loadScenarioToForm({ ...storageOptions });
-assert.equal(buildScenarioSaveDraft(storageOptions).config.storageRoundTripEfficiency, preciseEfficiency,
-  "unchanged percentage display must preserve stored efficiency precision");
+assert.equal(storageScenario.config.marketOpFee, 27.5);
+for (const [key, value] of Object.entries(legacyStorageConfig)) assert.equal(storageScenario.config[key], value);
+assert.equal(storageScenario.confirmedConfig.storageCapacityCompPrice, 7.25);
+assert.equal(storageScenario.confirmedConfigSources.storageCapacityCompPrice, "explicit");
+assert.equal(Object.hasOwn(storageScenario.confirmedConfig, "storageRoundTripEfficiency"), false);
 delete storageScenario.config.storageArbitragePrice;
 loadScenarioToForm({ ...storageOptions });
 const absentArbitrageDraft = buildScenarioSaveDraft(storageOptions);

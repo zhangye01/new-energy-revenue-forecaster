@@ -14,9 +14,8 @@
   if (root.window && root.window !== root) root.window.NE_COMPARE_SENSITIVITY = api;
 })(typeof globalThis !== "undefined" ? globalThis : window, function (rules, dispatch, calculation, versions, getEnergyData) {
   if (!rules || !dispatch || !calculation || !versions) throw new Error("敏感性分析初始化失败：缺少收益测算依赖");
-  const { annualStorageIsComplete, closeAmount, hourlyRowsAreComplete } = calculation;
+  const { annualStorageIsComplete, closeAmount, hourlyRowsAreComplete, storageEfficiencyForResult, storageSupplementPriceForResult } = calculation;
   const cache = new Map();
-  const STORAGE_KEYS = ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"];
   const DISPATCH_FACTORS = new Set(["spot", "capture_spread"]);
   const FEE_KEYS = ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee"];
   const FACTORS = [
@@ -108,8 +107,7 @@
     const environment = rules.getEnvValueAllocation(project, config, row.year).unitValuePerMarketMwh +
       (options.legacyEnvironment ? rules.legacyCarbonValuePerMarketMwh(project, config, row.year) : 0);
     const fees = rules.getFeeConfigForYear(project, config, row.year);
-    const storageKeys = row.storageDispatch ? STORAGE_KEYS.slice(1) : STORAGE_KEYS;
-    const storage = project.hasStorage ? storageKeys.reduce((sum, key) => sum + (Number(config[key]) || 0), 0) : 0;
+    const storage = project.hasStorage ? storageSupplementPriceForResult(config, row) : 0;
     return energy * row.capturePrice + mechanism + marketEnergy * (strategy + environment) + (row.storageDispatch?.incrementalRevenue ?? 0)
       + energy * (storage - FEE_KEYS.reduce((sum, key) => sum + fees[key], 0) + fees.otherIncome);
   }
@@ -236,7 +234,8 @@
       if (!result.annualRows.every((row) => row.storageDispatch) || !hourlyRowsAreComplete(project, scenario, result)) {
         return { message: "配储基准小时明细缺失或对账未通过，请重新测算后查看敏感性。" };
       }
-      scheme = { powerMw: project.storagePowerMw, durationH: project.storageDurationH, roundTripEfficiency: scenario.config.storageRoundTripEfficiency ?? 0.9 };
+      scheme = { powerMw: project.storagePowerMw, durationH: project.storageDurationH,
+        roundTripEfficiency: storageEfficiencyForResult(project, scenario.config, result.annualRows[0]) };
     }
     const hourly = prepareHourlyCurves(project, result);
     if (scheme && !hourly) return { message: TIME_SERIES_ERROR };

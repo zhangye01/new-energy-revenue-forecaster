@@ -122,7 +122,7 @@
         nodes.refresh.disabled = nodes.refresh.hidden || Boolean(busy);
       }
       if (nodes.next) nodes.next.disabled = !usable || busy === "submit";
-      onTask({ project, task: current ? task : null, current: Boolean(current), serviceReady, phase });
+      onTask({ project, task: current ? task : null, current: Boolean(current), serviceReady, phase, usable });
       syncPolling(view);
     }
 

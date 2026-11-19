@@ -39,9 +39,7 @@
     envValueMode: "env-value-mode", greenCertPrice: "green-cert-price", greenCertRealizeRatio: "green-cert-realize-ratio",
     greenPremiumPrice: "green-premium-price", greenPremiumRealizeRatio: "green-premium-realize-ratio",
     feeConfigMode: "fee-config-mode", marketOpFee: "market-op-fee", gridAssessFee: "grid-assess-fee",
-    ancillaryFee: "ancillary-fee", otherNetIncome: "other-net-income",
-    storageRoundTripEfficiency: "storage-round-trip-efficiency", storageCapacityCompPrice: "storage-capacity-comp-price",
-    storageAncillaryRevenuePrice: "storage-ancillary-revenue-price", storageOtherRevenuePrice: "storage-other-revenue-price"
+    ancillaryFee: "ancillary-fee", otherNetIncome: "other-net-income"
   });
 
   function manualSource(project, scenario) {
@@ -139,8 +137,7 @@
       mechanism: ["mechanismEnabled"],
       trade: ["ltPricingMode"],
       environment: ["envValueMode"],
-      fees: ["feeConfigMode"],
-      storage: project.hasStorage ? ["storageRoundTripEfficiency", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"] : []
+      fees: ["feeConfigMode"]
     };
     if (config.mechanismEnabled) {
       groups.mechanism.push("mechanismRatio", "mechanismPrice", "mechanismStartYm", "mechanismEndYm", "mechanismReferenceMode");
@@ -164,12 +161,11 @@
     const fields = {};
     const states = Object.entries(groups).map(([id, keys]) => {
       keys.forEach((key) => {
-        const suggestedEfficiency = key === "storageRoundTripEfficiency" && !Object.hasOwn(config, key);
         const value = fieldValue(config, key);
-        const missing = key.endsWith("ByYear") ? !annualComplete(key) : !suggestedEfficiency && empty(value);
+        const missing = key.endsWith("ByYear") ? !annualComplete(key) : empty(value);
         const changedDuration = key === "mechanismEndYm" && getRevenueRules().mechanismDurationMonths(config.mechanismStartYm, value)
           !== getRevenueRules().mechanismDurationMonths(scenario.config?.mechanismStartYm, scenario.config?.mechanismEndYm);
-        fields[key] = missing ? "missing" : !suggestedEfficiency && !changedDuration && getScenarioModel().isConfigConfirmed(scenario, key, value) ? "confirmed" : "pending";
+        fields[key] = missing ? "missing" : !changedDuration && getScenarioModel().isConfigConfirmed(scenario, key, value) ? "confirmed" : "pending";
       });
       const missing = keys.filter((key) => fields[key] === "missing").length;
       const pending = keys.filter((key) => fields[key] === "pending").length;
@@ -188,7 +184,7 @@
       const raw = field.value;
       config[key] = raw === "" ? "" : key.endsWith("Enabled") ? raw === "yes"
         : key.endsWith("Mode") || key.endsWith("Ym") ? raw
-          : key.endsWith("Ratio") || key === "storageRoundTripEfficiency" ? readRatioValue(querySelector, `#${id}`, Number(raw) / 100) : Number(raw);
+          : key.endsWith("Ratio") ? readRatioValue(querySelector, `#${id}`, Number(raw) / 100) : Number(raw);
     });
     if (getField(querySelector, "#mechanism-duration-months")) config.mechanismEndYm = syncMechanismEndMonth(querySelector);
     const state = buildRefinementState({ project, scenario, config });
@@ -559,11 +555,6 @@
       const feeSource = scenario.config.feeConfigMode === "manual"
         ? scenario.config.feeManualValuesByYear?.[project.startYear] : scenario.config;
       const otherNetIncome = getScenarioConfig().getOtherNetIncome(feeSource);
-      const storagePart = project.hasStorage
-        ? scenario.config.storageCapacityCompPrice
-          + scenario.config.storageAncillaryRevenuePrice
-          + scenario.config.storageOtherRevenuePrice
-        : null;
       const primaryFees = feeConfig.marketOpFee + feeConfig.gridAssessFee + feeConfig.ancillaryFee;
       const marks = [
         scenario.id === project.activeScenarioId ? "当前" : "",
@@ -578,7 +569,6 @@
         <td>${asNum(scenario.config.mechanismPrice, 1)}</td>
         <td>${asNum(scenario.config.ltYear1Pnl, 1)}</td>
         <td>${asNum(valuePart, 1)}</td>
-        <td>${storagePart === null ? "-" : asNum(storagePart, 1)}</td>
         <td>${asNum(primaryFees, 1)}</td>
         <td>${otherNetIncome === null ? "—" : asNum(otherNetIncome, 1)}</td>
         <td>${formatDate(scenario.updatedAt)}</td>
@@ -673,12 +663,6 @@
     setValue(querySelector, "#ancillary-fee", config.ancillaryFee);
     setValue(querySelector, "#other-net-income", fieldValue(config, "otherNetIncome"));
     if (refs.feeConfigMode) refs.feeConfigMode.value = storedMode("feeConfigMode", ["global", "manual"], "global");
-    if (refs.storageArbitragePrice) refs.storageArbitragePrice.value = config.storageArbitragePrice ?? "";
-    setRatioValue(querySelector, "#storage-round-trip-efficiency",
-      Object.hasOwn(config, "storageRoundTripEfficiency") ? config.storageRoundTripEfficiency : 0.9);
-    if (refs.storageCapacityCompPrice) refs.storageCapacityCompPrice.value = config.storageCapacityCompPrice ?? "";
-    if (refs.storageAncillaryRevenuePrice) refs.storageAncillaryRevenuePrice.value = config.storageAncillaryRevenuePrice ?? "";
-    if (refs.storageOtherRevenuePrice) refs.storageOtherRevenuePrice.value = config.storageOtherRevenuePrice ?? "";
     Object.entries(REFINEMENT_FIELDS).forEach(([key, id]) => {
       const field = getField(querySelector, `#${id}`) || refs[key];
       if (field) loadedInputs.set(field, { display: String(field.value), original: fieldValue(config, key) });
@@ -690,12 +674,8 @@
     const {
       refs = {},
       querySelector = () => null,
-      locked = false,
-      canUseStorageRevenue = false
+      locked = false
     } = input;
-    if (refs.scenarioStorageRevenueSection) {
-      refs.scenarioStorageRevenueSection.hidden = !canUseStorageRevenue;
-    }
 
     const mechanismEnabled = selectValue(querySelector, "#mechanism-enabled") === "yes";
     [
@@ -713,19 +693,6 @@
     const endLabel = getField(querySelector, "#mechanism-end-ym")?.closest?.("label");
     if (endLabel) endLabel.hidden = !mechanismEnabled;
 
-    [
-      getField(querySelector, "#storage-round-trip-efficiency"),
-      refs.storageCapacityCompPrice,
-      refs.storageAncillaryRevenuePrice,
-      refs.storageOtherRevenuePrice
-    ].forEach((field) => {
-      if (!field) return;
-      field.disabled = locked || !canUseStorageRevenue;
-    });
-    if (refs.storageArbitragePrice) {
-      refs.storageArbitragePrice.readOnly = true;
-      refs.storageArbitragePrice.disabled = locked || !canUseStorageRevenue;
-    }
     if (refs.scenarioLockHint) {
       refs.scenarioLockHint.textContent = locked
         ? "当前方案已锁定，请切换方案或解锁。"
@@ -771,8 +738,6 @@
 
   function buildScenarioConfigFromForm(input = {}) {
     const {
-      project = {},
-      refs = {},
       querySelector,
       clamp = (value) => value,
       ltPricingMode = "auto",
@@ -807,17 +772,11 @@
       marketOpFee: numberValue(querySelector, "#market-op-fee"),
       gridAssessFee: numberValue(querySelector, "#grid-assess-fee"),
       ancillaryFee: numberValue(querySelector, "#ancillary-fee"),
-      otherNetIncome: numberValue(querySelector, "#other-net-income"),
-      ...(project.hasStorage ? { storageRoundTripEfficiency: readRatioValue(querySelector,
-        "#storage-round-trip-efficiency", numberValue(querySelector, "#storage-round-trip-efficiency") / 100) } : {}),
-      storageArbitragePrice: project.hasStorage ? Number(refs.storageArbitragePrice?.value || 0) : 0,
-      storageCapacityCompPrice: project.hasStorage ? Number(refs.storageCapacityCompPrice?.value || 0) : 0,
-      storageAncillaryRevenuePrice: project.hasStorage ? Number(refs.storageAncillaryRevenuePrice?.value || 0) : 0,
-      storageOtherRevenuePrice: project.hasStorage ? Number(refs.storageOtherRevenuePrice?.value || 0) : 0
+      otherNetIncome: numberValue(querySelector, "#other-net-income")
     };
   }
 
-  function validateActiveNumericFields({ project, refs, querySelector, ltPricingMode, envValueMode, feeConfigMode }) {
+  function validateActiveNumericFields({ querySelector, ltPricingMode, envValueMode, feeConfigMode }) {
     const fields = [];
     const add = (selector, label, min = 0, max = Infinity) => fields.push([getField(querySelector, selector)?.value, label, min, max]);
     if (selectValue(querySelector, "#mechanism-enabled") === "yes") {
@@ -840,16 +799,6 @@
       [["#market-op-fee", "市场运营费"], ["#grid-assess-fee", "电网考核费"], ["#ancillary-fee", "辅助服务费"]]
         .forEach(([selector, label]) => add(selector, label));
       add("#other-net-income", "其他净收入", -Infinity);
-    }
-    if (project.hasStorage) {
-      const efficiency = getField(querySelector, "#storage-round-trip-efficiency")?.value;
-      if (efficiency === null || efficiency === undefined || String(efficiency).trim() === ""
-          || !Number.isFinite(Number(efficiency)) || Number(efficiency) <= 0 || Number(efficiency) > 100) {
-        return "储能往返效率须大于0且不超过100%。";
-      }
-      [["storageCapacityCompPrice", "配储容量补偿"],
-        ["storageAncillaryRevenuePrice", "配储辅助服务收益"], ["storageOtherRevenuePrice", "配储其他收益"]]
-        .forEach(([key, label]) => fields.push([refs[key]?.value, label, 0, Infinity]));
     }
     for (const [value, label, min, max] of fields) {
       if (value === null || value === undefined || String(value).trim() === "" || !Number.isFinite(Number(value))) {
@@ -885,10 +834,6 @@
     });
     if (!Object.hasOwn(stored, "otherNetIncome") && (!applicable.has("otherNetIncome") ||
         candidate.otherNetIncome === fieldValue(stored, "otherNetIncome"))) delete config.otherNetIncome;
-    // This value remains the original rough-price assumption. Refinement neither
-    // edits it nor invents one for old scenarios that never saved the field.
-    if (Object.hasOwn(stored, "storageArbitragePrice")) config.storageArbitragePrice = stored.storageArbitragePrice;
-    else delete config.storageArbitragePrice;
     if (stored.ltConvergeSpeedUnit === "legacy_ratio") {
       config.ltConvergeSpeedUnit = "legacy_ratio";
     }
@@ -984,7 +929,7 @@
       }
     }
 
-    const numericError = validateActiveNumericFields({ project, refs, querySelector, ltPricingMode, envValueMode, feeConfigMode });
+    const numericError = validateActiveNumericFields({ querySelector, ltPricingMode, envValueMode, feeConfigMode });
     if (numericError) return invalid(numericError);
     if (ltPricingMode !== "manual" && scenario.config?.ltConvergeSpeedUnit === "legacy_ratio"
         && Number(getField(querySelector, "#lt-converge-speed")?.value) > 1) {
@@ -996,8 +941,6 @@
       scenarioName,
       ...(pending ? { manualImportRevision: pending.revision } : {}),
       config: preserveStoredConfig(input, buildScenarioConfigFromForm({
-        project,
-        refs,
         querySelector,
         clamp,
         ltPricingMode,
@@ -1040,7 +983,6 @@
     if (config.envValueMode === "manual") confirmedKeys.push("envManualValuesByYear");
     else confirmedKeys.push("greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio");
     confirmedKeys.push(...(config.feeConfigMode === "manual" ? ["feeManualValuesByYear"] : FEE_FIELDS));
-    if (project.hasStorage) confirmedKeys.push("storageRoundTripEfficiency", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice");
     getScenarioModel().confirmConfig(scenario, confirmedKeys, { project });
     scenario.updatedAt = nowIso();
     project.statuses = project.statuses || {};

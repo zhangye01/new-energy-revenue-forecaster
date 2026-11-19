@@ -156,8 +156,10 @@ assert.equal(JSON.stringify(storageResult), storageOriginal, "验证不改写历
 // Preserve old, uniformly allocated storage results that predate dispatch metadata.
 const legacyStorageRun = { id: "legacy-storage", pricesByYear: { 2026: Array(8760).fill(300), 2027: Array(8760).fill(300) } };
 const legacyStorage = calculator.calculateScenarioResult(storageProject, storageScenario, legacyStorageRun);
+const legacyUnitSupplement = ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"]
+  .reduce((sum, key) => sum + storageScenario.config[key], 0);
 for (const row of legacyStorage.annualRows) {
-  const supplement = row.energyMwh * storageScenario.config.storageArbitragePrice;
+  const supplement = row.energyMwh * legacyUnitSupplement;
   row.storageDispatch = null; row.storageSupplementRevenue += supplement; row.fullRevenue += supplement;
   row.fullRevenuePrice = row.fullRevenue / row.energyMwh;
 }
@@ -165,7 +167,7 @@ legacyStorage.totalFullRevenue = legacyStorage.annualRows.reduce((sum, row) => s
 legacyStorage.avgFullRevenuePrice = legacyStorage.totalFullRevenue / legacyStorage.totalEnergy;
 legacyStorage.hourlyPreview.forEach((row) => {
   delete row.storageDispatch;
-  row.fullRevenue += row.energyMwh * storageScenario.config.storageArbitragePrice;
+  row.fullRevenue += row.energyMwh * legacyUnitSupplement;
 });
 assert.equal(analysis.isResultComplete(storageProject, storageScenario, legacyStorage, { includeHourly: true }), true,
   "历史无调度记录的固定度电配储结果保留原校验方式");

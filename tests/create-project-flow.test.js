@@ -212,6 +212,7 @@ for (const changes of [
   { hasStorage: false, storagePowerMw: null, storageDurationH: null },
   { storagePowerMw: 40 },
   { storageDurationH: 4 },
+  { storageRoundTripEfficiency: 0.84 },
   { storageNote: "仅修改配储备注" },
   { note: "仅修改项目备注" }
 ]) {
@@ -248,6 +249,10 @@ for (const changes of [
   assert.equal(preserved.statuses["forecast-page"], "completed", "市场价版本保留，旧配储价源是否可计算由运行前校验决定");
   if (storageEdited) {
     for (const page of ["rough-page", "scenario-page", "results-page", "compare-page"]) assert.equal(preserved.statuses[page], "stale");
+  } else if (changes.storageRoundTripEfficiency) {
+    assert.equal(preserved.storageRoundTripEfficiency, 0.84);
+    assert.equal(preserved.statuses["rough-page"], "completed");
+    for (const page of ["scenario-page", "results-page", "compare-page"]) assert.equal(preserved.statuses[page], "stale");
   } else assert.equal(JSON.stringify(preserved.statuses), statusesBefore, "备注编辑不触发测算失效");
 }
 

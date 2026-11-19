@@ -55,9 +55,12 @@
     // Storage affects project revenue, not the imported generation or market
     // history. Compare the remaining boundary separately before applying edits.
     const storageKeys = ["hasStorage", "storagePowerMw", "storageDurationH"];
-    const storageChanged = storageKeys.some((key) => project[key] !== projectInput[key]);
+    const storageSpecsChanged = storageKeys.some((key) => project[key] !== projectInput[key]);
+    const efficiencyKey = "storageRoundTripEfficiency";
+    const efficiencyChanged = Object.hasOwn(projectInput, efficiencyKey) && project[efficiencyKey] !== projectInput[efficiencyKey];
     const storageNeutralProject = { ...project, storageNote: projectInput.storageNote };
     storageKeys.forEach((key) => { storageNeutralProject[key] = projectInput[key]; });
+    storageNeutralProject[efficiencyKey] = projectInput[efficiencyKey];
     const baseChanged = projectModel.hasProjectBaseInputChanged(storageNeutralProject, projectInput);
     const energyModeChanged = project.energyMode !== projectInput.energyMode;
 
@@ -90,11 +93,13 @@
       if (project.statuses["energy-page"] === "not_started") {
         project.statuses["energy-page"] = "in_progress";
       }
-      if (storageChanged) {
-        if (project.statuses["rough-page"] && project.statuses["rough-page"] !== "not_started") project.statuses["rough-page"] = "stale";
+      if (storageSpecsChanged || efficiencyChanged) {
+        if (storageSpecsChanged && project.statuses["rough-page"] && project.statuses["rough-page"] !== "not_started") {
+          project.statuses["rough-page"] = "stale";
+        }
         actions.markDownstreamStale?.(project, "forecast-page");
-        actions.setTopMeta?.("配储参数已更新，原电量与历史数据已保留，请复核收益参数并重新测算。");
-        actions.setCreateSaveMessage?.(`已更新当前项目：${project.name}。配储参数变化，请复核收益参数；原粗算与结果保留。`, "warn");
+        actions.setTopMeta?.("配储参数已更新，请重新生成基准结果。");
+        actions.setCreateSaveMessage?.(`已更新当前项目：${project.name}。配储设备参数已更新，请重新生成基准结果。`, "warn");
       } else {
         actions.setTopMeta?.("当前项目已保存。");
         actions.setCreateSaveMessage?.(`已更新当前项目：${project.name}。`, "success");
@@ -152,11 +157,12 @@
       forceCreate = false
     } = options;
     const existingProject = forceCreate ? null : actions.getActiveProject?.();
-    const formState = projectModel.buildCreateProjectFormInput(energyWorkspace.readCreateProjectFormRawInput({
+    const rawInput = energyWorkspace.readCreateProjectFormRawInput({
       refs,
       documentRef,
       existingProject
-    }), {
+    });
+    const formState = projectModel.buildCreateProjectFormInput(rawInput, {
       autoUniqueName,
       forceCreate,
       currentYear: new Date().getFullYear(),
@@ -174,6 +180,7 @@
       name: !existingProject && autoUniqueName ? actions.resolveUniqueProjectName?.(formState.input.name) : formState.input.name
     };
     if (existingProject) {
+      if (rawInput.keepStorageEfficiency) delete projectInput.storageRoundTripEfficiency;
       return updateExistingProjectFromForm({ project: existingProject, projectInput, targetPage, appState, modules, actions });
     }
     return createProjectFromValidatedInput({

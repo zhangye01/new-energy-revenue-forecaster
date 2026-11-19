@@ -71,6 +71,10 @@ const provinceChoiceButton = new FakeTarget({ energyStep2Choice: "province" });
 const energyEventRefs = {
   createProjectForm: new FakeTarget(),
   createHasStorage: new FakeTarget(),
+  createStoragePowerMw: new FakeTarget(),
+  createStorageDurationH: new FakeTarget(),
+  createStorageEfficiency: new FakeTarget(),
+  createStorageCapacityMwh: new FakeTarget(),
   createToEnergyButton: new FakeTarget(),
   energyToHistoryButton: new FakeTarget(),
   exportEnergyAnnualTemplateButton: new FakeTarget(),
@@ -97,6 +101,13 @@ bindCreateEnergyEvents({
 });
 assert.equal(energyEventRefs.createProjectForm.dispatch("submit").prevented, true);
 energyEventRefs.createHasStorage.dispatch("change");
+energyEventRefs.createHasStorage.value = "yes";
+energyEventRefs.createStoragePowerMw.value = "64";
+energyEventRefs.createStorageDurationH.value = "2";
+energyEventRefs.createStorageDurationH.dispatch("input");
+assert.equal(energyEventRefs.createStorageCapacityMwh.value, "128");
+energyEventRefs.createStorageEfficiency.dispatch("input");
+assert.equal(energyEventRefs.createStorageEfficiency.dataset.storageEfficiencyEdited, "true");
 energyEventRefs.createToEnergyButton.dispatch("click");
 energyEventRefs.energyToHistoryButton.dispatch("click");
 energyEventRefs.exportEnergyAnnualTemplateButton.dispatch("click");
@@ -182,6 +193,8 @@ const createProjectFormValues = buildCreateProjectFormValues({
     hasStorage: true,
     storagePowerMw: 64,
     storageDurationH: 2,
+    scenarios: [{ config: { storageRoundTripEfficiency: 0.83 } },
+      { isBaseline: true, config: { storageRoundTripEfficiency: 0.88 } }],
     storageNote: "两小时储能",
     capacityMw: 200,
     startYear: 2026,
@@ -203,6 +216,7 @@ assert.deepEqual(createProjectFormValues, {
   hasStorage: "yes",
   storagePower: "64",
   storageDuration: "2",
+  storageEfficiency: "88",
   storageNote: "两小时储能",
   capacity: "200",
   startYear: "2026",
@@ -244,6 +258,7 @@ assert.deepEqual(
     hasStorage: "no",
     storagePower: "",
     storageDuration: "",
+    storageEfficiency: "",
     storageNote: "",
     capacity: "100",
     startYear: "",
@@ -268,6 +283,7 @@ const createFormRefs = {
   createProvince: new FakeTarget(),
   createStoragePowerMw: new FakeTarget(),
   createStorageDurationH: new FakeTarget(),
+  createStorageEfficiency: new FakeTarget(),
   createStorageNote: new FakeTarget()
 };
 createFormTargets["#create-project-name"].value = "江苏项目";
@@ -277,6 +293,7 @@ createFormTargets["#create-site-type"].value = "offshore";
 createFormTargets["#create-has-storage"].value = "yes";
 createFormRefs.createStoragePowerMw.value = "64";
 createFormRefs.createStorageDurationH.value = "2";
+createFormRefs.createStorageEfficiency.value = "88";
 createFormRefs.createStorageNote.value = "两小时";
 createFormTargets["#create-capacity-mw"].value = "200";
 createFormTargets["#create-start-year"].value = "2026";
@@ -294,6 +311,8 @@ assert.deepEqual(readCreateProjectFormRawInput({
   hasStorage: "yes",
   storagePower: "64",
   storageDuration: "2",
+  storageEfficiency: "88",
+  keepStorageEfficiency: false,
   storageNote: "两小时",
   capacity: "200",
   startYear: "2026",
@@ -310,6 +329,12 @@ assert.equal(createFormTargets["#create-project-name"].value, "江苏海上风�
 assert.equal(createFormRefs.createProvince.value, "jiangsu");
 assert.equal(createFormTargets["#create-has-storage"].value, "yes");
 assert.equal(createFormRefs.createStoragePowerMw.value, "64");
+assert.equal(createFormRefs.createStorageEfficiency.value, "88", "优先带入历史基准方案效率");
+const oldEquipmentForm = { refs: createFormRefs, documentRef: new FakeDocument(createFormTargets),
+  existingProject: { hasStorage: true, scenarios: [{ isBaseline: true, config: { storageRoundTripEfficiency: 0.88 } }] } };
+assert.equal(readCreateProjectFormRawInput(oldEquipmentForm).keepStorageEfficiency, true, "加载旧效率不会改写方案口径");
+createFormRefs.createStorageEfficiency.dataset.storageEfficiencyEdited = "true";
+assert.equal(readCreateProjectFormRawInput(oldEquipmentForm).keepStorageEfficiency, false, "显式录入才提升为项目设备参数");
 assert.equal(createFormTargets["#create-forecast-years"].value, "25");
 assert.equal(createFormTargets["#create-note"].value, "示例项目");
 assert.equal(applyCreateProjectFormValues(), false);
@@ -328,6 +353,7 @@ assert.equal(createFormTargets["#create-project-name"].value, "");
 assert.equal(createFormRefs.createProvince.value, "");
 assert.equal(createFormTargets["#create-has-storage"].value, "");
 assert.equal(createFormRefs.createStoragePowerMw.value, "");
+assert.equal(createFormRefs.createStorageEfficiency.value, "");
 assert.equal(createFormTargets["#create-note"].value, "");
 assert.deepEqual(resetCalls, [
   "sync-storage",
@@ -339,19 +365,30 @@ const storageRefs = {
   createHasStorage: new FakeTarget(),
   createStoragePowerField: new FakeTarget(),
   createStorageDurationField: new FakeTarget(),
+  createStorageEfficiencyField: new FakeTarget(),
+  createStorageCapacityField: new FakeTarget(),
   createStorageNoteField: new FakeTarget(),
   createStoragePowerMw: new FakeTarget(),
   createStorageDurationH: new FakeTarget(),
+  createStorageEfficiency: new FakeTarget(),
+  createStorageCapacityMwh: new FakeTarget(),
   createStorageNote: new FakeTarget()
 };
 storageRefs.createHasStorage.value = "yes";
+storageRefs.createStoragePowerMw.value = "6.4";
+storageRefs.createStorageDurationH.value = "2.5";
 assert.equal(applyCreateStorageFieldsState({ refs: storageRefs }), true);
 assert.equal(storageRefs.createStoragePowerField.hidden, false);
 assert.equal(storageRefs.createStoragePowerMw.disabled, false);
+assert.equal(storageRefs.createStorageCapacityField.hidden, false);
+assert.equal(storageRefs.createStorageCapacityMwh.value, "16");
 storageRefs.createHasStorage.value = "no";
 assert.equal(applyCreateStorageFieldsState({ refs: storageRefs }), false);
 assert.equal(storageRefs.createStorageDurationField.hidden, true);
 assert.equal(storageRefs.createStorageDurationH.disabled, true);
+assert.equal(storageRefs.createStorageEfficiency.disabled, true);
+assert.equal(storageRefs.createStorageCapacityField.hidden, true);
+assert.equal(storageRefs.createStorageCapacityMwh.value, "");
 
 const createToEnergyButton = new FakeTarget();
 assert.equal(applyCreateWorkspaceEntryState({ refs: { createToEnergyButton }, ready: false }), true);

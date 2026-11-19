@@ -46,9 +46,46 @@
     };
   }
 
+  function buildStorageOperationsIntro(dispatch) {
+    if (!dispatch.every((item) => valuesPresent(item, ["chargeMwh", "dischargeMwh"]))) return [];
+    const first = dispatch[0];
+    const efficiency = Number.isFinite(first.roundTripEfficiency) ? `往返效率 ${asPercent(first.roundTripEfficiency)}，` : "";
+    return [`首年${efficiency}充电 ${asEnergy(first.chargeMwh)}、放电 ${asEnergy(first.dischargeMwh)}。全期累计充电 ${asEnergy(sum(dispatch, "chargeMwh"))}、放电 ${asEnergy(sum(dispatch, "dischargeMwh"))}。`];
+  }
+
+  function buildSpotStorageData(dispatch, rows, totalEnergy) {
+    const required = ["withoutStorageSpotRevenue", "withStorageSpotRevenue", "incrementalRevenue", "dischargeRevenue", "chargeOpportunityCost"];
+    if (!dispatch.every((item, index) => valuesPresent(item, required) &&
+      agrees(item.withoutStorageSpotRevenue, rows[index].spotRevenue) &&
+      agrees(item.withStorageSpotRevenue - item.withoutStorageSpotRevenue, item.incrementalRevenue) &&
+      agrees(item.dischargeRevenue - item.chargeOpportunityCost, item.incrementalRevenue))) return null;
+
+    const increase = sum(dispatch, "incrementalRevenue");
+    const unitLift = totalEnergy > 0 ? `，按储前结算电量折合 ${asPrice(increase / totalEnergy)}` : "";
+    const table = {
+      key: "storage",
+      title: "有储与无储现货收益对比",
+      headers: ["项目", `首年 ${rows[0].year}（万元）`, "全周期（万元）"],
+      rows: [
+        ["无储现货收益", "withoutStorageSpotRevenue"],
+        ["有储现货收益", "withStorageSpotRevenue"],
+        ["配储现货增量", "incrementalRevenue"],
+        ["放电收入", "dischargeRevenue"],
+        ["充电机会成本", "chargeOpportunityCost"]
+      ].map(([label, key]) => [label, asMoneyWan(dispatch[0][key]), asMoneyWan(sum(dispatch, key))]),
+      note: "配储现货增量＝放电收入－充电机会成本。"
+    };
+    return {
+      table, spotOnly: true, operationsIntro: buildStorageOperationsIntro(dispatch),
+      intro: [`同一条现货价格曲线下，配储全周期现货增量为 ${asMoney(increase)}${unitLift}。`],
+      finding: `全周期现货增量 ${asMoney(increase)}${unitLift}。`
+    };
+  }
+
   function buildStorageData(rows, totalEnergy) {
-    const required = ["withStorageFullRevenue", "withoutStorageFullRevenue", "incrementalRevenue", "independentSupplementRevenue"];
     const dispatch = rows.map((row) => row.storageDispatch);
+    if (dispatchExhibits.usesSpotStorage(rows)) return buildSpotStorageData(dispatch, rows, totalEnergy);
+    const required = ["withStorageFullRevenue", "withoutStorageFullRevenue", "incrementalRevenue", "independentSupplementRevenue"];
     if (!dispatch.every((item, index) => valuesPresent(item, required) &&
         agrees(item.withStorageFullRevenue, rows[index].fullRevenue) &&
         agrees(item.withStorageFullRevenue - item.withoutStorageFullRevenue, item.incrementalRevenue + item.independentSupplementRevenue))) return null;
@@ -81,12 +118,7 @@
     const lift = withoutStorage > 0 ? `，相当于无储收入的 ${asPercent(increase / withoutStorage)}` : "";
     const unitLift = totalEnergy > 0 ? `，按储前结算电量折合 ${asPrice(increase / totalEnergy)}` : "";
     const intro = [`同一条现货价格曲线下，配储全期收入增量为 ${asMoney(increase)}${lift}${unitLift}。其中现货净套利 ${asMoney(arbitrage)}，独立配储收益 ${asMoney(supplements)}。`];
-    const operationsIntro = [];
-    if (dispatch.every((item) => valuesPresent(item, ["chargeMwh", "dischargeMwh"]))) {
-      const efficiency = Number.isFinite(first.roundTripEfficiency) ? `往返效率 ${asPercent(first.roundTripEfficiency)}，` : "";
-      operationsIntro.push(`首年${efficiency}充电 ${asEnergy(first.chargeMwh)}、放电 ${asEnergy(first.dischargeMwh)}。全期累计充电 ${asEnergy(sum(dispatch, "chargeMwh"))}、放电 ${asEnergy(sum(dispatch, "dischargeMwh"))}。`);
-    }
-    return { table, intro, operationsIntro, finding: `全期收入增量 ${asMoney(increase)}${lift}。` };
+    return { table, intro, operationsIntro: buildStorageOperationsIntro(dispatch), finding: `全期收入增量 ${asMoney(increase)}${lift}。` };
   }
 
   function priceFigure(rows, { includesSpot, change, detail }) {
@@ -101,11 +133,15 @@
     };
   }
 
-  function contributionItems(result, verifiedConfig, hasDispatch) {
+  function contributionItems(result, verifiedConfig, storage) {
     if (!result.annualRows.every((row) => valuesPresent(row, resultComponentKeys))) return [];
     const items = report.getResultContributionItems(result, verifiedConfig);
     if (!items.every((item) => Number.isFinite(item.amount)) || !agrees(sum(items, "amount"), result.totalFullRevenue)) return [];
-    return items.map((item) => hasDispatch && item.colorKey === "storage" ? { ...item, label: "配储收益" } : item);
+    return items.map((item) => {
+      if (storage?.spotOnly && item.colorKey === "spot") return { ...item, label: "无储现货收益" };
+      if (storage && !storage.spotOnly && item.colorKey === "storage") return { ...item, label: "配储收益" };
+      return item;
+    });
   }
 
   function firstYearBridge(first, items) {
@@ -125,7 +161,7 @@
     };
   }
 
-  function buildIncomeDetails(result, items, composition) {
+  function buildIncomeDetails(result, items, composition, spotOnly) {
     if (!items.length) return null;
     const nonzero = items.filter((item) => item.amount !== 0 || item.colorKey === "spot");
     const adjustments = nonzero.filter((item) => item.colorKey !== "spot");
@@ -134,7 +170,7 @@
       result.totalFullRevenue > 0 ? moneyNumber.format(amount / result.totalFullRevenue * 100) : "—"];
     return {
       figure: adjustments.length ? {
-        key: "income", kind: "contribution", title: "全周期现货之外的收入增减",
+        key: "income", kind: "contribution", title: spotOnly ? "全周期收入增减（以无储现货收益为起点）" : "全周期现货之外的收入增减",
         caption: composition,
         items: adjustments.map(({ label, amount, colorKey }) => ({ label, value: amount / 10000, colorKey }))
       } : null,
@@ -184,10 +220,10 @@
       : "";
     const spot = items.find((item) => item.colorKey === "spot");
     const otherNet = spot ? totalRevenue - spot.amount : 0;
-    const spotShare = spot ? `现货市场收入 ${asMoney(spot.amount)}，其余各项合计 ${asMoney(otherNet)}。` : "";
+    const spotShare = spot ? `${spot.label} ${asMoney(spot.amount)}，其余各项合计 ${asMoney(otherNet)}。` : "";
     const positive = items.filter((item) => item.colorKey !== "spot" && item.amount > 0).sort((a, b) => b.amount - a.amount)[0];
     const negative = items.filter((item) => item.colorKey !== "spot" && item.amount < 0).sort((a, b) => a.amount - b.amount)[0];
-    const drivers = [positive ? `${positive.label}是现货收入之外的主要增收项，贡献 ${asMoney(positive.amount)}。` : "",
+    const drivers = [positive ? `${positive.label}是主要增收项，贡献 ${asMoney(positive.amount)}。` : "",
       negative ? `${negative.label}是主要扣减项，减少收入 ${asMoney(Math.abs(negative.amount))}。` : ""].join("");
     return { trend: `${average}${range}`, composition: `${spotShare}${drivers}`, finding: spotShare || `${average}${range}` };
   }
@@ -222,7 +258,7 @@
     if (turning) sections.push({ key: "turning-point", title: "关键年份变化", intro: turning.intro,
       blocks: [...(turning.figure ? [figureBlock(turning.figure.key)] : []), tableBlock(turning.table.key),
         ...(explainMechanism ? dispatch.incomeBlocks : [])] });
-    if (storage) sections.push({ key: "storage", title: "配储收入增量", intro: storage.intro, blocks: [tableBlock(storage.table.key)] });
+    if (storage) sections.push({ key: "storage", title: storage.spotOnly ? "配储现货增量" : "配储收入增量", intro: storage.intro, blocks: [tableBlock(storage.table.key)] });
     const priceBlocks = [...(spotDetails?.blocks || []), ...(bridge ? [figureBlock(bridge.key)] : [])];
     if (priceBlocks.length) sections.push({ key: "appendix-price", appendix: true, title: "首年电价与电量明细",
       intro: spotDetails?.intro || [], blocks: priceBlocks });
@@ -261,10 +297,10 @@
       field("配储规格", storageDescription)
     ];
     const storage = buildStorageData(rows, result.totalEnergy);
-    const items = contributionItems(result, verifiedConfig, Boolean(storage));
+    const items = contributionItems(result, verifiedConfig, storage);
     const income = buildIncomeOverview(rows, result.totalFullRevenue, items);
-    const incomeDetails = buildIncomeDetails(result, items, income.composition);
-    const firstItems = contributionItems({ ...result, annualRows: [first], totalFullRevenue: first.fullRevenue }, verifiedConfig, Boolean(storage));
+    const incomeDetails = buildIncomeDetails(result, items, income.composition, storage?.spotOnly);
+    const firstItems = contributionItems({ ...result, annualRows: [first], totalFullRevenue: first.fullRevenue }, verifiedConfig, storage);
     const bridge = firstYearBridge(first, firstItems);
     const pricing = pricingOverview(rows);
     const turning = turningPointExhibits.buildTurningPoint({ change: pricing.change });

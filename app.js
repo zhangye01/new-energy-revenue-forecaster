@@ -119,6 +119,7 @@ const supplyDemandFlow = supplyDemandFlowModule.create({
   onDraftChange: () => backendForecastPanel.render()
 });
 let renderedForecastResults = { projectId: null, html: "", chartKey: "", visible: {}, disposeChart: null };
+const renderForecastStorage = forecastResultsView.createStorageSpotPreview(document, revenueCalculator.calculateStorageSpotPreview);
 const backendForecastPanel = forecastPage.createBackendForecastPanel({
   documentRef: document, getProject: getActiveProject,
   getService: () => config.backendForecastService,
@@ -3005,6 +3006,10 @@ function acceptBackendForecastTask(input) {
 function renderBackendForecastResults(state) {
   const root = document.querySelector("#forecast-results-root");
   if (!root) return;
+  const project = state.project;
+  const run = state.usable && project?.hasStorage ? getActiveRun(project) : null;
+  renderForecastStorage({ project, scenario: run ? getActiveScenario(project) : null,
+    run: run?.marketPriceBasis === priceForecast.MARKET_PRICE_BASIS ? run : null });
   const projectId = state.project?.id ?? null;
   const ready = !supplyDemandFlow.hasUnsavedChanges() && !supplyDemandFlow.hasPendingDraft(state.project);
   const publishedRuns = ready ? forecastRunFlow.getPublishedBackendResults(state.project) : [];
@@ -3932,8 +3937,7 @@ function syncScenarioFieldLocks() {
   scenarioForm.applyScenarioFieldLocks({
     refs,
     querySelector: (selector) => document.querySelector(selector),
-    locked,
-    canUseStorageRevenue: Boolean(project?.hasStorage)
+    locked
   });
 
   syncEnvValueControls(project, scenario, locked);
@@ -4021,7 +4025,7 @@ function getSavedResultContext(options = {}) {
 
 function renderResultRecords({ project, scenario, result, state }) {
   const canRead = result?.annualRows?.length && !["incomplete_result", "invalid_source_prices"].includes(state.reason);
-  const view = { state: canRead ? "ready" : "empty", isHistorical: !state.current };
+  const view = { state: canRead ? "ready" : "empty", isHistorical: !state.current, includeLastSaved: state.reason === "legacy_storage_revenue" };
   resultHistory.render({ documentRef: document, project, scenario, result, view, downloadCsv });
   if (refs.runCalcButton) refs.runCalcButton.disabled = !project || !scenario;
   if (refs.exportAnnualButton) refs.exportAnnualButton.disabled = !state.current;
@@ -4031,7 +4035,8 @@ function renderResultRecords({ project, scenario, result, state }) {
 function renderResultBrief({ project, scenario, result, state }) {
   const root = refs.resultBriefContent;
   if (!root) return;
-  const status = state.current ? "" : "当前显示上次测算结果。请在收益参数补充与细化中重新测算。";
+  const status = state.current ? "" : state.reason === "legacy_storage_revenue" ? state.message
+    : "当前显示上次测算结果。请在收益参数补充与细化中重新测算。";
   if (renderedResultBrief?.result === result && renderedResultBrief.status === status &&
       renderedResultBrief.project === project && renderedResultBrief.scenario === scenario) return;
   disposeResultCharts();

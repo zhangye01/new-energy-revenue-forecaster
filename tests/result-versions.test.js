@@ -117,4 +117,23 @@ assert.equal(calculate({ validateResult: null, calculateScenarioResult: () => ({
 assert.equal(project.resultsByScenario[scenario.id], second, "异常结果不能覆盖正常结果");
 assert.equal(resultVersions.listArchivedResults(project, scenario.id).length, 2);
 
+const storageProject = { ...project, id: "new-equipment", hasStorage: true, storagePowerMw: 10, storageDurationH: 2,
+  storageRoundTripEfficiency: 0.82 };
+const storageScenario = { ...scenario, config: { ...scenario.config, storageRoundTripEfficiency: 0.95,
+  storageArbitragePrice: 20, storageCapacityCompPrice: 50 } };
+run.pricesByYear[scenarioYear][0] = 300;
+const storageResult = resultVersions.stampComputedResult(storageProject, storageScenario, run,
+  roughPrice.stampBaselineResult(storageProject, storageScenario, run,
+    calculator.calculateScenarioResult(storageProject, storageScenario, run)));
+assert.equal(storageResult.sourceContext.storageRoundTripEfficiency, 0.82);
+assert.equal(storageResult.resultVersion.project.storageRoundTripEfficiency, 0.82);
+assert.equal(roughPrice.baselineResultState(storageProject, storageScenario, storageResult).current, true);
+const resultDigest = JSON.stringify(storageResult);
+storageProject.storageRoundTripEfficiency = 0.8;
+assert.equal(roughPrice.baselineResultState(storageProject, storageScenario, storageResult).reason, "stale_context");
+const savedStorageContext = resultVersions.getArchivedCalculationContext(storageResult);
+assert.equal(isResultComplete(savedStorageContext.project, savedStorageContext.scenario, storageResult, { includeHourly: true }), true,
+  "变更设备参数后，已存结果仍按当时的效率对账");
+assert.equal(JSON.stringify(storageResult), resultDigest);
+
 console.log("result versions tests passed");

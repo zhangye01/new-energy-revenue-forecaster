@@ -266,7 +266,7 @@ const { createBrowserSandbox } = require("../scripts/module-load-smoke");
   sandbox.runCalculation();
   const dispatchResult = storageProject.resultsByScenario[storageScenario.id];
   assert.equal(dispatchResult.annualRows[0].storageDispatch.incrementalRevenue, 170);
-  assert.equal(dispatchResult.annualRows[0].storageSupplementRevenue, 190, "旧99元/MWh不参与新基准");
+  assert.equal(dispatchResult.annualRows[0].storageSupplementRevenue, 170, "旧手填套利和独立补充收益均不参与新基准");
   assert.equal(JSON.stringify(storageProject.legacyStorageResultsByScenario[storageScenario.id]), initialBaselineJson);
   assert.equal(JSON.stringify(storageProject.roughPrice.snapshots), storedStorageRoughJson);
   const restoredStorage = sandbox.sanitizeProject(JSON.parse(JSON.stringify(storageProject)), 9);

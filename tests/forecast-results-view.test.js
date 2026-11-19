@@ -145,4 +145,32 @@ for (const [phase, label] of [["ready", "待提交"], ["input-required", "待提
   assert.equal(modelCards(buildView({ project, phase })).filter(([, content]) => content.includes(label)).length, 3);
 }
 
+const panel = { hidden: true };
+const summary = { innerHTML: "" };
+const nodes = { "#forecast-storage-preview": panel, "#forecast-storage-summary": summary };
+let calculations = 0;
+const renderStorage = forecastView.createStorageSpotPreview({ querySelector: (selector) => nodes[selector] }, () => {
+  calculations += 1;
+  return { totalWithoutStorageSpotRevenue: 120000, totalWithStorageSpotRevenue: 123456, totalIncrementalRevenue: 3456 };
+});
+const storage = { ...project, hasStorage: true, storageRoundTripEfficiency: 0.88, energyData: { hourlyByYear: {} } };
+const storageRun = { pricesByYear: {} };
+renderStorage({ project: storage, run: null });
+assert.equal(panel.hidden, false);
+assert.match(summary.innerHTML, /等待生效的逐时现货电价/);
+renderStorage({ project: storage, run: storageRun });
+assert.match(summary.innerHTML, /无储现货收益.*12\.00 万元/);
+assert.match(summary.innerHTML, /配储现货增量.*0\.35 万元/);
+renderStorage({ project: storage, run: storageRun });
+assert.equal(calculations, 1);
+storage.storageRoundTripEfficiency = 0.9;
+renderStorage({ project: storage, run: storageRun });
+storage.energyData.hourlyByYear[2026] = [];
+renderStorage({ project: storage, run: storageRun });
+assert.equal(calculations, 3);
+renderStorage({ project: storage, run: null });
+assert.doesNotMatch(summary.innerHTML, /配储现货增量/);
+renderStorage({ project, run: null });
+assert.equal(panel.hidden, true);
+
 console.log("Forecast result view tests passed.");

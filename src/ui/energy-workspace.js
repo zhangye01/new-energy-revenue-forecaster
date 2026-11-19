@@ -1,7 +1,9 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const dispatch = typeof module !== "undefined" && module.exports
+    ? require("../domain/storage-dispatch") : root.NE_STORAGE_DISPATCH;
+  const api = factory(dispatch);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -9,7 +11,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_ENERGY_WORKSPACE = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (dispatch) {
   const BLOCKED_MESSAGE = "请先完成步骤1基础信息保存，再执行结算电量配置。";
 
   function disabledControls(overrides = {}) {
@@ -48,6 +50,12 @@
     });
     refs.createHasStorage?.addEventListener("change", () => {
       handlers.syncCreateStorageFields?.();
+    });
+    [refs.createStoragePowerMw, refs.createStorageDurationH].forEach((field) => {
+      field?.addEventListener("input", () => updateCreateStorageCapacity(refs));
+    });
+    refs.createStorageEfficiency?.addEventListener("input", ({ target }) => {
+      target.dataset.storageEfficiencyEdited = "true";
     });
     refs.createToEnergyButton?.addEventListener("click", () => {
       handlers.enterEnergyPage?.();
@@ -149,6 +157,14 @@
     return Number.isFinite(value) ? String(value) : "";
   }
 
+  function storageEfficiencyPercentValue(project) {
+    if (!project?.hasStorage) return "";
+    const scenarios = project.scenarios || [];
+    const baseline = scenarios.find((scenario) => scenario.isBaseline) || scenarios[0];
+    const efficiency = dispatch.resolveStorageEfficiency(project, baseline?.config);
+    return dispatch.isStorageEfficiency(efficiency) ? String(Number((efficiency * 100).toPrecision(15))) : "";
+  }
+
   function buildCreateProjectFormValues(input = {}) {
     const {
       project = null,
@@ -184,6 +200,7 @@
       hasStorage: hasStorageChosen ? (project.hasStorage ? "yes" : "no") : "",
       storagePower: positiveNumberValue(project.storagePowerMw),
       storageDuration: positiveNumberValue(project.storageDurationH),
+      storageEfficiency: storageEfficiencyPercentValue(project),
       storageNote: project.storageNote || "",
       capacity: positiveNumberValue(project.capacityMw),
       startYear: finiteNumberValue(project.startYear),
@@ -209,6 +226,10 @@
       existingProject = null
     } = input;
     const query = (selector) => documentRef?.querySelector?.(selector) || null;
+    const storageEfficiency = getTargetValue(refs.createStorageEfficiency);
+    const keepStorageEfficiency = Boolean(existingProject?.hasStorage && storageEfficiency &&
+      refs.createStorageEfficiency?.dataset?.storageEfficiencyEdited !== "true" &&
+      Number(storageEfficiency) === Number(storageEfficiencyPercentValue(existingProject)));
     return {
       name: getTargetValue(query("#create-project-name")),
       province: getTargetValue(refs.createProvince),
@@ -217,6 +238,8 @@
       hasStorage: getTargetValue(query("#create-has-storage")),
       storagePower: getTargetValue(refs.createStoragePowerMw),
       storageDuration: getTargetValue(refs.createStorageDurationH),
+      storageEfficiency,
+      keepStorageEfficiency,
       storageNote: getTargetValue(refs.createStorageNote),
       capacity: getTargetValue(query("#create-capacity-mw")),
       startYear: getTargetValue(query("#create-start-year")),
@@ -241,6 +264,8 @@
     setInputValue(query("#create-has-storage"), values.hasStorage);
     setInputValue(refs.createStoragePowerMw, values.storagePower);
     setInputValue(refs.createStorageDurationH, values.storageDuration);
+    setInputValue(refs.createStorageEfficiency, values.storageEfficiency);
+    if (refs.createStorageEfficiency?.dataset) delete refs.createStorageEfficiency.dataset.storageEfficiencyEdited;
     setInputValue(refs.createStorageNote, values.storageNote);
     setInputValue(query("#create-capacity-mw"), values.capacity);
     setInputValue(query("#create-start-year"), values.startYear);
@@ -269,6 +294,7 @@
         hasStorage: "",
         storagePower: "",
         storageDuration: "",
+        storageEfficiency: "",
         storageNote: "",
         capacity: "",
         startYear: "",
@@ -287,6 +313,8 @@
     [
       refs.createStoragePowerField,
       refs.createStorageDurationField,
+      refs.createStorageEfficiencyField,
+      refs.createStorageCapacityField,
       refs.createStorageNoteField
     ].forEach((field) => {
       if (field) field.hidden = !storageEnabled;
@@ -294,11 +322,21 @@
     [
       refs.createStoragePowerMw,
       refs.createStorageDurationH,
+      refs.createStorageEfficiency,
       refs.createStorageNote
     ].forEach((field) => {
       if (field) field.disabled = !storageEnabled;
     });
+    updateCreateStorageCapacity(refs);
     return storageEnabled;
+  }
+
+  function updateCreateStorageCapacity(refs) {
+    const power = Number(getTargetValue(refs.createStoragePowerMw));
+    const duration = Number(getTargetValue(refs.createStorageDurationH));
+    const capacity = power * duration;
+    const usable = refs.createHasStorage?.value === "yes" && power > 0 && duration > 0 && Number.isFinite(capacity);
+    setInputValue(refs.createStorageCapacityMwh, usable ? String(Number(capacity.toPrecision(15))) : "");
   }
 
   function applyCreateWorkspaceEntryState(input = {}) {

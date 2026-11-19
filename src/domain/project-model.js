@@ -1,9 +1,11 @@
 "use strict";
 
 (function (root, factory) {
-  const priceForecast = typeof module !== "undefined" && module.exports
-    ? require("./price-forecast") : root.NE_PRICE_FORECAST;
-  const api = factory(priceForecast);
+  const commonJs = typeof module !== "undefined" && module.exports;
+  const api = factory(
+    commonJs ? require("./price-forecast") : root.NE_PRICE_FORECAST,
+    commonJs ? require("./storage-dispatch") : root.NE_STORAGE_DISPATCH
+  );
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -11,7 +13,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_PROJECT_MODEL = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (priceForecast) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (priceForecast, storageDispatch) {
   const PROJECT_WORKSPACE_BUCKET_SET = new Set(["new", "history"]);
   const ASSET_TYPE_SET = new Set(["wind", "photovoltaic"]);
   const SITE_TYPE_SET = new Set(["onshore", "offshore"]);
@@ -198,6 +200,8 @@
       hasStorage: Boolean(input.hasStorage),
       storagePowerMw: Number.isFinite(input.storagePowerMw) ? input.storagePowerMw : null,
       storageDurationH: Number.isFinite(input.storageDurationH) ? input.storageDurationH : null,
+      ...(input.hasStorage && storageDispatch.isStorageEfficiency(input.storageRoundTripEfficiency)
+        ? { storageRoundTripEfficiency: input.storageRoundTripEfficiency } : {}),
       storageNote: typeof input.storageNote === "string" ? input.storageNote : "",
       capacityMw: Number.isFinite(input.capacityMw) ? input.capacityMw : 0,
       startYear: Number.isInteger(input.startYear) ? input.startYear : resolveCurrentYear(options),
@@ -266,6 +270,7 @@
     const forecastYearsRaw = trimText(rawInput.forecastYears);
     const storagePowerInput = Number(storagePowerRaw);
     const storageDurationInput = Number(storageDurationRaw);
+    const storageEfficiencyInput = Number(trimText(rawInput.storageEfficiency)) / 100;
     const capacityInput = Number(capacityRaw);
     const startYearInput = Number(startYearRaw);
     const forecastYearsInput = Number(forecastYearsRaw);
@@ -283,6 +288,7 @@
       forecastYearsInput,
       storagePowerMw: hasStorage && Number.isFinite(storagePowerInput) && storagePowerInput > 0 ? storagePowerInput : null,
       storageDurationH: hasStorage && Number.isFinite(storageDurationInput) && storageDurationInput > 0 ? storageDurationInput : null,
+      ...(hasStorage && storageDispatch.isStorageEfficiency(storageEfficiencyInput) ? { storageRoundTripEfficiency: storageEfficiencyInput } : {}),
       storageNote: hasStorage ? storageNoteRaw : "",
       capacityMw: Number.isFinite(capacityInput) && capacityInput > 0 ? capacityInput : 0,
       startYear: Number.isFinite(startYearInput) && startYearInput >= 2026 ? Math.floor(startYearInput) : currentYear,
@@ -340,6 +346,12 @@
         message: "保存失败：储能时长未填写或格式无效。"
       };
     }
+    if (input.hasStorage && !storageDispatch.isStorageEfficiency(input.storageRoundTripEfficiency)) {
+      return {
+        topMeta: "请填写储能往返效率（%）。",
+        message: "保存失败：储能往返效率须大于 0% 且不超过 100%。"
+      };
+    }
     if (!Number.isFinite(input.capacityInput) || input.capacityInput <= 0) {
       return {
         topMeta: "请填写有效的装机容量（MW）。",
@@ -376,6 +388,7 @@
       || project.hasStorage !== input.hasStorage
       || project.storagePowerMw !== input.storagePowerMw
       || project.storageDurationH !== input.storageDurationH
+      || project.storageRoundTripEfficiency !== input.storageRoundTripEfficiency
       || project.storageNote !== input.storageNote
       || project.capacityMw !== input.capacityMw
       || project.startYear !== input.startYear
@@ -384,12 +397,7 @@
 
   function applyCreateProjectInput(project, input = {}) {
     if (!isPlainObject(project)) return project;
-    const newlyApplicable = [];
-    if (!project.hasStorage && input.hasStorage) newlyApplicable.push(
-      "storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"
-    );
-    // Older saves confirmed hidden defaults. A newly applicable revenue item
-    // needs review, while retaining its value and unrelated confirmations.
+    // Changes to the forecast period can expose previously unreviewed years.
     (project.scenarios || []).forEach((scenario) => {
       if (!isPlainObject(scenario.confirmedConfig)) return;
       const invalidate = (key) => {
@@ -403,7 +411,6 @@
         delete scenario.confirmedConfig[key];
         if (scenario.confirmedConfigSources) delete scenario.confirmedConfigSources[key];
       };
-      newlyApplicable.forEach(invalidate);
       if ((project.startYear !== input.startYear || project.forecastYears !== input.forecastYears)
           && Number.isInteger(input.startYear) && Number.isInteger(input.forecastYears) && input.forecastYears > 0) {
         ["ltManualPricesByYear", "envManualValuesByYear", "feeManualValuesByYear"].forEach((key) => {
@@ -426,6 +433,8 @@
     project.hasStorage = input.hasStorage;
     project.storagePowerMw = input.storagePowerMw;
     project.storageDurationH = input.storageDurationH;
+    if (!input.hasStorage) delete project.storageRoundTripEfficiency;
+    else if (storageDispatch.isStorageEfficiency(input.storageRoundTripEfficiency)) project.storageRoundTripEfficiency = input.storageRoundTripEfficiency;
     project.storageNote = input.storageNote;
     project.capacityMw = input.capacityMw;
     project.startYear = input.startYear;
@@ -478,6 +487,7 @@
       hasStorage,
       storagePowerMw: Object.prototype.hasOwnProperty.call(rawProject, "storagePowerMw") ? rawProject.storagePowerMw : null,
       storageDurationH: Object.prototype.hasOwnProperty.call(rawProject, "storageDurationH") ? rawProject.storageDurationH : null,
+      ...(Object.hasOwn(rawProject, "storageRoundTripEfficiency") ? { storageRoundTripEfficiency: rawProject.storageRoundTripEfficiency } : {}),
       storageNote: typeof rawProject.storageNote === "string" ? rawProject.storageNote : "",
       capacityMw: Number.isFinite(rawCapacity) ? rawCapacity : (isNewDraft ? null : 0),
       startYear: Number.isFinite(rawStartYear) ? Math.floor(rawStartYear) : (isNewDraft ? null : currentYear),

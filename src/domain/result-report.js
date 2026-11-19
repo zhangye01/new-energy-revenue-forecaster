@@ -3,7 +3,8 @@
 (function (root, factory) {
   const rules = root.NE_REVENUE_RULES || (typeof require !== "undefined" ? require("./revenue-rules") : null);
   const versions = root.NE_RESULT_VERSIONS || (typeof require !== "undefined" ? require("./result-versions") : null);
-  const api = factory(rules, versions);
+  const storage = root.NE_STORAGE_DISPATCH || (typeof require !== "undefined" ? require("./storage-dispatch") : null);
+  const api = factory(rules, versions, storage);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -11,8 +12,8 @@
   if (root.window && root.window !== root) {
     root.window.NE_RESULT_REPORT = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, versions) {
-  if (!rules || !versions) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, versions, storage) {
+  if (!rules || !versions || !storage) {
     throw new Error("结果简报初始化失败：缺少结算规则或结果版本模块");
   }
 
@@ -58,10 +59,16 @@
     return Number((Number(value || 0)).toFixed(4));
   }
 
+  function storageLabel(rows, legacyLabel) {
+    return rows.length && rows.every((row) => row.storageDispatch?.revenueMode === storage.SPOT_REVENUE_MODE)
+      ? "配储现货增量" : legacyLabel;
+  }
+
   function contributionItemsFor(rows, feeItems) {
     const sum = (key) => rows.reduce((total, row) => total + Number(row[key] || 0), 0);
+    const storageTitle = storageLabel(rows, "配储补充收益");
     return [...CONTRIBUTION_COMPONENTS, ...feeItems].map((item) => ({
-      label: item.label,
+      label: item.key === "storageSupplementRevenue" ? storageTitle : item.label,
       amount: item.negative ? -sum(item.key) : sum(item.key),
       colorKey: item.colorKey
     }));
@@ -109,7 +116,7 @@
       { label: "差价机制", value: first.mechanismRevenue / energyMwh, colorKey: "mechanism" },
       { label: "交易策略", value: first.ltPnlRevenue / energyMwh, colorKey: "trade" },
       { label: "环境价值", value: first.envRevenue / energyMwh, colorKey: "env" },
-      { label: "配储补充", value: first.storageSupplementRevenue / energyMwh, colorKey: "storage" },
+      { label: storageLabel(rows, "配储补充"), value: first.storageSupplementRevenue / energyMwh, colorKey: "storage" },
       ...feeItems.map(({ label, key, colorKey, negative }) => ({
         label, value: (negative ? -first[key] : first[key]) / energyMwh, colorKey
       })),
@@ -125,11 +132,13 @@
     const config = versions.getResultFeeConfig(result, verifiedConfig);
     const displayRows = rowsWithFeeBreakdown(rows, config);
     const feeItems = feeComponents(displayRows);
+    const storageTitle = storageLabel(rows, "配储补充");
     return {
       rows,
       years: rows.map((row) => String(row.year)),
       annualComponents: [...ANNUAL_COMPONENTS, ...feeItems.map((item) => ({ ...item, name: item.label }))].map((item) => ({
         ...item,
+        name: item.key === "storageSupplementRevenue" ? storageTitle : item.name,
         data: displayRows.map((row) => resultMoneyWan(item.negative ? -row[item.key] : row[item.key]))
       })),
       annualNet: {

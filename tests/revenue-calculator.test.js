@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const {
   calculateScenarioResult,
+  calculateStorageSpotPreview,
   hourIndexToTimestamp
 } = require("../src/domain/revenue-calculator");
 
@@ -152,6 +153,41 @@ const signedResult = calculateScenarioResult(createProject(), createScenario(), 
 assert.deepEqual(signedResult.missingYears, []);
 assert.equal(signedResult.hourlyPreview[0].spotRevenue, -100);
 assert.equal(signedResult.hourlyPreview[1].spotRevenue, 0);
+
+const storageProject = { ...createProject(), hasStorage: true, forecastYears: 2,
+  storagePowerMw: 1, storageDurationH: 1, storageRoundTripEfficiency: 0.8 };
+const storageScenario = createScenario();
+storageScenario.config.storageRoundTripEfficiency = 0.95;
+const storageHours = storageProject.energyData.hourlyByYear;
+storageHours[2026] = fullYearHours(0);
+storageHours[2026][0] = 1;
+storageHours[2027] = [...storageHours[2026]];
+const storagePrices = fullYearHours(100);
+storagePrices[1] = 300;
+const storageRun = { pricesByYear: { 2026: storagePrices, 2027: [...storagePrices] } };
+const storageBefore = structuredClone({ storageProject, storageScenario, storageRun });
+const storagePreview = calculateStorageSpotPreview(storageProject, storageScenario, storageRun);
+const newStorageResult = calculateScenarioResult(storageProject, storageScenario, storageRun);
+assert.deepEqual(storagePreview, {
+  annualRows: [2026, 2027].map((year) => ({ year, withoutStorageSpotRevenue: 100, withStorageSpotRevenue: 240, incrementalRevenue: 140 })),
+  totalWithoutStorageSpotRevenue: 200, totalWithStorageSpotRevenue: 480, totalIncrementalRevenue: 280
+});
+newStorageResult.annualRows.forEach((row, index) => {
+  assert.equal(row.storageDispatch.revenueMode, "spot_increment_only");
+  assert.equal(row.storageDispatch.roundTripEfficiency, 0.8, "设备往返效率优先");
+  assert.equal(row.storageDispatch.independentSupplementRevenue, 0);
+  assert.equal(row.storageSupplementRevenue, storagePreview.annualRows[index].incrementalRevenue);
+  assert.equal(row.storageDispatch.withStorageSpotRevenue, storagePreview.annualRows[index].withStorageSpotRevenue);
+});
+assert.deepEqual({ storageProject, storageScenario, storageRun }, storageBefore, "自动测算与正式测算都保留原输入");
+const { storageRoundTripEfficiency, ...legacyEquipment } = storageProject;
+assert.equal(calculateStorageSpotPreview(legacyEquipment, storageScenario, storageRun).totalIncrementalRevenue, 370,
+  "旧项目在补录设备效率前沿用原方案效率");
+assert.equal(calculateStorageSpotPreview(storageProject, storageScenario, { pricesByYear: { 2026: storagePrices } }), null,
+  "测算周期还有年份缺少价格时不展示不完整的合计");
+const missingSecondYear = { ...storageProject, energyData: { hourlyByYear: { 2026: storageHours[2026] } } };
+assert.equal(calculateStorageSpotPreview(missingSecondYear, storageScenario, storageRun), null,
+  "测算周期还有年份缺少电量时不展示不完整的合计");
 
 // A later-year fault must never replace a previously saved complete result with
 // a partial first-year total, even when activation/readiness flags were forged.

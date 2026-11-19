@@ -88,6 +88,10 @@
     const count = query("#result-history-count");
     if (!panel || !content || !count) return;
     const entries = collectArchiveEntries(project, scenario?.id);
+    if (view?.includeLastSaved && result?.annualRows?.length && !entries.some((entry) =>
+      entry.result === result || (result.resultVersion?.id && entry.result.resultVersion?.id === result.resultVersion.id))) {
+      entries.unshift({ key: "last-saved", result });
+    }
     const contextKey = JSON.stringify([project?.id, scenario?.id]);
     const sameContext = panel.dataset.context === contextKey;
     const previous = sameContext && panel.dataset.selectedArchive;

@@ -162,6 +162,8 @@
 }
 
 .forecast-results-panel { min-width: 0; }
+#forecast-storage-preview[hidden] { display: none; }
+.forecast-storage-value { display: block; margin-top: 6px; font-variant-numeric: tabular-nums; }
 #forecast-results-root { display: grid; gap: 12px; min-width: 0; }
 .forecast-result-models { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .forecast-result-model { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); }

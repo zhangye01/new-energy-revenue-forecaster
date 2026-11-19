@@ -122,21 +122,21 @@ function testScenarioGoldenCalculation() {
   approx(first.ltPnlPrice, 8, "首年交易策略损益度电值");
   approx(first.ltPnlRevenue, 96000, "首年交易策略损益");
   approx(first.envRevenue, 150000, "首年环境价值收益只计绿证和绿电溢价");
-  approx(first.storageSupplementRevenue, 400000, "平价下只计独立补充收益，不计旧手工套利");
+  approx(first.storageSupplementRevenue, 0, "平价下配储现货增量为零，历史手工收益均不参与新结算");
   approx(first.storageDispatch.incrementalRevenue, 0, "平价下逐时套利为零");
   approx(first.comprehensiveFee, 600000, "首年综合费用");
   approx(first.otherIncome, 40000, "首年其他收入");
-  approx(first.fullRevenue, 6486000, "首年全口径收入");
-  approx(first.fullRevenuePrice, 324.3, "首年度电全口径收入");
+  approx(first.fullRevenue, 6086000, "首年全口径收入");
+  approx(first.fullRevenuePrice, 304.3, "首年度电全口径收入");
 
   const second = result.annualRows[1];
   approx(second.mechanismRatio, 0, "机制结束后次年机制占比");
   approx(second.mechanismRevenue, 0, "机制结束后次年机制收入");
   approx(second.ltPnlPrice, 5, "次年交易策略固定步长收敛");
-  approx(second.fullRevenue, 6709500, "次年全口径收入");
+  approx(second.fullRevenue, 6289500, "次年全口径收入");
   approx(result.totalEnergy, 41000, "周期总上网电量");
-  approx(result.totalFullRevenue, 13195500, "周期全口径总收入");
-  approx(result.avgFullRevenuePrice, 321.8414634146341, "周期平均度电收入");
+  approx(result.totalFullRevenue, 12375500, "周期全口径总收入");
+  approx(result.avgFullRevenuePrice, 301.8414634146341, "周期平均度电收入");
 }
 
 function testManualYearOverrides() {
@@ -176,7 +176,7 @@ function testManualYearOverrides() {
   approx(row.envRevenue, 96000, "手工逐年配置仅计绿证和绿电溢价");
   approx(row.comprehensiveFee, 200000, "手工逐年综合费用");
   approx(row.otherIncome, 100000, "手工逐年其他收入");
-  approx(row.fullRevenue, 6916000, "手工逐年配置全口径收入");
+  approx(row.fullRevenue, 6516000, "手工逐年配置全口径收入");
 }
 
 function testMissingCurveReporting() {
@@ -209,7 +209,7 @@ const storageYear = withStorage.annualRows[0];
 approx(storageYear.storageDispatch.chargeOpportunityCost, 100, "充电放弃100元售电收入");
 approx(storageYear.storageDispatch.dischargeRevenue, 270, "放电0.9MWh收入270元");
 approx(storageYear.storageDispatch.incrementalRevenue, 170, "同一价格曲线的净套利差额");
-approx(storageYear.fullRevenue - withoutStorage.annualRows[0].fullRevenue, 190, "只加套利170元和独立收益20元");
+approx(storageYear.fullRevenue - withoutStorage.annualRows[0].fullRevenue, 170, "全口径收入只加现货增量170元");
 approx(withStorage.hourlyPreview.reduce((sum, hour) => sum + hour.fullRevenue, 0), storageYear.fullRevenue, "首年小时收入与年度结果对账");
 const reducedEfficiency = calculateScenarioResult(oneYear, {
   ...scenario, config: { ...scenario.config, storageRoundTripEfficiency: 0.8 }

@@ -79,14 +79,15 @@
     if (!fingerprint || result.sourceContext.runId !== run?.id) throw new Error("电价版本不完整，请核对后重新测算。");
     const {
       id, name, province, assetType, startYear, forecastYears, capacityMw, siteType, hasStorage,
-      storagePowerMw, storageDurationH
+      storagePowerMw, storageDurationH, storageRoundTripEfficiency
     } = project;
     return {
       ...result,
       resultVersion: freezeDeep({
         id: makeVersionId(), schemaVersion: SCHEMA_VERSION, scenarioName: scenario.name || "当前方案", isBaseline: Boolean(scenario.isBaseline),
         project: { id, name, province, assetType, startYear, forecastYears, capacityMw, siteType, hasStorage: Boolean(hasStorage),
-          storagePowerMw: storagePowerMw ?? null, storageDurationH: storageDurationH ?? null },
+          storagePowerMw: storagePowerMw ?? null, storageDurationH: storageDurationH ?? null,
+          ...(hasStorage && storageRoundTripEfficiency != null ? { storageRoundTripEfficiency } : {}) },
         scenarioConfig: utils.cloneData(scenario.config || {})
       }),
       priceSource: Object.freeze({ type: priceSourceType(run), runId: run.id, fingerprint })
@@ -102,7 +103,9 @@
         typeof source?.scenarioId !== "string" || !source.scenarioId || !Number.isInteger(project.startYear) ||
         !Number.isInteger(project.forecastYears) || project.forecastYears < 1 || project.forecastYears > 100 ||
         !Number.isFinite(project.capacityMw) || project.capacityMw <= 0 || typeof project.hasStorage !== "boolean" ||
-        (project.hasStorage && ![project.storagePowerMw, project.storageDurationH].every((value) => Number.isFinite(value) && value > 0))) return null;
+        (project.hasStorage && ![project.storagePowerMw, project.storageDurationH].every((value) => Number.isFinite(value) && value > 0)) ||
+        (project.storageRoundTripEfficiency !== undefined &&
+          (!Number.isFinite(project.storageRoundTripEfficiency) || project.storageRoundTripEfficiency <= 0 || project.storageRoundTripEfficiency > 1))) return null;
     return { project, scenario: { id: source.scenarioId, name: version.scenarioName,
       isBaseline: version.isBaseline, config: version.scenarioConfig } };
   }

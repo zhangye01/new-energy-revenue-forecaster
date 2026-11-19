@@ -187,6 +187,9 @@ const carryScenario = scenario(carryProject, { mechanismStartYm: "2026-01", mech
   storageCapacityCompPrice: 4, storageAncillaryRevenuePrice: 2, storageOtherRevenuePrice: 1, otherNetIncome: 6 });
 const unknown = getCompactSettlementDraft(carryProject, carryScenario, undefined, scenarioModel);
 assert.deepEqual(unknown, { ltYear1Pnl: null, ltTargetPnl: null, ltConvergeSpeed: null, environmentPrice: null, feesNetPrice: null, storagePrice: null });
+// These assumptions were explicitly confirmed before the storage income fields moved out of refinement.
+carryScenario.confirmedConfig = { storageArbitragePrice: 5, storageCapacityCompPrice: 4,
+  storageAncillaryRevenuePrice: 2, storageOtherRevenuePrice: 1 };
 assert.equal(scenarioModel.confirmConfig(carryScenario, undefined, { project: carryProject }), true);
 const carried = getCompactSettlementDraft(carryProject, carryScenario, { ltYear1Pnl: null, storagePrice: 0 }, scenarioModel);
 assert.equal(carried.ltYear1Pnl, null, "用户清空值后保留待填状态");

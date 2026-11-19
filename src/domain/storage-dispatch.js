@@ -7,7 +7,17 @@
   if (root.window && root.window !== root) root.window.NE_STORAGE_DISPATCH = api;
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
   const ALGORITHM_VERSION = "daily-price-pairing-v1";
+  const SPOT_REVENUE_MODE = "spot_increment_only";
+  const DEFAULT_EFFICIENCY = 0.9;
   const HOURS_PER_DAY = 24;
+
+  function resolveStorageEfficiency(project, scenarioConfig) {
+    return project?.storageRoundTripEfficiency ?? scenarioConfig?.storageRoundTripEfficiency ?? DEFAULT_EFFICIENCY;
+  }
+
+  function isStorageEfficiency(value) {
+    return Number.isFinite(value) && value > 0 && value <= 1;
+  }
 
   function finiteNumber(value, name, minimum, strict = false) {
     if (typeof value !== "number" || !Number.isFinite(value)
@@ -112,5 +122,5 @@
     return result;
   }
 
-  return Object.freeze({ ALGORITHM_VERSION, calculateHourlyDispatch });
+  return Object.freeze({ ALGORITHM_VERSION, SPOT_REVENUE_MODE, calculateHourlyDispatch, isStorageEfficiency, resolveStorageEfficiency });
 });

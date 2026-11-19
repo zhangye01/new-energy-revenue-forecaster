@@ -243,7 +243,7 @@
       .reduce((sum, key) => sum + Number(entry[key]), 0) <= 1 + 0.000001;
   }
 
-  function applicableConfigKeys(project = {}, config = {}) {
+  function applicableConfigKeys(_project = {}, config = {}) {
     const keys = ["mechanismEnabled", "ltPricingMode", "envValueMode", "feeConfigMode"];
     if (config.mechanismEnabled) {
       keys.push("mechanismRatio", "mechanismPrice", "mechanismStartYm", "mechanismEndYm", "mechanismReferenceMode");
@@ -255,7 +255,6 @@
     else keys.push("greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio");
     keys.push(...(getFeeConfigMode(config) === "manual" ? ["feeManualValuesByYear"]
       : ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherNetIncome"]));
-    if (project.hasStorage) keys.push("storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice", "storageRoundTripEfficiency");
     return keys;
   }
 

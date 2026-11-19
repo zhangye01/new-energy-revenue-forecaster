@@ -585,6 +585,17 @@ for (const efficiency of [0.912345678901234, null, "legacy-invalid"]) {
 }
 withoutEfficiency.config.storageRoundTripEfficiency = 0.9;
 confirmConfig(withoutEfficiency, ["storageRoundTripEfficiency"], { project: efficiencyProject });
-assert.equal(isConfigConfirmed(sanitizeScenario(efficiencyProject, withoutEfficiency), "storageRoundTripEfficiency"), true);
+assert.equal(Object.hasOwn(withoutEfficiency.confirmedConfig, "storageRoundTripEfficiency"), false);
+withoutEfficiency.confirmedConfig.storageRoundTripEfficiency = 0.9;
+withoutEfficiency.confirmedConfigSources.storageRoundTripEfficiency = "explicit";
+const withLegacyReview = sanitizeScenario(efficiencyProject, withoutEfficiency);
+assert.equal(isConfigConfirmed(withLegacyReview, "storageRoundTripEfficiency"), true, "saved historical review remains readable");
+assert.equal(withLegacyReview.confirmedConfigSources.storageRoundTripEfficiency, "explicit");
+const removedStorageBatch = applyBatchParameter({ ...efficiencyProject, scenarios: [withLegacyReview] }, {
+  key: "storageCapacityCompPrice", spec: { type: "number", min: 0, max: 2000 }, rawValue: "99", scope: "all"
+});
+assert.equal(removedStorageBatch.updated, 0);
+assert.equal(removedStorageBatch.skippedInapplicable, 1);
+assert.equal(withLegacyReview.config.storageCapacityCompPrice, withoutEfficiency.config.storageCapacityCompPrice);
 
 console.log("scenario model tests passed");

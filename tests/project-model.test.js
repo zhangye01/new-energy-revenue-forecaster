@@ -56,6 +56,7 @@ const createInput = normalizeCreateProjectFormInput({
   hasStorage: "yes",
   storagePower: "64",
   storageDuration: "2",
+  storageEfficiency: "88.125",
   storageNote: " 两小时 ",
   capacity: "200",
   startYear: "2026.9",
@@ -68,6 +69,7 @@ assert.equal(createInput.hasStorage, true);
 assert.equal(createInput.storageChoice, "yes");
 assert.equal(createInput.storagePowerMw, 64);
 assert.equal(createInput.storageDurationH, 2);
+assert.equal(createInput.storageRoundTripEfficiency, 0.88125);
 assert.equal(createInput.storageNote, "两小时");
 assert.equal(createInput.capacityMw, 200);
 assert.equal(createInput.startYear, 2026);
@@ -160,6 +162,17 @@ assert.deepEqual(buildCreateProjectFormInput({
   topMeta: "请填写有效的储能功率（MW）。",
   message: "保存失败：储能功率未填写或格式无效。"
 });
+const storageForm = {
+  name: "配储参数", province: "jiangsu", assetType: "wind", siteType: "offshore",
+  hasStorage: "yes", storagePower: "64", storageDuration: "2", capacity: "200", startYear: "2026", forecastYears: "20"
+};
+for (const storageEfficiency of ["", "0", "-1", "100.001", "无效"]) {
+  assert.match(buildCreateProjectFormInput({ ...storageForm, storageEfficiency }, options).error.message, /往返效率/);
+}
+const withEquipment = buildCreateProjectFormInput({ ...storageForm, storageEfficiency: "100" }, options);
+assert.equal(withEquipment.error, null);
+assert.equal(createProjectRecord(withEquipment.input, options).storageRoundTripEfficiency, 1);
+assert.equal(buildCreateProjectFormInput({ ...storageForm, hasStorage: "no" }, options).error, null);
 assert.deepEqual(buildCreateProjectFormInput({
   name: "缺周期",
   province: "jiangsu",
@@ -272,9 +285,8 @@ const applicabilityProject = { siteType: "onshore", hasStorage: false, scenarios
 ] };
 applyCreateProjectInput(applicabilityProject, { ...applicabilityProject, siteType: "offshore", hasStorage: true });
 for (const scenario of applicabilityProject.scenarios) {
-  assert.deepEqual(scenario.confirmedConfig, { otherFee: 3, mechanismPrice: 365,
-    carbonEnabled: false, carbonPrice: 0, carbonRealizeRatio: 0, envManualValuesByYear: applicableConfirmations.envManualValuesByYear },
-  "newly enabled storage requires review, while site changes leave archived environmental confirmations intact");
+  assert.deepEqual(scenario.confirmedConfig, applicableConfirmations,
+    "设备启用不改写历史配储收益或环境价值的确认记录");
   assert.deepEqual(scenario.config, applicableConfirmations, "re-review never discards saved values");
   scenario.confirmedConfig = structuredClone(applicableConfirmations);
 }
@@ -507,6 +519,9 @@ assert.equal(JSON.stringify(missingStorage), missingStorageBefore);
 const validStorage = sanitizeProjectBase({ ...historyProject, storagePowerMw: 64.1234567890123, storageDurationH: 2.125 }, 0, options);
 assert.equal(validStorage.storagePowerMw, 64.1234567890123);
 assert.equal(validStorage.storageDurationH, 2.125);
+assert.equal(Object.hasOwn(validStorage, "storageRoundTripEfficiency"), false, "还原历史项目时沿用各原方案效率");
+const restoredEquipment = sanitizeProjectBase({ ...validStorage, storageRoundTripEfficiency: 0.88123456789 }, 0, options);
+assert.equal(restoredEquipment.storageRoundTripEfficiency, 0.88123456789);
 assert.equal(validateRevenueConfig(validStorage, storageDefaultConfig(validStorage)).some((message) => /配储功率和时长/.test(message)), false);
 const inactiveStorage = sanitizeProjectBase({ ...historyProject, hasStorage: false, storagePowerMw: 64.1234567890123, storageDurationH: 2.125 }, 0, options);
 assert.equal(inactiveStorage.storagePowerMw, 64.1234567890123);

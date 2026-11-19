@@ -295,11 +295,7 @@ const BATCH_PARAM_SPECS = {
   marketOpFee: { label: "市场运营费(元/MWh)", type: "number", min: 0, max: 2000 },
   gridAssessFee: { label: "并网考核费(元/MWh)", type: "number", min: 0, max: 2000 },
   ancillaryFee: { label: "辅助服务费(元/MWh)", type: "number", min: 0, max: 2000 },
-  otherNetIncome: { label: "其他净收入(元/MWh)", type: "number", min: -2000, max: 2000 },
-  storageArbitragePrice: { label: "现货价差套利(元/MWh)", type: "number", min: 0, max: 2000 },
-  storageCapacityCompPrice: { label: "容量补偿收益(元/MWh)", type: "number", min: 0, max: 2000 },
-  storageAncillaryRevenuePrice: { label: "配储辅助服务收益(元/MWh)", type: "number", min: 0, max: 2000 },
-  storageOtherRevenuePrice: { label: "其他配储收益(元/MWh)", type: "number", min: 0, max: 2000 }
+  otherNetIncome: { label: "其他净收入(元/MWh)", type: "number", min: -2000, max: 2000 }
 };
 
 const OVERVIEW_POLICY_DETAILS = [
