@@ -36,8 +36,9 @@
   }
 
   function paragraph(text, style = "Normal", options = {}) {
-    const { align, bold = false } = options;
-    return `<w:p><w:pPr><w:pStyle w:val="${style}"/>${align ? `<w:jc w:val="${align}"/>` : ""}</w:pPr>${textRun(text, bold)}</w:p>`;
+    const { align, bold = false, lead = "", keepNext = false, pageBreakBefore = false } = options;
+    const runs = lead ? `${textRun(`${lead}　`, true)}${textRun(text)}` : textRun(text, bold);
+    return `<w:p><w:pPr><w:pStyle w:val="${style}"/>${keepNext ? "<w:keepNext/>" : ""}${pageBreakBefore ? "<w:pageBreakBefore/>" : ""}${align ? `<w:jc w:val="${align}"/>` : ""}</w:pPr>${runs}</w:p>`;
   }
 
   function columnWidths(weights) {
@@ -48,7 +49,7 @@
   }
 
   function table(rows, weights, options = {}) {
-    const { header = false, labels = [] } = options;
+    const { header = false } = options;
     const widths = columnWidths(weights);
     const borders = ["top", "left", "bottom", "right", "insideH", "insideV"].map((edge) =>
       `<w:${edge} w:val="single" w:sz="4" w:color="D9D9D9"/>`).join("");
@@ -56,25 +57,18 @@
     const body = rows.map((row, rowIndex) => {
       const isHeader = header && rowIndex === 0;
       const cells = widths.map((width, index) => {
-        const isLabel = labels.includes(index);
-        const fill = isHeader ? "E3EDF7" : isLabel ? "F2F5F8" : "";
+        const fill = isHeader ? "E3EDF7" : rowIndex % 2 === 0 ? "F5F8FB" : "";
         const style = isHeader ? "TableHeader" : "TableText";
         const align = header && index > 0 ? (isHeader ? "center" : "right") : "left";
-        return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${fill ? `<w:shd w:val="clear" w:fill="${fill}"/>` : ""}<w:vAlign w:val="center"/></w:tcPr>${paragraph(row[index], style, { align, bold: isLabel })}</w:tc>`;
+        return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${fill ? `<w:shd w:val="clear" w:fill="${fill}"/>` : ""}<w:vAlign w:val="center"/></w:tcPr>${paragraph(row[index], style, { align, keepNext: isHeader || rowIndex === rows.length - 2 })}</w:tc>`;
       }).join("");
       return `<w:tr><w:trPr><w:cantSplit/>${isHeader ? "<w:tblHeader/>" : ""}</w:trPr>${cells}</w:tr>`;
     }).join("");
-    return `<w:tbl><w:tblPr><w:tblW w:w="${CONTENT_WIDTH}" w:type="dxa"/><w:tblBorders>${borders}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="50" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="50" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${body}</w:tbl>`;
+    return `<w:tbl><w:tblPr><w:tblW w:w="${CONTENT_WIDTH}" w:type="dxa"/><w:tblBorders>${borders}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${body}</w:tbl>`;
   }
 
-  function informationTable(items, singleColumn = false) {
-    if (!items.length) return "";
-    if (singleColumn) return table(items.map(({ label, value }) => [label, value]), [24, 76], { labels: [0] });
-    const rows = [];
-    for (let offset = 0; offset < items.length; offset += 2) {
-      rows.push(items.slice(offset, offset + 2).flatMap(({ label, value }) => [label, value]));
-    }
-    return table(rows, [19, 31, 19, 31], { labels: [0, 2] });
+  function labeledParagraphs(items, style) {
+    return (items || []).map(({ label, value }) => paragraph(value, style, { lead: label })).join("");
   }
 
   function encodeImage(figure, source, index) {
@@ -92,35 +86,56 @@
     const width = header.getUint32(16);
     const height = header.getUint32(20);
     if (!width || !height) throw fail();
-    const pictureWidth = Math.min(FIGURE_WIDTH_EMU, Math.round(2.9 * 914400 * width / height));
+    const maxHeight = figure.kind === "contribution" ? 2.35 : figure.kind === "annual" ? 2.15 : 2.9;
+    const pictureWidth = Math.min(FIGURE_WIDTH_EMU, Math.round(maxHeight * 914400 * width / height));
     return { ...figure, bytes, pictureWidth, pictureHeight: Math.round(pictureWidth * height / width),
       id: index + 1, relId: `rId${index + 3}`, path: `media/figure-${index + 1}.png` };
   }
 
   function picture(image) {
-    const { title, caption, id, relId, pictureWidth: cx, pictureHeight: cy } = image;
+    const { title, number, caption, id, relId, pictureWidth: cx, pictureHeight: cy } = image;
     const size = `cx="${cx}" cy="${cy}"`;
-    const imageRun = `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent ${size}/><wp:docPr id="${id}" name="图 ${id}" descr="${xml(title)}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="图 ${id}.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext ${size}/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
-    return `${paragraph(title, "Heading2")}<w:p><w:pPr><w:pStyle w:val="Figure"/>${caption ? "<w:keepNext/>" : ""}<w:jc w:val="center"/></w:pPr>${imageRun}</w:p>${caption ? paragraph(caption, "Caption") : ""}`;
+    const figureLabel = `图 ${number ?? id}`;
+    const imageRun = `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent ${size}/><wp:docPr id="${id}" name="${figureLabel}" descr="${xml(title)}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="${figureLabel}.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext ${size}/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+    return `${paragraph(`${figureLabel}　${title}`, "Heading2")}<w:p><w:pPr><w:pStyle w:val="Figure"/>${caption ? "<w:keepNext/>" : ""}<w:jc w:val="center"/></w:pPr>${imageRun}</w:p>${caption ? paragraph(caption, "Caption") : ""}`;
   }
 
   function tableWeights(reportTable) {
     const { key, headers } = reportTable;
-    if (key === "annual") return headers.map((header, index) => index === 0 ? 13 : Math.max(20, header.length + 11));
-    if (key === "storage") return headers.map((header, index) => index === 0 ? 32 : Math.max(20, header.length + 12));
+    if (key === "annual" || key === "key-years") return headers.map((header, index) => index === 0 ? 13 : Math.max(20, header.length + 11));
+    if (key === "storage" || key === "income-details") return headers.map((header, index) => index === 0 ? 34 : Math.max(20, header.length + 12));
     return headers.map(() => 1);
   }
 
+  function reportTableXml(reportTable) {
+    const note = reportTable.note ? paragraph(reportTable.note, "Caption", { keepNext: true }) : "";
+    return paragraph(`表 ${reportTable.number}　${reportTable.title}`, "Heading2") + note +
+      table([reportTable.headers, ...reportTable.rows], tableWeights(reportTable), { header: true });
+  }
+
+  function reportSections(brief, images) {
+    const tables = brief.tables.map((entry, index) => ({ ...entry, number: entry.number ?? index + 1 }));
+    if (!brief.sections?.length) return [...images.map(picture), ...tables.map(reportTableXml)].join("");
+    const figuresByKey = new Map(images.map((image) => [image.key, image]));
+    const tablesByKey = new Map(tables.map((entry) => [entry.key, entry]));
+    return brief.sections.map((section) => {
+      const pageBreakBefore = section.key === "annual" && tablesByKey.get("annual")?.rows.length >= 16;
+      const intro = (section.intro || []).map((text, index) => paragraph(text, "Normal", { keepNext: index === 0 }));
+      const blocks = section.blocks.map(({ kind, key }) => {
+        if (kind === "figure" && figuresByKey.has(key)) return picture(figuresByKey.get(key));
+        if (kind === "table" && tablesByKey.has(key)) return reportTableXml(tablesByKey.get(key));
+        return "";
+      });
+      return [paragraph(section.title, "Heading1", { pageBreakBefore }), ...intro, ...blocks].join("");
+    }).join("");
+  }
+
   function documentXml(brief, images) {
-    const tables = brief.tables.map((reportTable) => paragraph(reportTable.title, "Heading1") +
-      table([reportTable.headers, ...reportTable.rows], tableWeights(reportTable), { header: true })).join("");
     const body = [
       paragraph(brief.title, "Title"), paragraph(brief.projectName, "Subtitle"),
-      paragraph("项目概况", "Heading1"), informationTable(brief.context),
-      paragraph("核心结论", "Heading1"), paragraph(brief.summary), informationTable(brief.metrics),
-      ...images.map(picture), tables,
-      paragraph("测算口径与版本", "Heading1"), informationTable(brief.assumptions, true),
-      paragraph("结果来源", "Heading2"), informationTable(brief.trace, true)
+      paragraph("项目概况", "Heading1"), labeledParagraphs(brief.context, "Fact"),
+      paragraph("核心结论", "Heading1"), paragraph(brief.summary), labeledParagraphs(brief.metrics, "Fact"),
+      labeledParagraphs(brief.findings, "Finding"), reportSections(brief, images)
     ].join("");
     return `${XML_HEADER}<w:document xmlns:w="${WORD_NS}" xmlns:r="${DOC_RELS}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${body}<w:sectPr><w:footerReference w:type="default" r:id="${REL.footer}"/><w:pgSz w:w="${PAGE_WIDTH}" w:h="${PAGE_HEIGHT}"/><w:pgMar w:top="960" w:right="${SIDE_MARGIN}" w:bottom="960" w:left="${SIDE_MARGIN}" w:header="440" w:footer="480" w:gutter="0"/></w:sectPr></w:body></w:document>`;
   }
@@ -130,15 +145,17 @@
     const styles = [
       ["Normal", "Normal", 22, 0, 132], ["Title", "Title", 52, 0, 120, true, true],
       ["Subtitle", "Subtitle", 29, 0, 156, false, true], ["Heading1", "heading 1", 32, 220, 100, true, true, 0],
-      ["Heading2", "heading 2", 26, 186, 90, true, true, 1], ["Caption", "Caption", 18, 36, 110],
+      ["Heading2", "heading 2", 26, 140, 75, true, true, 1], ["Caption", "Caption", 18, 30, 86],
+      ["Fact", "Brief fact", 21, 0, 32], ["Finding", "Brief finding", 22, 100, 72],
       ["Figure", "Figure", 20, 0, 0], ["TableText", "Table text", 19, 0, 0],
       ["TableHeader", "Table header", 19, 0, 0, true], ["ReportFooter", "Report footer", 17, 0, 0]
     ];
     const body = styles.map(([id, name, size, before, after, bold, keep, outline]) => {
       const normal = id === "Normal";
       const color = id === "Caption" || id === "ReportFooter" ? "555F6D" : "000000";
-      const spacing = `<w:spacing w:before="${before}" w:after="${after}" w:line="${id.startsWith("Table") ? 252 : 300}" w:lineRule="auto"/>`;
-      return `<w:style w:type="paragraph"${normal ? ' w:default="1"' : ""} w:styleId="${id}"><w:name w:val="${name}"/>${normal ? "" : '<w:basedOn w:val="Normal"/><w:next w:val="Normal"/>'}<w:qFormat/><w:pPr>${keep ? "<w:keepNext/>" : ""}<w:keepLines/>${spacing}${outline === undefined ? "" : `<w:outlineLvl w:val="${outline}"/>`}</w:pPr><w:rPr>${font}${bold ? "<w:b/>" : ""}<w:color w:val="${color}"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr></w:style>`;
+      const line = id.startsWith("Table") ? 235 : id === "Fact" ? 260 : 300;
+      const spacing = `<w:spacing w:before="${before}" w:after="${after}" w:line="${line}" w:lineRule="auto"/>`;
+      return `<w:style w:type="paragraph"${normal ? ' w:default="1"' : ""} w:styleId="${id}"><w:name w:val="${name}"/>${normal ? "" : '<w:basedOn w:val="Normal"/><w:next w:val="Normal"/>'}<w:qFormat/><w:pPr>${keep ? "<w:keepNext/>" : ""}<w:keepLines/><w:wordWrap w:val="0"/>${spacing}${outline === undefined ? "" : `<w:outlineLvl w:val="${outline}"/>`}</w:pPr><w:rPr>${font}${bold ? "<w:b/>" : ""}<w:color w:val="${color}"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr></w:style>`;
     }).join("");
     return `${XML_HEADER}<w:styles xmlns:w="${WORD_NS}"><w:docDefaults><w:rPrDefault><w:rPr>${font}<w:lang w:val="zh-CN" w:eastAsia="zh-CN"/></w:rPr></w:rPrDefault></w:docDefaults>${body}</w:styles>`;
   }
@@ -159,11 +176,11 @@
   }
 
   function coreProperties(brief, timestamp) {
-    return `${XML_HEADER}<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xml(brief.title)}</dc:title><dc:subject>${xml(brief.projectName)}</dc:subject><dc:description>${xml(brief.versionId)}</dc:description><dcterms:created xsi:type="dcterms:W3CDTF">${timestamp}</dcterms:created></cp:coreProperties>`;
+    return `${XML_HEADER}<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xml(brief.title)}</dc:title><dc:subject>${xml(brief.projectName)}</dc:subject><dcterms:created xsi:type="dcterms:W3CDTF">${timestamp}</dcterms:created></cp:coreProperties>`;
   }
 
-  function footerXml(version) {
-    return `${XML_HEADER}<w:ftr xmlns:w="${WORD_NS}"><w:p><w:pPr><w:pStyle w:val="ReportFooter"/><w:jc w:val="right"/></w:pPr>${textRun(`测算版本 ${version || "未编号"}  |  `)}<w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:ftr>`;
+  function footerXml() {
+    return `${XML_HEADER}<w:ftr xmlns:w="${WORD_NS}"><w:p><w:pPr><w:pStyle w:val="ReportFooter"/><w:jc w:val="right"/></w:pPr><w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:ftr>`;
   }
 
   function buildDocx(brief, figures, { xlsx = root.XLSX, nowIso = () => new Date().toISOString() } = {}) {
@@ -180,7 +197,7 @@
       ["docProps/core.xml", coreProperties(brief, timestamp)],
       ["word/document.xml", documentXml(brief, images)],
       ["word/styles.xml", stylesXml()],
-      ["word/footer1.xml", footerXml(brief.versionId)],
+      ["word/footer1.xml", footerXml()],
       ["word/_rels/document.xml.rels", relationships([[REL.styles, `${DOC_RELS}/styles`, "styles.xml"],
         [REL.footer, `${DOC_RELS}/footer`, "footer1.xml"],
         ...images.map(({ relId, path }) => [relId, `${DOC_RELS}/image`, path])])],
@@ -193,11 +210,24 @@
     return result instanceof Uint8Array ? result : new Uint8Array(result);
   }
 
+  function filenamePart(value, limit) {
+    const safe = String(value || "").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").trim();
+    const encoder = new root.TextEncoder();
+    let name = "";
+    let bytes = 0;
+    for (const character of safe) {
+      bytes += encoder.encode(character).length;
+      if (bytes > limit) break;
+      name += character;
+    }
+    return name.replace(/[. ]+$/u, "");
+  }
+
   function filename(brief) {
-    const safe = (value) => String(value || "").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/[. ]+$/u, "").trim();
-    const project = Array.from(safe(brief?.projectName) || "项目").slice(0, 80).join("");
-    const version = safe(brief?.versionId) || "未编号";
-    return `${project}-基准结果简报-${version}.docx`;
+    const project = filenamePart(brief?.projectName, 145) || "项目";
+    const solution = brief?.context?.find(({ label }) => label === "测算方案")?.value;
+    const scenario = filenamePart(brief?.scenarioName || solution, 70);
+    return [project, scenario, "基准结果简报"].filter(Boolean).join("-") + ".docx";
   }
 
   return Object.freeze({ MIME_TYPE, buildDocx, filename });

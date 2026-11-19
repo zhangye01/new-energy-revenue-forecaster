@@ -68,7 +68,7 @@
 | `forecast-page.js` | 后台预测提交、任务状态查询和输入版本隔离 |
 | `forecast-results-view.js` | 三种模型的回传结果和历史预测记录的只读展示 |
 | `forecast-run-flow.js` | 旧预测运行兼容和已生效价格运行可用性校验 |
-| `result-brief.js` | 基准结果简报的只读项目概况、结论、图表、表格和版本信息 |
+| `result-brief.js` | 基准结果简报的项目概况、分析章节及带编号的图表 |
 | `result-brief-charts.js` | 网页与 Word 共用的图表配置和图片输出 |
 | `result-brief-word.js` | 在浏览器中生成带原生文字、表格和嵌入图表的 `.docx` |
 | `scenario-form.js` | 收益参数补充与细化页表单读写和场景配置构造 |

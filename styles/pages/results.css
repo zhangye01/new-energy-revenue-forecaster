@@ -17,8 +17,8 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px 20px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--line);
 }
 
 .result-brief-header h2 {
@@ -36,14 +36,14 @@
   gap: 12px;
   min-width: 0;
   margin: 0;
-  padding-block: 24px;
+  padding-block: 25px;
   border-bottom: 1px solid var(--line);
 }
 
 .result-brief-section h3 {
   color: var(--text);
-  font-size: 1rem;
-  font-weight: 750;
+  font-size: clamp(1.04rem, 1.25vw, 1.19rem);
+  font-weight: 760;
   line-height: 1.5;
 }
 
@@ -84,7 +84,8 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
 }
 
-.result-brief .result-brief-summary {
+.result-brief .result-brief-summary,
+.result-brief .result-brief-intro {
   max-width: 84ch;
   color: var(--text);
   font-size: 0.95rem;
@@ -92,13 +93,18 @@
   overflow-wrap: anywhere;
 }
 
+.result-brief-executive {
+  gap: 14px;
+}
+
 .result-brief-metrics {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
 }
 
 .result-brief-metrics > div {
-  padding: 10px 12px;
-  border-top: 1px solid var(--line);
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
   background: var(--panel-soft);
 }
 
@@ -107,6 +113,66 @@
   font-size: clamp(1.04rem, 1.45vw, 1.4rem);
   font-weight: 760;
   font-variant-numeric: tabular-nums;
+}
+
+.result-brief .result-brief-findings {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr));
+  gap: 14px 24px;
+}
+
+.result-brief-findings > div {
+  padding-left: 11px;
+  border-left: 2px solid var(--line);
+}
+
+.result-brief-findings dt {
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+.result-brief-findings dd {
+  font-weight: 500;
+}
+
+.result-brief-chapter {
+  gap: 15px;
+}
+
+.result-brief-chapter:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.result-brief-intro {
+  display: grid;
+  gap: 6px;
+}
+
+.result-brief-block {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+}
+
+.result-brief-block + .result-brief-block {
+  margin-top: 7px;
+}
+
+.result-brief-block h4 {
+  color: var(--text);
+  font-size: 0.94rem;
+  font-weight: 720;
+  line-height: 1.45;
+}
+
+.result-brief-object-number {
+  display: inline-block;
+  margin-right: 0.48em;
+  color: var(--muted);
+  font-size: 0.82em;
+  white-space: nowrap;
 }
 
 .result-brief-note {
@@ -134,12 +200,17 @@
   height: 350px;
 }
 
-.result-brief-table table {
-  min-width: 36rem;
+.result-brief-chart[data-brief-chart="first-price-bridge"] {
+  height: 388px;
 }
 
-.result-brief-table[data-brief-table="storage"] table {
+.result-brief-table table {
   min-width: 0;
+}
+
+.result-brief-table {
+  border: 1px solid var(--line);
+  border-radius: 5px;
 }
 
 .result-brief-table :is(th, td) {
@@ -159,26 +230,6 @@
 
 .result-brief-table tbody tr:nth-child(even) {
   background: var(--panel-soft);
-}
-
-.result-brief-foot {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.result-brief-assumptions {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
-}
-
-.result-brief-assumptions dd,
-.result-brief-trace dd {
-  font-weight: 500;
-}
-
-.result-brief-trace {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr));
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
 }
 
 .result-brief .result-brief-empty {
@@ -268,6 +319,11 @@
     padding-block: 18px;
   }
 
+  .result-brief .result-brief-context {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px 12px;
+  }
+
   .result-brief-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
@@ -277,13 +333,17 @@
     padding-inline: 8px;
   }
 
-  .result-brief-table[data-brief-table="annual"] table {
-    min-width: 19rem;
+  .result-brief-table:is([data-brief-table="annual"], [data-brief-table="key-years"]) table {
+    min-width: 18rem;
     table-layout: fixed;
   }
 
-  .result-brief-table[data-brief-table="annual"] th:first-child {
+  .result-brief-table:is([data-brief-table="annual"], [data-brief-table="key-years"]) th:first-child {
     width: 12.5%;
+  }
+
+  .result-brief-chart[data-brief-chart="first-price-bridge"] {
+    height: 405px;
   }
 
   .result-brief-table :is(th, td) {

@@ -4052,10 +4052,10 @@ function renderResultRecords({ project, scenario, result, state }) {
   if (refs.exportHourlyButton) refs.exportHourlyButton.disabled = !state.current || result?.hourlyPreview?.length !== 8760;
 }
 
-function renderResultBrief({ project, scenario, result, run, state }) {
+function renderResultBrief({ project, scenario, result, state }) {
   const root = refs.resultBriefContent;
   if (!root) return;
-  const status = state.current ? "" : state.message;
+  const status = state.current ? "" : "当前显示上次测算结果。请在收益参数补充与细化中重新测算。";
   if (renderedResultBrief?.result === result && renderedResultBrief.status === status &&
       renderedResultBrief.project === project && renderedResultBrief.scenario === scenario) return;
   disposeResultCharts();
@@ -4063,8 +4063,8 @@ function renderResultBrief({ project, scenario, result, run, state }) {
   const verifiedConfig = state.current || state.reason === "stale_run" ? scenario.config : null;
   const origin = resultVersions.getArchivedCalculationContext(result)?.project || project;
   const labels = origin ? { province: getProvinceName(origin.province), assetType: getAssetTypeLabel(origin.assetType), siteType: getSiteTypeLabel(origin.siteType) } : {};
-  const brief = canRead ? resultBrief.buildBrief({ project, scenario, result, run, verifiedConfig, labels }) : null;
-  const message = !result ? "请在收益参数补充与细化中发起基准测算。" : status || "当前测算结果缺少简报所需的年度数据，请重新测算。";
+  const brief = canRead ? resultBrief.buildBrief({ project, scenario, result, verifiedConfig, labels }) : null;
+  const message = !result ? "请在收益参数补充与细化中发起基准测算。" : "当前没有可用于简报的测算结果，请在收益参数补充与细化中重新测算。";
   resultBriefView.render({ root, brief, message });
   if (refs.resultBriefMessage) {
     refs.resultBriefMessage.hidden = !brief || !status;
