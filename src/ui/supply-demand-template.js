@@ -18,6 +18,9 @@
   const GROWTH_TEMPLATE_NAME = "供需增长率模板";
   const GROWTH_TEMPLATE_VERSION = 1;
   const GROWTH_HEADER_ROW = 4;
+  const GROWTH_BASIS_LABEL = "增速口径";
+  const CAPACITY_GROWTH = "装机容量";
+  const ENERGY_GROWTH = "年度电量";
   const DEFAULT_CURVE_LABEL = "默认典型年";
   const ANNUAL_HEADER_ROW = 6;
   const MODE_LABELS = Object.freeze({ net: "净额", bidirectional: "双向" });
@@ -425,6 +428,26 @@
     return descriptor;
   }
 
+  function growthBasis(series) {
+    return Object.hasOwn(series || {}, "capacityHours") ? CAPACITY_GROWTH : ENERGY_GROWTH;
+  }
+
+  function workbookGrowthBasis(sheet) {
+    const label = sheet.value(2, 2);
+    const value = sheet.value(2, 3);
+    if ([label, value].some((cell) => cell != null && cell !== "")) {
+      assertLabel(sheet, 2, 2, GROWTH_BASIS_LABEL);
+      if (![CAPACITY_GROWTH, ENERGY_GROWTH].includes(value)) {
+        throw new Error("模板增速口径无效，请重新下载当前要素的增长率模板。");
+      }
+      return value;
+    }
+    // The first capacity release recorded its basis in the instructions.
+    const instructions = sheet.value(3, 1);
+    return typeof instructions === "string" && instructions.startsWith(`用于${CAPACITY_GROWTH}增速。`)
+      ? CAPACITY_GROWTH : ENERGY_GROWTH;
+  }
+
   function buildGrowthWorkbook(project, config, { xlsx = root.XLSX, seriesKey } = {}) {
     if (!xlsx?.utils) throw new Error("Excel 组件未加载，请刷新后重试。");
     const years = periodYears(project);
@@ -432,11 +455,11 @@
     const descriptor = growthDescriptor(editable, seriesKey);
     const series = readSeries(editable, descriptor);
     const rates = series?.growthRatesByYear;
-    const basis = series?.capacityHours ? "装机容量" : "年度电量";
+    const basis = growthBasis(series);
     const sheet = xlsx.utils.aoa_to_sheet([
       [GROWTH_TEMPLATE_NAME, GROWTH_TEMPLATE_VERSION],
       ["起始年", years[0], "末年", years.at(-1)],
-      ["供需要素", descriptor.label],
+      ["供需要素", descriptor.label, GROWTH_BASIS_LABEL, basis],
       ["填写说明", `用于${basis}增速。5 或 5% 均为增长 5%。空白沿用，填 0 更新为零。`],
       ["年份", "增长率（%）"],
       ...years.slice(1).map((year) => [year, exportValue(rates?.[year])])
@@ -448,7 +471,7 @@
     return workbook;
   }
 
-  function validateGrowthHeader(sheet, years, descriptor) {
+  function validateGrowthHeader(sheet, years, descriptor, basis) {
     ["起始年", "末年"].forEach((label, index) => assertLabel(sheet, 1, index * 2, label));
     if (sheet.value(1, 1) !== years[0] || sheet.value(1, 3) !== years.at(-1)) {
       throw new Error(`模板测算周期与项目不符，请下载 ${years[0]}—${years.at(-1)} 年增长率模板。`);
@@ -458,6 +481,9 @@
     assertLabel(sheet, 2, 0, "供需要素");
     if (sheet.value(2, 1) !== descriptor.label) {
       throw new Error(`模板供需要素与当前选择不符，请下载「${descriptor.label}」的增长率模板。`);
+    }
+    if (workbookGrowthBasis(sheet) !== basis) {
+      throw new Error(`模板增速口径与当前配置不符。当前按${basis}增长，请下载「${descriptor.label}」的当前增速模板。`);
     }
     assertLabel(sheet, GROWTH_HEADER_ROW, 0, "年份");
     assertLabel(sheet, GROWTH_HEADER_ROW, 1, "增长率（%）");
@@ -471,12 +497,13 @@
         baseConfig.forecastYears === years.length && isObject(baseConfig.elements);
       const config = compatible ? clone(baseConfig) : domain.prepareShareConfig(project, baseConfig);
       const descriptor = growthDescriptor(config, seriesKey);
+      const selected = readSeries(config, descriptor);
       const rowLimit = GROWTH_HEADER_ROW + years.length;
       const sheet = reader(workbook, xlsx, GROWTH_SHEET, GROWTH_HEADER_ROW + domain.MAX_FORECAST_YEARS, 4);
       if (workbook.SheetNames.length !== 1) throw new Error(`增长率模板仅包含「${GROWTH_SHEET}」工作表。`);
-      validateGrowthHeader(sheet, years, descriptor);
+      validateGrowthHeader(sheet, years, descriptor, growthBasis(selected));
       if (sheet.lastRow >= rowLimit) throw new Error("增长率模板存在测算周期外的数据行，请按原模板填写。");
-      const rates = readSeries(config, descriptor)?.growthRatesByYear;
+      const rates = selected?.growthRatesByYear;
       const allowedYears = new Set(years.slice(1));
       const readYears = new Set();
       const changes = [];
@@ -566,8 +593,10 @@
   function downloadGrowth(project, config, { xlsx = root.XLSX, seriesKey } = {}) {
     const workbook = buildGrowthWorkbook(project, config, { xlsx, seriesKey });
     const { startYear, forecastYears } = project;
-    const label = workbook.Sheets[GROWTH_SHEET].B3.v;
-    const filename = `${csvUtils.sanitizeExportFilenamePart(project.name || "项目")}_供需增长率模板_${startYear}-${startYear + forecastYears - 1}_${label}.xlsx`;
+    const sheet = workbook.Sheets[GROWTH_SHEET];
+    const label = sheet.B3.v;
+    const templateLabel = sheet.D3.v === CAPACITY_GROWTH ? "供需装机增长率模板" : "供需增长率模板";
+    const filename = `${csvUtils.sanitizeExportFilenamePart(project.name || "项目")}_${templateLabel}_${startYear}-${startYear + forecastYears - 1}_${label}.xlsx`;
     xlsx.writeFile(workbook, filename);
   }
 

@@ -275,20 +275,52 @@ async function testCapacityHoursWorkbooks() {
   const original = JSON.stringify(editable);
   const options = { xlsx, seriesKey: "wind" };
   const legacyGrowth = template.buildGrowthWorkbook(project, legacy, options);
-  legacyGrowth.Sheets["逐年增长率"].B6 = { t: "n", v: 5 };
+  const rejected = await template.readGrowthFile(project, fileFor(legacyGrowth), { ...options, baseConfig: editable });
+  assert.match(rejected.errors[0], /增速口径与当前配置不符.*装机容量/);
+  assert.equal(rejected.config, null);
+  assert.equal(rejected.changedRows, 0);
 
-  const updated = await template.readGrowthFile(project, fileFor(legacyGrowth), { ...options, baseConfig: editable });
+  const olderEnergy = legacyGrowth.Sheets["逐年增长率"];
+  delete olderEnergy.C3;
+  delete olderEnergy.D3;
+  olderEnergy.B4.v = "5 或 5% 均为增长 5%。空白沿用，填 0 更新为零。";
+  assert.match(template.parseGrowthWorkbook(project, legacyGrowth, { ...options, baseConfig: editable }).errors[0], /增速口径.*装机容量/);
+  assert.equal(template.parseGrowthWorkbook(project, legacyGrowth, { ...options, baseConfig: legacy }).changedRows, 0);
+
+  const capacityGrowth = template.buildGrowthWorkbook(project, editable, options);
+  const capacitySheet = capacityGrowth.Sheets["逐年增长率"];
+  assert.deepEqual([capacitySheet.C3.v, capacitySheet.D3.v], ["增速口径", "装机容量"]);
+  capacitySheet.B6 = { t: "n", v: 5 };
+  assert.match(template.parseGrowthWorkbook(project, capacityGrowth, { ...options, baseConfig: legacy }).errors[0], /增速口径.*年度电量/);
+  const updated = await template.readGrowthFile(project, fileFor(capacityGrowth), { ...options, baseConfig: editable });
   assert.equal(updated.ok, true, updated.errors.join("\n"));
   assert.deepEqual(updated.changes, [{ year: 2028, value: 5 }]);
   assert.deepEqual(updated.config.elements.wind.capacityHours, wind.capacityHours);
+
+  delete capacitySheet.C3;
+  delete capacitySheet.D3;
+  const firstCapacityRelease = await template.readGrowthFile(project, fileFor(capacityGrowth), { ...options, baseConfig: editable });
+  assert.equal(firstCapacityRelease.ok, true, firstCapacityRelease.errors.join("\n"));
+  assert.deepEqual(firstCapacityRelease.changes, updated.changes);
+  capacitySheet.C3 = { t: "s", v: "增速口径" };
+  assert.match(template.parseGrowthWorkbook(project, capacityGrowth, { ...options, baseConfig: editable }).errors[0], /增速口径无效/);
+
   const reexport = template.buildGrowthWorkbook(project, updated.config, options);
   assert.match(reexport.Sheets["逐年增长率"].B4.v, /装机容量/);
   assert.equal(reexport.Sheets["逐年增长率"].B6.v, 5);
+  template.downloadGrowth(project, updated.config, { ...options, xlsx: { ...xlsx, writeFile(_book, filename) {
+    assert.match(filename, /供需装机增长率模板/);
+  } } });
 
   const curves = await template.readCurveFile(project, fileFor(curveWorkbook(legacy)), { xlsx, baseConfig: updated.config });
   assert.equal(curves.ok, true, curves.errors.join("\n"));
   assert.equal(curves.changedRows, 0);
   assert.deepEqual(curves.config, updated.config);
+  const legacyCurves = await template.readCurveFile(project, fileFor(workbook(legacy)),
+    { xlsx, baseConfig: updated.config, allowLegacy: true });
+  assert.equal(legacyCurves.ok, true, legacyCurves.errors.join("\n"));
+  assert.equal(legacyCurves.legacy, true);
+  assert.deepEqual(legacyCurves.config, updated.config, "legacy combined workbook contributes curves without replacing capacity growth");
   assert.equal(JSON.stringify(editable), original);
 }
 

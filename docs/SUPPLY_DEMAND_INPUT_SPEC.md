@@ -1,12 +1,16 @@
-# 现货预测供需输入配置（2026-11-18）
+# 现货预测供需输入配置（2026-11-19）
 
 ## 范围与业务口径
 
 在原电价预测工作台前置配置六个独立输入：省内负荷load、联络线负荷tieLine、风电wind、光伏solar、水电hydro、非市场化nonMarket。周期自动读取项目startYear/forecastYears，不重复填年限。非市场化仅是自由配置元素，不拆成分。联络线正送出、负受入。
 
-首年总量MWh直接作为首年电量；后续年度=上年×(1+当年增长率/100)。增长率必须逐年明确填写，允许-100%归零，低于-100%拒绝。首年不再应用增长率。普通元素非负；联络线单向净额模式允许首年负值，增长不改变方向。同年双向时仍为一个联络线元素，分别配置正的送出量和受入量及各自增长/曲线，输出逐小时送出减受入，净年电量为0时不能抹去时段流动。
+省内负荷、联络线和非市场化出力按电量配置。首年填写电量（MWh），后续年度电量为上年电量乘以 `1 + 当年电量增速/100`。普通元素非负。联络线净额模式允许首年负值，增长率沿原方向滚动。双向模式分别填写非负的送出量、受入量及各自增速和曲线，逐小时净额为送出减去受入。年净额为零时仍分别保留时段送出和受入。
 
-每个要素配置一套默认典型年。新配置采用占比，分月12个值合计为1，每个有电量月份的典型日24小时占比也分别合计为1。月电量=年度电量×当月占比。典型小时电量=月电量÷月天数×当小时占比。各年默认继承典型年。单年可覆盖整套分月占比、任意一个或多个分时月份，按向量独立继承。无电量要素须显式填0，该要素曲线可留空。旧版按原相对权重归一化，修改时可以把等价比例带进新版草稿。
+新建供需配置时，风电、光伏和水电默认采用装机与利用小时口径。首年有效装机填写当年平均在运容量，单位为 MW。后续各年有效装机为上年装机乘以 `1 + 当年装机增速/100`。当年发电量等于有效装机乘以当年的等效利用小时，单位为 MWh。有效装机非负。等效利用小时可填 0 至 8,760 h，后续各年默认沿用首年值，可按年覆盖，清空某年的覆盖值即恢复首年值。显式覆盖为 0 只使对应年度出力归零。
+
+两种口径均从第二年起逐年明确填写增速。允许 −100% 归零，归零后的电量或装机按百分比滚动仍为零。旧配置中的风电、光伏及水电继续使用当时填写的电量和电量增速。主动切换装机口径时填写新的首年参数和逐年装机增速，沿用原曲线。
+
+每个要素配置一套默认典型年。新版使用占比，分月 12 个值合计为 1，每个有电量月份的典型日 24 小时占比也各自合计为 1。月电量等于年度电量乘以当月占比。典型小时电量等于月电量除以月天数，再乘以该小时占比。各年默认继承典型年。指定年份可覆盖整套分月占比和任意一个或多个分时月份，其余向量独立继承。各年电量均为零的要素可留空曲线。首年出力为零但后续有出力时，仍需配齐适用曲线。旧版按原相对权重归一化，编辑时可将等价占比带入草稿。
 
 沿用现系统365天/8760小时模型年，月份天数31/28/31/30/31/30/31/31/30/31/30/31，不自动切换真实闰年；界面说明该边界。每年288个典型小时记录带representedDays，展开8760小时供算法读取。校验Σ月电量=年度电量，Σ典型小时×该月天数=年度电量，Σ8760小时=年度电量。MW为相应1小时MWh除以1h，不混用总量单位。
 
@@ -14,26 +18,51 @@
 
 ## 紧凑配置契约（前后端模块共用）
 
-project.supplyDemand={version:1,draft?:Config,config?:Config,generatedAt?:ISO,inputFingerprint?:string}。仅保存紧凑配置及元数据，不将全周期8760数组反复写入localStorage。Config={version:1|2,startYear,forecastYears,elements:{load:Series,tieLine:SeriesWithMode,wind:Series,solar:Series,hydro:Series,nonMarket:Series}}。配置版本1为历史的相对权重版，版本2为占比版。
-Series={baseEnergyMwh:number|null,growthRatesByYear:{[year]:number|null},monthlyWeights:(number|null)[12],hourlyWeightsByMonth:{[month1to12]:(number|null)[24]}}。配置版本2的Series可带`curveOverridesByYear`。年份条目内的`monthlyWeights`覆盖该年12个月占比，`hourlyWeightsByMonth[month]`仅覆盖该年月24小时占比。未指定的向量各自继承默认典型年。
-SeriesWithMode在单向时{mode:'net',...Series}；双向时{mode:'bidirectional',export:Series,import:Series}。保留不活动分支数据，切换不静默清空。config.startYear/forecastYears表示填写时的周期；项目周期变化须显式核对，不能把旧首年量默认为新首年量。
+项目保存紧凑的供需配置、生成时间及输入指纹。
+
+```text
+project.supplyDemand = { version: 1, draft?: Config, config?: Config, generatedAt?: ISO, inputFingerprint?: string }
+Config = { version: 1 | 2, startYear, forecastYears, elements: { load, tieLine, wind, solar, hydro, nonMarket } }
+Series = {
+  baseEnergyMwh: number | null,
+  growthRatesByYear: { [year]: number | null },
+  monthlyWeights: (number | null)[12],
+  hourlyWeightsByMonth: { [month]: (number | null)[24] },
+  curveOverridesByYear?: { [year]: { monthlyWeights?: number[12], hourlyWeightsByMonth?: { [month]: number[24] } } },
+  capacityHours?: {
+    baseCapacityMw: number | null,
+    baseUtilizationHours: number | null,
+    utilizationHoursByYear: { [year]: number }
+  }
+}
+```
+
+配置版本 1 使用历史相对权重和电量基数。配置版本 2 使用占比，可保存 `curveOverridesByYear`。年份条目内的分月占比覆盖该年 12 个月，分时占比只覆盖指定年月的 24 小时，未指定的向量继承默认典型年。
+
+`capacityHours` 仅用于版本 2 的风电、光伏和水电。保留该字段时，`growthRatesByYear` 表示装机增速，计算采用装机与利用小时。历史 `baseEnergyMwh` 如已存在则继续保留。省内负荷、联络线、非市场化和历史发电要素按 `baseEnergyMwh` 与电量增速计算。
+联络线沿用 `{mode:'net', ...Series}` 或 `{mode:'bidirectional', export:Series, import:Series}`，切换保留各分支原数据。配置中的起始年和年数为填写时的项目周期。
 
 领域模块NE_SUPPLY_DEMAND提供：
-- ELEMENTS（key/label）、MONTH_DAYS、createConfig(project)、validateConfig(project,config)返回字符串错误数组。
+- `ELEMENTS`（key/label）、`GENERATOR_KEYS`、`MONTH_DAYS` 定义要素及日历。`createConfig(project)` 创建历史兼容结构，`createCapacityHoursConfig(project)` 创建新版草稿，`validateConfig(project,config)` 返回字符串错误数组。
 - buildAnnualSummary(project,config)返回{ok,errors,annualRows}，仅计算年度摘要，供已保存预测来源核验使用，不展开典型日或8760数组。
 - buildTypicalSummary(project,config)返回年度与典型日数据，供页面预览。不展开逐小时数组。
 - fingerprint(project,config)只读稳定指纹，覆盖省份/项目ID/起始年/年限及完整配置。
 - buildDataset(project,config)返回{ok,errors,fingerprint,annualRows,typicalRows,hourlyByYear,source}。annualRows每年{year,load,tieLine,wind,solar,hydro,nonMarket,residualDemand,tieLineExport,tieLineImport}。typicalRows每年每月每小时{year,month,hour,representedDays,...六元素及residualDemand}，hour为0..23。hourlyByYear[year]包含各要素的8760小时序列。source记录模型日历和单位，`curveReuse`对新版占比使用`default_with_year_overrides`，历史相对权重继续使用原标识。
-- csvRows(dataset,kind)返回表头+数据行，kind=annual/typical/hourly，导出必须带year/month/hour与单位（8760另含day/hourIndex）。
+- `csvRows(dataset, kind)` 返回表头和数据行。年度 CSV 使用 `year`，典型小时 CSV 使用 `year/month/hour/represented_days`，逐小时 CSV 使用 `year/month/day/hour/hour_index`，电量字段均以 `_mwh` 结尾。
 无效配置返回错误，不变更输入或历史快照，不返回伪造全零有效数据。
 
-## 界面与曲线模板
+## 界面与 Excel 模板
 
-界面直接填写首年电量、逐年增长率和联络线方式。曲线工作簿按选中的默认典型年或一个测算年份下载，带出当前草稿的有效分月和分时占比。页面也可修改分月占比，查看选择年月的分月电量与典型日分时曲线。导入会核对工作簿结构、周期、曲线范围与各向量合计。空白单元格保留原值，填写0按零更新。导入失败保留已保存的数据及上一份有效草稿。用户确认保存后生成年度、典型小时和逐小时数据，供预测使用。可恢复指定年的默认曲线。
+按要素页签填写该要素的首年参数，展开编辑逐年增速。风电、光伏和水电在装机口径下也可设定某一年的利用小时。联络线页签内选择净额或双向送受，双向模式按方向编辑。
 
-项目起始年变动时，首年电量须重新填写。默认典型年曲线和重叠年份的调整可带入核对，重叠的后续年份可带入已有增长率。界面和工作簿共同编辑一份待保存的配置。旧的已保存配置及预测版本保留生成时输入。
+- **逐年增速工作簿**按当前要素或联络线方向下载，覆盖首年之后的测算年份。新版模板标注 `增速口径`，导入校验项目周期、要素或方向、增速口径及年份。标注为年度电量和装机容量的文件分别用于对应口径。旧模板如果在填写说明中明确写有「用于装机容量增速」或「用于年度电量增速」，沿用文字标明的口径。更早的未标注模板沿用年度电量口径，在装机口径中导入时提示下载对应模板。
+- **曲线工作簿**按默认典型年或一个指定年份下载，包含该范围全部要素的有效分月和分时占比。通过 Excel 导入后校验工作簿结构、周期、范围及各向量合计。可将指定年份的当前要素恢复为默认曲线。
 
-供需堆积面积图读取已生成数据。分月视图将每个典型小时的电量按代表天数计入月合计。典型日视图展示所选月份的24小时。供给面积由风电、光伏、水电、非市场化出力和联络线受入构成，总需求线为省内负荷加联络线送出。悬停可查看各项电量及剩余需求。
+两类工作簿均以空白保留原值，填 0 更新为零。导入结果先进入草稿，失败时保留上一份有效草稿及已保存配置。点击「校验并生成供需数据」后生成年度、典型小时和逐小时数据。
+
+项目起始年变动时，首年电量或首年有效装机及利用小时须重新填写。默认曲线和重叠年份的曲线覆盖可带入核对，仍属后续年份的原增速与年度利用小时覆盖也可带入。界面和模板编辑同一份草稿。旧的已保存配置及预测版本保留其生成时输入。
+
+生成后的图表、数据明细和 CSV 统一放在「供需数据预览」。堆积面积图的分月视图将典型小时电量按代表天数计入月合计，典型日视图展示所选月份的 24 小时。供给面积由风电、光伏、水电、非市场化出力和联络线受入构成，总需求线为省内负荷加联络线送出。点击图例可隐藏或恢复对应曲线，悬停的合计与剩余需求使用完整数据。
 
 `NE_SUPPLY_DEMAND_TEMPLATE`负责工作簿生成和导入校验。`NE_SUPPLY_DEMAND_WORKSPACE.createController({root,getProject,onCommit,downloadCsv,onDraftChange})`返回`{render,hasUnsavedChanges,disposeChart}`。主控在保存时校验目标项目及供需配置，并在输入版本变化时更新预测生效状态。根节点`#supply-demand-root`位于预测任务面板之前。已生成结果仍可通过`downloadCsv(filename,rows)`导出。
 
@@ -41,7 +70,7 @@ SeriesWithMode在单向时{mode:'net',...Series}；双向时{mode:'bidirectional
 
 提交预测前须保存有效供需配置，未保存的编辑须先确认。请求包含小时数据、供需配置和来源指纹。算法由后台执行，前台查询任务状态并只读展示三个模型的回传结果。后台未接通时显示“算法待联调”。历史模拟运行保留原数值和来源标识。
 
-供需配置数值变化或项目范围变化后，旧run和既有收入结果保留历史内容，不能继续冒充当前有效预测；需重新生成预测并测算。相同配置重复保存不造成无意义失效。保存草稿不替换已生效输入；有未保存草稿须明确提示。既有没有供需输入的历史项目仍可查看原预测/结果，首次生成新版预测须补配置。粗算快照、收入配置及历史年表不回写。
+已保存的供需配置、增长口径或项目范围变化后，旧预测运行及其收入结果按原版本保留。当前版本须取得与新供需相符的预测价源才能重算收益。相同配置重复保存保留原指纹。草稿待确认时，已生效输入继续可查看。既有无供需输入的历史项目仍可查看原预测和结果，首次生成新版预测须补供需配置。粗算快照、收入配置及历史年表保留原记录。
 
 已保存run来源须校验版本、项目/周期、365天日历、8760小时、MWh/MW单位、1小时间隔、模型使用标记、配置快照和完整年度摘要。损坏或不兼容来源不得继续生效，但保留原run及历史结果供核对；只有完全没有供需来源字段的旧run才适用历史兼容。算法输入的年度/典型日数组须逐项存在，不接受稀疏数组绕过校验。
 
@@ -49,4 +78,4 @@ SeriesWithMode在单向时{mode:'net',...Series}；双向时{mode:'bidirectional
 
 ## 验证
 
-覆盖界面与曲线模板合并、默认继承、指定年分月和分时分别覆盖、恢复默认、占比校验、导入预览及显式保存、相同配置回传、年度复利、月/典型小时/8760总量守恒、送出/受入符号、双向净0但小时非0、零元素、周期变更复核、历史配置与快照保真、CSV单位和时间顺序。正式价格模型接入按算法对接规格执行。
+验证覆盖增速模板口径校验、装机复利、利用小时默认继承和单年覆盖、首年无出力及后续有出力、曲线分月及分时独立覆盖、恢复默认、占比校验、导入草稿及显式生成、月与小时电量守恒、联络线符号、年度净额为零但时段送受并存、周期变更、历史预测及快照保真、CSV 单位与时间顺序。正式价格模型接入按算法对接规格执行。
