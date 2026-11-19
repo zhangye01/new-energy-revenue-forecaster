@@ -121,12 +121,11 @@
     const yearsRangeText = `${range.startDate || ""} 至 ${range.endDate || ""}`;
     const sourceKind = dataset.mock ? "省级模拟样本" : "省级历史样本";
     const basisLabel = dataset.marketPriceLabel || "省级现货参考价";
-    const { expectedPoints = 0, samplePoints = 0 } = historyData.coverage || {};
+    const { samplePoints = 0 } = historyData.coverage || {};
     return {
       yearsRangeText,
       sourceKind,
       basisLabel,
-      coverage: expectedPoints > 0 ? (samplePoints / expectedPoints * 100).toFixed(1) + "%" : "—",
       exportPlan: buildHistoryExportPlan({
         provinceLabel, sourceKind, basisLabel, yearsRangeText,
         exportRows: historyData.exportRows, sanitizePart

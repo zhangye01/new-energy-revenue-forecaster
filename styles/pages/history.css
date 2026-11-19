@@ -103,6 +103,7 @@
 
 .history-source-tags {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 6px;
 }
@@ -118,11 +119,6 @@
   color: var(--text);
   font-size: 0.78rem;
   font-weight: 700;
-}
-
-.history-source-demo {
-  background: var(--info-bg);
-  color: var(--blue);
 }
 
 .history-range {

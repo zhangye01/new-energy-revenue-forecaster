@@ -23,9 +23,11 @@
     if (refs.historySourceProvince) {
       refs.historySourceProvince.textContent = provinceLabel;
     }
-    if (refs.historySourceKind) refs.historySourceKind.textContent = view.sourceKind || "省级模拟样本";
-    if (refs.historySourceBasis) refs.historySourceBasis.textContent = view.basisLabel || "省级现货模拟价";
-    if (refs.historySourceCoverage) refs.historySourceCoverage.textContent = `样本覆盖率 ${view.coverage || "—"}`;
+    if (refs.historySourceDetails) {
+      refs.historySourceDetails.textContent = view.sourceKind && view.basisLabel
+        ? `使用${view.sourceKind}，价格口径为${view.basisLabel}。`
+        : "工作台提供内置省级模拟样本。";
+    }
   }
 
   function setHistoryNoData(input = {}) {

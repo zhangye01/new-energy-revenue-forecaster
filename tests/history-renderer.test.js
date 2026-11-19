@@ -12,8 +12,7 @@ const { sanitizeHistoryAnalysis } = require("../src/domain/project-settings");
 
 const refs = {
   historySourceProvince: { textContent: "" },
-  historySourceKind: { textContent: "" },
-  historySourceCoverage: { textContent: "" },
+  historySourceDetails: { textContent: "" },
   historyTrendMode: {},
   historyKpiPoints: { textContent: "1" },
   historyKpiAvg: { textContent: "2" },
@@ -26,12 +25,13 @@ const refs = {
 
 renderHistoryImportState(refs, { province: "jiangsu" }, () => "江苏");
 assert.equal(refs.historySourceProvince.textContent, "江苏");
+assert.equal(refs.historySourceDetails.textContent, "工作台提供内置省级模拟样本。");
 resetHistoryKpis(refs);
 assert.equal(refs.historyKpiPoints.textContent, "-");
 assert.equal(refs.historyKpiNegative.textContent, "-");
 
 let noDataMessage = "";
-const testDataset = { startYear: 2024, endYear: 2024, mock: true, modelDays: 365,
+const testDataset = { startYear: 2024, endYear: 2024, mock: true, marketPriceLabel: "省级现货模拟价", modelDays: 365,
   years: [{ year: 2024, values: Array(365 * 96).fill(300) }] };
 renderHistoryPrices({
   refs,
@@ -101,8 +101,7 @@ assert.deepEqual(renderedKeys, chartKeys);
 assert.deepEqual(exportKeys, chartKeys);
 assert.equal(refs.historyTrendMode.value, "yoy");
 assert.equal(refs.historyKpiAvg.textContent, "300.0 元/MWh");
-assert.equal(refs.historySourceKind.textContent, "省级模拟样本");
-assert.equal(refs.historySourceCoverage.textContent, "样本覆盖率 100.0%");
+assert.equal(refs.historySourceDetails.textContent, "使用省级模拟样本，价格口径为省级现货模拟价。");
 assert.equal(refs.historyInsightBox.textContent, "2024-01-01 至 2024-01-03");
 assert.deepEqual(project.roughPrice.snapshots, [{ id: "saved-rough" }]);
 assert.equal(project.statuses["history-page"], "completed");

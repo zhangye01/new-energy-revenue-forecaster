@@ -161,9 +161,7 @@ const readyView = buildHistoryReadyViewModel({
 assert.equal(readyView.yearsRangeText, "2025-01-01 至 2025-12-31");
 assert.equal(readyView.sourceKind, "省级模拟样本");
 assert.equal(readyView.basisLabel, "省级现货模拟价");
-assert.equal(readyView.coverage, "75.0%");
 assert.equal(readyView.exportPlan[0][1], "江苏-省级模拟样本-2025-01-01 至 2025-12-31-月度电价趋势.csv");
 assert.equal(readyView.kpis.points, "3 点");
-assert.equal(buildHistoryReadyViewModel().coverage, "—");
 
 console.log("history page tests passed");

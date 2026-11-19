@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="./styles/pages/scenario.css?v=20261118d">
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
-    <link rel="stylesheet" href="./styles/pages/history.css?v=20261118m">
+    <link rel="stylesheet" href="./styles/pages/history.css?v=20261119c">
     <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118t">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261118m">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
@@ -88,7 +88,7 @@
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
     <script src="./config.js?v=20261119b" defer></script>
-    <script src="./runtime.js?v=20261118t" defer></script>
+    <script src="./runtime.js?v=20261119c" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
@@ -135,8 +135,8 @@
     <script src="./src/ui/result-history.js?v=20261118f" defer></script>
     <script src="./src/domain/history-analysis.js?v=20261118n" defer></script>
     <script src="./src/ui/history-charts.js?v=20261118m" defer></script>
-    <script src="./src/ui/history-page.js?v=20261118n" defer></script>
-    <script src="./src/ui/history-renderer.js?v=20261118n" defer></script>
+    <script src="./src/ui/history-page.js?v=20261119c" defer></script>
+    <script src="./src/ui/history-renderer.js?v=20261119c" defer></script>
     <script src="./src/ui/theme-controller.js?v=20261113c" defer></script>
     <script src="./src/ui/shell-events.js?v=20261113c" defer></script>
     <script src="./src/ui/app-event-bindings.js?v=20261118t" defer></script>
@@ -868,11 +868,8 @@
             <div class="history-source-panel">
               <div class="history-source-tags" id="history-source-meta">
                 <span class="history-source-chip" id="history-source-province">—</span>
-                <span class="history-source-chip history-source-demo" id="history-source-kind">省级模拟样本</span>
-                <span class="history-source-chip" id="history-source-basis">省级现货模拟价</span>
-                <span class="history-source-chip" id="history-source-coverage">样本覆盖率 —</span>
               </div>
-              <p data-help="数据口径" data-help-anchor="#history-source-meta">同省同口径按相同日期取数。内置模拟样本固定为 2018–2025 年、15 分钟间隔，按 365 天生成，闰日留空。样本覆盖率按所选日期的模型时段计算。</p>
+              <p data-help="数据口径" data-help-anchor="#history-source-meta"><span id="history-source-details">工作台提供内置省级模拟样本。</span> 同省同口径按相同日期取数。内置模拟样本覆盖 2018–2025 年，间隔 15 分钟，按 365 天模型年生成，闰日留空。</p>
               <span class="history-range" id="history-insight-box" role="status">等待选择日期</span>
             </div>
 
