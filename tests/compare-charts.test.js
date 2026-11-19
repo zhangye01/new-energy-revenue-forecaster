@@ -26,11 +26,11 @@ const factors = [
   { name: "现货价格", lowDelta: -10, highDelta: 12 },
   { name: "综合费用", lowDelta: 8, highDelta: -7 }
 ];
-const tornado = buildSensitivityTornadoOption(factors, 680.5, { rangePercent: 20, topN: 2 }, tokens);
-assert.deepEqual(tornado.yAxis.data, ["现货价格", "利用小时"]);
+const tornado = buildSensitivityTornadoOption(factors, 680.5, { rangePercent: 20 }, tokens);
+assert.deepEqual(tornado.yAxis.data, ["综合费用", "现货价格", "利用小时"]);
 assert.equal(tornado.series[0].name, "-20%");
-assert.equal(tornado.series[1].data[0], 12);
-assert.ok(tornado.tooltip.formatter([{ axisValue: "利用小时", marker: "●", seriesName: "+20%", value: 30 }]).includes("基准首年收益"));
+assert.equal(tornado.series[1].data[1], 12);
+assert.ok(tornado.tooltip.formatter([{ axisValue: "利用小时", marker: "●", seriesName: "+20%", value: 30 }]).includes("基准全周期综合度电均价"));
 
 const response = buildSensitivityResponseOption(
   { name: "利用小时", series: [600, 680.5, 760] },
@@ -47,18 +47,18 @@ const negativeResponse = buildSensitivityResponseOption({ name: "费用", series
 assert.equal(negativeResponse.series[0].data[1], -100.123456);
 assert.equal(negativeResponse.series[0].markLine.data[0].yAxis, -100.123456, "基准线保留原精度和负值");
 
-const priceTarget = { label: "首年度电净价", unit: "元/MWh", decimals: 2 };
-const priceTornado = buildSensitivityTornadoOption(factors, 396.257, { rangePercent: 20, topN: "all" }, tokens, priceTarget);
+const priceTarget = { label: "全周期综合度电均价", unit: "元/MWh", decimals: 2 };
+const priceTornado = buildSensitivityTornadoOption(factors, 396.257, { rangePercent: 20 }, tokens, priceTarget);
 assert.equal(priceTornado.xAxis.name, "相对基准变化 元/MWh");
 assert.match(priceTornado.tooltip.formatter([{ axisValue: "利用小时", marker: "●", seriesName: "+20%", value: -0.053 }]),
-  /-0\.05 元\/MWh.*基准首年度电净价：396\.26 元\/MWh/);
+  /-0\.05 元\/MWh.*基准全周期综合度电均价：396\.26 元\/MWh/);
 const priceResponse = buildSensitivityResponseOption({ name: "现货价格", series: [369.25, 396.257, 421.127] },
   396.257, ["-20%", "0%", "+20%"], tokens, priceTarget);
 assert.equal(priceResponse.yAxis.name, "元/MWh");
 assert.equal(priceResponse.series[0].markLine.data[0].yAxis, 396.257);
 assert.equal(priceResponse.series[0].markLine.label.formatter, "基准 396.26 元/MWh");
 assert.match(priceResponse.tooltip.formatter([{ axisValue: "+20%", value: 421.127 }]),
-  /首年度电净价：421\.13 元\/MWh.*相对基准：24\.87 元\/MWh/);
+  /全周期综合度电均价：421\.13 元\/MWh.*相对基准：24\.87 元\/MWh/);
 
 const available = [
   {

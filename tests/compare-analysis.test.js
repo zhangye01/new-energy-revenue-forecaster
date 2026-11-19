@@ -6,15 +6,13 @@ const calculator = require("../src/domain/revenue-calculator");
 const rough = require("../src/domain/rough-price");
 const {
   applyCompareFrameSelection, buildAvailableScenarioResults, buildCompareFrameState, buildCompareRenderState,
-  detectTopDriver, getBaselineCompareItem, getFirstAnnualRow, resolveActiveCompareScenarioId,
-  resolveSensitivitySelection, resultComponentTotals, sanitizeCompareSensitivitySettings, summarizeScenarioComparison,
+  detectTopDriver, getBaselineCompareItem, resolveActiveCompareScenarioId,
+  resultComponentTotals, sanitizeCompareSensitivitySettings, summarizeScenarioComparison,
   sensitivityAxisLabels
 } = analysis;
 
-assert.deepEqual(sanitizeCompareSensitivitySettings({ rangePercent: 99, stepPercent: 0, responseScalePercent: 10, topN: 1, selectedKeys: ["spot", "", null, "fee"] }),
-  { target: "first_revenue", rangePercent: 60, stepPercent: 5, responseScalePercent: 100, topN: 3, selectedKeys: ["spot", "fee"] });
-assert.equal(sanitizeCompareSensitivitySettings({ target: "first_net_price" }).target, "first_net_price");
-assert.equal(sanitizeCompareSensitivitySettings({ target: "unknown" }).target, "first_revenue");
+assert.deepEqual(sanitizeCompareSensitivitySettings({ rangePercent: 99, stepPercent: 0, target: "first_revenue", topN: 1, selectedKeys: ["fee"] }),
+  { rangePercent: 60, stepPercent: 5 });
 assert.deepEqual(sensitivityAxisLabels({ rangePercent: 10, stepPercent: 5 }), ["-10%", "-5%", "0%", "+5%", "+10%"]);
 assert.equal(sensitivityAxisLabels({ rangePercent: Infinity, stepPercent: -5 }).length, 121, "非法输入使用安全边界");
 
@@ -33,7 +31,6 @@ assert.deepEqual(available.map((item) => item.scenario.id), ["base", "up"]);
 const baseline = getBaselineCompareItem(available);
 assert.equal(baseline.scenario.id, "base");
 assert.equal(getBaselineCompareItem([available[1]]), null, "不能把备选结果冒充基准");
-assert.equal(getFirstAnnualRow(baseline).year, 2026);
 const summary = summarizeScenarioComparison(available, baseline);
 assert.equal(summary.bestScenario.scenario.id, "up");
 assert.ok(Math.abs(summary.maxGapWan - 43.8) < 0.000001);
@@ -50,32 +47,26 @@ assert.ok(Math.abs(totals.primaryFees + baselinePrimaryFees) < 1e-6);
 assert.equal(totals.otherNetIncome, -baseline.result.totalEnergy);
 assert.ok(Math.abs(totals.primaryFees + totals.otherNetIncome - totals.feesAndOtherNetIncome) < 1e-6);
 
-const selected = resolveSensitivitySelection([{ key: "spot" }, { key: "fee" }], ["missing", "fee"], "missing");
-assert.deepEqual(selected.selectedKeys, ["fee"]);
-assert.equal(selected.activeFactorKey, "fee");
 const input = { project, available, comparePeriod: "2026-2027", activeCompareScenarioId: "missing", activeSensitivityFactorKey: "missing",
-  sensitivitySettings: { rangePercent: 20, stepPercent: 10, selectedKeys: ["fee"] } };
+  sensitivitySettings: { rangePercent: 20, stepPercent: 10 } };
 const render = buildCompareRenderState(input);
 assert.equal(render.baseline.scenario.id, "base");
-assert.equal(render.baselineRevenueWan, baseline.result.annualRows[0].fullRevenue / 10000);
-assert.equal(render.sensitivityBaseline, render.baselineRevenueWan);
+assert.equal(render.sensitivityBaseline, baseline.result.avgFullRevenuePrice);
 assert.equal(render.bestScenario.scenario.id, "up");
 assert.equal(render.activeCompareScenarioId, "up");
-assert.equal(render.sensitivitySelection.activeFactorKey, "fee");
-assert.deepEqual(render.sensitivityFactors.map((factor) => factor.key), ["fee"]);
-assert.ok(!render.allSensitivityFactors.some((factor) => factor.key === "storage"));
-const netPrice = buildCompareRenderState({ ...input, sensitivitySettings: { ...input.sensitivitySettings, target: "first_net_price" } });
-assert.equal(netPrice.sensitivityTarget.unit, "元/MWh");
-assert.equal(netPrice.sensitivityBaseline, baseline.result.annualRows[0].fullRevenuePrice);
-assert.equal(netPrice.sensitivityFactors[0].series[2], netPrice.sensitivityBaseline);
-assert.ok(!netPrice.allSensitivityFactors.some((factor) => factor.key === "hours"));
+assert.equal(render.activeSensitivityFactorKey, render.sensitivityFactors[0].key);
+assert.deepEqual(render.sensitivityFactors.map(({ key }) => key).sort(), ["capture_spread", "mechanism_price", "mechanism_ratio", "spot"]);
+assert.equal(render.sensitivityFactors[0].series[2], render.sensitivityBaseline);
 const frame = buildCompareFrameState(input);
 assert.equal(frame.hasResults, true);
 assert.equal(frame.available.length, 2);
 assert.equal(frame.comparePeriod, "2026-2027");
-const settings = { selectedKeys: ["spot"] };
-assert.deepEqual(applyCompareFrameSelection({ frameState: frame, sensitivitySettings: settings }), { activeCompareScenarioId: "up", activeSensitivityFactorKey: "fee" });
-assert.deepEqual(settings.selectedKeys, ["fee"]);
+assert.deepEqual(applyCompareFrameSelection({ frameState: frame }), { activeCompareScenarioId: "up", activeSensitivityFactorKey: render.activeSensitivityFactorKey });
+const deferredFrame = buildCompareFrameState({ ...input, includeSensitivity: false, activeSensitivityFactorKey: "mechanism_price" });
+assert.equal(deferredFrame.compareState.sensitivityDeferred, true);
+assert.equal(deferredFrame.compareState.focusScenario.scenario.id, "up");
+assert.deepEqual(deferredFrame.compareState.sensitivityFactors, []);
+assert.equal(applyCompareFrameSelection({ frameState: deferredFrame }).activeSensitivityFactorKey, "mechanism_price");
 assert.equal(JSON.stringify(project), original, "分析不写回结果或输入");
 
 // A valid input fingerprint alone cannot prove the stored output is complete.

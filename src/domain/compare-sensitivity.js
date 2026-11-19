@@ -5,94 +5,44 @@
   const api = factory(
     commonJs ? require("./revenue-rules") : root.NE_REVENUE_RULES,
     commonJs ? require("./storage-dispatch") : root.NE_STORAGE_DISPATCH,
-    commonJs ? require("./result-calculation") : root.NE_RESULT_CALCULATION
+    commonJs ? require("./result-calculation") : root.NE_RESULT_CALCULATION,
+    commonJs ? require("./result-versions") : root.NE_RESULT_VERSIONS,
+    () => commonJs ? require("./energy-data") : root.NE_ENERGY_DATA
   );
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.NE_COMPARE_SENSITIVITY = api;
   if (root.window && root.window !== root) root.window.NE_COMPARE_SENSITIVITY = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, dispatch, calculation) {
-  if (!rules || !dispatch || !calculation) throw new Error("敏感性分析初始化失败：缺少收益测算依赖");
-  const { closeAmount, hourlyRowsAreComplete } = calculation;
+})(typeof globalThis !== "undefined" ? globalThis : window, function (rules, dispatch, calculation, versions, getEnergyData) {
+  if (!rules || !dispatch || !calculation || !versions) throw new Error("敏感性分析初始化失败：缺少收益测算依赖");
+  const { annualStorageIsComplete, closeAmount, hourlyRowsAreComplete } = calculation;
   const cache = new Map();
-  const TARGET_METRICS = Object.freeze({
-    first_revenue: Object.freeze({ key: "first_revenue", label: "首年全口径收入", unit: "万元" }),
-    first_net_price: Object.freeze({ key: "first_net_price", label: "首年度电净价", unit: "元/MWh" })
-  });
   const STORAGE_KEYS = ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"];
-  const DISPATCH_FACTORS = new Set(["spot", "hours", "capture_spread"]);
-  const MAIN_FEE_KEYS = ["marketOpFee", "gridAssessFee", "ancillaryFee"];
-  const FEE_KEYS = [...MAIN_FEE_KEYS, "otherFee"];
-  const ENV_PRICE_KEYS = ["greenCertPrice", "greenPremiumPrice"];
-  const ENV_RATIO_KEYS = ["greenCertRealizeRatio", "greenPremiumRealizeRatio"];
+  const DISPATCH_FACTORS = new Set(["spot", "capture_spread"]);
+  const FEE_KEYS = ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee"];
   const FACTORS = [
-    ["spot", "现货价格水平", "同比调整首年全部现货小时价格，联动捕获价及机制补差", 0],
-    ["hours", "年利用小时 / 上网电量", "保持首年发电形状，同比调整全部小时电量", 1],
-    ["capture_spread", "捕获价差", "保持现货均价，按比例调整小时价格相对均价的偏离", 2],
-    ["mechanism_price", "机制电价", "调整机制电价，按首年有效机制电量重算", 3],
-    ["mechanism_ratio", "机制电量占比", "同比调整机制占比，上限为100%，联动市场化电量", 4],
-    ["trade_strategy", "交易策略损益", "同比调整首年策略损益单价，保留正负方向", 0],
-    ["env_value", "环境价值单价", "同比调整适用环境价值价格，兑现比例保持不变", 2],
-    ["env_ratio", "环境价值兑现比例", "同比调整适用兑现比例，合计达到100%后停止增加", 1],
-    ["fee", "费用", "同比调整首年计入费用的项目单价", 3],
-    ["storage", "配储补充收益", "同比调整配储各项度电收益，仅适用于配储项目", 4]
+    ["spot", "现货价格水平", "同比调整全周期逐时现货电价，联动捕获价、机制补差及配储套利", 0],
+    ["mechanism_price", "机制电价", "同比调整机制电价，按各年实际生效月份和机制电量重算补差", 3],
+    ["mechanism_ratio", "机制电量占比", "同比调整机制电量占比（0–100%），联动有效期内机制电量和市场化电量", 4],
+    ["capture_spread", "捕获价差", "保持各年现货均价，按比例调整同年小时价格相对均价的偏离", 2]
   ];
 
-  function normalizeTarget(target) {
-    return typeof target === "string" && Object.hasOwn(TARGET_METRICS, target) ? target : "first_revenue";
+  function baselineValue(baseline) {
+    const result = baseline?.result;
+    return Number.isFinite(result?.totalEnergy) && result.totalEnergy > 0 && Number.isFinite(result.avgFullRevenuePrice)
+      ? result.avgFullRevenuePrice : null;
   }
 
-  function targetMetric(target) {
-    return TARGET_METRICS[normalizeTarget(target)];
-  }
-
-  function baselineValue(baseline, target) {
-    const first = baseline?.result?.annualRows?.[0];
-    if (normalizeTarget(target) === "first_net_price") {
-      return Number.isFinite(first?.energyMwh) && first.energyMwh > 0 && Number.isFinite(first.fullRevenuePrice) ? first.fullRevenuePrice : null;
-    }
-    return Number.isFinite(first?.fullRevenue) ? first.fullRevenue / 10000 : null;
-  }
-
-  function scaleFields(source, keys, factor) {
-    keys.forEach((key) => { source[key] = (Number(source[key]) || 0) * factor; });
-  }
-
-  function yearlySource(config, mode, map, year) {
-    return config[mode] === "manual" ? config[map]?.[year] || config : config;
-  }
-
-  function createPerturbation(project, scenario, first, key, ratio) {
-    const config = JSON.parse(JSON.stringify(scenario.config));
+  function createPerturbation(scenario, first, key, ratio) {
+    const config = { ...scenario.config };
     const row = { ...first };
     const factor = 1 + ratio;
     if (key === "spot") {
       row.spotAvgPrice *= factor;
       row.capturePrice *= factor;
     }
-    if (key === "hours") { row.energyMwh *= factor; row.annualHours *= factor; }
     if (key === "capture_spread") row.capturePrice = row.spotAvgPrice + (row.capturePrice - row.spotAvgPrice) * factor;
     if (key === "mechanism_price") config.mechanismPrice *= factor;
-    if (key === "mechanism_ratio") config.mechanismRatio = Math.min(1, config.mechanismRatio * factor);
-    if (key === "trade_strategy") {
-      if (config.ltPricingMode === "manual") {
-        const value = rules.tradeStrategyPnlPriceForYear(config, first.year - project.startYear + 1, first.year);
-        config.ltManualPricesByYear = { ...config.ltManualPricesByYear, [first.year]: value * factor };
-      }
-      else config.ltYear1Pnl *= factor;
-    }
-    if (key === "fee") {
-      const source = yearlySource(config, "feeConfigMode", "feeManualValuesByYear", first.year);
-      scaleFields(source, MAIN_FEE_KEYS, factor);
-      if (!Object.hasOwn(source, "otherNetIncome")) scaleFields(source, ["otherFee"], factor);
-      else if (source.otherNetIncome < 0) source.otherNetIncome *= factor;
-    }
-    if (key === "storage") scaleFields(config, first.storageDispatch ? STORAGE_KEYS.slice(1) : STORAGE_KEYS, factor);
-    if (key === "env_value" || key === "env_ratio") {
-      const source = yearlySource(config, "envValueMode", "envManualValuesByYear", first.year);
-      const totalRatio = ENV_RATIO_KEYS.reduce((sum, name) => sum + (Number(source[name]) || 0), 0);
-      scaleFields(source, key === "env_value" ? ENV_PRICE_KEYS : ENV_RATIO_KEYS,
-        key === "env_ratio" && totalRatio > 0 ? Math.min(factor, 1 / totalRatio) : factor);
-    }
+    if (key === "mechanism_ratio") config.mechanismRatio = Math.max(0, Math.min(1, config.mechanismRatio * factor));
     return { config, row };
   }
 
@@ -115,72 +65,193 @@
       + energy * (storage - FEE_KEYS.reduce((sum, key) => sum + fees[key], 0) + fees.otherIncome);
   }
 
-  function availability(project, baseline, target) {
-    const first = baseline?.result?.annualRows?.[0];
-    if (!project || !baseline?.scenario?.config || !first || !Number.isFinite(first.energyMwh) || first.energyMwh <= 0 || !Number.isFinite(first.fullRevenue)) {
-      return { ok: false, message: "首年没有有效上网电量，暂不展示敏感性。" };
+  const HOURS_PER_YEAR = 8760;
+  const TIME_SERIES_ERROR = "全周期逐时电量或电价缺失，或与保存的基准结果不一致，请核对后重新测算。";
+  const YEARLY_RESULT_ERROR = "全周期基准收入、电量与当前参数对账未通过，请重新测算。";
+
+  function annualResultsAgree(project, scenario, result) {
+    if (!Array.isArray(result.annualRows) || result.annualRows.length !== project.forecastYears || result.missingYears?.length) return false;
+    let totalEnergy = 0, totalRevenue = 0;
+    for (const [offset, row] of result.annualRows.entries()) {
+      if (!row || row.year !== project.startYear + offset || row.energyMwh < 0 ||
+          ![row.annualHours, row.energyMwh, row.spotAvgPrice, row.capturePrice, row.spotRevenue, row.fullRevenue].every(Number.isFinite) ||
+          !closeAmount(row.energyMwh, row.annualHours * project.capacityMw) ||
+          !closeAmount(row.fullRevenuePrice, row.energyMwh > 0 ? row.fullRevenue / row.energyMwh : 0) ||
+          !closeAmount(row.spotRevenue, row.energyMwh * row.capturePrice) || !annualStorageIsComplete(project, scenario.config, row) ||
+          !closeAmount(row.fullRevenue, calculateAnnualRevenue(project, scenario.config, row))) return false;
+      totalEnergy += row.energyMwh;
+      totalRevenue += row.fullRevenue;
     }
-    const initial = calculateAnnualRevenue(project, baseline.scenario.config, first);
-    if (!closeAmount(initial, first.fullRevenue)) {
-      return { ok: false, message: "首年基准结果与当前参数不一致，请重新测算后查看敏感性。" };
-    }
-    if (normalizeTarget(target) === "first_net_price" && !closeAmount(first.fullRevenuePrice, first.fullRevenue / first.energyMwh)) {
-      return { ok: false, message: "首年度电净价与基准收入、电量对账未通过，请重新测算后查看敏感性。" };
-    }
-    if ((project.hasStorage || first.storageDispatch) && !hourlyRowsAreComplete(project, baseline.scenario, baseline.result)) {
-      return { ok: false, message: "首年配储小时明细缺失或对账未通过，请重新测算后查看敏感性。" };
-    }
-    return { ok: true, message: "" };
+    return closeAmount(totalEnergy, result.totalEnergy) && closeAmount(totalRevenue, result.totalFullRevenue) &&
+      closeAmount(result.avgFullRevenuePrice, totalRevenue / totalEnergy);
   }
 
-  function perturbDispatch(row, hours, key, ratio, scheme) {
-    const factor = 1 + ratio;
-    const prices = hours.map(({ spotPrice }) => key === "spot" ? spotPrice * factor
-      : key === "capture_spread" ? row.spotAvgPrice + (spotPrice - row.spotAvgPrice) * factor : spotPrice);
-    const generationMwh = hours.map(({ energyMwh }) => key === "hours" ? energyMwh * factor : energyMwh);
-    const value = dispatch.calculateHourlyDispatch({ prices, generationMwh, ...scheme });
-    return { ...row.storageDispatch, incrementalRevenue: value.incrementalRevenue };
+  function findPriceSource(project, result) {
+    const runId = result.sourceContext?.runId || project.activeRunId;
+    if (!runId || !Array.isArray(project.priceRuns) || (project.activeRunId && project.activeRunId !== runId)) return null;
+    const run = project.priceRuns.find((item) => item?.id === runId);
+    if (!run) return null;
+    const fingerprint = result.resultVersion || result.priceSource
+      ? (versions.matchesSavedPriceSource(project, result) ? result.priceSource.fingerprint : "")
+      : versions.priceContentFingerprint(project, run);
+    return fingerprint ? { run, fingerprint } : null;
   }
 
-  function buildFactors(project, baseline, ratios, target) {
-    const first = baseline?.result?.annualRows?.[0];
-    const metric = normalizeTarget(target);
-    if (!availability(project, baseline, metric).ok) return [];
-    const { hourlyPreview, sourceContext } = baseline.result;
-    const scheme = first.storageDispatch ? {
-      powerMw: project.storagePowerMw, durationH: project.storageDurationH,
-      roundTripEfficiency: baseline.scenario.config.storageRoundTripEfficiency ?? 0.9
-    } : null;
-    // A repeated run ID and equal annual totals may still have different dispatch inputs.
-    const dispatchInputs = scheme ? hourlyPreview.map(({ spotPrice, energyMwh }) => [spotPrice, energyMwh]) : null;
-    const cacheKey = JSON.stringify([project.id, project.siteType, project.hasStorage, project.startYear,
-      baseline.scenario.config, first, sourceContext?.runId, scheme, dispatchInputs, ratios, metric]);
-    if (cache.has(cacheKey)) return cache.get(cacheKey);
-    const base = baselineValue(baseline, metric);
-    const priceTarget = metric === "first_net_price";
-    const factors = FACTORS.filter(([key]) => key !== "storage" || project.hasStorage).map(([key, name, note, colorIndex]) => {
-      const series = ratios.map((ratio) => {
-        if (ratio === 0) return base;
-        const changed = createPerturbation(project, baseline.scenario, first, key, ratio);
-        if (scheme && DISPATCH_FACTORS.has(key)) {
-          changed.row.storageDispatch = perturbDispatch(changed.row, hourlyPreview, key, ratio, scheme);
-        }
-        const revenue = calculateAnnualRevenue(project, changed.config, changed.row);
-        return priceTarget ? revenue / changed.row.energyMwh : revenue / 10000;
-      });
-      const lowDelta = series[0] - base, highDelta = series[series.length - 1] - base;
-      const description = first.storageDispatch && key === "storage"
-        ? "同比调整容量补偿、辅助服务与其他补充收益，逐时现货套利保持固定" : note;
-      return { key, name, note: description, colorIndex, series, lowDelta, highDelta,
-        sensitivity: Math.max(...series.map((value) => Math.abs(value - base))) };
-    }).filter((factor) => factor.series.every(Number.isFinite) && factor.sensitivity > Math.max(1e-8, Math.abs(base) * 1e-12))
-      .sort((a, b) => b.sensitivity - a.sensitivity);
-    factors.forEach((factor) => { Object.freeze(factor.series); Object.freeze(factor); });
+  function hourlyEnergy(project, rows) {
+    const saved = project.energyData?.hourlyByYear;
+    if (rows.every((row) => Array.isArray(saved?.[row.year]) && saved[row.year].length === HOURS_PER_YEAR)) return saved;
+    // Restore from the stored typical curve on a separate project shell. Missing input stays missing.
+    return getEnergyData()?.ensureProjectEnergyDataDerivedState({ ...project }).hourlyByYear;
+  }
+
+  function prepareCurve(hours, prices, project, row) {
+    if (!Array.isArray(hours) || hours.length !== HOURS_PER_YEAR || !Array.isArray(prices) || prices.length !== HOURS_PER_YEAR) return null;
+    const generation = new Array(HOURS_PER_YEAR);
+    const words = new DataView(new ArrayBuffer(8));
+    let hashA = 2166136261, hashB = 5381, totalEnergy = 0, totalPrice = 0, spotRevenue = 0;
+    const hash = (value) => {
+      words.setFloat64(0, value || 0, true);
+      hashA = Math.imul(hashA ^ words.getUint32(0, true), 16777619);
+      hashB = Math.imul(hashB ^ words.getUint32(4, true), 1597334677);
+    };
+    for (let index = 0; index < HOURS_PER_YEAR; index += 1) {
+      const equivalentHours = hours[index];
+      const price = prices[index];
+      if (!Number.isFinite(equivalentHours) || equivalentHours < 0 || !Number.isFinite(price)) return null;
+      const energy = equivalentHours * project.capacityMw;
+      generation[index] = energy;
+      totalEnergy += energy;
+      totalPrice += price;
+      spotRevenue += energy * price;
+      hash(energy);
+      hash(price);
+    }
+    const mean = totalPrice / HOURS_PER_YEAR;
+    if (!closeAmount(row.energyMwh, totalEnergy) || !closeAmount(row.spotAvgPrice, mean) || !closeAmount(row.spotRevenue, spotRevenue)) return null;
+    return { generation, prices, mean, key: `${hashA >>> 0}:${hashB >>> 0}` };
+  }
+
+  function prepareStorage(project, result) {
+    const source = findPriceSource(project, result);
+    if (!source) return null;
+    const hours = hourlyEnergy(project, result.annualRows);
+    const groups = new Map();
+    const curves = [];
+    const curveIndices = [];
+    for (const row of result.annualRows) {
+      const curve = prepareCurve(hours?.[row.year], source.run.pricesByYear[row.year], project, row);
+      if (!curve) return null;
+      // Validate equality even when numeric hashes collide before sharing a dispatch.
+      const candidates = groups.get(curve.key) || [];
+      const duplicate = candidates.find((index) => curves[index].prices.every((price, hour) =>
+        price === curve.prices[hour] && curves[index].generation[hour] === curve.generation[hour]));
+      if (duplicate !== undefined) curveIndices.push(duplicate);
+      else {
+        curveIndices.push(curves.length);
+        groups.set(curve.key, [...candidates, curves.length]);
+        curves.push(curve);
+      }
+    }
+    return { curves, curveIndices, sourceKey: [source.fingerprint, curves.map(({ key }) => key), curveIndices] };
+  }
+
+  function reconcileStorage(storage, rows, scheme) {
+    try {
+      const baselineDispatch = storage.curves.map(({ prices, generation }) => dispatch.calculateHourlyDispatch({ prices, generationMwh: generation, ...scheme }));
+      return rows.every((row, i) => Object.entries(baselineDispatch[storage.curveIndices[i]])
+        .every(([key, value]) => closeAmount(row.storageDispatch[key], value)));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function prepareCycle(project, baseline) {
+    const { result, scenario } = baseline || {};
+    const base = baselineValue(baseline);
+    if (!project || !scenario?.config || base === null) return { message: "测算周期内没有有效结算电量，暂无法分析。" };
+    if (!annualResultsAgree(project, scenario, result)) return { message: YEARLY_RESULT_ERROR };
+    let scheme, storage;
+    if (project.hasStorage) {
+      if (!result.annualRows.every((row) => row.storageDispatch) || !hourlyRowsAreComplete(project, scenario, result)) {
+        return { message: "配储基准小时明细缺失或对账未通过，请重新测算后查看敏感性。" };
+      }
+      storage = prepareStorage(project, result);
+      if (!storage) return { message: TIME_SERIES_ERROR };
+      scheme = { powerMw: project.storagePowerMw, durationH: project.storageDurationH, roundTripEfficiency: scenario.config.storageRoundTripEfficiency ?? 0.9 };
+    }
+    const cacheKey = JSON.stringify([project.id, project.province, project.siteType, project.assetType, project.startYear, project.hasStorage,
+      scenario.config, base, result.totalEnergy, result.annualRows, scheme, storage?.sourceKey]);
+    let entry = cache.get(cacheKey);
+    if (!entry) {
+      if (storage && !reconcileStorage(storage, result.annualRows, scheme)) return { message: TIME_SERIES_ERROR };
+      entry = { points: new Map(), sweeps: new Map() };
+      if (cache.size >= 4) cache.delete(cache.keys().next().value);
+      cache.set(cacheKey, entry);
+    }
+    return { result, scenario, scheme, storage, base, entry };
+  }
+
+  function availability(project, baseline) {
+    const { message = "" } = prepareCycle(project, baseline);
+    return { ok: !message, message };
+  }
+
+  function perturbedStorageRevenue(curve, key, scale, scheme) {
+    const { mean, generation } = curve;
+    const prices = new Array(HOURS_PER_YEAR);
+    if (key === "spot") {
+      for (let hour = 0; hour < prices.length; hour += 1) prices[hour] = curve.prices[hour] * scale;
+    } else {
+      for (let hour = 0; hour < prices.length; hour += 1) prices[hour] = mean + (curve.prices[hour] - mean) * scale;
+    }
+    return dispatch.calculateHourlyDispatch({ prices, generationMwh: generation, ...scheme }).incrementalRevenue;
+  }
+
+  function calculatePoint(project, cycle, key, ratio) {
+    const { result, scenario, scheme, storage, entry, base } = cycle;
+    const pointKey = `${key}:${ratio}`;
+    if (entry.points.has(pointKey)) return entry.points.get(pointKey);
+    let storageRevenue;
+    if (storage && DISPATCH_FACTORS.has(key)) {
+      storageRevenue = [];
+      for (const curve of storage.curves) storageRevenue.push(perturbedStorageRevenue(curve, key, 1 + ratio, scheme));
+    }
+    let revenue = 0;
+    for (const [index, original] of result.annualRows.entries()) {
+      const { row, config } = createPerturbation(scenario, original, key, ratio);
+      if (storageRevenue) row.storageDispatch = { ...original.storageDispatch, incrementalRevenue: storageRevenue[storage.curveIndices[index]] };
+      revenue += calculateAnnualRevenue(project, config, row);
+    }
+    const price = revenue / result.totalEnergy;
+    const value = Math.abs(price - base) < Math.max(1e-8, Math.abs(base) * 1e-12) ? base : price;
+    if (entry.points.size >= 600) entry.points.delete(entry.points.keys().next().value);
+    entry.points.set(pointKey, value);
+    return value;
+  }
+
+  function buildFactors(project, baseline, ratios) {
+    if (!Array.isArray(ratios) || !ratios.length || !ratios.every((value) => Number.isFinite(value) && value > -1)) return [];
+    const cycle = prepareCycle(project, baseline);
+    if (cycle.message) return [];
+    const { result, scenario, base, entry } = cycle;
+    const sweepKey = JSON.stringify(ratios);
+    if (entry.sweeps.has(sweepKey)) return entry.sweeps.get(sweepKey);
+    const { mechanismEnabled, mechanismRatio, mechanismStartYm, mechanismEndYm } = scenario.config;
+    const hasMechanism = mechanismEnabled && mechanismRatio > 0 && result.annualRows.some((row) =>
+      row.energyMwh > 0 && rules.mechanismActiveMonthsForYear(row.year, mechanismStartYm, mechanismEndYm) > 0);
+    const factors = FACTORS.map(([key, name, note, colorIndex]) => {
+      const applicable = !key.startsWith("mechanism_") || Boolean(hasMechanism);
+      const series = Object.freeze(ratios.map((ratio) => ratio === 0 || !applicable ? base : calculatePoint(project, cycle, key, ratio)));
+      const lowDelta = series[0] - base, highDelta = series.at(-1) - base;
+      return Object.freeze({ key, name, note: applicable ? note : `${note}。当前基准周期没有生效的机制电量`, colorIndex, applicable, series,
+        lowDelta, highDelta, sensitivity: Math.max(...series.map((value) => Math.abs(value - base))) });
+    }).sort((a, b) => b.sensitivity - a.sensitivity);
+    if (!factors.every(({ series }) => series.every(Number.isFinite))) return [];
     Object.freeze(factors);
-    if (cache.size >= 20) cache.delete(cache.keys().next().value);
-    cache.set(cacheKey, factors);
+    if (entry.sweeps.size >= 12) entry.sweeps.delete(entry.sweeps.keys().next().value);
+    entry.sweeps.set(sweepKey, factors);
     return factors;
   }
 
-  return Object.freeze({ buildFactors, createPerturbation, calculateAnnualRevenue, availability, baselineValue, normalizeTarget, targetMetric });
+  return Object.freeze({ buildFactors, calculateAnnualRevenue, availability, baselineValue });
 });

@@ -24,16 +24,9 @@
   }
 
   function sanitizeCompareSensitivitySettings(settings = {}) {
-    const topN = settings.topN === "all" ? "all" : Math.round(Number(settings.topN) || 8);
     return {
-      target: sensitivity.normalizeTarget(settings.target),
       rangePercent: clamp(Math.round(Number(settings.rangePercent) || 20), 5, 60),
-      stepPercent: clamp(Math.round(Number(settings.stepPercent) || 5), 1, 20),
-      responseScalePercent: 100,
-      topN: topN === "all" ? "all" : clamp(topN, 3, 20),
-      selectedKeys: Array.isArray(settings.selectedKeys)
-        ? settings.selectedKeys.filter(Boolean)
-        : []
+      stepPercent: clamp(Math.round(Number(settings.stepPercent) || 5), 1, 20)
     };
   }
 
@@ -53,7 +46,7 @@
 
   function buildCompareSensitivityFactors(project, baseline, settings = {}) {
     const ratios = sensitivityAxisLabels(settings).map((label) => Number(label.replace("%", "")) / 100);
-    return sensitivity.buildFactors(project, baseline, ratios, settings.target);
+    return sensitivity.buildFactors(project, baseline, ratios);
   }
 
   function resultComponentTotals(result, verifiedConfig) {
@@ -132,31 +125,6 @@
     return available.find((item) => item.scenario?.isBaseline) || null;
   }
 
-  function getFirstAnnualRow(item) {
-    const rows = item?.result?.annualRows || [];
-    return rows[0] || null;
-  }
-
-  function resolveSensitivitySelection(allFactors = [], selectedKeys = [], activeFactorKey = "") {
-    const allFactorKeys = allFactors.map((factor) => factor.key);
-    let nextSelectedKeys = Array.isArray(selectedKeys) && selectedKeys.length
-      ? selectedKeys.filter((key) => allFactorKeys.includes(key))
-      : allFactorKeys;
-    if (!nextSelectedKeys.length) {
-      nextSelectedKeys = allFactorKeys;
-    }
-    const selectedFactorSet = new Set(nextSelectedKeys);
-    const factors = allFactors.filter((factor) => selectedFactorSet.has(factor.key));
-    const nextActiveFactorKey = activeFactorKey && factors.some((factor) => factor.key === activeFactorKey)
-      ? activeFactorKey
-      : factors[0]?.key || "";
-    return {
-      selectedKeys: nextSelectedKeys,
-      activeFactorKey: nextActiveFactorKey,
-      factors
-    };
-  }
-
   function summarizeScenarioComparison(available = [], baseline = null) {
     if (available.length < 2 || !baseline) return { bestScenario: null, maxGapWan: 0 };
     const bestScenario = available.reduce((best, current) => {
@@ -186,24 +154,14 @@
       available = [],
       activeCompareScenarioId = "",
       activeSensitivityFactorKey = "",
-      sensitivitySettings = {}
+      sensitivitySettings = {},
+      includeSensitivity = true
     } = input;
     const baseline = getBaselineCompareItem(available);
-    const baselineFirst = getFirstAnnualRow(baseline);
-    const baselineRevenueWan = baselineFirst ? baselineFirst.fullRevenue / 10000 : 0;
-    const sensitivityTarget = sensitivity.targetMetric(sensitivitySettings.target);
-    const sensitivityBaseline = sensitivity.baselineValue(baseline, sensitivityTarget.key);
-    const allSensitivityFactors = buildCompareSensitivityFactors(
-      project,
-      baseline,
-      sensitivitySettings
-    );
-    const sensitivitySelection = resolveSensitivitySelection(
-      allSensitivityFactors,
-      sensitivitySettings.selectedKeys,
-      activeSensitivityFactorKey
-    );
-    const sensitivityFactors = sensitivitySelection.factors;
+    const sensitivityBaseline = sensitivity.baselineValue(baseline);
+    const sensitivityFactors = includeSensitivity ? buildCompareSensitivityFactors(project, baseline, sensitivitySettings) : [];
+    const resolvedFactorKey = !includeSensitivity || sensitivityFactors.some(({ key }) => key === activeSensitivityFactorKey)
+      ? activeSensitivityFactorKey : sensitivityFactors[0]?.key || "";
     const { bestScenario, maxGapWan } = baseline
       ? summarizeScenarioComparison(available, baseline)
       : { bestScenario: null, maxGapWan: 0 };
@@ -213,17 +171,14 @@
       activeCompareScenarioId
     );
     const focusScenario = available.find((item) => item.scenario.id === resolvedActiveCompareScenarioId) || baseline;
-    const sensitivityNotice = allSensitivityFactors.length ? ""
-      : sensitivity.availability(project, baseline, sensitivityTarget.key).message || `当前参数对${sensitivityTarget.label}没有产生可显示的变化。`;
+    const sensitivityNotice = !includeSensitivity || sensitivityFactors.length ? ""
+      : sensitivity.availability(project, baseline).message || "暂时无法重算全周期综合度电均价。";
     return {
       baseline,
-      baselineFirst,
-      baselineRevenueWan,
-      sensitivityTarget,
       sensitivityBaseline,
-      allSensitivityFactors,
       sensitivityNotice,
-      sensitivitySelection,
+      sensitivityDeferred: !includeSensitivity,
+      activeSensitivityFactorKey: resolvedFactorKey,
       sensitivityFactors,
       bestScenario,
       maxGapWan,
@@ -239,6 +194,7 @@
       activeCompareScenarioId = "",
       activeSensitivityFactorKey = "",
       sensitivitySettings = {},
+      includeSensitivity = true,
       getBaselineResultState
     } = input;
     const available = project ? buildAvailableScenarioResults(project, getBaselineResultState) : [];
@@ -248,7 +204,8 @@
         available,
         activeCompareScenarioId,
         activeSensitivityFactorKey,
-        sensitivitySettings
+        sensitivitySettings,
+        includeSensitivity
       })
       : {};
     if (project) compareState.excludedCount = Math.max(0,
@@ -259,30 +216,22 @@
       compareState,
       hasResults: available.length > 0,
       activeCompareScenarioId: compareState.activeCompareScenarioId || activeCompareScenarioId,
-      sensitivitySelection: compareState.sensitivitySelection || {
-        selectedKeys: sensitivitySettings.selectedKeys || [],
-        activeFactorKey: activeSensitivityFactorKey,
-        factors: []
-      }
+      activeSensitivityFactorKey: compareState.activeSensitivityFactorKey ?? activeSensitivityFactorKey
     };
   }
 
   function applyCompareFrameSelection(input = {}) {
     const {
       frameState = {},
-      sensitivitySettings = {},
       activeCompareScenarioId = "",
       activeSensitivityFactorKey = ""
     } = input;
     if (!frameState.hasResults) {
       return { activeCompareScenarioId, activeSensitivityFactorKey };
     }
-    if (Array.isArray(frameState.sensitivitySelection?.selectedKeys)) {
-      sensitivitySettings.selectedKeys = frameState.sensitivitySelection.selectedKeys;
-    }
     return {
       activeCompareScenarioId: frameState.activeCompareScenarioId || activeCompareScenarioId,
-      activeSensitivityFactorKey: frameState.sensitivitySelection?.activeFactorKey || activeSensitivityFactorKey
+      activeSensitivityFactorKey: frameState.activeSensitivityFactorKey ?? activeSensitivityFactorKey
     };
   }
 
@@ -290,7 +239,6 @@
     applyCompareFrameSelection,
     sanitizeCompareSensitivitySettings,
     sensitivityAxisLabels,
-    sensitivityTargetMetric: sensitivity.targetMetric,
     buildCompareSensitivityFactors,
     buildCompareFrameState,
     buildCompareRenderState,
@@ -299,9 +247,7 @@
     resultComponentTotals,
     detectTopDriver,
     getBaselineCompareItem,
-    getFirstAnnualRow,
     resolveActiveCompareScenarioId,
-    resolveSensitivitySelection,
     summarizeScenarioComparison
   });
 });

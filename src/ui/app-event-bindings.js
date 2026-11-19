@@ -30,7 +30,7 @@
     navigation: ["setActivePage"],
     compare: [
       "sanitizeCompareView", "sanitizeCompareSensitivitySettings",
-      "renderCompareWorkspaceState", "renderCompare", "queueCompareChartsResize"
+      "renderCompare", "queueCompareChartsResize"
     ],
     energy: [
       "getActiveProject", "isProjectCreateCompleted", "hasEnergyHistoryEntryReadiness",
@@ -142,11 +142,9 @@
           appState.compareView = nextView;
         },
         sanitizeCompareView: actions.sanitizeCompareView,
-        getActiveSensitivityFactorKey: state.getActiveSensitivityFactorKey,
         setActiveSensitivityFactorKey: state.setActiveSensitivityFactorKey,
         setActiveCompareScenarioId: state.setActiveCompareScenarioId,
         sanitizeCompareSensitivitySettings: actions.sanitizeCompareSensitivitySettings,
-        renderCompareWorkspaceState: actions.renderCompareWorkspaceState,
         renderCompare: actions.renderCompare,
         queueCompareChartsResize: actions.queueCompareChartsResize,
         schedulePersistAppData: actions.schedulePersistAppData

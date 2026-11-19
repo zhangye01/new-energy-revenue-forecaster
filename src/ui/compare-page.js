@@ -10,7 +10,7 @@
     root.window.NE_COMPARE_PAGE = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
-  const FIRST_REVENUE_TARGET = Object.freeze({ key: "first_revenue", label: "首年全口径收入", unit: "万元" });
+  const SENSITIVITY_METRIC = Object.freeze({ label: "全周期综合度电均价", unit: "元/MWh", decimals: 2 });
 
   function escapeHtml(text) {
     return String(text ?? "")
@@ -24,10 +24,6 @@
   function asNum(value, digits = 1) {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric.toFixed(digits) : "-";
-  }
-
-  function targetDigits(target) {
-    return target.decimalDigits ?? (target.key === FIRST_REVENUE_TARGET.key ? 1 : 2);
   }
 
   function setText(node, text) {
@@ -64,10 +60,7 @@
     const {
       available = [],
       baseline = null,
-      baselineFirst = null,
-      baselineRevenueWan = baselineFirst?.fullRevenue / 10000,
-      sensitivityTarget = FIRST_REVENUE_TARGET,
-      sensitivityBaseline = sensitivityTarget.key === FIRST_REVENUE_TARGET.key ? baselineRevenueWan : null,
+      sensitivityBaseline = baseline?.result?.avgFullRevenuePrice,
       comparePeriod = "-",
       sensitivityFactors = [],
       sensitivityNotice = "",
@@ -83,18 +76,16 @@
     } = input;
     const baselineName = baseline?.scenario?.name || "-";
     const baselineTargetText = Number.isFinite(sensitivityBaseline)
-      ? `${asNum(sensitivityBaseline, targetDigits(sensitivityTarget))} ${sensitivityTarget.unit}` : "-";
-    const compactTargetText = Number.isFinite(sensitivityBaseline) && sensitivityTarget.key === FIRST_REVENUE_TARGET.key
-      ? asCompactMoney(sensitivityBaseline * 10000) : baselineTargetText;
+      ? `${asNum(sensitivityBaseline, SENSITIVITY_METRIC.decimals)} ${SENSITIVITY_METRIC.unit}` : "-";
+    const strongestFactor = sensitivityFactors[0];
     const excludedNotice = excludedCount > 0 ? ` · ${excludedCount} 个历史或无效结果已排除，请重新测算。` : "";
     return {
       labels: {
         compareBaselineLabel: `基准：${baselineName}`,
-        compareMetricBaselineRevenueLabel: `基准${sensitivityTarget.label}`,
         compareScenarioLabel: available.length >= 2 ? `${available.length} 个方案已纳入对比` : "当前仅基准方案已测算"
       },
       messages: {
-        compareSensitivityMessage: sensitivityNotice || `基准：${baselineName} · ${sensitivityTarget.label} ${compactTargetText} · ${sensitivityFactors.length} 项变量 · 扰动 ±${sensitivitySettings.rangePercent}% / 步长 ${sensitivitySettings.stepPercent}%`,
+        compareSensitivityMessage: sensitivityNotice || `基准：${baselineName} · ${SENSITIVITY_METRIC.label} ${baselineTargetText} · ${sensitivityFactors.length} 项变量 · 扰动 ±${sensitivitySettings.rangePercent}% / 步长 ${sensitivitySettings.stepPercent}%`,
         compareScenarioMessage: (available.length >= 2
           ? `${available.length} 个已测算方案 · 对照基准：${baselineName}`
           : `仅“${baselineName}”有当前有效结果，待其他方案重算后比较。`) + excludedNotice
@@ -109,7 +100,8 @@
         {
           refKey: "compareMetricSensitiveFactors",
           value: `${sensitivityFactors.length} 项`,
-          hint: sensitivityFactors[0] ? `最高敏感：${sensitivityFactors[0].name}` : "等待基准结果"
+          hint: strongestFactor?.sensitivity >= 0.005 ? `最高敏感：${strongestFactor.name}` : sensitivityFactors.length
+            ? "当前扰动范围内无变化" : "等待基准结果"
         },
         {
           refKey: "compareMetricBestScenario",
@@ -154,24 +146,13 @@
         });
       });
     }
-    if (refs.compareSensitivityFactorList) {
-      refs.compareSensitivityFactorList.addEventListener("click", (event) => {
-        const button = event.target.closest("[data-sensitivity-factor]");
-        if (!button) return;
-        handlers.selectSensitivityFactor?.(button.dataset.sensitivityFactor || "");
-      });
-      refs.compareSensitivityFactorList.addEventListener("change", (event) => {
-        const input = event.target.closest("[data-sensitivity-variable]");
-        if (!input) return;
-        handlers.toggleSensitivityVariable?.(input.dataset.sensitivityVariable || "", Boolean(input.checked));
-      });
-    }
+    refs.compareSensitivityFactorList?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-sensitivity-factor]");
+      if (button) handlers.selectSensitivityFactor?.(button.dataset.sensitivityFactor || "");
+    });
     [
-      refs.compareSensitivityTarget,
       refs.compareSensitivityRange,
-      refs.compareSensitivityStep,
-      refs.compareSensitivityScale,
-      refs.compareSensitivityTopn
+      refs.compareSensitivityStep
     ].forEach((control) => {
       if (!control) return;
       control.addEventListener("change", () => {
@@ -194,23 +175,19 @@
       getCompareView = () => "",
       setCompareView = () => {},
       sanitizeCompareView = (value) => value,
-      getActiveSensitivityFactorKey = () => "",
       setActiveSensitivityFactorKey = () => {},
       setActiveCompareScenarioId = () => {},
       sanitizeCompareSensitivitySettings = () => sensitivitySettings,
-      renderCompareWorkspaceState = () => {},
       renderCompare = () => {},
       queueCompareChartsResize = () => {},
       schedulePersistAppData = () => {}
     } = input;
-    const selectionsByTarget = new Map();
-
     return {
       changeCompareView: (rawView) => {
         const nextView = sanitizeCompareView(rawView);
         if (getCompareView() === nextView) return;
         setCompareView(nextView);
-        renderCompareWorkspaceState();
+        renderCompare();
         queueCompareChartsResize();
         schedulePersistAppData();
       },
@@ -218,33 +195,10 @@
         setActiveSensitivityFactorKey(key);
         renderCompare();
       },
-      toggleSensitivityVariable: (key, checked) => {
-        const current = new Set(sensitivitySettings.selectedKeys);
-        if (checked) {
-          current.add(key);
-        } else {
-          current.delete(key);
-        }
-        sensitivitySettings.selectedKeys = Array.from(current);
-        if (!sensitivitySettings.selectedKeys.includes(getActiveSensitivityFactorKey())) {
-          setActiveSensitivityFactorKey(sensitivitySettings.selectedKeys[0] || "");
-        }
-        renderCompare();
-      },
       changeSensitivityControls: () => {
-        const previousTarget = sensitivitySettings.target || FIRST_REVENUE_TARGET.key;
-        sensitivitySettings.target = refs.compareSensitivityTarget?.value || previousTarget;
         sensitivitySettings.rangePercent = Number(refs.compareSensitivityRange?.value) || sensitivitySettings.rangePercent;
         sensitivitySettings.stepPercent = Number(refs.compareSensitivityStep?.value) || sensitivitySettings.stepPercent;
-        sensitivitySettings.responseScalePercent = 100;
-        sensitivitySettings.topN = refs.compareSensitivityTopn?.value === "all" ? "all" : Number(refs.compareSensitivityTopn?.value);
         sanitizeCompareSensitivitySettings();
-        if (sensitivitySettings.target !== previousTarget) {
-          selectionsByTarget.set(previousTarget, { keys: [...(sensitivitySettings.selectedKeys || [])], active: getActiveSensitivityFactorKey() });
-          const selection = selectionsByTarget.get(sensitivitySettings.target);
-          sensitivitySettings.selectedKeys = selection ? [...selection.keys] : [];
-          setActiveSensitivityFactorKey(selection?.active || "");
-        }
         renderCompare();
       },
       selectScenarioFocus: (scenarioId) => {
@@ -258,8 +212,7 @@
     const {
       refs = {},
       setCompareMetric = () => {},
-      syncCompareSensitivityControls = () => {},
-      sensitivityTarget
+      syncCompareSensitivityControls = () => {}
     } = input;
     setHtml(refs.compareBody, "");
     setHtml(refs.compareSensitivityBody, "");
@@ -275,14 +228,11 @@
     setCompareMetric(refs.compareMetricPeriod, "-");
     setText(refs.compareSensitivityResponseLabel, "等待变量选择");
     setText(refs.compareScenarioBridgeLabel, "等待方案选择");
-    setText(refs.compareSensitivityVariableSummary, "默认启用全部变量");
     setText(refs.compareBaselineLabel, "等待基准方案结果");
     setText(refs.compareScenarioLabel, "等待方案结果");
     setText(refs.compareSensitivityMessage, "请先在收益参数补充与细化中完成基准方案测算，再查看敏感性分析。");
     setText(refs.compareScenarioMessage, "仅纳入当前有效且电量口径一致的结果；过期方案请重新测算。");
     syncCompareSensitivityControls();
-    const selectedLabel = sensitivityTarget?.label || refs.compareSensitivityTarget?.selectedOptions?.[0]?.textContent || FIRST_REVENUE_TARGET.label;
-    setText(refs.compareMetricBaselineRevenueLabel, `基准${selectedLabel}`);
   }
 
   function renderCompareNoProjectState(input = {}) {
@@ -314,39 +264,21 @@
 
   function buildSensitivityFactorListHtml(input = {}) {
     const {
-      allFactors = [],
-      enabledFactors = [],
+      factors = [],
       activeFactorKey = "",
-      tokens = {},
-      sensitivityTarget = FIRST_REVENUE_TARGET
+      tokens = {}
     } = input;
     const palette = Array.isArray(tokens.palette) && tokens.palette.length ? tokens.palette : [tokens.primary || "#3f82e6"];
-    const enabledSet = new Set(enabledFactors.map((factor) => factor.key));
-    const enabledRankMap = new Map(enabledFactors.map((factor, index) => [factor.key, index + 1]));
-    const optionHtml = allFactors.map((factor) => {
-      const checked = enabledSet.has(factor.key);
-      return `
-      <div class="compare-variable-help-row">
-        <label class="compare-variable-option ${checked ? "" : "muted"}">
-          <input type="checkbox" data-sensitivity-variable="${escapeHtml(factor.key)}" ${checked ? "checked" : ""}>
-          <span><strong>${escapeHtml(factor.name)}</strong></span>
-        </label>
-        <small data-help="${escapeHtml(factor.name)}计算口径">${escapeHtml(factor.note)}</small>
-      </div>
-    `;
-    }).join("");
-
-    const drillHtml = enabledFactors.map((factor) => {
-      const index = enabledRankMap.get(factor.key) || 0;
+    const drillHtml = factors.map((factor, index) => {
       const isActive = factor.key === activeFactorKey;
       const colorIndex = Number.isFinite(Number(factor.colorIndex)) ? Number(factor.colorIndex) : 0;
       const color = palette[colorIndex % palette.length] || tokens.primary || palette[0];
       return `
       <div class="compare-factor-help-row">
-        <button class="compare-factor-button ${isActive ? "active" : ""}" type="button" data-sensitivity-factor="${escapeHtml(factor.key)}">
+        <button class="compare-factor-button ${isActive ? "active" : ""}" type="button" aria-pressed="${isActive}" data-sensitivity-factor="${escapeHtml(factor.key)}">
           <span class="compare-factor-rank" style="--factor-color:${color}">${index + 1}</span>
           <span class="compare-factor-main"><strong>${escapeHtml(factor.name)}</strong></span>
-          <span class="compare-factor-value">${asNum(factor.sensitivity, targetDigits(sensitivityTarget))} ${escapeHtml(sensitivityTarget.unit)}</span>
+          <span class="compare-factor-value">${asNum(factor.sensitivity, SENSITIVITY_METRIC.decimals)} ${SENSITIVITY_METRIC.unit}</span>
         </button>
         <small data-help="${escapeHtml(factor.name)}计算口径">${escapeHtml(factor.note)}</small>
       </div>
@@ -354,13 +286,8 @@
     }).join("");
 
     return `
-    <div class="compare-variable-grid">${optionHtml}</div>
-    <div class="compare-factor-subhead">
-      <strong>响应曲线变量</strong>
-      <span data-help="切换响应曲线">点击下方变量切换右侧曲线。</span>
-    </div>
     <div class="compare-factor-drill-list">
-      ${drillHtml || `<div class="hint">请至少启用一个变量。</div>`}
+      ${drillHtml || `<div class="hint">等待可用的敏感性结果。</div>`}
     </div>
   `;
   }
@@ -434,22 +361,19 @@
       },
       renderers = {}
     } = input;
-    const sensitivityTarget = compareState.sensitivityTarget || FIRST_REVENUE_TARGET;
-    const sensitivityBaseline = compareState.sensitivityBaseline === undefined && sensitivityTarget.key === FIRST_REVENUE_TARGET.key
-      ? compareState.baselineRevenueWan : compareState.sensitivityBaseline;
+    const { sensitivityBaseline = compareState.baseline?.result?.avgFullRevenuePrice, sensitivityFactors = [] } = compareState;
 
-    if (compareState.sensitivityNotice) {
-      renderPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, compareState.sensitivityNotice);
-    } else {
-      renderers.renderSensitivityTornadoChart?.(compareState.sensitivityFactors, sensitivityBaseline, sensitivityTarget);
+    if (!compareState.sensitivityDeferred) {
+      if (compareState.sensitivityNotice) {
+        renderPlaceholder("sensitivityTornado", refs.compareSensitivityTornadoChart, compareState.sensitivityNotice);
+        renderPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, compareState.sensitivityNotice);
+      } else {
+        renderers.renderSensitivityTornadoChart?.(sensitivityFactors, sensitivityBaseline, SENSITIVITY_METRIC);
+        renderers.renderSensitivityResponseChart?.(sensitivityFactors, sensitivityBaseline, SENSITIVITY_METRIC);
+      }
+      renderers.renderSensitivityFactorList?.(sensitivityFactors);
+      renderers.renderSensitivityTable?.(sensitivityFactors, SENSITIVITY_METRIC);
     }
-    renderers.renderSensitivityFactorList?.(compareState.allSensitivityFactors, compareState.sensitivityFactors, sensitivityTarget);
-    if (compareState.sensitivityNotice) {
-      renderPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, compareState.sensitivityNotice);
-    } else {
-      renderers.renderSensitivityResponseChart?.(compareState.sensitivityFactors, sensitivityBaseline, sensitivityTarget);
-    }
-    renderers.renderSensitivityTable?.(compareState.sensitivityFactors, sensitivityTarget);
 
     applyCompareView({
       refs,
@@ -457,12 +381,9 @@
       view: buildCompareOverviewView({
         available,
         baseline: compareState.baseline,
-        baselineFirst: compareState.baselineFirst,
-        baselineRevenueWan: compareState.baselineRevenueWan,
         sensitivityBaseline,
-        sensitivityTarget,
         comparePeriod,
-        sensitivityFactors: compareState.sensitivityFactors,
+        sensitivityFactors,
         sensitivityNotice: compareState.sensitivityNotice,
         sensitivitySettings,
         bestScenario: compareState.bestScenario,
@@ -506,7 +427,7 @@
       renderers = {}
     } = input;
 
-    resetComparePageState({ refs, setCompareMetric, syncCompareSensitivityControls, sensitivityTarget: compareState.sensitivityTarget });
+    resetComparePageState({ refs, setCompareMetric, syncCompareSensitivityControls });
     if (!project) {
       renderCompareNoProjectState({ refs, renderPlaceholder });
       return "no-project";

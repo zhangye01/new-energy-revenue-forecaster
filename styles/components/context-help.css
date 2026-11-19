@@ -104,7 +104,6 @@
 .context-help-card .context-help-copy p + p { margin-top: 6px; }
 .context-help-card strong:not(:first-child) { margin-top: 6px; }
 
-.compare-variable-help-row,
 .compare-factor-help-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

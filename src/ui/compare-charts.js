@@ -10,7 +10,7 @@
     root.window.NE_COMPARE_CHARTS = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
-  const DEFAULT_SENSITIVITY_METRIC = { label: "首年收益", unit: "万元", decimals: 1 };
+  const DEFAULT_SENSITIVITY_METRIC = { label: "全周期综合度电均价", unit: "元/MWh", decimals: 2 };
 
   function asNum(value, digits = 1) {
     const numeric = Number(value);
@@ -129,10 +129,9 @@
   }
 
   function buildSensitivityTornadoOption(factors, baselineValue, settings, tokens, metric = DEFAULT_SENSITIVITY_METRIC) {
-    const { label, unit, decimals = unit === "万元" ? 1 : 2 } = metric;
+    const { label, unit, decimals = 2 } = metric;
     const rangeLabel = `${settings.rangePercent}%`;
-    const displayCount = settings.topN === "all" ? factors.length : Math.min(Number(settings.topN) || 8, factors.length);
-    const topFactors = factors.slice(0, displayCount).reverse();
+    const topFactors = factors.slice().reverse();
     return {
       animationDuration: 340,
       grid: { top: 30, left: 132, right: 28, bottom: 52, containLabel: true },
@@ -174,7 +173,7 @@
   }
 
   function buildSensitivityResponseOption(selected, baselineValue, axisLabels, tokens, metric = DEFAULT_SENSITIVITY_METRIC) {
-    const { label, unit, decimals = unit === "万元" ? 1 : 2 } = metric;
+    const { label, unit, decimals = 2 } = metric;
     return {
       animationDuration: 340,
       grid: { top: 36, left: 56, right: 24, bottom: 44, containLabel: true },

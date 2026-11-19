@@ -264,12 +264,8 @@ let disposeBriefCharts = null;
 let activeSensitivityFactorKey = "";
 let activeCompareScenarioId = "";
 const compareSensitivitySettings = {
-  target: "first_revenue",
   rangePercent: 20,
-  stepPercent: 5,
-  responseScalePercent: 100,
-  topN: 8,
-  selectedKeys: []
+  stepPercent: 5
 };
 let compareChartsResizeBound = false;
 let historyChartsResizeBound = false;
@@ -3310,9 +3306,10 @@ function compareThemeTokens() {
 }
 
 function ensureCompareChart(chartKey, node) {
-  if (!node || !window.echarts) return null;
+  if (!node?.clientWidth || !node.clientHeight || !window.echarts) return null;
   const existed = compareChartInstances[chartKey];
   if (existed && !existed.isDisposed()) {
+    if (existed.getWidth() !== node.clientWidth || existed.getHeight() !== node.clientHeight) existed.resize();
     return existed;
   }
   const chart = window.echarts.init(node, null, { renderer: "canvas" });
@@ -3356,15 +3353,11 @@ function sanitizeCompareSensitivitySettings() {
 
 function syncCompareSensitivityControls() {
   const settings = sanitizeCompareSensitivitySettings();
-  const target = compareAnalysis.sensitivityTargetMetric(settings.target);
-  if (refs.compareSensitivityTarget) refs.compareSensitivityTarget.value = settings.target;
   if (refs.compareSensitivityTornadoNote) {
-    refs.compareSensitivityTornadoNote.textContent = `变量在 ±${settings.rangePercent}% 扰动下的${target.label}变化区间`;
+    refs.compareSensitivityTornadoNote.textContent = `变量在 ±${settings.rangePercent}% 扰动下的全周期综合度电均价变化区间`;
   }
   if (refs.compareSensitivityRange) refs.compareSensitivityRange.value = String(settings.rangePercent);
   if (refs.compareSensitivityStep) refs.compareSensitivityStep.value = String(settings.stepPercent);
-  if (refs.compareSensitivityScale) refs.compareSensitivityScale.value = String(settings.responseScalePercent);
-  if (refs.compareSensitivityTopn) refs.compareSensitivityTopn.value = settings.topN === "all" ? "all" : String(settings.topN);
 }
 
 function sensitivityAxisLabels(settings = compareSensitivitySettings) {
@@ -3383,19 +3376,14 @@ function renderSensitivityTornadoChart(factors, baselineValue, target) {
   chart.setOption(compareCharts.buildSensitivityTornadoOption(factors, baselineValue, settings, tokens, target), true);
 }
 
-function renderSensitivityFactorList(allFactors, enabledFactors, target) {
+function renderSensitivityFactorList(factors) {
   if (!refs.compareSensitivityFactorList) return;
   const tokens = compareThemeTokens();
   refs.compareSensitivityFactorList.innerHTML = comparePage.buildSensitivityFactorListHtml({
-    allFactors,
-    enabledFactors,
+    factors,
     activeFactorKey: activeSensitivityFactorKey,
-    sensitivityTarget: target,
     tokens
   });
-  if (refs.compareSensitivityVariableSummary) {
-    refs.compareSensitivityVariableSummary.textContent = `已启用 ${enabledFactors.length}/${allFactors.length} 项，排序按敏感度自动更新`;
-  }
 }
 
 function renderSensitivityResponseChart(factors, baselineValue, target) {
@@ -3419,7 +3407,8 @@ function renderSensitivityTable(factors, target) {
   if (refs.compareSensitivityLowHead) refs.compareSensitivityLowHead.textContent = `-${settings.rangePercent}%影响`;
   if (refs.compareSensitivityHighHead) refs.compareSensitivityHighHead.textContent = `+${settings.rangePercent}%影响`;
   refs.compareSensitivityBody.innerHTML = factors.map((factor) => {
-    const direction = factor.highDelta >= factor.lowDelta ? "同向" : "反向";
+    const change = factor.highDelta - factor.lowDelta;
+    const direction = factor.sensitivity < 0.005 ? "无变化" : Math.abs(change) < 0.005 ? "两端接近" : change > 0 ? "同向" : "反向";
     return `
       <tr>
         <td>${escapeHtml(factor.name)}</td>
@@ -4104,15 +4093,15 @@ function renderCompare() {
   renderCompareWorkspaceState();
   const project = getActiveProject();
   if (project) ensureScenarioMetadata(project);
+  const includeSensitivity = resolveVisiblePageId(appState.activePage) === "compare-page" && appState.compareView === "sensitivity";
   const frameState = compareAnalysis.buildCompareFrameState({
     project, getBaselineResultState: getValidatedResultState,
     comparePeriod: project ? getForecastPeriodDisplayRange(project) : "-",
-    activeCompareScenarioId,
-    activeSensitivityFactorKey,
-    sensitivitySettings: compareSensitivitySettings
+    activeCompareScenarioId, activeSensitivityFactorKey,
+    sensitivitySettings: compareSensitivitySettings, includeSensitivity
   });
   ({ activeCompareScenarioId, activeSensitivityFactorKey } = compareAnalysis.applyCompareFrameSelection({
-    frameState, sensitivitySettings: compareSensitivitySettings, activeCompareScenarioId, activeSensitivityFactorKey
+    frameState, activeCompareScenarioId, activeSensitivityFactorKey
   }));
   comparePage.renderCompareFrame({
     refs,
@@ -4289,7 +4278,6 @@ function renderWorkflowViews() {
   renderWorkflowContext();
   renderScenarioForm();
   renderResults();
-  renderCompareWorkspaceState();
   renderCompare();
 }
 
@@ -4374,7 +4362,6 @@ function createEventBindingChartRefs() {
 function createEventBindingStateAccessors() {
   return {
     compareSensitivitySettings,
-    getActiveSensitivityFactorKey: () => activeSensitivityFactorKey,
     setActiveSensitivityFactorKey: (key) => {
       activeSensitivityFactorKey = key;
     },
@@ -4396,7 +4383,7 @@ function createEventBindingActions() {
     hasUnpersistedAppData: () => !allowStorageReload && (hasUnsubmittedInputs() || appDataSnapshotStore.hasUnpersistedChanges(buildAppDataSnapshot())),
     setTopMeta, sanitizeHistoryAnalysis, renderPolicyPanel, renderHistoryPrices,
     exportHistoryChartData, setActivePage,
-    sanitizeCompareView, sanitizeCompareSensitivitySettings, renderCompareWorkspaceState,
+    sanitizeCompareView, sanitizeCompareSensitivitySettings,
     renderCompare, queueCompareChartsResize, getActiveProject, isProjectCreateCompleted,
     hasEnergyHistoryEntryReadiness, sanitizeEnergyStep2Choice, createProjectFromForm,
     syncCreateStorageFieldsUi, setCreateSaveMessage, setEnergyImportMessage,

@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="./styles/components/buttons.css?v=20261118d">
     <link rel="stylesheet" href="./styles/components/workflow.css?v=20261118d">
     <link rel="stylesheet" href="./styles/components/auth.css?v=20261113c">
-    <link rel="stylesheet" href="./styles/components/context-help.css?v=20261019e">
+    <link rel="stylesheet" href="./styles/components/context-help.css?v=20261119u">
     <link rel="stylesheet" href="./styles/pages/home.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/projects.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/create.css?v=20260714d">
@@ -20,10 +20,10 @@
     <link rel="stylesheet" href="./styles/pages/energy.css?v=20261119b">
     <link rel="stylesheet" href="./styles/pages/scenario.css?v=20261119m">
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261119s">
-    <link rel="stylesheet" href="./styles/pages/compare.css?v=20261119t">
+    <link rel="stylesheet" href="./styles/pages/compare.css?v=20261119u">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261119c">
     <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119o">
-    <link rel="stylesheet" href="./styles/responsive.css?v=20261119m">
+    <link rel="stylesheet" href="./styles/responsive.css?v=20261119u">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
       window.__openLoginModal = function () {
@@ -88,7 +88,7 @@
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
     <script src="./config.js?v=20261119p" defer></script>
-    <script src="./runtime.js?v=20261119t" defer></script>
+    <script src="./runtime.js?v=20261119u" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
@@ -130,10 +130,10 @@
     <script src="./src/ui/result-brief-word.js?v=20261119s" defer></script>
     <script src="./src/ui/scenario-form.js?v=20261119m" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20261118e" defer></script>
-    <script src="./src/ui/compare-charts.js?v=20261119t" defer></script>
-    <script src="./src/ui/compare-page.js?v=20261119t" defer></script>
-    <script src="./src/domain/compare-sensitivity.js?v=20261119t" defer></script>
-    <script src="./src/domain/compare-analysis.js?v=20261119t" defer></script>
+    <script src="./src/ui/compare-charts.js?v=20261119u" defer></script>
+    <script src="./src/ui/compare-page.js?v=20261119u" defer></script>
+    <script src="./src/domain/compare-sensitivity.js?v=20261119u" defer></script>
+    <script src="./src/domain/compare-analysis.js?v=20261119u" defer></script>
     <script src="./src/ui/result-history.js?v=20261119p" defer></script>
     <script src="./src/domain/history-analysis.js?v=20261118n" defer></script>
     <script src="./src/ui/history-charts.js?v=20261118m" defer></script>
@@ -141,7 +141,7 @@
     <script src="./src/ui/history-renderer.js?v=20261119c" defer></script>
     <script src="./src/ui/theme-controller.js?v=20261113c" defer></script>
     <script src="./src/ui/shell-events.js?v=20261119p" defer></script>
-    <script src="./src/ui/app-event-bindings.js?v=20261119p" defer></script>
+    <script src="./src/ui/app-event-bindings.js?v=20261119u" defer></script>
     <script src="./src/domain/workflow-status.js?v=20261119o" defer></script>
     <script src="./src/domain/scenario-config.js?v=20261118h" defer></script>
     <script src="./src/domain/rough-price.js?v=20261119o" defer></script>
@@ -156,7 +156,7 @@
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261119j" defer></script>
-    <script src="./app.js?v=20261119t" defer></script>
+    <script src="./app.js?v=20261119u" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -1344,31 +1344,16 @@
               <div class="panel-head">
                 <div>
                   <h3>基准敏感性分析</h3>
-                  <p class="hint" data-help="基准敏感性分析">按实际收益规则逐点扰动参数，重算所选首年指标并与当前基准对照。度电净价以扰动后的全口径收入除以对应的结算电量。比例受 0–100% 边界约束，结果会筛除对所选指标无影响的变量。</p>
+                  <p class="hint" data-help="基准敏感性分析">每次单独扰动一个变量，按全周期全口径收入合计除以全周期结算电量合计计算综合度电均价。机制电价与机制电量占比只影响机制生效年份，机制电量占比限制在 0% 至 100%。</p>
                 </div>
                 <span class="hint" id="compare-baseline-label">等待基准方案结果</span>
               </div>
               <div class="compare-control-strip compare-sensitivity-toolbar" aria-label="敏感性分析统一设置">
-                <label>目标指标
-                  <select id="compare-sensitivity-target">
-                    <option value="first_revenue">首年全口径收入</option>
-                    <option value="first_net_price">首年度电净价</option>
-                  </select>
-                </label>
                 <label>扰动范围 ±%
                   <input id="compare-sensitivity-range" type="number" min="5" max="60" step="5" value="20">
                 </label>
                 <label>步长 %
                   <input id="compare-sensitivity-step" type="number" min="1" max="20" step="1" value="5">
-                </label>
-                <input id="compare-sensitivity-scale" type="hidden" value="100">
-                <label>排序展示
-                  <select id="compare-sensitivity-topn">
-                    <option value="5">前5项</option>
-                    <option value="8" selected>前8项</option>
-                    <option value="10">前10项</option>
-                    <option value="all">全部</option>
-                  </select>
                 </label>
               </div>
               <div class="info-box" id="compare-sensitivity-message">
@@ -1380,7 +1365,7 @@
                   <div class="value" id="compare-metric-baseline-scenario">-</div>
                 </article>
                 <article class="metric-card compare-metric-card">
-                  <div class="label" id="compare-metric-baseline-revenue-label">基准首年全口径收入</div>
+                  <div class="label">基准全周期综合度电均价</div>
                   <div class="value" id="compare-metric-baseline-revenue">-</div>
                 </article>
                 <article class="metric-card compare-metric-card">
@@ -1395,17 +1380,14 @@
               <section class="compare-chart-card compare-chart-card-wide">
                 <div class="compare-chart-head">
                   <strong>敏感性排序</strong>
-                  <span id="compare-sensitivity-tornado-note">变量在 ±20% 扰动下的首年全口径收入变化区间</span>
+                  <span id="compare-sensitivity-tornado-note">变量在 ±20% 扰动下的全周期综合度电均价变化区间</span>
                 </div>
-                <div class="compare-chart compare-chart-tall" id="compare-sensitivity-tornado-chart"></div>
+                <div class="compare-chart" id="compare-sensitivity-tornado-chart"></div>
               </section>
-              <details class="compare-disclosure compare-variable-disclosure">
-                <summary>
-                  <span>敏感变量与钻取</span>
-                  <small id="compare-sensitivity-variable-summary">默认启用全部变量</small>
-                </summary>
+              <section class="compare-chart-card compare-chart-card-wide">
+                <div class="compare-chart-head"><strong>响应曲线变量</strong></div>
                 <div class="compare-factor-list" id="compare-sensitivity-factor-list"></div>
-              </details>
+              </section>
               <section class="compare-chart-card compare-chart-card-wide">
                 <div class="compare-chart-head">
                   <strong>响应曲线</strong>

@@ -26,7 +26,6 @@ class FakeTarget {
   constructor(dataset = {}) {
     this.dataset = dataset;
     this.handlers = {};
-    this.checked = false;
   }
 
   addEventListener(name, handler) {
@@ -45,7 +44,7 @@ class FakeTarget {
 const compareEventCalls = [];
 const compareTabButton = new FakeTarget({ compareView: "scenario" });
 const sensitivityList = new FakeTarget();
-const sensitivityFactor = new FakeTarget({ sensitivityFactor: "hours" });
+const sensitivityFactor = new FakeTarget({ sensitivityFactor: "spot" });
 const sensitivityVariable = new FakeTarget({ sensitivityVariable: "price" });
 const sensitivityTargetSelect = new FakeTarget();
 const sensitivityRange = new FakeTarget();
@@ -62,47 +61,36 @@ bindCompareEvents({
   handlers: {
     changeCompareView: (value) => compareEventCalls.push(`view:${value}`),
     selectSensitivityFactor: (value) => compareEventCalls.push(`factor:${value}`),
-    toggleSensitivityVariable: (value, checked) => compareEventCalls.push(`variable:${value}:${checked}`),
+    toggleSensitivityVariable: () => assert.fail("固定变量不支持启用或停用"),
     changeSensitivityControls: () => compareEventCalls.push("controls"),
     selectScenarioFocus: (value) => compareEventCalls.push(`scenario:${value}`)
   }
 });
 compareTabButton.dispatch("click");
 sensitivityList.dispatch("click", { target: sensitivityFactor });
-sensitivityVariable.checked = true;
 sensitivityList.dispatch("change", { target: sensitivityVariable });
 sensitivityTargetSelect.dispatch("change");
 sensitivityRange.dispatch("change");
 scenarioFocusList.dispatch("click", { target: scenarioFocus });
 assert.deepEqual(compareEventCalls, [
   "view:scenario",
-  "factor:hours",
-  "variable:price:true",
-  "controls",
+  "factor:spot",
   "controls",
   "scenario:up"
 ]);
 
 const handlerCalls = [];
 const sensitivitySettings = {
-  target: "first_revenue",
-  selectedKeys: ["hours"],
   rangePercent: 20,
-  stepPercent: 5,
-  responseScalePercent: 100,
-  topN: 5
+  stepPercent: 5
 };
 let compareView = "scenario";
-let activeFactor = "hours";
+let activeFactor = "spot";
 let activeScenario = "";
-sensitivityTargetSelect.value = "first_revenue";
 const compareHandlers = createCompareEventHandlers({
   refs: {
-    compareSensitivityTarget: sensitivityTargetSelect,
     compareSensitivityRange: { value: "30" },
-    compareSensitivityStep: { value: "10" },
-    compareSensitivityScale: { value: "80" },
-    compareSensitivityTopn: { value: "all" }
+    compareSensitivityStep: { value: "10" }
   },
   sensitivitySettings,
   getCompareView: () => compareView,
@@ -110,7 +98,6 @@ const compareHandlers = createCompareEventHandlers({
     compareView = value;
   },
   sanitizeCompareView: (value) => (value === "sensitivity" ? "sensitivity" : "scenario"),
-  getActiveSensitivityFactorKey: () => activeFactor,
   setActiveSensitivityFactorKey: (value) => {
     activeFactor = value;
   },
@@ -120,57 +107,32 @@ const compareHandlers = createCompareEventHandlers({
   sanitizeCompareSensitivitySettings: () => {
     handlerCalls.push("sanitize");
   },
-  renderCompareWorkspaceState: () => handlerCalls.push("workspace"),
   renderCompare: () => handlerCalls.push("render"),
   queueCompareChartsResize: () => handlerCalls.push("resize"),
   schedulePersistAppData: () => handlerCalls.push("persist")
 });
 compareHandlers.changeCompareView("sensitivity");
 compareHandlers.changeCompareView("sensitivity");
-compareHandlers.selectSensitivityFactor("price");
-compareHandlers.toggleSensitivityVariable("hours", false);
-compareHandlers.toggleSensitivityVariable("price", true);
+compareHandlers.selectSensitivityFactor("mechanism_price");
 compareHandlers.changeSensitivityControls();
 compareHandlers.selectScenarioFocus("up");
 assert.equal(compareView, "sensitivity");
-assert.equal(activeFactor, "price");
+assert.equal(activeFactor, "mechanism_price");
 assert.equal(activeScenario, "up");
-assert.deepEqual(sensitivitySettings.selectedKeys, ["price"]);
-assert.equal(sensitivitySettings.rangePercent, 30);
-assert.equal(sensitivitySettings.stepPercent, 10);
-assert.equal(sensitivitySettings.responseScalePercent, 100, "历史响应强度输入不再参与测算");
-assert.equal(sensitivitySettings.topN, "all");
+assert.deepEqual(sensitivitySettings, { rangePercent: 30, stepPercent: 10 });
 assert.deepEqual(handlerCalls, [
-  "workspace",
+  "render",
   "resize",
   "persist",
-  "render",
-  "render",
   "render",
   "sanitize",
   "render",
   "render"
 ]);
-
-sensitivityTargetSelect.value = "first_net_price";
-compareHandlers.changeSensitivityControls();
-assert.equal(sensitivitySettings.target, "first_net_price");
-assert.deepEqual(sensitivitySettings.selectedKeys, []);
-assert.equal(activeFactor, "");
-compareHandlers.toggleSensitivityVariable("fee", true);
-compareHandlers.selectSensitivityFactor("fee");
-sensitivityTargetSelect.value = "first_revenue";
-compareHandlers.changeSensitivityControls();
-assert.equal(sensitivitySettings.target, "first_revenue");
-assert.deepEqual(sensitivitySettings.selectedKeys, ["price"]);
-assert.equal(activeFactor, "price");
-sensitivityTargetSelect.value = "first_net_price";
-compareHandlers.changeSensitivityControls();
-assert.equal(sensitivitySettings.target, "first_net_price");
-assert.deepEqual(sensitivitySettings.selectedKeys, ["fee"]);
-assert.equal(activeFactor, "fee");
-assert.equal(sensitivitySettings.rangePercent, 30);
-assert.equal(sensitivitySettings.stepPercent, 10);
+handlerCalls.length = 0;
+compareHandlers.changeCompareView("scenario");
+assert.equal(compareView, "scenario");
+assert.deepEqual(handlerCalls, ["render", "resize", "persist"]);
 
 const availabilityView = buildCompareAvailabilityView({
   available: [{ scenario: { id: "base" }, result: {} }],
@@ -185,28 +147,25 @@ assert.deepEqual(
   ]
 );
 
+const cycleFactors = [
+  { key: "spot", name: "现货价格水平", note: "电价变化", sensitivity: 12.345, colorIndex: 0 },
+  { key: "mechanism_price", name: "机制电价", note: "机制电价变化", sensitivity: 4.21, colorIndex: 1 },
+  { key: "mechanism_ratio", name: "机制电量占比", note: "机制电量比例变化", sensitivity: 0, colorIndex: 2 },
+  { key: "capture_spread", name: "捕获价差", note: "价差变化", sensitivity: 0, colorIndex: 1 }
+];
 const factorHtml = buildSensitivityFactorListHtml({
   tokens,
-  activeFactorKey: "hours",
-  allFactors: [
-    { key: "hours", name: "利用小时", note: "上网电量变化", sensitivity: 20, colorIndex: 0 },
-    { key: "price", name: "现货价格", note: "电价变化", sensitivity: 12, colorIndex: 1 }
-  ],
-  enabledFactors: [
-    { key: "hours", name: "利用小时", note: "上网电量变化", sensitivity: 20, colorIndex: 0 }
-  ]
+  activeFactorKey: "spot",
+  factors: cycleFactors
 });
-assert.match(factorHtml, /data-sensitivity-variable="hours" checked/);
-assert.match(factorHtml, /compare-variable-option muted/);
-assert.match(factorHtml, /data-sensitivity-factor="hours"/);
-assert.match(factorHtml, /20.0 万元/);
-const netPriceTarget = { key: "first_net_price", label: "首年度电净价", unit: "元/MWh" };
-const netPriceFactors = [{ key: "fee", name: "费用", note: "费用同比变化", sensitivity: 12.345 }];
-const netPriceFactorsHtml = buildSensitivityFactorListHtml({
-  allFactors: netPriceFactors, enabledFactors: netPriceFactors, sensitivityTarget: netPriceTarget
-});
-assert.match(netPriceFactorsHtml, /12.35 元\/MWh/);
-assert.doesNotMatch(netPriceFactorsHtml, /万元/);
+assert.deepEqual(Array.from(factorHtml.matchAll(/data-sensitivity-factor="([^"]+)"/g), ([, key]) => key),
+  cycleFactors.map(({ key }) => key));
+assert.match(factorHtml, /aria-pressed="true" data-sensitivity-factor="spot"/);
+assert.match(factorHtml, /aria-pressed="false" data-sensitivity-factor="mechanism_ratio"/);
+assert.match(factorHtml, /compare-factor-rank" style="--factor-color:#3f82e6">1<\/span>/);
+assert.match(factorHtml, /12.35 元\/MWh/);
+assert.match(factorHtml, /0.00 元\/MWh/);
+assert.doesNotMatch(factorHtml, /checkbox|data-sensitivity-variable|万元/);
 
 const available = [
   {
@@ -251,10 +210,8 @@ assert.match(tableHtml, /\+20万元/);
 const overviewView = buildCompareOverviewView({
   available,
   baseline: available[0],
-  baselineFirst: available[0].result.annualRows[0],
-  baselineRevenueWan: 40,
   comparePeriod: "2026-2056",
-  sensitivityFactors: [{ name: "利用小时" }],
+  sensitivityFactors: cycleFactors,
   sensitivitySettings: { rangePercent: 20, stepPercent: 5 },
   bestScenario: available[1],
   maxGapWan: 20,
@@ -262,27 +219,28 @@ const overviewView = buildCompareOverviewView({
   asNum: (value, digits = 1) => Number(value).toFixed(digits)
 });
 assert.equal(overviewView.labels.compareBaselineLabel, "基准：基准<场景>");
-assert.match(overviewView.messages.compareSensitivityMessage, /首年全口径收入 40万元/);
+assert.match(overviewView.messages.compareSensitivityMessage, /全周期综合度电均价 30.12 元\/MWh/);
 assert.match(overviewView.messages.compareScenarioMessage, /2 个已测算方案/);
 assert.deepEqual(
   overviewView.metrics.map((metric) => [metric.refKey, metric.value]),
   [
     ["compareMetricBaselineScenario", "基准<场景>"],
-    ["compareMetricBaselineRevenue", "40.0 万元"],
-    ["compareMetricSensitiveFactors", "1 项"],
+    ["compareMetricBaselineRevenue", "30.12 元/MWh"],
+    ["compareMetricSensitiveFactors", "4 项"],
     ["compareMetricBestScenario", "乐观"],
     ["compareMetricMaxGap", "20.0 万元"]
   ]
 );
 
-const netPriceOverview = buildCompareOverviewView({
-  available, baseline: available[0], sensitivityTarget: netPriceTarget, sensitivityBaseline: 431.654,
-  sensitivityFactors: netPriceFactors, sensitivitySettings: { rangePercent: 20, stepPercent: 5 },
+const flatOverview = buildCompareOverviewView({
+  available, baseline: available[0], sensitivityBaseline: 431.654,
+  sensitivityFactors: cycleFactors.map((factor) => ({ ...factor, sensitivity: 0 })),
+  sensitivitySettings: { rangePercent: 20, stepPercent: 5 },
   asCompactMoney: () => assert.fail("度电净价不使用货币金额缩写")
 });
-assert.equal(netPriceOverview.labels.compareMetricBaselineRevenueLabel, "基准首年度电净价");
-assert.match(netPriceOverview.messages.compareSensitivityMessage, /首年度电净价 431.65 元\/MWh/);
-assert.equal(netPriceOverview.metrics.find(({ refKey }) => refKey === "compareMetricBaselineRevenue").value, "431.65 元/MWh");
+assert.match(flatOverview.messages.compareSensitivityMessage, /全周期综合度电均价 431.65 元\/MWh/);
+assert.equal(flatOverview.metrics.find(({ refKey }) => refKey === "compareMetricBaselineRevenue").value, "431.65 元/MWh");
+assert.equal(flatOverview.metrics.find(({ refKey }) => refKey === "compareMetricSensitiveFactors").hint, "当前扰动范围内无变化");
 
 const singleOverview = buildCompareOverviewView({ available: [available[0]], baseline: available[0], bestScenario: available[0], excludedCount: 1 });
 assert.equal(singleOverview.metrics.find((item) => item.refKey === "compareMetricBestScenario").value, "待比较");
@@ -303,7 +261,6 @@ const refs = {
   compareScenarioFocusList: makeNode(),
   compareMetricBaselineScenario: makeNode(),
   compareMetricBaselineRevenue: makeNode(),
-  compareMetricBaselineRevenueLabel: makeNode(),
   compareMetricSensitiveFactors: makeNode(),
   compareMetricCompareCount: makeNode(),
   compareMetricScenarioCount: makeNode(),
@@ -312,7 +269,6 @@ const refs = {
   compareMetricPeriod: makeNode(),
   compareSensitivityResponseLabel: makeNode(),
   compareScenarioBridgeLabel: makeNode(),
-  compareSensitivityVariableSummary: makeNode(),
   compareBaselineLabel: makeNode(),
   compareScenarioLabel: makeNode(),
   compareSensitivityMessage: makeNode(),
@@ -345,7 +301,6 @@ applyCompareView({
   setCompareMetric: (node, value, hint) => metricCalls.push({ node, value, hint })
 });
 assert.equal(refs.compareBaselineLabel.textContent, "基准：基准<场景>");
-assert.equal(refs.compareMetricBaselineRevenueLabel.textContent, "基准首年全口径收入");
 assert.match(refs.compareScenarioMessage.textContent, /2 个已测算方案/);
 assert.equal(metricCalls.length, 5);
 assert.equal(metricCalls[3].value, "乐观");
@@ -372,10 +327,8 @@ renderCompareReadyState({
   available,
   compareState: {
     baseline: available[0],
-    baselineFirst: available[0].result.annualRows[0],
-    baselineRevenueWan: 40,
-    allSensitivityFactors: [{ key: "hours", name: "利用小时", note: "上网电量变化", sensitivity: 20 }],
-    sensitivityFactors: [{ key: "hours", name: "利用小时", note: "上网电量变化", sensitivity: 20 }],
+    sensitivityBaseline: 431.65,
+    sensitivityFactors: cycleFactors,
     bestScenario: available[1],
     maxGapWan: 20,
     focusScenario: available[1]
@@ -386,9 +339,9 @@ renderCompareReadyState({
   asNum: (value, digits = 1) => Number(value).toFixed(digits),
   detectTopDriver: () => "现货收入",
   renderers: {
-    renderSensitivityTornadoChart: (factors, revenue) => readyRenderCalls.push(`tornado:${factors.length}:${revenue}`),
-    renderSensitivityFactorList: (allFactors, factors) => readyRenderCalls.push(`factor-list:${allFactors.length}:${factors.length}`),
-    renderSensitivityResponseChart: (factors, revenue) => readyRenderCalls.push(`response:${factors.length}:${revenue}`),
+    renderSensitivityTornadoChart: (factors, price) => readyRenderCalls.push(`tornado:${factors.length}:${price}`),
+    renderSensitivityFactorList: (factors) => readyRenderCalls.push(`factor-list:${factors.length}`),
+    renderSensitivityResponseChart: (factors, price) => readyRenderCalls.push(`response:${factors.length}:${price}`),
     renderSensitivityTable: (factors) => readyRenderCalls.push(`table:${factors.length}`),
     renderScenarioRankingChart: (items, baseline) => readyRenderCalls.push(`ranking:${items.length}:${baseline.scenario.id}`),
     renderCompareTrendChart: (items) => readyRenderCalls.push(`trend:${items.length}`),
@@ -398,10 +351,10 @@ renderCompareReadyState({
   }
 });
 assert.deepEqual(readyRenderCalls, [
-  "tornado:1:40",
-  "factor-list:1:1",
-  "response:1:40",
-  "table:1",
+  "tornado:4:431.65",
+  "response:4:431.65",
+  "factor-list:4",
+  "table:4",
   "ranking:2:base",
   "trend:2",
   "focus:2:base",
@@ -420,7 +373,6 @@ function makeFrameRefs() {
     compareScenarioFocusList: makeNode(),
     compareMetricBaselineScenario: makeNode(),
     compareMetricBaselineRevenue: makeNode(),
-    compareMetricBaselineRevenueLabel: makeNode(),
     compareMetricSensitiveFactors: makeNode(),
     compareMetricCompareCount: makeNode(),
     compareMetricScenarioCount: makeNode(),
@@ -429,7 +381,6 @@ function makeFrameRefs() {
     compareMetricPeriod: makeNode(),
     compareSensitivityResponseLabel: makeNode(),
     compareScenarioBridgeLabel: makeNode(),
-    compareSensitivityVariableSummary: makeNode(),
     compareBaselineLabel: makeNode(),
     compareScenarioLabel: makeNode(),
     compareSensitivityMessage: makeNode(),
@@ -486,12 +437,8 @@ const readyFrameStatus = renderCompareFrame({
   available,
   compareState: {
     baseline: available[0],
-    baselineFirst: available[0].result.annualRows[0],
-    baselineRevenueWan: 40,
-    sensitivityTarget: netPriceTarget,
     sensitivityBaseline: 431.65,
-    allSensitivityFactors: [{ key: "hours", name: "利用小时", note: "上网电量变化", sensitivity: 20 }],
-    sensitivityFactors: [{ key: "hours", name: "利用小时", note: "上网电量变化", sensitivity: 20 }],
+    sensitivityFactors: cycleFactors,
     bestScenario: available[1],
     maxGapWan: 20,
     focusScenario: available[1]
@@ -504,20 +451,20 @@ const readyFrameStatus = renderCompareFrame({
   renderers: {
     renderSensitivityTornadoChart: (_factors, base, target) => {
       assert.equal(base, 431.65);
-      assert.equal(target, netPriceTarget);
+      assert.deepEqual(target, { label: "全周期综合度电均价", unit: "元/MWh", decimals: 2 });
       frameReadyCalls.push("tornado");
     },
-    renderSensitivityFactorList: (_all, _enabled, target) => {
-      assert.equal(target, netPriceTarget);
+    renderSensitivityFactorList: (factors) => {
+      assert.deepEqual(factors, cycleFactors);
       frameReadyCalls.push("factor-list");
     },
     renderSensitivityResponseChart: (_factors, base, target) => {
       assert.equal(base, 431.65);
-      assert.equal(target, netPriceTarget);
+      assert.equal(target.label, "全周期综合度电均价");
       frameReadyCalls.push("response");
     },
     renderSensitivityTable: (_factors, target) => {
-      assert.equal(target, netPriceTarget);
+      assert.equal(target.unit, "元/MWh");
       frameReadyCalls.push("table");
     },
     renderScenarioRankingChart: () => frameReadyCalls.push("ranking"),
@@ -530,8 +477,8 @@ const readyFrameStatus = renderCompareFrame({
 assert.equal(readyFrameStatus, "ready");
 assert.deepEqual(frameReadyCalls, [
   "tornado",
-  "factor-list",
   "response",
+  "factor-list",
   "table",
   "ranking",
   "trend",
@@ -541,7 +488,7 @@ assert.deepEqual(frameReadyCalls, [
 ]);
 
 const invalidHoursRefs = makeFrameRefs();
-const invalidHoursText = "首年配储小时明细缺失或对账未通过，请重新测算后查看敏感性。";
+const invalidHoursText = "测算周期逐时数据缺失，请重新测算后查看敏感性。";
 const invalidHoursCharts = [];
 assert.equal(renderCompareFrame({
   refs: invalidHoursRefs,
@@ -556,5 +503,25 @@ assert.equal(renderCompareFrame({
 }), "ready", "年度对标不受小时对账错误影响");
 assert.equal(invalidHoursRefs.compareSensitivityMessage.textContent, invalidHoursText);
 assert.deepEqual(invalidHoursCharts, ["sensitivityTornado", "sensitivityResponse"].map((key) => ({ key, message: invalidHoursText })));
+
+const deferredRefs = makeFrameRefs();
+const deferredCalls = [];
+assert.equal(renderCompareFrame({
+  refs: deferredRefs,
+  project: { id: "scenario-only" },
+  available,
+  compareState: { baseline: available[0], sensitivityDeferred: true },
+  renderPlaceholder: () => assert.fail("方案对标展开时不绘制敏感性占位图"),
+  renderers: {
+    renderSensitivityTornadoChart: () => assert.fail("方案对标展开时不绘制敏感性排序图"),
+    renderSensitivityResponseChart: () => assert.fail("方案对标展开时不绘制敏感性响应图"),
+    renderSensitivityFactorList: () => assert.fail("方案对标展开时不重绘敏感性变量"),
+    renderSensitivityTable: () => assert.fail("方案对标展开时不重绘敏感性明细"),
+    renderScenarioRankingChart: () => deferredCalls.push("ranking"),
+    renderCompareTrendChart: () => deferredCalls.push("trend")
+  }
+}), "ready");
+assert.deepEqual(deferredCalls, ["ranking", "trend"]);
+assert.match(deferredRefs.compareBody.innerHTML, /基准&lt;场景&gt;/);
 
 console.log("compare page tests passed");
