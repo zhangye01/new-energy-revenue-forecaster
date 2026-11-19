@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const {
+  yearLabelInterval,
   buildResultChartTokens,
   buildResultPlaceholderOption,
   buildResultChartOptions
@@ -22,6 +23,8 @@ const baseTokens = {
 };
 
 const tokens = buildResultChartTokens(baseTokens);
+assert.equal(yearLabelInterval(Array.from({ length: 24 }), 8), 2);
+assert.equal(yearLabelInterval([], 8), 0);
 assert.equal(tokens.spot, baseTokens.primary);
 assert.equal(tokens.mechanism, baseTokens.baseline);
 assert.equal(tokens.fee, baseTokens.negative);
@@ -51,9 +54,12 @@ const chartData = {
   ]
 };
 
-const options = buildResultChartOptions(chartData, tokens, { yearInterval: 2 });
+const options = buildResultChartOptions(chartData, tokens, {
+  yearInterval: yearLabelInterval(Array.from({ length: 24 }))
+});
 assert.deepEqual(Object.keys(options), ["annualStack", "pricePath", "waterfall", "contribution"]);
 assert.equal(options.annualStack.xAxis.axisLabel.interval, 2);
+assert.equal(options.pricePath.xAxis.axisLabel.interval, 2);
 assert.equal(options.annualStack.series[0].type, "bar");
 assert.equal(options.annualStack.series[0].stack, "revenue");
 assert.equal(options.annualStack.series[2].type, "line");

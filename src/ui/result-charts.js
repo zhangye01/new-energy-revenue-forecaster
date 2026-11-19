@@ -15,6 +15,10 @@
     return Number.isFinite(numeric) ? numeric.toFixed(digits) : "-";
   }
 
+  function yearLabelInterval(rows, targetTicks = 8) {
+    return Math.max(0, Math.ceil((rows?.length || 0) / targetTicks) - 1);
+  }
+
   function buildResultChartTokens(baseTokens = {}) {
     return {
       ...baseTokens,
@@ -257,6 +261,7 @@
   }
 
   return Object.freeze({
+    yearLabelInterval,
     buildResultChartTokens,
     buildResultPlaceholderOption,
     buildResultChartOptions

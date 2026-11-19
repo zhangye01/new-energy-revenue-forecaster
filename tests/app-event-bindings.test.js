@@ -36,9 +36,7 @@ assert.equal(Object.prototype.hasOwnProperty.call(appActions, "setTopMeta"), tru
 assert.equal(Object.prototype.hasOwnProperty.call(appActions, "printScenarioReport"), true);
 
 const calls = [];
-const refs = {
-  provinceApplyMessage: { textContent: "old" }
-};
+const refs = {};
 const documentRef = {
   querySelector(selector) {
     calls.push(`query:${selector}`);
@@ -65,7 +63,6 @@ bindAppEvents({
   windowRef: {},
   appState,
   benchmarkMapZoomStep: 0.1,
-  scenarioVisualCharts: {},
   chartRefs: {},
   modules: {
     shellEvents: {
@@ -127,8 +124,7 @@ bindAppEvents({
     compareSensitivitySettings: { range: 10 },
     getActiveSensitivityFactorKey: () => "factor-a",
     setActiveSensitivityFactorKey: (key) => calls.push(`set-factor:${key}`),
-    setActiveCompareScenarioId: (scenarioId) => calls.push(`set-scenario:${scenarioId}`),
-    setSelectedProvinceDefaultKey: (provinceKey) => calls.push(`province:${provinceKey}`)
+    setActiveCompareScenarioId: (scenarioId) => calls.push(`set-scenario:${scenarioId}`)
   },
   actions: {
     setActivePage: () => calls.push("set-page"),
@@ -167,7 +163,6 @@ bindAppEvents({
     syncScenarioFieldLocks: () => calls.push("sync-locks"),
     exportManualScenarioTemplate: () => calls.push("export-manual"),
     importManualScenarioTemplate: () => calls.push("import-manual"),
-    renderProvinceLibrary: () => calls.push("render-province"),
     updateMarketTradeEnergyDisplay: () => calls.push("market-ratio"),
     updateEnvValueSpaceDisplay: () => calls.push("env-ratio"),
     runCalculation: () => calls.push("run-calc"),
@@ -204,8 +199,7 @@ compareHandlers.setActiveCompareScenarioId("s2");
 energyHandlers.setEnergyStep2Choice("province");
 assert.equal(appState.energyStep2Choice, "province");
 
-scenarioHandlers.changeProvinceDefault("zhejiang");
-assert.equal(refs.provinceApplyMessage.textContent, "");
+scenarioHandlers.saveScenarioFromForm();
 
 assert.deepEqual(derivedInput.querySelector("#mechanism-ratio"), { selector: "#mechanism-ratio" });
 derivedInput.handlers.updateEnvValueSpaceDisplay();
@@ -213,8 +207,7 @@ resultHandlers.printScenarioReport();
 
 assert.ok(calls.includes("set-factor:factor-b"));
 assert.ok(calls.includes("set-scenario:s2"));
-assert.ok(calls.includes("province:zhejiang"));
-assert.ok(calls.includes("render-province"));
+assert.ok(calls.includes("save-scenario"));
 assert.ok(calls.includes("env-ratio"));
 assert.ok(calls.includes("print-report"));
 

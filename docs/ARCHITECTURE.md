@@ -53,7 +53,6 @@
 | `file-import-utils.js` | 浏览器侧 CSV/TXT/Excel 文件读取与 Excel 转 CSV 适配 |
 | `script-loader.js` | ECharts 与地图等外部脚本的按需加载、复用和失败提示 |
 | `policy-panel.js` | 首页地区政策筛选 view model 和政策卡片 HTML 构造 |
-| `province-defaults.js` | 省份默认参数展示 view model、选择器排序、消息文案、参数卡片 HTML 构造和 DOM 写回 |
 | `energy-workspace.js` | 结算电量配置页工作台 view model、创建项目表单读写/清空、状态文案、按钮禁用和模板状态计算 |
 | `create-project-flow.js` | 创建项目表单保存流程编排，处理新建/更新项目分支和页面跳转副作用 |
 | `energy-template-flow.js` | 结算电量模板导出、文件导入、示例模板和省份典型曲线调用流程 |
@@ -71,9 +70,7 @@
 | `result-page.js` | 基准结果总览报告文案、指标卡、假设说明、明细表 HTML 和渲染状态构造 |
 | `result-print.js` | 基准结果总览打印前展开、图表刷新和打印后恢复控制 |
 | `result-charts.js` | 基准结果总览四张 ECharts 图的 option 构造和图表 token 扩展 |
-| `scenario-charts.js` | 收益参数补充与细化页参数可视化三张 ECharts 图的 option 和主题 token 构造 |
 | `scenario-form.js` | 收益参数补充与细化页表单读写和场景配置构造 |
-| `scenario-visual-data.js` | 收益参数补充与细化页参数可视化年度行数据构造 |
 | `manual-scenario-flow.js` | 交易策略、环境价值、综合费用三类逐年手工模板的导出、导入和状态回写流程 |
 | `compare-charts.js` | 多方案对比和敏感性分析图表 option、对比页主题 token 构造 |
 | `compare-page.js` | 多方案对比页变量列表、方案焦点列表和对比表格 HTML 构造 |

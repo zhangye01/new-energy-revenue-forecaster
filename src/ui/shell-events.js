@@ -156,23 +156,12 @@
     if (typeof chartRef.set === "function") chartRef.set(null);
   }
 
-  function disposeScenarioVisualCharts(scenarioVisualCharts = {}) {
-    Object.keys(scenarioVisualCharts).forEach((key) => {
-      const chart = scenarioVisualCharts[key];
-      if (chart && typeof chart.isDisposed === "function" && !chart.isDisposed()) {
-        chart.dispose();
-      }
-      delete scenarioVisualCharts[key];
-    });
-  }
-
   function createAppShellHandlers(input = {}) {
     const {
       refs = {},
       appState = {},
       benchmarkMapZoomStep = 0,
       chartRefs = {},
-      scenarioVisualCharts = {},
       actions = {}
     } = input;
 
@@ -237,7 +226,6 @@
         disposeChartRef(chartRefs.energyAnnual);
         disposeChartRef(chartRefs.energyCurve);
         disposeChartRef(chartRefs.benchmarkMap);
-        disposeScenarioVisualCharts(scenarioVisualCharts);
         actions.persistAppDataNow?.({ forceLocal: true });
       },
       handleKeydown: (event) => {

@@ -232,10 +232,6 @@ function makeChart() {
 let energyAnnualChart = makeChart();
 let energyCurveChart = makeChart();
 let benchmarkMapChart = makeChart();
-const scenarioVisualCharts = {
-  a: makeChart(),
-  b: makeChart()
-};
 const shellCalls = [];
 const appState = { overviewSlideIndex: 2, benchmarkMap: { level: "province" } };
 const appHandlers = createAppShellHandlers({
@@ -249,7 +245,6 @@ const appHandlers = createAppShellHandlers({
   },
   appState,
   benchmarkMapZoomStep: 0.25,
-  scenarioVisualCharts,
   chartRefs: {
     energyAnnual: {
       get: () => energyAnnualChart,
@@ -311,7 +306,6 @@ appHandlers.handleBeforeUnload();
 assert.equal(energyAnnualChart, null);
 assert.equal(energyCurveChart, null);
 assert.equal(benchmarkMapChart, null);
-assert.deepEqual(Object.keys(scenarioVisualCharts), []);
 assert.deepEqual(shellCalls, [
   "render-map",
   "persist-later",

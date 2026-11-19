@@ -18,12 +18,12 @@
     <link rel="stylesheet" href="./styles/pages/create.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/help.css?v=20261019f">
     <link rel="stylesheet" href="./styles/pages/energy.css?v=20261119b">
-    <link rel="stylesheet" href="./styles/pages/scenario.css?v=20261118d">
+    <link rel="stylesheet" href="./styles/pages/scenario.css?v=20261119m">
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261119c">
     <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119l">
-    <link rel="stylesheet" href="./styles/responsive.css?v=20261118m">
+    <link rel="stylesheet" href="./styles/responsive.css?v=20261119m">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
       window.__openLoginModal = function () {
@@ -88,7 +88,7 @@
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
     <script src="./config.js?v=20261119b" defer></script>
-    <script src="./runtime.js?v=20261119c" defer></script>
+    <script src="./runtime.js?v=20261119m" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
@@ -106,7 +106,6 @@
     <script src="./src/domain/result-calculation.js?v=20261118f" defer></script>
     <script src="./src/domain/result-report.js?v=20261118i" defer></script>
     <script src="./src/ui/policy-panel.js?v=20261113c" defer></script>
-    <script src="./src/ui/province-defaults.js?v=20261118h" defer></script>
     <script src="./src/ui/energy-workspace.js?v=20261119b" defer></script>
     <script src="./src/ui/create-project-flow.js?v=20261118m" defer></script>
     <script src="./src/ui/energy-template-flow.js?v=20261113c" defer></script>
@@ -124,10 +123,8 @@
     <script src="./src/ui/result-page.js?v=20261118i" defer></script>
     <script src="./src/ui/result-runner.js?v=20261118f" defer></script>
     <script src="./src/ui/result-print.js?v=20261118g" defer></script>
-    <script src="./src/ui/result-charts.js?v=20261113c" defer></script>
-    <script src="./src/ui/scenario-charts.js?v=20261118i" defer></script>
-    <script src="./src/ui/scenario-form.js?v=20261118t" defer></script>
-    <script src="./src/ui/scenario-visual-data.js?v=20261118i" defer></script>
+    <script src="./src/ui/result-charts.js?v=20261119m" defer></script>
+    <script src="./src/ui/scenario-form.js?v=20261119m" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20261118e" defer></script>
     <script src="./src/ui/compare-charts.js?v=20261118i" defer></script>
     <script src="./src/ui/compare-page.js?v=20261118i" defer></script>
@@ -139,14 +136,14 @@
     <script src="./src/ui/history-page.js?v=20261119c" defer></script>
     <script src="./src/ui/history-renderer.js?v=20261119c" defer></script>
     <script src="./src/ui/theme-controller.js?v=20261113c" defer></script>
-    <script src="./src/ui/shell-events.js?v=20261113c" defer></script>
-    <script src="./src/ui/app-event-bindings.js?v=20261118t" defer></script>
+    <script src="./src/ui/shell-events.js?v=20261119m" defer></script>
+    <script src="./src/ui/app-event-bindings.js?v=20261119m" defer></script>
     <script src="./src/domain/workflow-status.js?v=20261118e" defer></script>
     <script src="./src/domain/scenario-config.js?v=20261118h" defer></script>
     <script src="./src/domain/rough-price.js?v=20261118p" defer></script>
     <script src="./src/ui/rough-trend-chart.js?v=20261118p" defer></script>
     <script src="./src/ui/rough-price-workspace.js?v=20261118r" defer></script>
-    <script src="./src/domain/scenario-model.js?v=20261118h" defer></script>
+    <script src="./src/domain/scenario-model.js?v=20261119m" defer></script>
     <script src="./src/domain/project-settings.js?v=20261118n" defer></script>
     <script src="./src/domain/project-model.js?v=20261119a" defer></script>
     <script src="./src/domain/project-display.js?v=20261113c" defer></script>
@@ -155,7 +152,7 @@
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261119j" defer></script>
-    <script src="./app.js?v=20261119l" defer></script>
+    <script src="./app.js?v=20261119m" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -1286,62 +1283,6 @@
                 <div class="info-box" id="scenario-message" role="status" aria-live="polite" hidden></div>
               </section>
 
-              <details class="scenario-workspace scenario-optional">
-                <summary><span id="scenario-defaults-title">省份默认参数</span></summary>
-                <div class="scenario-optional-body">
-                <div class="scenario-workspace-head">
-                  <div>
-                    <p data-help="省份默认参数" data-help-anchor="#scenario-defaults-title">按省份查看默认参数。套用即确认这些默认参数，仍可展开细化。</p>
-                  </div>
-                  <div class="scenario-workspace-tools">
-                    <select
-                      id="province-default-selector"
-                      class="province-default-selector"
-                      aria-label="调用其他省份参数"
-                    ></select>
-                  </div>
-                </div>
-                <div class="info-box" id="province-apply-message">请选择一个省份，点击“带入当前方案”。</div>
-                <div class="province-default-list-wrap">
-                  <div class="province-default-list" id="province-param-body"></div>
-                </div>
-                </div>
-              </details>
-
-              <details class="scenario-workspace scenario-optional scenario-workspace-visual">
-                <summary><span id="scenario-visual-title">参数结构与年度影响</span></summary>
-                <div class="scenario-optional-body">
-                <div class="scenario-workspace-head">
-                  <div>
-                    <p data-help="参数可视化" data-help-anchor="#scenario-visual-title">按测算周期查看电量口径、度电参数和年度收益影响，辅助校核当前方案是否合理。</p>
-                  </div>
-                </div>
-                <div class="info-box" id="scenario-visual-message">请选择项目并保存方案后查看参数结构。</div>
-                <div class="scenario-visual-chart-grid" aria-label="参数结构可视化图组">
-                  <article class="scenario-visual-chart-card scenario-visual-chart-card-wide">
-                    <div class="scenario-visual-chart-head">
-                      <strong id="scenario-energy-chart-title">机制与环境电量口径</strong>
-                      <span data-help="机制与环境电量口径" data-help-anchor="#scenario-energy-chart-title">机制电量、绿色价值兑现电量与未兑现市场化电量</span>
-                    </div>
-                    <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-energy-chart" aria-label="机制与环境电量口径组合图"></div>
-                  </article>
-                  <article class="scenario-visual-chart-card scenario-visual-chart-card-wide">
-                    <div class="scenario-visual-chart-head">
-                      <strong id="scenario-trend-chart-title">收益参数度电路径</strong>
-                      <span data-help="度电参数路径" data-help-anchor="#scenario-trend-chart-title">交易策略、环境价值、三项费用、其他净收入和配储收益的年度变化。</span>
-                    </div>
-                    <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-trend-chart" aria-label="度电参数周期曲线图"></div>
-                  </article>
-                  <article class="scenario-visual-chart-card scenario-visual-chart-card-wide">
-                    <div class="scenario-visual-chart-head">
-                      <strong id="scenario-unit-chart-title">年度补充收益净影响构成</strong>
-                      <span data-help="补充收益净影响口径" data-help-anchor="#scenario-unit-chart-title">折算至总上网电量口径</span>
-                    </div>
-                    <div class="scenario-visual-chart scenario-visual-chart-tall" id="scenario-visual-unit-chart" aria-label="年度补充收益净影响构成图"></div>
-                  </article>
-                </div>
-                </div>
-              </details>
               <div class="scenario-next-step-row">
                 <button type="button" class="primary-button next-step-button" data-jump="results-page">进入基准结果总览</button>
               </div>
@@ -2011,7 +1952,6 @@
                 <details class="help-faq-item"><summary>2. 为什么导入后侧边栏状态没有变绿？</summary><p>状态点按完成标准判断，不是点一下页面就完成。比如结算电量配置只有在满足页面要求后才会变为已完成。</p></details>
                 <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>请先保存测算周期内各年的8760小时上网电量，生效一条完整电价曲线，并确认保存当前方案全部适用的收益参数。已保存的粗算版本用于交叉验证。</p></details>
                 <details class="help-faq-item"><summary>4. 为什么页面刷新后输入还在？</summary><p>当前原型默认开启输入持久化，已保存的项目数据会在页面切换和刷新后自动恢复。</p></details>
-                <details class="help-faq-item"><summary>5. 省份参数库去哪了？</summary><p>省份参数库已合并进“收益参数补充与细化”页面，现在以“省份默认参数带入”的方式提供默认值，再在同页内完成微调。</p></details>
               </div>
             </details>
           </section>

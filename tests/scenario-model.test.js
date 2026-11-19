@@ -3,7 +3,6 @@
 const assert = require("node:assert/strict");
 const {
   applyBatchParameter,
-  applyProvinceDefaultsToScenario,
   confirmConfig,
   createBaselineScenario,
   defaultScenarioConfig,
@@ -139,55 +138,6 @@ const sameTypeScenario = sanitizeScenario(offshoreStorageProject, {
 assert.equal(sameTypeScenario.config.mechanismReferenceMode, "same_type");
 assert.equal(sameTypeScenario.config.sameTypeSpread, -15);
 
-const applyTarget = {
-  config: {
-    carbonEnabled: true,
-    carbonPrice: 9,
-    storageArbitragePrice: 99
-  }
-};
-applyProvinceDefaultsToScenario(
-  { siteType: "offshore", hasStorage: true },
-  applyTarget,
-  {
-    provinceDefaults,
-    nowIso: "2026-06-10T08:00:00.000Z"
-  }
-);
-assert.equal(applyTarget.config.mechanismEnabled, provinceDefaults.mechanismEnabled);
-assert.equal(applyTarget.config.mechanismRatio, provinceDefaults.mechanismRatio);
-assert.equal(applyTarget.config.mechanismPrice, provinceDefaults.mechanismPrice);
-assert.equal(applyTarget.config.marketOpFee, provinceDefaults.marketOpFee);
-assert.equal(applyTarget.config.greenCertRealizeRatio, 1);
-assert.equal(applyTarget.config.greenPremiumRealizeRatio, 0);
-assert.equal(Object.hasOwn(applyTarget.config, "carbonRealizeRatio"), false);
-assert.equal(applyTarget.config.otherNetIncome, -1);
-assert.equal(isConfigConfirmed(applyTarget, "otherNetIncome"), true);
-assert.equal(applyTarget.config.storageArbitragePrice, provinceDefaults.storageArbitragePrice);
-assert.equal(applyTarget.updatedAt, "2026-06-10T08:00:00.000Z");
-assert.equal(isConfigConfirmed(applyTarget, "mechanismPrice"), true);
-assert.equal(isConfigConfirmed(applyTarget, "carbonPrice"), false, "applying defaults must not confirm untouched fields");
-
-const noStorageOnshoreTarget = { config: { carbonEnabled: true, carbonPrice: 8, carbonRealizeRatio: 0.25,
-  storageArbitragePrice: 99, storageCapacityCompPrice: 7.123456789012345 } };
-applyProvinceDefaultsToScenario(
-  { siteType: "onshore", hasStorage: false },
-  noStorageOnshoreTarget,
-  {
-    provinceDefaults,
-    nowIso: () => "2026-06-10T09:00:00.000Z"
-  }
-);
-assert.equal(noStorageOnshoreTarget.config.carbonEnabled, true);
-assert.equal(noStorageOnshoreTarget.config.carbonPrice, 8);
-assert.equal(noStorageOnshoreTarget.config.carbonRealizeRatio, 0.25);
-assert.equal(noStorageOnshoreTarget.config.storageArbitragePrice, 99);
-assert.equal(noStorageOnshoreTarget.config.storageCapacityCompPrice, 7.123456789012345);
-for (const key of ["carbonEnabled", "carbonPrice", "carbonRealizeRatio", "storageArbitragePrice", "storageCapacityCompPrice"]) {
-  assert.equal(isConfigConfirmed(noStorageOnshoreTarget, key), false, `${key} remains inapplicable after province defaults`);
-}
-assert.equal(noStorageOnshoreTarget.updatedAt, "2026-06-10T09:00:00.000Z");
-
 const baselineScenario = createBaselineScenario(offshoreStorageProject, {
   provinceDefaults,
   currentYear: 2026,
@@ -204,6 +154,18 @@ assert.deepEqual(baselineScenario.confirmedConfig, {});
 assert.deepEqual(baselineScenario.confirmedConfigSources, {});
 assert.equal(baselineScenario.confirmationReviewVersion, 1);
 assert.equal(isConfigConfirmed(baselineScenario, "mechanismPrice"), false, "a populated system default is still unconfirmed");
+
+const previouslyAppliedDefaults = {
+  ...baselineScenario,
+  config: { ...baselineScenario.config, mechanismPrice: 341.75, otherNetIncome: -2.25 },
+  confirmedConfig: { mechanismPrice: 341.75, otherNetIncome: -2.25 },
+  confirmedConfigSources: { mechanismPrice: "explicit", otherNetIncome: "explicit" }
+};
+const reopenedDefaults = sanitizeScenario(offshoreStorageProject, previouslyAppliedDefaults, 0, { provinceDefaults });
+assert.deepEqual(reopenedDefaults.config, previouslyAppliedDefaults.config);
+assert.deepEqual(reopenedDefaults.confirmedConfig, previouslyAppliedDefaults.confirmedConfig);
+assert.deepEqual(reopenedDefaults.confirmedConfigSources, previouslyAppliedDefaults.confirmedConfigSources);
+assert.equal(reopenedDefaults.updatedAt, previouslyAppliedDefaults.updatedAt);
 
 const oldInputs = createBaselineScenario(offshoreStorageProject);
 delete oldInputs.config.otherNetIncome;
@@ -267,7 +229,6 @@ assert.deepEqual(changedByNormalization.confirmationEvidence.confirmedConfig, co
 confirmationScenario.locked = true;
 const lockedConfirmationBefore = JSON.stringify(confirmationScenario);
 assert.equal(confirmConfig(confirmationScenario), false);
-applyProvinceDefaultsToScenario(offshoreStorageProject, confirmationScenario);
 assert.equal(JSON.stringify(confirmationScenario), lockedConfirmationBefore, "locked scenario and confirmation records are immutable");
 
 const manualConfirmationProject = { ...offshoreStorageProject, forecastYears: 1 };

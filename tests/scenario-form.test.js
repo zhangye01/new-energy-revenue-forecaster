@@ -66,8 +66,7 @@ const scenarioEventRefs = {
   exportEnvTemplateButton: new FakeTarget(),
   importEnvTemplateButton: new FakeTarget(),
   exportFeeTemplateButton: new FakeTarget(),
-  importFeeTemplateButton: new FakeTarget(),
-  provinceDefaultSelector: new FakeTarget("jiangsu")
+  importFeeTemplateButton: new FakeTarget()
 };
 bindScenarioEvents({
   refs: scenarioEventRefs,
@@ -81,8 +80,7 @@ bindScenarioEvents({
     applyBatchParameter: () => scenarioEventCalls.push("batch"),
     syncScenarioFieldLocks: () => scenarioEventCalls.push("sync-locks"),
     exportManualScenarioTemplate: (type) => scenarioEventCalls.push(`export:${type}`),
-    importManualScenarioTemplate: (type) => scenarioEventCalls.push(`import:${type}`),
-    changeProvinceDefault: (key) => scenarioEventCalls.push(`province:${key}`)
+    importManualScenarioTemplate: (type) => scenarioEventCalls.push(`import:${type}`)
   }
 });
 assert.equal(scenarioEventRefs.scenarioForm.dispatch("submit").prevented, true);
@@ -103,7 +101,6 @@ scenarioEventRefs.exportEnvTemplateButton.dispatch("click");
 scenarioEventRefs.importEnvTemplateButton.dispatch("click");
 scenarioEventRefs.exportFeeTemplateButton.dispatch("click");
 scenarioEventRefs.importFeeTemplateButton.dispatch("click");
-scenarioEventRefs.provinceDefaultSelector.dispatch("change");
 assert.deepEqual(scenarioEventCalls, [
   "save",
   "switch:base",
@@ -121,8 +118,7 @@ assert.deepEqual(scenarioEventCalls, [
   "export:env",
   "import:env",
   "export:fee",
-  "import:fee",
-  "province:jiangsu"
+  "import:fee"
 ]);
 
 const derivedEventCalls = [];

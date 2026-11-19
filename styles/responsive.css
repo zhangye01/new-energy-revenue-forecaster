@@ -157,38 +157,8 @@
     align-items: flex-start;
   }
 
-  .scenario-workspace-tools {
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .province-default-selector {
-    width: 100%;
-    min-width: 0;
-  }
-
   .scenario-batch-grid,
-  .scenario-visual-chart-grid,
   .compare-kpi-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .province-default-summary {
-    flex-direction: column;
-  }
-
-  .province-default-actions {
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .province-default-summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .province-default-details {
     grid-template-columns: 1fr;
   }
 

@@ -53,7 +53,6 @@ const exportBuilders = window.NE_EXPORT_BUILDERS;
 const fileImportUtils = window.NE_FILE_IMPORT_UTILS;
 const scriptLoader = window.NE_SCRIPT_LOADER;
 const policyPanel = window.NE_POLICY_PANEL;
-const provinceDefaultsView = window.NE_PROVINCE_DEFAULTS_VIEW;
 const energyWorkspace = window.NE_ENERGY_WORKSPACE;
 const createProjectFlow = window.NE_CREATE_PROJECT_FLOW;
 const energyTemplateFlow = window.NE_ENERGY_TEMPLATE_FLOW;
@@ -71,9 +70,7 @@ const resultHistory = window.NE_RESULT_HISTORY;
 const resultRunner = window.NE_RESULT_RUNNER;
 const resultPrint = window.NE_RESULT_PRINT;
 const resultCharts = window.NE_RESULT_CHARTS;
-const scenarioCharts = window.NE_SCENARIO_CHARTS;
 const scenarioForm = window.NE_SCENARIO_FORM;
-const scenarioVisualData = window.NE_SCENARIO_VISUAL_DATA;
 const compareCharts = window.NE_COMPARE_CHARTS;
 const comparePage = window.NE_COMPARE_PAGE;
 const historyCharts = window.NE_HISTORY_CHARTS;
@@ -86,7 +83,7 @@ const appStorage = window.NE_APP_STORAGE;
 const appPersistence = window.NE_APP_PERSISTENCE;
 const appUtils = window.NE_APP_UTILS;
 
-if (!supplyDemandFlowModule || !energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !scriptLoader || !policyPanel || !provinceDefaultsView || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastResultsView || !forecastRunFlow || !roughPrice || !roughPriceWorkspace || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioCharts || !scenarioForm || !scenarioVisualData || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
+if (!supplyDemandFlowModule || !energyProfiles || !priceForecast || !revenueRules || !revenueCalculator || !resultCalculation || !resultReport || !compareAnalysis || !historyAnalysis || !workflowStatus || !scenarioConfig || !scenarioModel || !projectSettings || !projectModel || !projectDisplay || !energyDataRules || !energyImportFlow || !csvUtils || !exportBuilders || !fileImportUtils || !scriptLoader || !policyPanel || !energyWorkspace || !createProjectFlow || !energyTemplateFlow || !manualScenarioFlow || !chartLifecycle || !energyCharts || !forecastPage || !forecastResultsView || !forecastRunFlow || !roughPrice || !roughPriceWorkspace || !projectListView || !resultPage || !resultRunner || !resultPrint || !resultCharts || !scenarioForm || !compareCharts || !comparePage || !historyCharts || !historyPage || !historyRenderer || !themeController || !shellEvents || !appEventBindings || !appStorage || !appPersistence || !appUtils) {
   throw new Error("应用初始化失败：缺少 src/domain 业务测算模块");
 }
 
@@ -272,8 +269,6 @@ const compareSensitivitySettings = {
   topN: 8,
   selectedKeys: []
 };
-const scenarioVisualCharts = {};
-let scenarioVisualResizeBound = false;
 let resultChartsResizeBound = false;
 let compareChartsResizeBound = false;
 let historyChartsResizeBound = false;
@@ -281,9 +276,6 @@ let historyChartsRefreshTimer = null;
 const historyAnalysisCache = new Map();
 const provinceTypicalCurveDbCache = new Map();
 let lastSyncedProjectProvinceContextKey = "";
-const expandedProvinceDefaultKeys = new Set();
-let selectedProvinceDefaultKey = "";
-let selectedProvinceDefaultContextKey = "";
 const compareChartInstances = {
   sensitivityTornado: null,
   sensitivityResponse: null,
@@ -1774,7 +1766,6 @@ function runActivePageEntryEffects(pageId) {
 }
 
 function queueActivePageCharts(pageId) {
-  if (pageId === "scenario-page") queueScenarioVisualResize();
   if (pageId === "history-page") {
     queueHistoryChartsResize();
     queueHistoryChartsRefresh();
@@ -2914,10 +2905,6 @@ function energyTemplateFlowContext() {
   };
 }
 
-function mechanismActiveMonthsForYear(year, startYm, endYm) {
-  return revenueRules.mechanismActiveMonthsForYear(year, startYm, endYm);
-}
-
 function pseudoNoise(index, seed) {
   return energyProfiles.pseudoNoise(index, seed);
 }
@@ -3336,78 +3323,6 @@ function queueHistoryChartsRefresh() {
   }, 90);
 }
 
-function getScenarioVisualChartNode(key) {
-  const nodeMap = {
-    energy: refs.scenarioVisualEnergyChart,
-    unit: refs.scenarioVisualUnitChart,
-    trend: refs.scenarioVisualTrendChart
-  };
-  return nodeMap[key] || null;
-}
-
-function ensureScenarioVisualChart(key) {
-  const node = getScenarioVisualChartNode(key);
-  if (!node || !window.echarts) return null;
-  const existing = scenarioVisualCharts[key];
-  if (existing && !existing.isDisposed()) {
-    return existing;
-  }
-  scenarioVisualCharts[key] = window.echarts.init(node, null, { renderer: "canvas" });
-  scenarioVisualResizeBound = chartLifecycle.bindWindowResizeOnce({
-    windowRef: window,
-    isBound: scenarioVisualResizeBound,
-    resize: () => chartLifecycle.resizeCharts(scenarioVisualCharts)
-  });
-  return scenarioVisualCharts[key];
-}
-
-function getScenarioVisualCharts() {
-  return ["energy", "trend", "unit"]
-    .map((key) => ensureScenarioVisualChart(key))
-    .filter(Boolean);
-}
-
-function queueScenarioVisualResize() {
-  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
-  chartLifecycle.queueDoubleFrame({
-    windowRef: window,
-    callback: () => chartLifecycle.resizeCharts(scenarioVisualCharts)
-  });
-}
-
-function renderScenarioVisualPlaceholder(message) {
-  scenarioCharts.applyScenarioVisualPlaceholder({
-    refs,
-    message,
-    tokens: scenarioCharts.buildScenarioVisualThemeTokens(appState.theme),
-    charts: resolveVisiblePageId(appState.activePage) === "scenario-page" ? getScenarioVisualCharts() : []
-  });
-}
-
-function renderScenarioVisualization() {
-  if (!refs.scenarioVisualMessage) return;
-  const project = getActiveProject();
-  if (project) ensureScenarioMetadata(project);
-  const includeRows = resolveVisiblePageId(appState.activePage) === "scenario-page";
-  const view = scenarioVisualData.buildScenarioVisualViewModel({
-    project, includeRows, scenario: project ? getActiveScenario(project) : null,
-    energyData: includeRows && project ? ensureProjectEnergyDataDerivedState(project) : null,
-    clamp, getProvinceName, getAssetTypeLabel, getSiteTypeLabel, getStorageConfigText,
-    mechanismActiveMonthsForYear, tradeStrategyPnlPriceForYear, getEnvValueAllocation, getFeeConfigForYear
-  });
-  if (!view.ok) {
-    renderScenarioVisualPlaceholder(view.message);
-    return;
-  }
-  scenarioCharts.applyScenarioVisualMessage(refs, view.message);
-  if (!includeRows) return;
-  const tokens = scenarioCharts.buildScenarioVisualThemeTokens(appState.theme);
-  scenarioCharts.applyScenarioVisualOptions({
-    refs, tokens, message: view.message, rows: view.rows, getChart: ensureScenarioVisualChart
-  });
-  queueScenarioVisualResize();
-}
-
 function compareThemeTokens() {
   return compareCharts.buildCompareThemeTokens(appState.theme);
 }
@@ -3636,59 +3551,6 @@ function renderHistoryPrices() {
     renderStatuses,
     renderProjects,
     schedulePersistAppData
-  });
-}
-
-function applyProvinceDefaultsToProject(provinceKey) {
-  provinceDefaultsView.applyProvinceDefaultsToProjectFlow({
-    provinceKey,
-    refs,
-    scenarioModel,
-    provinceDefaults: getProvinceDefaults(provinceKey),
-    nowIso: () => new Date().toISOString(),
-    getProvinceName,
-    actions: {
-      getActiveProject,
-      ensureScenarioMetadata,
-      getActiveScenario,
-      markDownstreamStale,
-      renderAll,
-      schedulePersistAppData
-    }
-  });
-}
-
-function toggleProvinceDefaultDetails(provinceKey) {
-  if (!provinceKey) return;
-  if (expandedProvinceDefaultKeys.has(provinceKey)) {
-    expandedProvinceDefaultKeys.delete(provinceKey);
-  } else {
-    expandedProvinceDefaultKeys.add(provinceKey);
-  }
-  renderProvinceLibrary();
-}
-
-function renderProvinceLibrary() {
-  const project = getActiveProject();
-  if (!refs.provinceParamBody || !refs.provinceApplyMessage) return;
-  const model = provinceDefaultsView.buildProvinceDefaultsViewModel({
-    project,
-    provinces: PROVINCES,
-    selectedProvinceDefaultKey,
-    selectedProvinceDefaultContextKey,
-    expandedKeys: Array.from(expandedProvinceDefaultKeys),
-    currentMessage: refs.provinceApplyMessage.textContent,
-    getProvinceDefaults: (key) => ({ ...getProvinceDefaults(key), otherNetIncome: defaultScenarioConfig({ province: key }).otherNetIncome }),
-    getProvinceName,
-    getRegionKey: getPolicyRegionKeyByProvince
-  });
-  selectedProvinceDefaultKey = model.selectedKey;
-  selectedProvinceDefaultContextKey = model.contextKey;
-  provinceDefaultsView.applyProvinceDefaultsView({
-    refs,
-    model,
-    root: document,
-    handlers: { toggleProvinceDefaultDetails, applyProvinceDefaultsToProject }
   });
 }
 
@@ -4163,10 +4025,6 @@ function ltPnlPriceForYear(config, yearIndex) {
   return revenueRules.ltPnlPriceForYear(config, yearIndex);
 }
 
-function tradeStrategyPnlPriceForYear(config, yearIndex, year) {
-  return revenueRules.tradeStrategyPnlPriceForYear(config, yearIndex, year);
-}
-
 function calculateScenarioResult(project, scenario, run) {
   return revenueCalculator.calculateScenarioResult(project, scenario, run, { hourIndexToTimestamp });
 }
@@ -4268,7 +4126,7 @@ function renderResultCharts(verifiedConfig, result) {
   const tokens = resultChartTokens();
   const chartData = resultReport.buildResultChartData(result, verifiedConfig);
   const options = resultCharts.buildResultChartOptions(chartData, tokens, {
-    yearInterval: scenarioCharts.scenarioVisualYearInterval(rows)
+    yearInterval: resultCharts.yearLabelInterval(rows)
   });
   Object.entries(options).forEach(([key, option]) => {
     const chart = ensureResultChart(key);
@@ -4512,8 +4370,6 @@ function renderWorkflowViews() {
   renderForecastRuns();
   renderWorkflowContext();
   renderScenarioForm();
-  renderProvinceLibrary();
-  renderScenarioVisualization();
   renderResults();
   renderCompareWorkspaceState();
   renderCompare();
@@ -4607,9 +4463,6 @@ function createEventBindingStateAccessors() {
     },
     setActiveCompareScenarioId: (scenarioId) => {
       activeCompareScenarioId = scenarioId;
-    },
-    setSelectedProvinceDefaultKey: (provinceKey) => {
-      selectedProvinceDefaultKey = provinceKey;
     }
   };
 }
@@ -4634,7 +4487,7 @@ function createEventBindingActions() {
     renderEnergyStep2ChoiceState, saveScenarioFromForm,
     switchActiveScenario, renameActiveScenario, duplicateActiveScenario, deleteActiveScenario,
     toggleBaselineLock, applyBatchParameter, syncScenarioFieldLocks, exportManualScenarioTemplate,
-    importManualScenarioTemplate, renderProvinceLibrary, updateMarketTradeEnergyDisplay,
+    importManualScenarioTemplate, updateMarketTradeEnergyDisplay,
     updateEnvValueSpaceDisplay, runCalculation, exportAnnualCsv, exportHourlyCsv,
     printScenarioReport
   });
@@ -4647,7 +4500,6 @@ function bindEvents() {
     windowRef: typeof window !== "undefined" ? window : null,
     appState,
     benchmarkMapZoomStep: BENCHMARK_MAP_ZOOM_STEP,
-    scenarioVisualCharts,
     modules: createEventBindingModules(),
     chartRefs: createEventBindingChartRefs(),
     state: createEventBindingStateAccessors(),

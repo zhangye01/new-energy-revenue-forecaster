@@ -42,7 +42,7 @@
       "saveScenarioFromForm", "switchActiveScenario",
       "renameActiveScenario", "duplicateActiveScenario", "deleteActiveScenario",
       "toggleBaselineLock", "applyBatchParameter", "syncScenarioFieldLocks",
-      "exportManualScenarioTemplate", "importManualScenarioTemplate", "renderProvinceLibrary",
+      "exportManualScenarioTemplate", "importManualScenarioTemplate",
       "updateMarketTradeEnergyDisplay", "updateEnvValueSpaceDisplay"
     ],
     result: ["runCalculation", "exportAnnualCsv", "exportHourlyCsv", "printScenarioReport"]
@@ -85,7 +85,6 @@
       appState = {},
       modules = {},
       benchmarkMapZoomStep = 0,
-      scenarioVisualCharts = {},
       chartRefs = {},
       state = {},
       actions = {}
@@ -105,7 +104,6 @@
       windowRef,
       appState,
       benchmarkMapZoomStep,
-      scenarioVisualCharts,
       chartRefs,
       actions
     });
@@ -197,14 +195,7 @@
         applyBatchParameter: actions.applyBatchParameter,
         syncScenarioFieldLocks: actions.syncScenarioFieldLocks,
         exportManualScenarioTemplate: actions.exportManualScenarioTemplate,
-        importManualScenarioTemplate: actions.importManualScenarioTemplate,
-        changeProvinceDefault: (provinceKey) => {
-          state.setSelectedProvinceDefaultKey?.(provinceKey);
-          if (refs.provinceApplyMessage) {
-            refs.provinceApplyMessage.textContent = "";
-          }
-          actions.renderProvinceLibrary?.();
-        }
+        importManualScenarioTemplate: actions.importManualScenarioTemplate
       }
     });
 

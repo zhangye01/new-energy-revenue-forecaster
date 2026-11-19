@@ -362,46 +362,6 @@
     return { ok: true, changed: true, tone: "success", message: `方案“${oldName}”已重命名为“${scenario.name}”。` };
   }
 
-  function applyProvinceDefaultsToScenario(project = {}, scenario = {}, input = {}) {
-    if (scenario.locked) return scenario;
-    const defaults = resolveProvinceDefaults({ provinceDefaults: input.provinceDefaults });
-    const nowIso = input.nowIso;
-    if (!scenario.config || !isPlainObject(scenario.config)) {
-      scenario.config = {};
-    }
-    const previousConfig = cloneConfigValue(scenario.config);
-    invalidateInactiveConfirmations(project, scenario);
-    scenario.config.mechanismEnabled = defaults.mechanismEnabled;
-    scenario.config.mechanismRatio = defaults.mechanismRatio;
-    scenario.config.mechanismPrice = defaults.mechanismPrice;
-    scenario.config.marketOpFee = defaults.marketOpFee;
-    scenario.config.gridAssessFee = defaults.gridAssessFee;
-    scenario.config.ancillaryFee = defaults.ancillaryFee;
-    scenario.config.otherNetIncome = 2 - defaults.otherFee;
-    scenario.config.greenCertPrice = defaults.greenCertPrice;
-    scenario.config.greenCertRealizeRatio = 1;
-    scenario.config.greenPremiumPrice = defaults.greenPremiumPrice;
-    scenario.config.greenPremiumRealizeRatio = 0;
-    scenario.config.storageArbitragePrice = project.hasStorage ? defaults.storageArbitragePrice : 0;
-    scenario.config.storageCapacityCompPrice = project.hasStorage ? defaults.storageCapacityCompPrice : 0;
-    scenario.config.storageAncillaryRevenuePrice = project.hasStorage ? defaults.storageAncillaryRevenuePrice : 0;
-    scenario.config.storageOtherRevenuePrice = project.hasStorage ? defaults.storageOtherRevenuePrice : 0;
-    const applicable = new Set(scenarioConfig.applicableConfigKeys(project, scenario.config));
-    Object.keys(scenario.config).forEach((key) => {
-      if (applicable.has(key)) return;
-      if (Object.prototype.hasOwnProperty.call(previousConfig, key)) scenario.config[key] = previousConfig[key];
-      else delete scenario.config[key];
-    });
-    confirmConfig(scenario, [
-      "mechanismEnabled", "mechanismRatio", "mechanismPrice",
-      "marketOpFee", "gridAssessFee", "ancillaryFee", "otherNetIncome",
-      "greenCertPrice", "greenCertRealizeRatio", "greenPremiumPrice", "greenPremiumRealizeRatio",
-      "storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"
-    ], { project });
-    scenario.updatedAt = typeof nowIso === "function" ? nowIso() : resolveNowIso({ nowIso });
-    return scenario;
-  }
-
   function parseBatchValue(spec, rawText) {
     if (rawText === null || rawText === undefined || String(rawText).trim() === "") return null;
     const num = Number(rawText);
@@ -488,7 +448,6 @@
 
   return Object.freeze({
     applyBatchParameter,
-    applyProvinceDefaultsToScenario,
     confirmConfig,
     createBaselineScenario,
     defaultScenarioConfig,

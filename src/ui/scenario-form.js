@@ -479,9 +479,6 @@
         handlers[handlerName]?.(templateType);
       });
     });
-    refs.provinceDefaultSelector?.addEventListener("change", () => {
-      handlers.changeProvinceDefault?.(refs.provinceDefaultSelector.value);
-    });
   }
 
   function bindScenarioDerivedFieldEvents(input = {}) {
