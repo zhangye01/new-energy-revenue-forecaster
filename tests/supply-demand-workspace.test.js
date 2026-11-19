@@ -50,12 +50,18 @@ function deferred() {
 
 function fixture(p = project(), behavior = {}) {
   const root = new Root(), commits = [], exports = [], downloads = [], reads = [], statuses = [];
+  const growthDownloads = [], growthReads = [];
   let active = p;
   const xlsx = {};
   const template = {
     downloadCurves(target, config, options) { downloads.push({ target, config, options }); },
     readCurveFile(target, file, options) {
       reads.push({ target, file, options });
+      return file.result;
+    },
+    downloadGrowth(target, config, options) { growthDownloads.push({ target, config, options }); },
+    readGrowthFile(target, file, options) {
+      growthReads.push({ target, file, options });
       return file.result;
     }
   };
@@ -78,9 +84,16 @@ function fixture(p = project(), behavior = {}) {
     downloadCsv(filename, rows) { exports.push({ filename, rows }); }
   });
   controller.render();
-  return { root, controller, commits, exports, downloads, reads, statuses, xlsx,
+  return { root, controller, commits, exports, downloads, reads, growthDownloads, growthReads, statuses, xlsx,
     setActive(value) { active = value; controller.render(); },
     upload(name, result) { return root.fire("change", { sdTemplateFile: "" }, { files: [{ name, result }] }); },
+    uploadGrowth(name, result) { return root.fire("change", { sdGrowthFile: "" }, { files: [{ name, result }] }); },
+    openGrowth(series) {
+      const button = (root.innerHTML.match(/<button\b[^>]*data-sd-action="growth-open"[^>]*>/g) || [])
+        .find((tag) => tag.includes(`data-sd-series="${series}"`));
+      assert.ok(button, `${series} has a growth disclosure`);
+      if (!button.includes('aria-expanded="true"')) root.fire("click", { sdAction: "growth-open", sdSeries: series });
+    },
     click(action, dataset = {}) { return root.fire("click", { sdAction: action, ...dataset }); },
     chooseElement(element) { return root.fire("click", { sdAction: "select-element", sdElement: element }); },
     edit(input, value, dataset = {}) { return root.fire("input", { sdInput: input, ...dataset }, { value: String(value) }); },
@@ -94,6 +107,116 @@ function fixture(p = project(), behavior = {}) {
       return markup.join("");
     }
   };
+}
+
+async function uploadMonthlyOverride(x, p, key, year, weights) {
+  x.click("download-template");
+  assert.equal(x.downloads.at(-1).options.year, year);
+  const config = domain.prepareShareConfig(p, x.downloads.at(-1).config);
+  const series = config.elements[key];
+  series.curveOverridesByYear ||= {};
+  series.curveOverridesByYear[year] = { ...series.curveOverridesByYear[year], monthlyWeights: weights };
+  await x.upload(`${year}-${key}-分月.xlsx`, { ok: true, config, changedRows: 1, changes: [{ label: key }] });
+}
+
+function monthlyPreview(html) {
+  const preview = html.match(/<details\b[^>]*data-sd-monthly-preview[^>]*>([\s\S]*?)<\/details>/)?.[1];
+  assert.ok(preview, "monthly values have a compact read-only disclosure");
+  assert.doesNotMatch(preview, /<input\b|<select\b|<textarea\b/);
+  return preview;
+}
+
+async function testGrowthWorkbook() {
+  const untouched = project("growth-no-op", 3);
+  untouched.supplyDemand = savedState(untouched);
+  const untouchedBefore = JSON.stringify(untouched), unchanged = fixture(untouched);
+  assert.doesNotMatch(unchanged.root.innerHTML, /data-sd-action="download-growth-template"|data-sd-growth-file/);
+  unchanged.openGrowth("load");
+  assert.match(unchanged.root.innerHTML, /data-sd-action="download-growth-template"/);
+  assert.match(unchanged.root.innerHTML, /<input\b[^>]*type="file"[^>]*data-sd-growth-file[^>]*accept="\.xlsx/);
+  unchanged.click("download-growth-template");
+  assert.deepEqual(unchanged.growthDownloads[0], {
+    target: untouched, config: untouched.supplyDemand.config, options: { xlsx: unchanged.xlsx, seriesKey: "load" }
+  });
+  await unchanged.uploadGrowth("空白增速.xlsx", { ok: true, config: clone(untouched.supplyDemand.config), changedRows: 0, changes: [] });
+  assert.deepEqual(unchanged.growthReads[0].options, {
+    xlsx: unchanged.xlsx, seriesKey: "load", baseConfig: untouched.supplyDemand.config
+  });
+  assert.notEqual(unchanged.growthReads[0].options.baseConfig, untouched.supplyDemand.config, "growth parsing receives an isolated basis");
+  assert.equal(JSON.stringify(untouched), untouchedBefore, "blank workbook preview preserves every saved value");
+  unchanged.click("generate");
+  assert.equal(unchanged.commits.length, 0, "no-op growth import must not rewrite legacy config or invalidate forecast");
+  assert.equal(unchanged.controller.hasUnsavedChanges(), false);
+  assert.equal(JSON.stringify(untouched), untouchedBefore);
+
+  const p = project("growth-shared-draft", 3), config = completeConfig(p);
+  config.elements.wind = { ...clone(config.elements.load), baseEnergyMwh: 12000 };
+  p.supplyDemand = savedState(p, config);
+  const before = JSON.stringify(p), x = fixture(p);
+  x.edit("base", 130000, { sdSeries: "load" });
+  x.select("curveYear", 2029);
+  await uploadMonthlyOverride(x, p, "load", 2029, [0, 1 / 6, ...Array(10).fill(1 / 12)]);
+  x.chooseElement("wind");
+  x.edit("base", 20000, { sdSeries: "wind" });
+  x.chooseElement("load");
+  x.openGrowth("load");
+  x.click("download-growth-template");
+  const originalDraft = clone(x.growthDownloads.at(-1).config);
+  const changed = clone(originalDraft);
+  changed.elements.load.growthRatesByYear = { 2028: 0, 2029: 8 };
+  const pending = deferred(), importing = x.uploadGrowth("负荷增速<&>.xlsx", pending.promise);
+  assert.equal(x.growthReads.at(-1).options.seriesKey, "load");
+  assert.deepEqual(x.growthReads.at(-1).options.baseConfig, originalDraft, "growth import starts from all current staged edits");
+  assert.match(x.root.innerHTML, /读取模板中/);
+  x.chooseElement("wind");
+  pending.resolve({ ok: true, config: changed, changedRows: 2, changes: [{ year: 2028, value: 0 }, { year: 2029, value: 8 }] });
+  await importing;
+  assert.equal(JSON.stringify(p), before, "import only stages changes, including after switching the active element");
+  assert.match(x.root.innerHTML, /value="20000" data-sd-series="wind"/);
+  const review = x.root.innerHTML.match(/<section\b[^>]*data-sd-import-preview[^>]*>([\s\S]*?)<\/section>/)?.[1];
+  assert.ok(review, "successful growth imports have a visible review");
+  assert.match(review, /负荷增速&lt;&amp;&gt;\.xlsx/);
+  assert.match(review, /省内负荷/);
+  assert.match(review, /2028[\s\S]*0\s*%/);
+  assert.match(review, /2029[\s\S]*8\s*%/);
+  assert.doesNotMatch(review, /月典型日分时|分月占比/, "growth review cannot masquerade as a curve import");
+  x.click("download-template");
+  assert.deepEqual(x.downloads.at(-1).config, changed);
+  assert.equal(changed.elements.wind.baseEnergyMwh, 20000);
+  assert.deepEqual(changed.elements.wind.growthRatesByYear, { 2028: 5, 2029: 5 });
+  assert.equal(changed.elements.load.baseEnergyMwh, 130000);
+  assert.equal(changed.elements.load.curveOverridesByYear[2029].monthlyWeights[0], 0);
+  x.chooseElement("load");
+  x.openGrowth("load");
+  assert.match(x.root.innerHTML, /value="0"[^>]*data-sd-series="load"[^>]*data-sd-year="2028"/);
+  assert.match(x.root.innerHTML, /value="8"[^>]*data-sd-series="load"[^>]*data-sd-year="2029"/);
+  await x.uploadGrowth("错误增速.xlsx", { ok: false, errors: ["增长率年份超出项目周期"] });
+  assert.match(x.root.innerHTML, /增长率年份超出项目周期/);
+  x.click("download-template");
+  assert.deepEqual(x.downloads.at(-1).config, changed, "invalid replacement keeps the complete staged draft");
+  x.click("generate");
+  assert.equal(x.commits.length, 1, "growth plus prior edits require only one explicit commit");
+  assert.deepEqual(p.supplyDemand.config, changed);
+  const { supplyDemand, ...otherState } = p;
+  const { supplyDemand: oldSupplyDemand, ...originalOtherState } = JSON.parse(before);
+  assert.deepEqual(otherState, originalOtherState, "growth import leaves rough snapshots and revenue state untouched");
+
+  const cancellable = project("growth-cancel", 3);
+  cancellable.supplyDemand = savedState(cancellable);
+  const cancelBefore = JSON.stringify(cancellable), cancelled = fixture(cancellable);
+  cancelled.edit("base", 150000, { sdSeries: "load" });
+  cancelled.openGrowth("load");
+  const delayed = deferred(), cancelledRead = cancelled.uploadGrowth("取消.xlsx", delayed.promise);
+  cancelled.click("discard");
+  delayed.resolve({ ok: true, config: completeConfig(cancellable, 9000), changedRows: 1, changes: [{ year: 2028, value: 9 }] });
+  await cancelledRead;
+  assert.match(cancelled.root.innerHTML, /value="150000" data-sd-series="load"/);
+  assert.doesNotMatch(cancelled.root.innerHTML, /取消\.xlsx/);
+  assert.equal(cancelled.controller.hasUnsavedChanges(), true, "cancelling a read preserves edits made before the import");
+  cancelled.click("discard");
+  assert.equal(cancelled.controller.hasUnsavedChanges(), false);
+  assert.equal(JSON.stringify(cancellable), cancelBefore);
+  assert.equal(cancelled.commits.length, 0);
 }
 
 async function main() {
@@ -112,7 +235,11 @@ async function main() {
     assert.match(tab, new RegExp(`aria-selected="${key === "load"}"`));
   }
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-select="curveSeries"|data-sd-select="tieMode"/);
-  assert.equal((initial.root.innerHTML.match(/data-sd-input="month-share"/g) || []).length, 12);
+  assert.doesNotMatch(initial.root.innerHTML, /data-sd-input="month-share"/);
+  monthlyPreview(initial.root.innerHTML);
+  initial.edit("month-share", 100, { sdMonth: "1" });
+  assert.equal(initial.controller.hasUnsavedChanges(), false, "obsolete monthly edit events cannot create a draft");
+  assert.deepEqual(fresh, original);
   assert.match(initial.root.innerHTML, /data-sd-action="generate" disabled/);
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-growth-panel|sd-curve-bars|<textarea/);
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-supply-chart/, "chart appears after successful generation");
@@ -256,7 +383,7 @@ async function main() {
   assert.match(hybridFixture.root.innerHTML, /2029 年分月电量（MWh）/);
   assert.match(hybridFixture.root.innerHTML, /沿用默认/);
   assert.match(hybridFixture.root.innerHTML, /sd-curve-bars/);
-  for (const [month, pct] of [[1, 0], [2, 100 / 6]]) hybridFixture.edit("month-share", pct, { sdMonth: String(month) });
+  await uploadMonthlyOverride(hybridFixture, hybrid, "load", 2029, [0, 1 / 6, ...Array(10).fill(1 / 12)]);
   assert.match(hybridFixture.root.innerHTML, /本年已调整 · 分月已调整/);
   hybridFixture.click("download-template");
   const combined = clone(hybridFixture.downloads.at(-1).config);
@@ -297,6 +424,8 @@ async function main() {
 
   const single = fixture(project("single", 1));
   assert.doesNotMatch(single.root.innerHTML, /data-sd-action="growth-open"/);
+  assert.doesNotMatch(single.root.innerHTML, /data-sd-action="download-growth-template"|data-sd-growth-file/);
+  await testGrowthWorkbook();
 
   const keyboardProject = project("keyboard-tabs"), keyboardBefore = JSON.stringify(keyboardProject);
   const keyboard = fixture(keyboardProject), focusedTabs = [];
@@ -330,7 +459,8 @@ async function main() {
     elementFixture.chooseElement(key);
     const html = elementFixture.root.innerHTML;
     assert.equal((html.match(/data-sd-input="base"/g) || []).length, 1, "each tab shows only its own base input");
-    assert.equal((html.match(/data-sd-input="month-share"/g) || []).length, 12);
+    assert.doesNotMatch(html, /data-sd-input="month-share"/);
+    monthlyPreview(html);
     assert.match(html, new RegExp(`data-sd-input="base"[^>]*data-sd-series="${key}"`));
     const selected = (html.match(/<button\b[^>]*data-sd-action="select-element"[^>]*>/g) || []).filter((tag) => tag.includes('aria-selected="true"'));
     assert.equal(selected.length, 1);
@@ -346,8 +476,7 @@ async function main() {
   assert.match(elementFixture.root.innerHTML, /147,446\.00/, "projected totals compound the edited annual growth rates");
   elementFixture.select("curveYear", 2029);
   elementFixture.select("curveMonth", 7);
-  elementFixture.edit("month-share", 0, { sdMonth: "1" });
-  elementFixture.edit("month-share", 100 / 6, { sdMonth: "2" });
+  await uploadMonthlyOverride(elementFixture, byElement, "load", 2029, [0, 1 / 6, ...Array(10).fill(1 / 12)]);
   elementFixture.chooseElement("wind");
   assert.match(elementFixture.root.innerHTML, /value="12000" data-sd-series="wind"/);
   assert.match(elementFixture.root.innerHTML, /<option value="2029" selected/);
@@ -357,12 +486,11 @@ async function main() {
   elementFixture.click("growth-open", { sdSeries: "wind" });
   elementFixture.edit("growth-rate", 3, { sdSeries: "wind", sdYear: "2028" });
   elementFixture.edit("growth-rate", 4, { sdSeries: "wind", sdYear: "2029" });
-  elementFixture.edit("month-share", 100 / 6, { sdMonth: "1" });
-  elementFixture.edit("month-share", 0, { sdMonth: "2" });
+  await uploadMonthlyOverride(elementFixture, byElement, "wind", 2029, [1 / 6, 0, ...Array(10).fill(1 / 12)]);
   elementFixture.chooseElement("solar");
   elementFixture.chooseElement("load");
   assert.match(elementFixture.root.innerHTML, /value="130000" data-sd-series="load"/);
-  assert.match(elementFixture.root.innerHTML, /data-sd-input="month-share"[^>]*value="0"[^>]*data-sd-month="1"/);
+  assert.match(monthlyPreview(elementFixture.root.innerHTML), /1月[\s\S]*?0%/);
   assert.match(elementFixture.root.innerHTML, /本年已调整 · 分月已调整/);
   elementFixture.click("growth-open", { sdSeries: "load" });
   assert.match(elementFixture.root.innerHTML, /value="6"[^>]*data-sd-series="load"[^>]*data-sd-year="2028"/);
@@ -380,7 +508,7 @@ async function main() {
   assert.equal(JSON.stringify(byElement), elementBefore, "switching elements keeps all edits isolated until explicit generation");
   elementFixture.chooseElement("wind");
   assert.match(elementFixture.root.innerHTML, /value="20000" data-sd-series="wind"/);
-  assert.match(elementFixture.root.innerHTML, /data-sd-input="month-share"[^>]*value="0"[^>]*data-sd-month="2"/);
+  assert.match(monthlyPreview(elementFixture.root.innerHTML), /2月[\s\S]*?0%/);
   elementFixture.click("generate");
   assert.deepEqual(byElement.supplyDemand.config, elementDraft, "a single commit saves both element drafts");
 

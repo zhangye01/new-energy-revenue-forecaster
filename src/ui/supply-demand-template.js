@@ -14,6 +14,10 @@
   const CURVE_SHEETS = Object.freeze({ notes: "填写说明", monthly: "分月占比", hourly: "典型日分时占比" });
   const CURVE_TEMPLATE_NAME = "供需曲线模板";
   const CURVE_TEMPLATE_VERSION = 1;
+  const GROWTH_SHEET = "逐年增长率";
+  const GROWTH_TEMPLATE_NAME = "供需增长率模板";
+  const GROWTH_TEMPLATE_VERSION = 1;
+  const GROWTH_HEADER_ROW = 4;
   const DEFAULT_CURVE_LABEL = "默认典型年";
   const ANNUAL_HEADER_ROW = 6;
   const MODE_LABELS = Object.freeze({ net: "净额", bidirectional: "双向" });
@@ -102,7 +106,7 @@
     const cell = (row, column) => sheet[address(row, column)];
     return {
       cell, value: (row, column) => cell(row, column)?.v, location: (row, column) => `${name}!${address(row, column)}`,
-      lastColumn: range.e.c
+      lastRow: range.e.r, lastColumn: range.e.c
     };
   }
 
@@ -118,14 +122,20 @@
     const percent = typeof value === "number" ? format.includes("%") : text.endsWith("%");
     const digits = percent ? text.slice(0, -1).trim() : text;
     const raw = typeof value === "number" ? value : DECIMAL.test(digits) ? Number(digits) : NaN;
-    const parsed = percent && kind === "growth" && typeof value === "number" ? raw * 100
+    const parsed = percent && kind === "growth" && typeof value === "number" ? percentagePoints(raw)
       : percent && (kind === "weight" || kind === "ratio") && typeof value === "string" ? raw / 100 : raw;
-    if (kind === "month" && (percent || cell?.t === "e" || cell?.t === "d")) return NaN;
-    if (kind !== "month" && (!Number.isFinite(parsed) || cell?.t === "e" || cell?.t === "d" || percent && kind === "base")) {
+    if (kind === "month" || kind === "year") return percent || cell?.t === "e" || cell?.t === "d" ? NaN : parsed;
+    if (!Number.isFinite(parsed) || cell?.t === "e" || cell?.t === "d" || percent && kind === "base") {
       const expected = { growth: "有效增长率", base: "MWh 数值", weight: "有效权重", ratio: "有效占比" };
       throw new Error(`${sheet.location(row, column)} 须填写${expected[kind]}。`);
     }
     return parsed;
+  }
+
+  function percentagePoints(ratio) {
+    // Shift the decimal so an Excel percentage of 7% matches a saved rate of 7.
+    const [digits, exponent = "0"] = String(ratio).split("e");
+    return Number(`${digits}e${Number(exponent) + 2}`);
   }
 
   function assertLabel(sheet, row, column, expected) {
@@ -405,6 +415,100 @@
     }
   }
 
+  function growthDescriptor(config, seriesKey) {
+    const descriptor = activeCurves(config).series.find(({ key, branch }) => {
+      if (branch === "export") return seriesKey === "tieLineExport";
+      if (branch === "import") return seriesKey === "tieLineImport";
+      return seriesKey === key;
+    });
+    if (!descriptor) throw new Error("请选择当前联络线方式下有效的供需要素。");
+    return descriptor;
+  }
+
+  function buildGrowthWorkbook(project, config, { xlsx = root.XLSX, seriesKey } = {}) {
+    if (!xlsx?.utils) throw new Error("Excel 组件未加载，请刷新后重试。");
+    const years = periodYears(project);
+    const editable = domain.prepareShareConfig(project, config);
+    const descriptor = growthDescriptor(editable, seriesKey);
+    const rates = readSeries(editable, descriptor)?.growthRatesByYear;
+    const sheet = xlsx.utils.aoa_to_sheet([
+      [GROWTH_TEMPLATE_NAME, GROWTH_TEMPLATE_VERSION],
+      ["起始年", years[0], "末年", years.at(-1)],
+      ["供需要素", descriptor.label],
+      ["填写说明", "5 或 5% 均为增长 5%。空白沿用，填 0 更新为零。"],
+      ["年份", "增长率（%）"],
+      ...years.slice(1).map((year) => [year, exportValue(rates?.[year])])
+    ]);
+    sheet["!cols"] = [19, 24, 14, 20].map((wch) => ({ wch }));
+    sheet["!merges"] = [{ s: { r: 3, c: 1 }, e: { r: 3, c: 3 } }];
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, sheet, GROWTH_SHEET);
+    return workbook;
+  }
+
+  function validateGrowthHeader(sheet, years, descriptor) {
+    ["起始年", "末年"].forEach((label, index) => assertLabel(sheet, 1, index * 2, label));
+    if (sheet.value(1, 1) !== years[0] || sheet.value(1, 3) !== years.at(-1)) {
+      throw new Error(`模板测算周期与项目不符，请下载 ${years[0]}—${years.at(-1)} 年增长率模板。`);
+    }
+    assertLabel(sheet, 0, 0, GROWTH_TEMPLATE_NAME);
+    assertLabel(sheet, 0, 1, GROWTH_TEMPLATE_VERSION);
+    assertLabel(sheet, 2, 0, "供需要素");
+    if (sheet.value(2, 1) !== descriptor.label) {
+      throw new Error(`模板供需要素与当前选择不符，请下载「${descriptor.label}」的增长率模板。`);
+    }
+    assertLabel(sheet, GROWTH_HEADER_ROW, 0, "年份");
+    assertLabel(sheet, GROWTH_HEADER_ROW, 1, "增长率（%）");
+  }
+
+  function parseGrowthWorkbook(project, workbook, { xlsx = root.XLSX, seriesKey, baseConfig } = {}) {
+    try {
+      if (!xlsx?.utils) throw new Error("Excel 组件未加载，请刷新后重试。");
+      const years = periodYears(project);
+      const compatible = [1, 2].includes(baseConfig?.version) && baseConfig.startYear === years[0] &&
+        baseConfig.forecastYears === years.length && isObject(baseConfig.elements);
+      const config = compatible ? clone(baseConfig) : domain.prepareShareConfig(project, baseConfig);
+      const descriptor = growthDescriptor(config, seriesKey);
+      const rowLimit = GROWTH_HEADER_ROW + years.length;
+      const sheet = reader(workbook, xlsx, GROWTH_SHEET, GROWTH_HEADER_ROW + domain.MAX_FORECAST_YEARS, 4);
+      if (workbook.SheetNames.length !== 1) throw new Error(`增长率模板仅包含「${GROWTH_SHEET}」工作表。`);
+      validateGrowthHeader(sheet, years, descriptor);
+      if (sheet.lastRow >= rowLimit) throw new Error("增长率模板存在测算周期外的数据行，请按原模板填写。");
+      const rates = readSeries(config, descriptor)?.growthRatesByYear;
+      const allowedYears = new Set(years.slice(1));
+      const readYears = new Set();
+      const changes = [];
+      for (let row = GROWTH_HEADER_ROW; row < rowLimit; row += 1) {
+        for (const column of [2, 3]) {
+          const cell = sheet.cell(row, column);
+          if (cell?.f || cell?.v != null && cell.v !== "") {
+            throw new Error(`${sheet.location(row, column)} 超出增长率模板列，请核对表头。`);
+          }
+        }
+        if (row === GROWTH_HEADER_ROW) continue;
+        const year = numberAt(sheet, row, 0, "year");
+        const value = numberAt(sheet, row, 1, "growth");
+        if (year === null && value === null) continue;
+        if (!allowedYears.has(year)) {
+          throw new Error(`${sheet.location(row, 0)} 须填写首年之后、测算周期内的年份。`);
+        }
+        if (readYears.has(year)) throw new Error(`${sheet.location(row, 0)} 的年份 ${year} 重复。`);
+        readYears.add(year);
+        if (value === null) continue;
+        if (value < -100) throw new Error(`${sheet.location(row, 1)} 的增长率不能低于 -100%。`);
+        if (value !== rates?.[year]) changes.push({ year, value });
+      }
+      if (changes.length) {
+        const series = mutableSeries(config, descriptor, project);
+        if (!isObject(series.growthRatesByYear)) series.growthRatesByYear = {};
+        for (const { year, value } of changes) series.growthRatesByYear[year] = value;
+      }
+      return { ok: true, config, errors: [], changes, changedRows: changes.length };
+    } catch (error) {
+      return { ok: false, config: null, errors: [error?.message || "供需增长率模板读取失败。"], changes: [], changedRows: 0 };
+    }
+  }
+
   async function readTemplateFile(project, file, options, parse) {
     const xlsx = options.xlsx || root.XLSX;
     try {
@@ -437,6 +541,11 @@
     });
   }
 
+  async function readGrowthFile(project, file, options = {}) {
+    const result = await readTemplateFile(project, file, options, parseGrowthWorkbook);
+    return { changes: [], changedRows: 0, ...result };
+  }
+
   function download(project, config, { xlsx = root.XLSX } = {}) {
     const workbook = buildWorkbook(project, config, { xlsx });
     const years = periodYears(project);
@@ -452,5 +561,16 @@
     xlsx.writeFile(workbook, filename);
   }
 
-  return Object.freeze({ buildWorkbook, parseWorkbook, readFile, download, buildCurveWorkbook, parseCurveWorkbook, readCurveFile, downloadCurves });
+  function downloadGrowth(project, config, { xlsx = root.XLSX, seriesKey } = {}) {
+    const workbook = buildGrowthWorkbook(project, config, { xlsx, seriesKey });
+    const { startYear, forecastYears } = project;
+    const label = workbook.Sheets[GROWTH_SHEET].B3.v;
+    const filename = `${csvUtils.sanitizeExportFilenamePart(project.name || "项目")}_供需增长率模板_${startYear}-${startYear + forecastYears - 1}_${label}.xlsx`;
+    xlsx.writeFile(workbook, filename);
+  }
+
+  return Object.freeze({
+    buildWorkbook, parseWorkbook, readFile, download, buildCurveWorkbook, parseCurveWorkbook, readCurveFile, downloadCurves,
+    buildGrowthWorkbook, parseGrowthWorkbook, readGrowthFile, downloadGrowth
+  });
 });

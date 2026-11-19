@@ -24,6 +24,7 @@
   const MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
   const HOURS = Array.from({ length: 24 }, (_, index) => index);
   const ERROR_LIMIT = 8;
+  const EXCEL_ACCEPT = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const escape = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
@@ -76,7 +77,11 @@
 
   function growthPanel(project, entry, key, label, series, disabled) {
     if (entry.growthSeries !== key) return "";
-    return `<div class="sd-growth-panel" id="sd-growth-panel" data-sd-growth-panel><div class="sd-section-head"><h5>${label} · 逐年增长率（%）</h5>${button("growth-close", "收起")}</div>
+    const preview = entry.staged?.imported?.seriesKey === key ? renderImportPreview(entry) : "";
+    return `<div class="sd-growth-panel" id="sd-growth-panel" data-sd-growth-panel><div class="sd-section-head"><h5>${label} · 逐年增长率（%）</h5>
+      <div class="sd-actions">${button("download-growth-template", "下载增速模板", false, Boolean(disabled))}
+        <label class="sd-file ghost-button"><input type="file" data-sd-growth-file accept="${EXCEL_ACCEPT}"${entry.conflict ? " disabled" : ""}><span>导入增速模板</span></label></div></div>
+      ${preview}
       <div class="sd-actions"><label>统一增速 %${numberInput("growth-fill", entry.growthFills[key], `${label}统一增速`, `min="-100"${disabled}`)}</label>${button("growth-fill", "填入空白年份", false, Boolean(disabled))}</div>
       <div class="sd-number-grid">${years(project).slice(1).map((year) => `<div><label>${year}年${numberInput("growth-rate", series.growthRatesByYear[year], `${label}${year}年增长率`, `min="-100" data-sd-series="${key}" data-sd-year="${year}"${disabled}`)}</label><span class="sd-color-muted" data-sd-growth-total="${year}">${growthTotalLabel(project, series, year)}</span></div>`).join("")}</div></div>`;
   }
@@ -86,14 +91,14 @@
     const series = getSeries(config, key);
     const attrs = `data-sd-series="${key}"${key === "tieLine" ? "" : ' min="0"'}${disabled}`;
     const expanded = entry.growthSeries === key;
-    const edit = laterYears.length ? `<button type="button" class="ghost-button" data-sd-action="growth-open" data-sd-series="${key}" aria-expanded="${expanded}"${expanded ? ' aria-controls="sd-growth-panel"' : ""}>逐年增速 · <span data-sd-growth-for="${key}">${growthStatus(laterYears, series)}</span></button>` : "";
+    const edit = laterYears.length ? `<div class="sd-growth-trigger">
+      <button type="button" class="primary-button" data-sd-action="growth-open" data-sd-series="${key}" aria-expanded="${expanded}"${expanded ? ' aria-controls="sd-growth-panel"' : ""}>${expanded ? "收起" : "编辑"}逐年增速<span class="sd-growth-chevron" aria-hidden="true"></span></button>
+      <span class="sd-color-muted" data-sd-growth-for="${key}">${growthStatus(laterYears, series)}</span></div>` : "";
     return `<section class="sd-section sd-element-annual"><div class="sd-section-head"><h4 id="sd-annual-heading">年度电量与增速</h4></div>
-      <p data-help="电量与增速" data-help-anchor="#sd-annual-heading">${project.startYear} 年填电量，后续按各年增速滚动。${entry.activeElement === "tieLine" ? "联络线净额正数送出、负数受入；双向分别填写非负电量。" : ""}无该项可填 0。</p>
-      <div class="sd-element-summary"><label>首年总量（${project.startYear} 年，MWh）${numberInput("base", series.baseEnergyMwh, `${label}首年电量`, attrs)}</label>${edit}</div>
+      <p data-help="电量与增速" data-help-anchor="#sd-annual-heading">${project.startYear} 年填电量，后续按各年增速滚动。增速可手填或用 Excel 模板导入，空白保留原值，填 0 表示不增长。${entry.activeElement === "tieLine" ? "联络线净额正数送出、负数受入。双向分别填写非负电量。" : ""}无该项可填 0。</p>
+      <div class="sd-element-summary"><label>首年总量（${project.startYear} 年，MWh）${numberInput("base", series.baseEnergyMwh, `${label}首年总量`, attrs)}</label>${edit}</div>
       ${growthPanel(project, entry, key, label, series, disabled)}</section>`;
   }
-
-  function shareInput(value) { return Number.isFinite(value) ? Number((value * 100).toFixed(6)) : null; }
 
   function yearTotal(project, series, year) {
     let total = series.baseEnergyMwh;
@@ -140,24 +145,32 @@
     return `本年已调整 · ${monthText} · ${hourText}`;
   }
 
+  function monthlyCurvePreview(monthly) {
+    const filled = monthly.filter(Number.isFinite);
+    const total = filled.reduce((sum, value) => sum + value, 0);
+    const status = filled.length ? `合计 ${share.format(total)}${filled.length === 12 ? "" : " · 待补齐"}` : "待导入";
+    const values = MONTHS.map((month) => {
+      const value = monthly[month - 1];
+      return `<span>${month}月 <strong>${Number.isFinite(value) ? share.format(value) : "—"}</strong></span>`;
+    }).join("");
+    return `<details class="sd-monthly-shares" data-sd-monthly-preview><summary>查看分月占比 <span>${status}</span></summary>
+      <div class="sd-month-total-grid">${values}</div></details>`;
+  }
+
   function renderCurves(project, entry, config, domain, key, disabled) {
     const series = getSeries(config, key);
     const curve = domain.getCurve(series, entry.curveYear);
-    const monthly = curve.monthlyWeights || [];
-    const total = monthly.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
-    const complete = monthly.length === 12 && monthly.every(Number.isFinite);
     const override = series.curveOverridesByYear?.[entry.curveYear];
     return `<section class="sd-section"><div class="sd-section-head"><h4 id="sd-curve-heading">典型年曲线</h4><span class="sd-state" data-sd-curve-origin>${curveOrigin(series, entry.curveYear, entry.curveMonth)}</span></div>
-      <p data-help="分月与分时占比" data-help-anchor="#sd-curve-heading">分月 12 个占比合计 100%。每月典型日 24 个小时占比也分别合计 100%。默认曲线跨年复用，可单独调整某年。Excel 模板包含所选范围的全部供需要素，空白保留现值，填 0 才更新为零。</p>
+      <p data-help="分月与分时占比" data-help-anchor="#sd-curve-heading">分月和分时均通过 Excel 模板导入。分月 12 个占比合计 100%，每月典型日 24 个小时占比也分别合计 100%。默认曲线跨年复用，可单独导入指定年份。模板包含所选范围的全部要素，空白保留现值，填 0 更新为零。</p>
       <div class="sd-actions sd-curve-controls">
         <label>范围<select data-sd-select="curveYear"${disabled}>${option("default", "默认典型年", entry.curveYear === null ? "default" : "")}${years(project).map((year) => option(year, `${year}年`, entry.curveYear)).join("")}</select></label>
-        <label>分时预览<select data-sd-select="curveMonth">${MONTHS.map((month) => option(month, `${month}月`, entry.curveMonth)).join("")}</select></label>
+        ${button("download-template", "下载 Excel 曲线模板", false, Boolean(disabled))}
+        <label class="sd-file ghost-button"><input type="file" data-sd-template-file accept="${EXCEL_ACCEPT}"${entry.conflict ? " disabled" : ""}><span>导入 Excel 曲线</span></label>
         ${button("restore-curve", "恢复默认", false, !override || Boolean(disabled))}</div>
-      <div class="sd-section-head"><h5>分月占比（%）</h5><span class="sd-color-muted" data-sd-month-total>合计 ${share.format(total)}${complete ? "" : " · 待补齐"}</span></div>
-      <div class="sd-number-grid">${MONTHS.map((month) => `<label>${month}月${numberInput("month-share", shareInput(monthly[month - 1]), `${month}月占比`, `min="0" max="100" data-sd-month="${month}"${disabled}`)}</label>`).join("")}</div>
+      ${monthlyCurvePreview(curve.monthlyWeights || [])}
+      <div class="sd-actions sd-curve-controls"><label>分时预览<select data-sd-select="curveMonth">${MONTHS.map((month) => option(month, `${month}月`, entry.curveMonth)).join("")}</select></label></div>
       <div data-sd-curve-preview>${curvePreview(project, entry, config, domain)}</div>
-      <div class="sd-actions">${button("download-template", "下载 Excel 曲线模板", false, Boolean(disabled))}
-        <label class="sd-file ghost-button"><input type="file" data-sd-template-file accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"${entry.conflict ? " disabled" : ""}><span>导入 Excel 曲线</span></label></div>
     </section>`;
   }
 
@@ -235,12 +248,17 @@
   function renderImportPreview(entry) {
     const imported = entry.staged?.imported;
     if (!imported) return "";
-    const { name, year, changedRows, changes, legacy } = imported;
+    const { name, year, seriesKey, changedRows, changes, legacy } = imported;
+    const growth = Boolean(seriesKey);
+    const scope = growth ? `${COLUMNS[seriesKey] || DIRECTIONAL_COLUMNS[seriesKey]}逐年增速` : year === null ? "默认典型年" : `${year} 年`;
+    const summary = growth ? (changedRows ? `已载入 ${changedRows} 年增速变更` : "模板与当前增速一致")
+      : `${changedRows ? `已载入 ${changedRows} 行曲线变更` : "模板与当前曲线一致"}${legacy ? " · 仅载入旧模板的曲线" : ""}`;
     const shownRows = (changes || []).slice(0, ERROR_LIMIT);
     const preview = shownRows.length ? `<ul>${shownRows.map((change) => `<li>${escape(typeof change === "string" ? change
-      : [change.label, change.month ? `${change.month}月典型日分时` : "分月占比"].filter(Boolean).join(" · "))}</li>`).join("")}</ul>` : "";
-    return `<section class="sd-section sd-import-preview" data-sd-import-preview><div class="sd-section-head"><h5>${year === null ? "默认典型年" : `${year} 年`}导入预览</h5><span class="sd-file-name">${escape(name)}</span></div>
-      <span>${changedRows ? `已载入 ${changedRows} 行曲线变更` : "模板与当前曲线一致"}${legacy ? " · 仅载入旧模板的曲线" : ""}</span>${preview}</section>`;
+      : growth ? `${change.year} 年 · ${change.value}%`
+          : [change.label, change.month ? `${change.month}月典型日分时` : "分月占比"].filter(Boolean).join(" · "))}</li>`).join("")}</ul>` : "";
+    return `<section class="sd-section sd-import-preview" data-sd-import-preview><div class="sd-section-head"><h5>${scope}导入预览</h5><span class="sd-file-name">${escape(name)}</span></div>
+      <span>${summary}</span>${preview}</section>`;
   }
 
   function markup(project, entry, domain, config, savedErrors, savedDataset) {
@@ -250,11 +268,13 @@
     const canDiscard = Boolean(entry.staged || entry.loading || draft);
     const savedMarkup = renderSaved(entry, project, savedErrors, savedDataset);
     const disabled = entry.loading || entry.conflict ? " disabled" : "";
+    const importedSeries = entry.staged?.imported?.seriesKey;
+    const previewInEditor = importedSeries === entry.growthSeries && importedSeries === selectedSeries(entry, config);
     return `<div class="panel sd-workspace"><div class="sd-section-head">
       <div><h3 id="sd-workspace-heading">测算周期供需配置</h3><span class="sd-period">${periodLabel(project)} · ${project.forecastYears}年</span></div>
       <span class="sd-state" data-sd-dirty>${status}</span></div>
       ${renderElementEditor(project, entry, config, domain, disabled)}
-      ${renderImportPreview(entry)}${renderNotice(entry)}
+      ${previewInEditor ? "" : renderImportPreview(entry)}${renderNotice(entry)}
       ${entry.conflict ? '<div class="sd-alert">当前项目周期或已保存供需配置已更新。请放弃草稿后继续配置。</div>' : ""}
       <div class="sd-actions">${button("generate", "校验并生成供需数据", true, !canGenerate)}
         <span data-sd-discard-wrap${canDiscard ? "" : " hidden"}>${button("discard", entry.loading ? "取消读取" : "放弃草稿")}</span></div>
@@ -478,9 +498,10 @@
       const context = eventContext(event);
       if (!context) return;
       const { project, entry } = context, { dataset, value } = event.target;
-      if (dataset?.sdTemplateFile !== undefined) {
+      const growthFile = dataset?.sdGrowthFile !== undefined;
+      if (growthFile || dataset?.sdTemplateFile !== undefined) {
         const file = event.target.files?.[0];
-        if (file) return importFile(project, entry, file);
+        if (file) return importFile(project, entry, file, growthFile);
         return;
       }
       const selected = dataset?.sdSelect;
@@ -518,22 +539,6 @@
       return value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
     }
 
-    function editMonthly(series, year, month, value) {
-      const monthly = domain.getCurve(series, year).monthlyWeights;
-      const index = month - 1;
-      if (shareInput(monthly[index]) === value) return false;
-      const changed = [...monthly];
-      changed[index] = value === null ? null : value / 100;
-      if (year === null) { series.monthlyWeights = changed; return true; }
-      series.curveOverridesByYear ||= {};
-      const override = series.curveOverridesByYear[year] ||= {};
-      if (changed.every((entry, position) => entry === series.monthlyWeights[position])) delete override.monthlyWeights;
-      else override.monthlyWeights = changed;
-      if (!Object.keys(override).length) delete series.curveOverridesByYear[year];
-      if (!Object.keys(series.curveOverridesByYear).length) delete series.curveOverridesByYear;
-      return true;
-    }
-
     function updateEditor(project, entry, config, key) {
       if (!root.querySelector) { refreshDraft(); return; }
       const setText = (selector, text) => {
@@ -550,19 +555,11 @@
       if (discard) discard.hidden = false;
       const message = root.querySelector("[data-sd-message]");
       if (message) { message.textContent = ""; message.classList?.remove("sd-alert"); }
-      const series = getSeries(config, selectedSeries(entry, config));
-      if (key) {
-        const laterYears = years(project).slice(1);
-        setText(`[data-sd-growth-for="${key}"]`, growthStatus(laterYears, series));
-        if (entry.growthSeries === key) {
-          laterYears.forEach((year) => setText(`[data-sd-growth-total="${year}"]`, growthTotalLabel(project, series, year)));
-        }
+      const series = getSeries(config, key), laterYears = years(project).slice(1);
+      setText(`[data-sd-growth-for="${key}"]`, growthStatus(laterYears, series));
+      if (entry.growthSeries === key) {
+        laterYears.forEach((year) => setText(`[data-sd-growth-total="${year}"]`, growthTotalLabel(project, series, year)));
       }
-      const monthly = domain.getCurve(series, entry.curveYear).monthlyWeights;
-      const total = monthly.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
-      setText("[data-sd-month-total]", `合计 ${share.format(total)}${monthly.every(Number.isFinite) ? "" : " · 待补齐"}`);
-      setText("[data-sd-curve-origin]", curveOrigin(series, entry.curveYear, entry.curveMonth));
-      setDisabled('[data-sd-action="restore-curve"]', !series.curveOverridesByYear?.[entry.curveYear]);
       const preview = root.querySelector("[data-sd-curve-preview]");
       if (preview) preview.innerHTML = curvePreview(project, entry, config, domain);
       onDraftChange();
@@ -570,7 +567,7 @@
 
     function onInput(event) {
       const context = eventContext(event), kind = event.target?.dataset?.sdInput;
-      if (!context || !kind) return;
+      if (!context || !["base", "growth-rate", "growth-fill"].includes(kind)) return;
       const { project, entry } = context;
       if (entry.loading || entry.conflict) return;
       const value = numeric(event.target.value);
@@ -578,19 +575,14 @@
       const selected = selectedSeries(entry, config), series = getSeries(config, selected);
       if (kind === "growth-fill") { entry.growthFills[selected] = value; return; }
       const key = event.target.dataset.sdSeries;
-      if (kind === "month-share") {
-        const month = Number(event.target.dataset.sdMonth);
-        if (!MONTHS.includes(month) || !editMonthly(series, entry.curveYear, month, value)) return;
+      if (key !== selected) return;
+      if (kind === "base") {
+        if (series.baseEnergyMwh === value) return;
+        series.baseEnergyMwh = value;
       } else {
-        if (key !== selected) return;
-        if (kind === "base") {
-          if (series.baseEnergyMwh === value) return;
-          series.baseEnergyMwh = value;
-        } else if (kind === "growth-rate") {
-          const year = Number(event.target.dataset.sdYear);
-          if (!years(project).slice(1).includes(year) || series.growthRatesByYear[year] === value) return;
-          series.growthRatesByYear[year] = value;
-        } else return;
+        const year = Number(event.target.dataset.sdYear);
+        if (!years(project).slice(1).includes(year) || series.growthRatesByYear[year] === value) return;
+        series.growthRatesByYear[year] = value;
       }
       stage(project, entry, config);
       updateEditor(project, entry, config, key);
@@ -601,25 +593,31 @@
       onDraftChange();
     }
 
-    async function importFile(project, entry, file) {
+    function workbookScope(project, entry, growth) {
+      return growth ? { seriesKey: selectedSeries(entry, editableConfig(project, entry)) } : { year: entry.curveYear };
+    }
+
+    async function importFile(project, entry, file, growth) {
       const codec = template();
-      if (!codec || !/\.xlsx$/i.test(file.name || "")) {
+      const read = growth ? codec?.readGrowthFile : codec?.readCurveFile;
+      if (typeof read !== "function" || !/\.xlsx$/i.test(file.name || "")) {
         const wasLoading = Boolean(entry.loading);
         entry.loading = null;
-        notice(entry, "无法导入 Excel 模板。", [codec ? "请选择 .xlsx 文件。" : "Excel 模块尚未加载，请刷新后重试。"]);
+        notice(entry, "无法导入 Excel 模板。", [typeof read === "function" ? "请选择 .xlsx 文件。" : "Excel 模块尚未加载，请刷新后重试。"]);
         if (wasLoading) refreshDraft();
         else render();
         return;
       }
-      const request = { source: source(project), year: entry.curveYear };
+      const scope = workbookScope(project, entry, growth);
+      const request = { source: source(project) };
       entry.loading = request;
       const basis = templateBase(project, entry);
       notice(entry, "");
       refreshDraft();
       let result;
       try {
-        result = await codec.readCurveFile(project, file, { xlsx: xlsx(), year: request.year,
-          baseConfig: basis ? clone(basis) : undefined, allowLegacy: true });
+        result = await read.call(codec, project, file, { xlsx: xlsx(), ...scope,
+          baseConfig: basis ? clone(basis) : undefined, ...(growth ? {} : { allowLegacy: true }) });
       } catch (error) {
         result = { ok: false, errors: [error?.message || "无法读取工作簿，请核对文件。"] };
       }
@@ -632,9 +630,9 @@
         refreshDraft();
         return;
       }
-      stage(project, entry, clone(result.config), { name: file.name, year: request.year,
+      stage(project, entry, clone(result.config), { name: file.name, ...scope,
         changedRows: result.changedRows, changes: clone(result.changes || []), legacy: result.legacy === true });
-      notice(entry, "模板校验通过，请核对曲线后保存。");
+      notice(entry, growth ? "模板校验通过，请核对增速后生成供需数据。" : "模板校验通过，请核对曲线后保存。");
       refreshDraft();
     }
 
@@ -760,11 +758,13 @@
       const { project, entry } = context, action = control.dataset.sdAction;
       if (action === "select-element") {
         selectElement(entry, control.dataset.sdElement);
-      } else if (action === "download-template") {
+      } else if (action === "download-template" || action === "download-growth-template") {
         try {
           const codec = template();
-          if (!codec) throw new Error("Excel 模块尚未加载，请刷新后重试。");
-          codec.downloadCurves(project, templateBase(project, entry), { xlsx: xlsx(), year: entry.curveYear });
+          const growth = action === "download-growth-template";
+          const download = growth ? codec?.downloadGrowth : codec?.downloadCurves;
+          if (typeof download !== "function") throw new Error("Excel 模块尚未加载，请刷新后重试。");
+          download.call(codec, project, templateBase(project, entry), { xlsx: xlsx(), ...workbookScope(project, entry, growth) });
         } catch (error) {
           notice(entry, "模板下载失败。", [error?.message || "请重试。"]);
           render();
@@ -773,13 +773,12 @@
         generate(project, entry);
       } else if (action === "discard") {
         discard(project, entry);
-      } else if (action === "growth-open" || action === "growth-close") {
+      } else if (action === "growth-open") {
         const key = selectedSeries(entry, editableConfig(project, entry));
-        if (project.forecastYears < 2 || (action === "growth-open" && control.dataset.sdSeries !== key)) return;
-        entry.growthSeries = entry.growthSeries === key || action === "growth-close" ? null : key;
+        if (project.forecastYears < 2 || control.dataset.sdSeries !== key) return;
+        entry.growthSeries = entry.growthSeries === key ? null : key;
         render();
-        const focus = entry.growthSeries ? '[data-sd-input="growth-fill"]' : '[data-sd-action="growth-open"]';
-        root.querySelector?.(focus)?.focus?.({ preventScroll: true });
+        root.querySelector?.('[data-sd-action="growth-open"]')?.focus?.({ preventScroll: true });
       } else if (action === "growth-fill") {
         fillGrowth(project, entry);
       } else if (action === "restore-curve") {

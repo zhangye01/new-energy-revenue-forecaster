@@ -168,6 +168,105 @@ async function testCurveTemplates() {
   assert.equal(filename, "测试-供需_供需曲线模板_2027-2029_2028年.xlsx");
 }
 
+async function testGrowthTemplates() {
+  const input = { ...project, forecastYears: 6 };
+  const original = configured(input);
+  original.elements.load.growthRatesByYear = { 2028: 7, 2029: -2, 2030: 3, 2031: 1.5, 2032: -3 };
+  original.elements.nonMarket.monthlyWeights = ["历史草稿"];
+  const before = JSON.stringify(original);
+  const options = { xlsx, seriesKey: "load", baseConfig: original };
+  const growth = () => template.buildGrowthWorkbook(input, original, options);
+  const ratesSheet = (book) => book.Sheets["逐年增长率"];
+  const file = growth();
+  const sheet = ratesSheet(file);
+  assert.deepEqual(file.SheetNames, ["逐年增长率"]);
+  assert.deepEqual([sheet.B2.v, sheet.D2.v, sheet.B3.v, sheet.A5.v, sheet.B5.v], [2027, 2032, "省内负荷", "年份", "增长率（%）"]);
+  assert.deepEqual([sheet.A6.v, sheet.B6.v, sheet.A10.v, sheet.B10.v], [2028, 7, 2032, -3]);
+
+  sheet.B6 = { t: "n", v: 0.07, z: "0.00%" };
+  delete sheet.B7;
+  const same = await template.readGrowthFile(input, fileFor(file), options);
+  assert.equal(same.ok, true, same.errors.join("\n"));
+  assert.deepEqual(same.changes, []);
+  assert.equal(same.changedRows, 0);
+  assert.equal(JSON.stringify(same.config), before);
+  assert.notEqual(same.config, original);
+  assert.equal(domain.fingerprint(input, same.config), domain.fingerprint(input, original));
+
+  sheet.B6 = { t: "n", v: 5 };
+  sheet.B7 = { t: "s", v: " 5% " };
+  sheet.B8 = { t: "n", v: 0.07, z: "0.000%" };
+  sheet.B9 = { t: "n", v: 0 };
+  sheet.B10 = { t: "n", v: -1, z: "0%" };
+  const updated = await template.readGrowthFile(input, fileFor(file), options);
+  assert.equal(updated.ok, true, updated.errors.join("\n"));
+  assert.equal(updated.changedRows, 5);
+  assert.deepEqual(updated.changes, [
+    { year: 2028, value: 5 }, { year: 2029, value: 5 }, { year: 2030, value: 7 },
+    { year: 2031, value: 0 }, { year: 2032, value: -100 }
+  ]);
+  const expected = JSON.parse(before);
+  expected.elements.load.growthRatesByYear = { 2028: 5, 2029: 5, 2030: 7, 2031: 0, 2032: -100 };
+  assert.deepEqual(updated.config, expected);
+  assert.equal(JSON.stringify(original), before);
+
+  const invalid = [
+    ["A7", { t: "n", v: 2028 }, /年份 2028 重复/],
+    ["A6", { t: "n", v: 2027 }, /首年之后、测算周期内/],
+    ["A6", { t: "s", v: "2033" }, /首年之后、测算周期内/],
+    ["A6", { t: "n", v: 2028, z: "0%" }, /首年之后、测算周期内/],
+    ["B6", { t: "s", v: "-100.001%" }, /不能低于 -100%/],
+    ["B6", { t: "s", v: "待补充" }, /B6 须填写有效增长率/],
+    ["B6", { t: "e", v: 15 }, /B6 须填写有效增长率/],
+    ["C6", { t: "n", v: 3 }, /C6 超出增长率模板列/],
+    ["B5", { t: "s", v: "增长倍数" }, /B5 应为.+增长率/]
+  ];
+  for (const [address, cell, error] of invalid) {
+    const book = growth();
+    ratesSheet(book)[address] = cell;
+    const failed = template.parseGrowthWorkbook(input, book, options);
+    assert.equal(failed.ok, false);
+    assert.equal(failed.config, null);
+    assert.deepEqual(failed.changes, []);
+    assert.equal(failed.changedRows, 0);
+    assert.match(failed.errors[0], error);
+  }
+  assert.match(template.parseGrowthWorkbook(project, growth(), options).errors[0], /模板测算周期与项目不符/);
+  assert.match(template.parseGrowthWorkbook(input, growth(), { ...options, seriesKey: "wind" }).errors[0], /模板供需要素与当前选择不符/);
+  assert.equal(JSON.stringify(original), before);
+
+  const dual = domain.prepareShareConfig(input, original);
+  dual.elements.tieLine.mode = "bidirectional";
+  const directional = { xlsx, seriesKey: "tieLineExport", baseConfig: dual };
+  const exportTemplate = template.buildGrowthWorkbook(input, dual, directional);
+  assert.equal(ratesSheet(exportTemplate).B3.v, "联络线送出");
+  ratesSheet(exportTemplate).B6 = { t: "n", v: 0 };
+  const exportUpdate = template.parseGrowthWorkbook(input, exportTemplate, directional);
+  assert.equal(exportUpdate.ok, true, exportUpdate.errors.join("\n"));
+  assert.equal(exportUpdate.config.elements.tieLine.export.growthRatesByYear[2028], 0);
+  assert.deepEqual(exportUpdate.config.elements.tieLine.import, dual.elements.tieLine.import);
+  assert.match(template.parseGrowthWorkbook(input, exportTemplate, { ...directional, seriesKey: "tieLineImport" }).errors[0], /供需要素与当前选择不符/);
+  assert.match(template.parseGrowthWorkbook(input, exportTemplate, { ...directional, baseConfig: original }).errors[0], /当前联络线方式/);
+  assert.throws(() => template.buildGrowthWorkbook(input, dual, { xlsx, seriesKey: "tieLine" }), /当前联络线方式/);
+
+  const single = { ...project, forecastYears: 1 };
+  const oneYearTemplate = template.buildGrowthWorkbook(single, undefined, options);
+  assert.equal(ratesSheet(oneYearTemplate).A6, undefined);
+  assert.equal(template.parseGrowthWorkbook(single, oneYearTemplate, { xlsx, seriesKey: "load" }).changedRows, 0);
+  const wrongFile = await template.readGrowthFile(input, { ...fileFor(growth()), name: "增速.csv" }, options);
+  assert.equal(wrongFile.ok, false);
+  assert.deepEqual(wrongFile.changes, []);
+  assert.equal(wrongFile.changedRows, 0);
+  assert.match(wrongFile.errors[0], /\.xlsx/);
+
+  let filename;
+  template.downloadGrowth(input, dual, { ...directional, xlsx: { ...xlsx, writeFile(book, name) {
+    assert.equal(ratesSheet(book).B3.v, "联络线送出");
+    filename = name;
+  } } });
+  assert.equal(filename, "测试-供需_供需增长率模板_2027-2032_联络线送出.xlsx");
+}
+
 async function run() {
   const blank = template.buildWorkbook(project, undefined, { xlsx });
   assert.deepEqual(blank.SheetNames, keys);
@@ -283,6 +382,7 @@ async function run() {
   } } });
   assert.equal(savedFilename, "测试-供需_供需配置模板_2027-2029.xlsx");
   await testCurveTemplates();
+  await testGrowthTemplates();
   console.log("supply-demand Excel template tests passed");
 }
 
