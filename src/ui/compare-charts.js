@@ -187,6 +187,8 @@
     const { axisTitle, axisUnit, axisValues, axisLabels, baselineInput = 0, applicable = true } = selected;
     const inputBounds = axisValues.length > 1 ? { min: axisValues[0], max: axisValues.at(-1) } : {};
     const horizontalAxis = valueAxis(axisTitle, tokens);
+    const verticalAxis = valueAxis(unit, tokens);
+    verticalAxis.axisLine.onZero = false;
     const markLines = [{ yAxis: baselineValue }];
     if (applicable && Number.isFinite(selected.baselineInput) && baselineInput >= axisValues[0] && baselineInput <= axisValues.at(-1)) {
       markLines.push({
@@ -217,7 +219,7 @@
         }
       }),
       xAxis: { ...horizontalAxis, ...inputBounds, nameLocation: "middle", nameGap: 28 },
-      yAxis: valueAxis(unit, tokens),
+      yAxis: verticalAxis,
       series: [{
         name: selected.name,
         type: "line",

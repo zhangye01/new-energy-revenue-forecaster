@@ -88,6 +88,7 @@ const negativeResponse = buildSensitivityResponseOption({ name: "捕获价差", 
   axisValues: [-20, 0, 20], axisLabels: ["−20%", "0%", "+20%"], series: [-80, -100.123456, -120] }, -100.123456, tokens);
 assert.deepEqual(negativeResponse.series[0].data[1], [0, -100.123456]);
 assert.equal(negativeResponse.series[0].markLine.data[0].yAxis, -100.123456, "基准线保留原精度和负值");
+assert.equal(negativeResponse.yAxis.axisLine.onZero, false, "横轴包含负值时，纵轴及其单位留在图表左侧");
 
 const priceTarget = { label: "全周期综合度电均价", unit: "元/MWh", decimals: 2 };
 const priceTornado = buildSensitivityTornadoOption(factors, 396.257, tokens, priceTarget);
