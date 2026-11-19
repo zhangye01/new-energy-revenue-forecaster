@@ -386,6 +386,13 @@
     };
   }
 
+  function normalizeRestoredForecastBinding(projectId, binding) {
+    if (!isSupplyObject(binding) || typeof projectId !== "string" || !projectId.trim() || binding.targetProjectId !== projectId) return null;
+    const { sourceProjectId, runId, inputFingerprint } = binding;
+    if (sourceProjectId === projectId || ![sourceProjectId, runId, inputFingerprint].every((value) => typeof value === "string" && value.trim())) return null;
+    return { targetProjectId: projectId, sourceProjectId, runId, inputFingerprint };
+  }
+
   function validateSupplyDemandRun(project, run) {
     const config = project?.supplyDemand?.config;
     const saved = run?.supplyDemandInput;
@@ -406,8 +413,12 @@
     if (snapshotErrors.length) return { ok: false, errors: ["供需来源配置快照不完整或无效，请重新生成电价预测。"] };
     const copiedSourceIds = project.duplicationTargetProjectId === project.id && Array.isArray(project.duplicatedFromProjectIds)
       ? project.duplicatedFromProjectIds.filter((id) => typeof id === "string" && id.trim()) : [];
+    const restored = normalizeRestoredForecastBinding(project.id, project.restoredForecastBinding);
+    const restoredSourceMatches = restored && restored.runId === run.id
+      && restored.sourceProjectId === saved.projectId && restored.inputFingerprint === saved.fingerprint;
+    const sourceIsInherited = copiedSourceIds.includes(saved.projectId) || restoredSourceMatches;
     const sourceProject = saved.projectId === (project.id ?? null) ? project
-      : copiedSourceIds.includes(saved.projectId) ? { ...project, id: saved.projectId } : null;
+      : sourceIsInherited ? { ...project, id: saved.projectId } : null;
     const current = sourceProject && supplyDemand.fingerprint(sourceProject, config);
     if (!sourceProject || saved.fingerprint !== current
         || saved.province !== (project.province ?? null) || saved.period?.startYear !== project.startYear
@@ -488,6 +499,7 @@
     snapshotSupplyDemandInput,
     validateSupplyDemandDataset,
     validateSupplyDemandRun,
+    normalizeRestoredForecastBinding,
     createForecastRunForModel
   });
 });

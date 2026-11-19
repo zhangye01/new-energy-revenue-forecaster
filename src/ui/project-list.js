@@ -1,7 +1,9 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const forecastRunFlow = typeof module !== "undefined" && module.exports
+    ? require("./forecast-run-flow") : root.NE_FORECAST_RUN_FLOW;
+  const api = factory(forecastRunFlow);
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
@@ -9,7 +11,7 @@
   if (root.window && root.window !== root) {
     root.window.NE_PROJECT_LIST_VIEW = api;
   }
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (forecastRunFlow) {
   function escapeHtml(text) {
     return String(text)
       .replaceAll("&", "&amp;")
@@ -217,6 +219,11 @@
             ? source.duplicatedFromProjectIds : [])
         ].filter((id) => typeof id === "string" && id.trim() && id !== clone.id)));
         clone.duplicationTargetProjectId = clone.id;
+        if (source.restoredForecastBinding) {
+          const binding = forecastRunFlow.buildRestoredForecastBinding(source, clone.id);
+          if (binding) clone.restoredForecastBinding = binding;
+          else delete clone.restoredForecastBinding;
+        }
         clone.ownerAccount = String(appState.auth?.account || "").trim();
         clone.name = resolveUniqueProjectName(`${source.name}-副本`);
         clone.createdAt = new Date().toISOString();

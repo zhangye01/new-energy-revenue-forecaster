@@ -1,10 +1,12 @@
 "use strict";
 
 (function (root, factory) {
-  const api = factory();
+  const forecastRunFlow = typeof module !== "undefined" && module.exports
+    ? require("./forecast-run-flow") : root.NE_FORECAST_RUN_FLOW;
+  const api = factory(forecastRunFlow);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.NE_PROJECT_BACKUP = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function () {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (forecastRunFlow) {
   const FORMAT = "new-energy-project-backup";
   const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
   // A structural guard for recursive downstream readers, not a file-size or array-length limit.
@@ -79,7 +81,7 @@
           throw new Error(`备份包含不安全字段“${key}”：${path}，未恢复任何项目。`);
         }
         // IDs become object-map keys in result and workspace modules.
-        if (["id", "projectId", "scenarioId", "runId", "activeScenarioId", "activeRunId"].includes(key)
+        if (["id", "projectId", "scenarioId", "runId", "activeScenarioId", "activeRunId", "targetProjectId", "sourceProjectId"].includes(key)
             && typeof child === "string" && UNSAFE_KEYS.has(child)) {
           throw new Error(`备份包含不安全标识：${path}.${key}，未恢复任何项目。`);
         }
@@ -162,6 +164,7 @@
     ["energyData", "statuses", "energyTemplateExports", "roughPrice", "resultsByScenario"].forEach((key) => validateContainer(project, key, false, path));
     validateContainer(project, "legacyStorageResultsByScenario", false, path);
     validateContainer(project, "resultHistoryByScenario", false, path);
+    validateContainer(project, "restoredForecastBinding", false, path);
     for (const versions of Object.values(project.resultHistoryByScenario || {})) {
       if (!Array.isArray(versions) || versions.some((version) => !isObject(version) || !Array.isArray(version.annualRows))) {
         throw new Error(`备份测算历史结构无效：${path}，未恢复任何项目。`);
@@ -207,6 +210,9 @@
           ? project.restoredFromProjectId : project.id;
         restored.id = makeId("restored");
         if (!restored.id || ids.has(restored.id)) throw new Error("无法生成唯一副本编号，请重试。");
+        const binding = forecastRunFlow.buildRestoredForecastBinding(project, restored.id);
+        if (binding) restored.restoredForecastBinding = binding;
+        else delete restored.restoredForecastBinding;
         restored.name = `${restored.name}（恢复副本）`;
         copies += 1;
       }

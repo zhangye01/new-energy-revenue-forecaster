@@ -457,6 +457,7 @@
     ].filter((id) => typeof id === "string" && id.trim() && id !== rawProject.id)));
     const duplicatedFromProjectIds = Array.from(new Set((Array.isArray(rawProject.duplicatedFromProjectIds)
       ? rawProject.duplicatedFromProjectIds : []).filter((id) => typeof id === "string" && id.trim() && id !== rawProject.id)));
+    const restoredForecastBinding = priceForecast.normalizeRestoredForecastBinding(rawProject.id, rawProject.restoredForecastBinding);
     return {
       id: typeof rawProject.id === "string" && rawProject.id ? rawProject.id : makeId("proj"),
       ...(typeof rawProject.restoredFromProjectId === "string" && rawProject.restoredFromProjectId.trim()
@@ -465,6 +466,7 @@
       ...(duplicatedFromProjectIds.length ? { duplicatedFromProjectIds } : {}),
       ...(typeof rawProject.duplicationTargetProjectId === "string" && rawProject.duplicationTargetProjectId.trim()
         ? { duplicationTargetProjectId: rawProject.duplicationTargetProjectId } : {}),
+      ...(restoredForecastBinding ? { restoredForecastBinding } : {}),
       ownerAccount: typeof rawProject.ownerAccount === "string"
         ? rawProject.ownerAccount.trim()
         : (typeof rawProject.account === "string" ? rawProject.account.trim() : ""),

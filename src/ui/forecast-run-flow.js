@@ -52,12 +52,22 @@
 
   function getActiveRun(project) {
     const runs = Array.isArray(project?.priceRuns) ? project.priceRuns : [];
-    return runs.find((run) => run.id === project?.activeRunId) || null;
+    return runs.find((run) => run?.id === project?.activeRunId) || null;
   }
 
   function hasActiveActivatableRun(project, services = {}) {
     const run = getActiveRun(project);
     return canActivateRun(run, project) && !supplyDemandRunError(project, run, services);
+  }
+
+  function buildRestoredForecastBinding(project, targetProjectId) {
+    const run = getActiveRun(project);
+    const saved = run?.supplyDemandInput;
+    if (!saved || !canActivateRun(run, project) || !priceForecast.validateSupplyDemandRun(project, run).ok) return null;
+    // Bind the verified source to the new identity without rewriting the historical run.
+    return priceForecast.normalizeRestoredForecastBinding(targetProjectId, {
+      targetProjectId, sourceProjectId: saved.projectId, runId: run.id, inputFingerprint: saved.fingerprint
+    });
   }
 
   function supplyDemandRunError(project, run, services = {}) {
@@ -269,6 +279,7 @@
 
   return Object.freeze({
     addActivationLog,
+    buildRestoredForecastBinding,
     canActivateRun,
     forceActivateRun,
     forecastParameterError,
