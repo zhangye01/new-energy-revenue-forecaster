@@ -1,7 +1,12 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { buildView } = require("../src/ui/forecast-results-view");
+const forecastView = require("../src/ui/forecast-results-view");
+const buildView = (state) => forecastView.buildView(state).html;
+
+function legendCodes(html) {
+  return Array.from(html.matchAll(/data-forecast-legend="([a-z]+)"/g), ([, code]) => code);
+}
 
 const project = Object.freeze({ id: "forecast-test", startYear: 2026, forecastYears: 3, activeRunId: "run-lstm" });
 const state = { project, current: true, serviceReady: true };
@@ -19,7 +24,8 @@ const task = {
 const empty = buildView(state);
 assert.deepEqual(Array.from(empty.matchAll(/data-forecast-model="([a-z]+)"/g), ([, code]) => code), ["lstm", "xgboost", "ensemble"]);
 assert.equal((empty.match(/待返回/g) || []).length, 3);
-assert.doesNotMatch(empty, /演示|data-forecast-annual|<button|<input|<select/);
+assert.doesNotMatch(empty, /演示|data-forecast-annual|data-forecast-chart|<button|<input|<select/);
+assert.equal(forecastView.buildView(state).chart, null);
 
 const result = buildView({ ...state, task });
 assert.match(result, /年度现货均价（元\/MWh）/);
@@ -29,7 +35,13 @@ assert.match(result, /<th scope="row">2028<\/th>(<td class="forecast-result-miss
 assert.doesNotMatch(result, /回测|MAPE/);
 assert.doesNotMatch(result, /测算采用/, "unpublished returns never claim a selected price");
 assert.match(result, /&lt;img src=x/);
-assert.doesNotMatch(result, /<img|2025|2029|345\.00|999\.00|演示|<button|<input|<select/);
+assert.doesNotMatch(result, /<img|2025|2029|345\.00|999\.00|演示|<input|<select/);
+assert.match(result, /data-forecast-chart[\s\S]+data-forecast-annual/);
+assert.deepEqual(legendCodes(result), ["lstm", "xgboost"]);
+assert.deepEqual(forecastView.buildView({ ...state, task }).chart, { years: [2026, 2027, 2028], series: [
+  { code: "lstm", label: "LSTM", prices: [0, -15.2, null] },
+  { code: "xgboost", label: "XGBoost", prices: [150, null, null] }
+] });
 assert.doesNotMatch(buildView({ ...state, project: { ...project, activeRunId: "other-run" }, task }), /测算采用/);
 assert.doesNotMatch(buildView({ ...state, task, current: false }), /data-forecast-annual|结果可查看/);
 assert.doesNotMatch(buildView({ ...state, task, serviceReady: false }), /data-forecast-annual|结果可查看/);
@@ -93,7 +105,8 @@ assert.match(caseView, /<th scope="row">2026<\/th><td>-8\.50<\/td><td>0\.00<\/td
 assert.match(caseView, /<th scope="row">2028<\/th><td>-8\.50<\/td><td>0\.00<\/td><td>272\.25<\/td>/);
 assert.match(caseView, /data-forecast-history[\s\S]*legacy&lt;&amp;&gt;/);
 assert.doesNotMatch(caseView, />case-(lstm|xgboost|ensemble)</, "shown case prices should not be repeated in archive rows");
-assert.doesNotMatch(caseView, /<button|<input|<select/);
+assert.deepEqual(legendCodes(caseView), ["lstm", "xgboost", "ensemble"]);
+assert.doesNotMatch(caseView, /<input|<select/);
 
 const incompleteCaseRun = { ...caseRuns[2], pricesByYear: { 2026: Array(8759).fill(272.25) } };
 const partialCase = buildView({ ...caseState, caseRuns: [caseRuns[0], incompleteCaseRun] });
@@ -102,6 +115,7 @@ assert.deepEqual(modelCards(partialCase).filter(([, contents]) => contents.inclu
   ["lstm"], "only an available case model gets the label");
 assert.doesNotMatch(partialCase, /测算采用/);
 assert.match(partialCase, />case-ensemble</, "saved case models that are not displayed remain in the archive");
+assert.deepEqual(legendCodes(partialCase), ["lstm"]);
 
 const liveOverCase = buildView({ ...state, project: caseProject, caseRuns, task });
 assert.match(liveOverCase, /结果可查看/);

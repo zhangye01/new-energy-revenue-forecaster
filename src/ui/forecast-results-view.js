@@ -1,12 +1,13 @@
 "use strict";
 
 (function (root, factory) {
-  const utils = typeof module !== "undefined" && module.exports ? require("../domain/app-utils") : root.NE_APP_UTILS;
-  const api = factory(utils);
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  const commonJs = typeof module !== "undefined" && module.exports;
+  const api = factory(commonJs ? require("../domain/app-utils") : root.NE_APP_UTILS,
+    commonJs ? require("./forecast-results-chart") : root.NE_FORECAST_RESULTS_CHART);
+  if (commonJs) module.exports = api;
   root.NE_FORECAST_RESULTS_VIEW = api;
   if (root.window && root.window !== root) root.window.NE_FORECAST_RESULTS_VIEW = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (utils) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (utils, trendChart) {
   const MODELS = new Map([["lstm", "LSTM"], ["xgboost", "XGBoost"], ["ensemble", "Ensemble"]]);
   const HOURS_PER_YEAR = 8760;
   const formatPrice = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -96,6 +97,100 @@
     </table></div>`;
   }
 
+  function renderChart({ series }) {
+    const legend = series.map(({ code, label }) =>
+      `<button type="button" class="forecast-result-legend-toggle" data-forecast-legend="${code}" aria-pressed="true" aria-controls="forecast-results-annual-plot">${label}</button>`).join("");
+    return `<figure class="forecast-result-chart" data-forecast-chart>
+      <figcaption class="forecast-result-chart-head">
+        <h3 class="forecast-result-chart-title">年度现货均价趋势 <span class="forecast-result-chart-unit">元/MWh</span></h3>
+        <div class="forecast-result-legend" data-forecast-chart-legend role="group" aria-label="显示的模型曲线" hidden>${legend}</div>
+      </figcaption>
+      <div class="forecast-result-plot" id="forecast-results-annual-plot" data-forecast-chart-plot role="img" aria-label="各模型年度现货均价曲线，具体数值见下方年度均价表" hidden></div>
+      <p class="forecast-result-chart-fallback" data-forecast-chart-fallback>图表暂不可用，可查看下方年度均价表。</p>
+    </figure>`;
+  }
+
+  function bindChartLegend(chart, buttons, { series }, visible) {
+    if (series.every(({ code }) => visible[code] === false)) visible[series[0].code] = true;
+    const byCode = new Map(series.map((entry) => [entry.code, entry]));
+    const sync = () => {
+      const count = series.filter(({ code }) => visible[code] !== false).length;
+      for (const button of buttons) {
+        const selected = visible[button.dataset.forecastLegend] !== false;
+        const required = selected && count === 1;
+        button.setAttribute("aria-pressed", String(selected));
+        if (required) button.setAttribute("aria-disabled", "true");
+        else button.removeAttribute("aria-disabled");
+        button.title = required ? "至少保留一条曲线" : "";
+      }
+    };
+    for (const button of buttons) {
+      const { code, label } = byCode.get(button.dataset.forecastLegend);
+      button.onclick = () => {
+        if (button.getAttribute("aria-disabled") === "true") return;
+        visible[code] = visible[code] === false;
+        chart.dispatchAction({ type: "hideTip" });
+        chart.dispatchAction({ type: visible[code] ? "legendSelect" : "legendUnSelect", name: label });
+        sync();
+      };
+    }
+    sync();
+  }
+
+  function mountChart(container, data, visible) {
+    const windowRef = container.ownerDocument?.defaultView;
+    const plot = container.querySelector("[data-forecast-chart-plot]");
+    if (!data || !plot || !trendChart || !windowRef?.echarts?.init) return null;
+    const legend = container.querySelector("[data-forecast-chart-legend]");
+    const fallback = container.querySelector("[data-forecast-chart-fallback]");
+    const buttons = Array.from(legend.querySelectorAll("[data-forecast-legend]"));
+    const tokenNames = { blue: "blue", orange: "orange", green: "green", ink: "ink", muted: "muted",
+      line: "line", lineStrong: "line-strong", panel: "panel" };
+    plot.hidden = false;
+    let chart;
+    let width = plot.clientWidth;
+    const draw = () => {
+      const style = windowRef.getComputedStyle(plot);
+      const tokens = Object.fromEntries(Object.entries(tokenNames).map(([key, name]) => [key, style.getPropertyValue(`--${name}`).trim()]));
+      chart.setOption(trendChart.buildOption(data, visible, tokens, width), true);
+    };
+    try {
+      chart = windowRef.echarts.init(plot, null, { renderer: "canvas" });
+      bindChartLegend(chart, buttons, data, visible);
+      draw();
+    } catch {
+      chart?.dispose();
+      plot.hidden = true;
+      return null;
+    }
+    legend.hidden = false;
+    fallback.hidden = true;
+    const resize = () => {
+      if (!plot.clientWidth || chart.isDisposed()) return;
+      chart.resize();
+      if (width === plot.clientWidth) return;
+      width = plot.clientWidth;
+      draw();
+    };
+    const observer = windowRef.ResizeObserver ? new windowRef.ResizeObserver(resize) : null;
+    if (observer) observer.observe(plot);
+    else windowRef.addEventListener("resize", resize);
+    const themeObserver = windowRef.MutationObserver ? new windowRef.MutationObserver(() => {
+      if (!chart.isDisposed() && plot.clientWidth) draw();
+    }) : null;
+    themeObserver?.observe(container.ownerDocument.body, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => {
+      themeObserver?.disconnect();
+      if (observer) observer.disconnect();
+      else windowRef.removeEventListener("resize", resize);
+      buttons.forEach((button) => { button.onclick = null; });
+      chart.dispose();
+      plot.hidden = true;
+      legend.hidden = true;
+      fallback.hidden = false;
+    };
+  }
+
   function renderHistory(project, currentRunIds) {
     if (!Array.isArray(project.priceRuns)) return "";
     const archivedRuns = project.priceRuns.filter((run) => run && typeof run === "object" && !currentRunIds.has(run.id));
@@ -131,7 +226,7 @@
   }
 
   function buildView({ project, task, current, serviceReady, phase, caseRuns, publishedRuns } = {}) {
-    if (!project) return '<p class="forecast-result-empty">请先选择项目。</p>';
+    if (!project) return { html: '<p class="forecast-result-empty">请先选择项目。</p>', chart: null };
     const years = expectedYears(project);
     const returned = serviceReady && current && task?.status === "succeeded" ? task.results : null;
     const publishedTask = task?.id && publishedRuns?.some((run) => run.backendTaskId === task.id);
@@ -145,9 +240,14 @@
     const visibleRuns = !showLive ? models : [];
     const currentRunIds = new Set(visibleRuns.filter(({ prices }) => prices.some(Number.isFinite))
       .map(({ result }) => result?.runId ?? result?.id).filter(Boolean));
-    return `<div class="forecast-result-models">${models.map((model) => renderModel(model, activeRunId, fromCase, pendingText)).join("")}</div>
-      ${renderAnnual(models, years, pendingText)}${renderHistory(project, currentRunIds)}`;
+    const series = models.filter(({ prices }) => prices.some(Number.isFinite)).map(({ code, label, prices }) => ({
+      code, label, prices: prices.map((price) => Number.isFinite(price) ? price : null)
+    }));
+    const chart = series.length ? { years, series } : null;
+    const html = `<div class="forecast-result-models">${models.map((model) => renderModel(model, activeRunId, fromCase, pendingText)).join("")}</div>
+      ${chart ? renderChart(chart) : ""}${renderAnnual(models, years, pendingText)}${renderHistory(project, currentRunIds)}`;
+    return { html, chart };
   }
 
-  return Object.freeze({ buildView });
+  return Object.freeze({ buildView, mountChart });
 });

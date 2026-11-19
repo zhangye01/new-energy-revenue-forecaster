@@ -120,7 +120,7 @@ const supplyDemandFlow = supplyDemandFlowModule.create({
   onPersist: schedulePersistAppData, onRender: renderAll, onMessage: setTopMeta,
   onDraftChange: () => backendForecastPanel.render()
 });
-let renderedForecastResults = { projectId: null, html: "" };
+let renderedForecastResults = { projectId: null, html: "", chartKey: "", visible: {}, disposeChart: null };
 const backendForecastPanel = forecastPage.createBackendForecastPanel({
   documentRef: document, getProject: getActiveProject,
   getService: () => config.backendForecastService,
@@ -3047,14 +3047,21 @@ function renderBackendForecastResults(state) {
   const ready = !supplyDemandFlow.hasUnsavedChanges() && !supplyDemandFlow.hasPendingDraft(state.project);
   const publishedRuns = ready ? forecastRunFlow.getPublishedBackendResults(state.project) : [];
   const caseRuns = ready && !publishedRuns.length ? forecastRunFlow.getArchivedCaseRuns(state.project) : [];
-  const html = forecastResultsView.buildView({ ...state, caseRuns, publishedRuns });
+  const { html, chart } = forecastResultsView.buildView({ ...state, caseRuns, publishedRuns });
+  const chartKey = chart ? JSON.stringify(chart) : "";
   const sameProject = renderedForecastResults.projectId === projectId;
-  if (sameProject && renderedForecastResults.html === html) return;
+  const visible = sameProject ? renderedForecastResults.visible : {};
+  if (sameProject && renderedForecastResults.html === html && renderedForecastResults.chartKey === chartKey) {
+    if (chart && !renderedForecastResults.disposeChart) renderedForecastResults.disposeChart = forecastResultsView.mountChart(root, chart, visible);
+    return;
+  }
   const historyOpen = sameProject && root.querySelector("[data-forecast-history]")?.open;
+  renderedForecastResults.disposeChart?.();
   root.innerHTML = html;
   const history = root.querySelector("[data-forecast-history]");
   if (history && historyOpen) history.open = true;
-  renderedForecastResults = { projectId, html };
+  const disposeChart = chart ? forecastResultsView.mountChart(root, chart, visible) : null;
+  renderedForecastResults = { projectId, html, chartKey, visible, disposeChart };
 }
 
 function renderForecastRuns() {
@@ -3065,6 +3072,8 @@ function renderForecastRuns() {
   } else {
     supplyDemandFlow.disposeChart();
     backendForecastPanel.dispose();
+    renderedForecastResults.disposeChart?.();
+    renderedForecastResults.disposeChart = null;
   }
   if (["rough-page", "validation-page"].includes(appState.activePage)) roughPriceWorkspace.renderWorkspace({
     documentRef: typeof document !== "undefined" ? document : null,
