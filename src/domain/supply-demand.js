@@ -20,8 +20,12 @@
   const VALUE_KEYS = Object.freeze([...ELEMENTS.map((item) => item.key), "residualDemand", "tieLineExport", "tieLineImport"]);
   const MAX_FORECAST_YEARS = 30;
   const SHARE_TOLERANCE = 1e-6;
+  const PERIOD_CHANGED = "项目测算周期已变化，请重新核对首年电量、逐年增长率及曲线后生成供需数据。";
+  const PROVINCE_CHANGED = "项目省份已变化，请按当前省份核对输入后重新生成供需数据。";
+  const SAVED_SOURCE_MISMATCH = "已保存的供需数据与当前项目省份或输入来源不一致，请核对后重新生成。";
   const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const isNumber = (value) => typeof value === "number" && Number.isFinite(value);
+  const nonEmptyString = (value) => typeof value === "string" && Boolean(value.trim());
 
   function validPeriod(project) {
     return Number.isInteger(project?.startYear) && project.startYear >= 1 && project.startYear <= 9999
@@ -413,7 +417,7 @@
     if (!validPeriod(project)) return ["请先设置有效的项目测算周期（1至30年、有效起始年份）。"];
     if (!isObject(config) || ![1, 2].includes(config.version) || !isObject(config.elements)) return ["供需配置缺失或版本不支持，请先填写供需输入。"];
     if (config.startYear !== project.startYear || config.forecastYears !== project.forecastYears) {
-      return ["项目测算周期已变化，请重新核对首年电量、逐年增长率及曲线后保存供需配置。"];
+      return [PERIOD_CHANGED];
     }
     if (!isObject(config.elements.tieLine) || !["net", "bidirectional"].includes(config.elements.tieLine.mode)) {
       return ["请选择有效的联络线配置方式（净额或双向送受）。"];
@@ -460,6 +464,51 @@
       second = Math.imul(second, 33) ^ value.charCodeAt(index);
     }
     return `supply-v${version}-${(first >>> 0).toString(16)}-${(second >>> 0).toString(16)}-${value.length}`;
+  }
+
+  function supplyBoundarySourceIds(project, expectedFingerprint) {
+    const binding = project.restoredForecastBinding;
+    const restoredBoundId = nonEmptyString(project.id) && binding?.targetProjectId === project.id &&
+      binding.inputFingerprint === expectedFingerprint && nonEmptyString(binding.runId) ? binding.sourceProjectId : null;
+    return new Set([
+      restoredBoundId, project.restoredFromProjectId,
+      ...(Array.isArray(project.restoredFromProjectIds) ? project.restoredFromProjectIds : []),
+      ...(nonEmptyString(project.id) && project.duplicationTargetProjectId === project.id && Array.isArray(project.duplicatedFromProjectIds)
+        ? project.duplicatedFromProjectIds : [])
+    ].filter(nonEmptyString));
+  }
+
+  function savedBoundaryErrors(project, savedState = project?.supplyDemand) {
+    const config = savedState?.config;
+    if (!validPeriod(project)) return [];
+    if (savedState?.requiresProvinceReview === true) return [PROVINCE_CHANGED];
+    if (!isObject(config)) return [];
+    if (config.startYear !== project.startYear || config.forecastYears !== project.forecastYears) return [PERIOD_CHANGED];
+    if (Object.hasOwn(savedState, "generatedProvince") && savedState.generatedProvince !== (project.province ?? null)) return [PROVINCE_CHANGED];
+    // Legacy configurations sometimes lack a recorded fingerprint. A recorded
+    // fingerprint, however, must match unchanged inputs and the current province.
+    if (!Object.hasOwn(savedState, "inputFingerprint")) return [];
+    const expected = savedState.inputFingerprint;
+    if (!nonEmptyString(expected)) return [SAVED_SOURCE_MISMATCH];
+    if (fingerprint(project, config) === expected) return [];
+    for (const id of supplyBoundarySourceIds(project, expected)) {
+      if (id !== project.id && fingerprint({ ...project, id }, config) === expected) return [];
+    }
+    return [SAVED_SOURCE_MISMATCH];
+  }
+
+  function activeGenerationFingerprint(project, config) {
+    if (config?.version !== 2 || !isObject(config.elements)) return fingerprint(project, config);
+    const elements = { ...config.elements };
+    for (const key of GENERATOR_KEYS) {
+      const series = elements[key];
+      if (!isObject(series)) continue;
+      const active = { ...series };
+      delete active.alternateGeneration;
+      if (generationMode(series) === CAPACITY_MODE) delete active.baseEnergyMwh;
+      elements[key] = active;
+    }
+    return fingerprint(project, { ...config, elements });
   }
 
   function compileCurve(series, required, year = null) {
@@ -589,5 +638,5 @@
   }
 
   return Object.freeze({ ELEMENTS, GENERATOR_KEYS, MONTH_DAYS, MAX_FORECAST_YEARS, createSeries, createConfig, createCapacityHours, createCapacityHoursConfig, switchGenerationMode, prepareShareConfig, getCurve, validateShares,
-    validateConfig, fingerprint, buildAnnualSummary, buildTypicalSummary, buildDataset, csvRows });
+    validateConfig, savedBoundaryErrors, fingerprint, activeGenerationFingerprint, buildAnnualSummary, buildTypicalSummary, buildDataset, csvRows });
 });

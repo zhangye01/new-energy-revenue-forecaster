@@ -37,8 +37,8 @@
 
   function periodLabel(project) { return project.startYear + "—" + (project.startYear + project.forecastYears - 1) + "年"; }
   function option(value, label, selected) { return `<option value="${value}"${value === selected ? " selected" : ""}>${label}</option>`; }
-  function button(action, label, primary = false, disabled = false) {
-    return `<button type="button" class="${primary ? "primary-button" : "ghost-button"}" data-sd-action="${action}"${disabled ? " disabled" : ""}>${label}</button>`;
+  function button(action, label, primary = false, disabled = false, attributes = "") {
+    return `<button type="button" class="${primary ? "primary-button" : "ghost-button"}" data-sd-action="${action}"${disabled ? " disabled" : ""}${attributes ? " " + attributes : ""}>${label}</button>`;
   }
 
   function tableRows(rows, leading, config) {
@@ -176,7 +176,7 @@
   function renderNotice(entry) {
     const errors = entry.errors;
     const list = errors.length ? `<ul>${errors.slice(0, ERROR_LIMIT).map((error) => `<li>${escape(error)}</li>`).join("")}</ul>` : "";
-    const remaining = errors.length > ERROR_LIMIT ? `<p>另有 ${errors.length - ERROR_LIMIT} 项，请核对后重新导入。</p>` : "";
+    const remaining = errors.length > ERROR_LIMIT ? `<p>另有 ${errors.length - ERROR_LIMIT} 项，请补充或修正后重试。</p>` : "";
     return `<div class="sd-message${errors.length ? " sd-alert" : ""}" role="status" aria-live="polite" data-sd-message>${escape(entry.message)}${list}${remaining}</div>`;
   }
 
@@ -224,6 +224,15 @@
     return savedErrors.length ? "待核对" : saved ? "已保存" : "待配置";
   }
 
+  function generationHint(entry, saved, draft, boundaryErrors, savedErrors) {
+    if (entry.loading) return "模板读取中，完成后可生成。";
+    if (entry.conflict) return "请先放弃草稿，再核对最新配置。";
+    if (boundaryErrors.length) return "原参数已带入，请核对当前省份和测算周期后重新生成。";
+    if (entry.staged || draft) return "修改尚未生成，校验通过后更新供需数据。";
+    if (savedErrors.length) return "请修正已保存配置中的无效参数后重新生成。";
+    return saved ? "配置未变，无需重新生成。" : "填写参数或导入模板后可生成。";
+  }
+
   function renderImportFeedback(entry) {
     const imported = entry.staged?.imported;
     if (!imported) return "";
@@ -236,10 +245,11 @@
       <span>${summary}</span></section>`;
   }
 
-  function markup(project, entry, config, savedErrors, savedDataset, generatorKeys) {
+  function markup(project, entry, config, savedErrors, savedDataset, generatorKeys, boundaryErrors) {
     const saved = project.supplyDemand?.config, draft = project.supplyDemand?.draft;
-    const status = statusLabel(entry, saved, savedErrors.length ? savedErrors : savedDataset?.errors || [], draft);
-    const canGenerate = Boolean((entry.staged || draft) && !entry.loading && !entry.conflict);
+    const errors = savedErrors.length ? savedErrors : savedDataset?.errors || [];
+    const status = statusLabel(entry, saved, errors, draft);
+    const canGenerate = Boolean((entry.staged || draft || (saved && boundaryErrors.length)) && !entry.loading && !entry.conflict);
     const canDiscard = Boolean(entry.staged || entry.loading || draft);
     const savedMarkup = renderSaved(entry, project, savedErrors, savedDataset);
     const disabled = entry.loading || entry.conflict ? " disabled" : "";
@@ -251,8 +261,9 @@
       ${renderElementEditor(project, entry, config, disabled, generatorKeys)}
       ${feedbackInEditor ? "" : renderImportFeedback(entry)}${renderNotice(entry)}
       ${entry.conflict ? '<div class="sd-alert">当前项目周期或已保存供需配置已更新。请放弃草稿后继续配置。</div>' : ""}
-      <div class="sd-actions">${button("generate", "校验并生成供需数据", true, !canGenerate)}
-        <span data-sd-discard-wrap${canDiscard ? "" : " hidden"}>${button("discard", entry.loading ? "取消读取" : "放弃草稿")}</span></div>
+      <div class="sd-actions">${button("generate", "校验并生成供需数据", true, !canGenerate, 'aria-describedby="sd-generation-hint"')}
+        <span data-sd-discard-wrap${canDiscard ? "" : " hidden"}>${button("discard", entry.loading ? "取消读取" : "放弃草稿")}</span>
+        <span class="sd-color-muted" id="sd-generation-hint" data-sd-generation-hint>${generationHint(entry, saved, draft, boundaryErrors, errors)}</span></div>
       ${savedMarkup}</div>`;
   }
 
@@ -402,9 +413,10 @@
       const config = editableConfig(project, entry);
       if (project.forecastYears === 1) entry.growthSeries = null;
       const saved = project.supplyDemand?.config;
-      const savedErrors = saved ? domain.validateConfig(project, saved) : [];
+      const boundaryErrors = domain.savedBoundaryErrors(project, project.supplyDemand);
+      const savedErrors = boundaryErrors.length ? boundaryErrors : saved ? domain.validateConfig(project, saved) : [];
       const savedDataset = saved && !savedErrors.length ? loadChartDataset(project, entry, saved) : null;
-      root.innerHTML = markup(project, entry, config, savedErrors, savedDataset, domain.GENERATOR_KEYS);
+      root.innerHTML = markup(project, entry, config, savedErrors, savedDataset, domain.GENERATOR_KEYS, boundaryErrors);
       if (savedDataset?.ok) mountChart(entry, savedDataset);
       if (!bound && root.addEventListener) {
         root.addEventListener("input", onInput);
@@ -533,6 +545,7 @@
       };
       setText("[data-sd-dirty]", "待保存");
       setDisabled('[data-sd-action="generate"]', false);
+      setText("[data-sd-generation-hint]", "修改尚未生成，校验通过后更新供需数据。");
       const discard = root.querySelector("[data-sd-discard-wrap]");
       if (discard) discard.hidden = false;
       const message = root.querySelector("[data-sd-message]");
@@ -667,10 +680,16 @@
 
     function generate(project, entry) {
       const previous = project.supplyDemand || {};
-      const candidate = entry.staged?.config || previous.draft;
+      const boundaryErrors = domain.savedBoundaryErrors(project, previous);
+      const candidate = entry.staged?.config || (previous.config && boundaryErrors.length ? editableConfig(project, entry) : previous.draft);
       if (!candidate || entry.loading || entry.conflict) return;
-      if (savedConfigMatches(project, previous.config, candidate)) {
-        if (domain.validateConfig(project, candidate).length) return;
+      const errors = domain.validateConfig(project, candidate);
+      if (errors.length) {
+        notice(entry, "供需数据生成失败，请核对以下参数。", errors);
+        render();
+        return;
+      }
+      if (!boundaryErrors.length && savedConfigMatches(project, previous.config, candidate)) {
         if (!previous.draft) { clearStaged(entry, "已保留相同的供需配置。"); return; }
         const next = clone(previous);
         delete next.draft;
@@ -692,6 +711,8 @@
     function exportSaved(project, entry, kind) {
       const config = project.supplyDemand?.config;
       if (!config || !Object.hasOwn(CSV_LABELS, kind)) return;
+      const boundaryErrors = domain.savedBoundaryErrors(project, project.supplyDemand);
+      if (boundaryErrors.length) { notice(entry, "请先核对并重新生成供需数据。", boundaryErrors); render(); return; }
       const result = loadDataset(project, entry, config);
       if (!result.ok) { notice(entry, "请核对已保存的供需配置。", result.errors); render(); return; }
       const label = CSV_LABELS[kind];
@@ -704,7 +725,7 @@
       if (entry.loading || entry.conflict || entry.growthSeries !== key) return;
       const fill = entry.growthFills[key];
       if (!Number.isFinite(fill) || fill < -100) {
-        notice(entry, "请填写有效的统一增速。", ["增长率不能低于 -100%。"]);
+        notice(entry, "请填写有效的统一增速。", ["增长率须填写有限数字，且不能低于 -100%。"]);
         render();
         root.querySelector?.('[data-sd-input="growth-fill"]')?.focus?.();
         return;

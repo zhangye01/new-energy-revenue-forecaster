@@ -62,6 +62,9 @@
     const energyModeChanged = project.energyMode !== projectInput.energyMode;
 
     projectModel.applyCreateProjectInput(project, projectInput);
+    if (project.province !== oldProvince && (project.supplyDemand?.config || project.supplyDemand?.draft)) {
+      project.supplyDemand = { ...project.supplyDemand, requiresProvinceReview: true };
+    }
     project.statuses["create-page"] = actions.isProjectCreateCompleted?.(project) ? "completed" : "in_progress";
     const provinceDefaultsAutoSynced = baseChanged && actions.syncProjectProvinceDefaultsToBaseline?.(project, {
       force: actions.shouldAutoSyncProvinceDefaults?.(project)

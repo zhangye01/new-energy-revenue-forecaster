@@ -162,6 +162,7 @@ const existingProject = {
     "history-page": "completed"
   },
   energyData: { mode: "annual_hours" },
+  supplyDemand: { config: { startYear: 2028, forecastYears: 20 }, inputFingerprint: "original-supply" },
   energyTemplateExports: {
     hourly_8760: "old",
     annual_hours: "old",
@@ -192,6 +193,9 @@ const updated = updateExistingProjectFromForm({
 });
 assert.equal(updated, existingProject);
 assert.equal(existingProject.name, "新项目");
+assert.deepEqual(existingProject.supplyDemand, {
+  config: { startYear: 2028, forecastYears: 20 }, inputFingerprint: "original-supply", requiresProvinceReview: true
+});
 assert.deepEqual(existingProject.energyData, { mode: "province_typical_curve" });
 assert.deepEqual(existingProject.historySpotImport, { source: "empty" });
 assert.equal(existingProject.statuses["energy-page"], "in_progress");

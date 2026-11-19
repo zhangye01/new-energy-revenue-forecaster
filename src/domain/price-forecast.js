@@ -458,6 +458,9 @@
     if (!supplyDemand) return { ok: false, errors: ["供需输入模块尚未加载。"] };
     const errors = supplyDemand.validateConfig(project, config);
     if (errors.length) return { ok: false, errors };
+    if (project.supplyDemand?.requiresProvinceReview === true) {
+      return { ok: false, errors: ["请核对当前省份的供需配置并重新生成。"] };
+    }
     if (!hasSource) return { ok: false, errors: ["历史预测未绑定当前供需输入，请重新生成。"] };
     if (!isSupplyObject(saved) || saved.version !== 1 || saved.calendar !== "fixed_365_days"
         || saved.hoursPerYear !== 8760 || !isSupplyObject(saved.units)
@@ -477,11 +480,14 @@
     const sourceIsInherited = copiedSourceIds.includes(saved.projectId) || restoredSourceMatches;
     const sourceProject = saved.projectId === (project.id ?? null) ? project
       : sourceIsInherited ? { ...project, id: saved.projectId } : null;
-    const current = sourceProject && supplyDemand.fingerprint(sourceProject, config);
-    if (!sourceProject || saved.fingerprint !== current
-        || saved.province !== (project.province ?? null) || saved.period?.startYear !== project.startYear
+    if (!sourceProject || saved.province !== (project.province ?? null) || saved.period?.startYear !== project.startYear
         || saved.period?.forecastYears !== project.forecastYears
         || supplyDemand.fingerprint(sourceProject, saved.configSnapshot) !== saved.fingerprint) {
+      return { ok: false, errors: ["供需输入或项目边界已变化，请重新生成电价预测。"] };
+    }
+    const current = supplyDemand.fingerprint(sourceProject, config);
+    if (saved.fingerprint !== current && !(config.version === 2 && saved.configSnapshot.version === 2 &&
+        supplyDemand.activeGenerationFingerprint(sourceProject, config) === supplyDemand.activeGenerationFingerprint(sourceProject, saved.configSnapshot))) {
       return { ok: false, errors: ["供需输入或项目边界已变化，请重新生成电价预测。"] };
     }
     const expected = supplyDemand.buildAnnualSummary(project, saved.configSnapshot);

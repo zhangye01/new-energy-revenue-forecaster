@@ -72,6 +72,10 @@ function fixture(p = project(), behavior = {}) {
       if (behavior.throw) throw new Error("模拟保存失败");
       assert.equal(target, active);
       assert.equal(controller.hasUnsavedChanges(target), false, "draft clears before the synchronous workflow render");
+      if (flags.generated) {
+        next.generatedProvince = target.province ?? null;
+        delete next.requiresProvinceReview;
+      }
       target.supplyDemand = next;
       commits.push({ next: clone(next), flags });
       controller.render();
@@ -431,7 +435,87 @@ function testGenerationModeRoundTrip() {
   inactiveReopened.click("discard");
 }
 
+function testBoundaryReview() {
+  const shortened = project("shorter-period");
+  shortened.supplyDemand = savedState(shortened);
+  const previous = clone(shortened.supplyDemand), roughBefore = JSON.stringify(shortened.roughPrice);
+  const short = fixture(shortened);
+  shortened.forecastYears = 1;
+  short.controller.render();
+  assert.match(short.root.innerHTML, /data-sd-generation-hint>原参数已带入/);
+  assert.doesNotMatch(short.root.innerHTML, /data-sd-action="generate" disabled|data-sd-saved-preview/);
+  assert.deepEqual(shortened.supplyDemand, previous, "opening a changed period never rewrites the saved source");
+  short.edit("base", 120000, { sdSeries: "load" });
+  assert.equal(short.controller.hasUnsavedChanges(), false, "re-entering a carried value need not invent a draft");
+  short.click("generate");
+  assert.equal(short.commits.length, 1, "the migrated period can be explicitly confirmed without changing a value");
+  assert.deepEqual(short.commits[0].flags, { changed: true, generated: true });
+  assert.equal(shortened.supplyDemand.config.forecastYears, 1);
+  assert.equal(shortened.supplyDemand.config.elements.load.baseEnergyMwh, 120000);
+  assert.equal(shortened.supplyDemand.generatedAt, generatedAt);
+  assert.match(short.root.innerHTML, /data-sd-saved-preview/);
+  assert.equal(JSON.stringify(shortened.roughPrice), roughBefore);
+
+  const moved = project("different-province", 1);
+  const sameConfig = domain.prepareShareConfig(moved, completeConfig(moved));
+  moved.supplyDemand = { ...savedState(moved, sameConfig), generatedProvince: moved.province, requiresProvinceReview: true };
+  const movedSource = clone(moved.supplyDemand), behavior = { fail: true };
+  moved.province = "hebei";
+  const other = fixture(moved, behavior);
+  assert.match(other.root.innerHTML, /核对当前省份和测算周期后重新生成/);
+  assert.doesNotMatch(other.root.innerHTML, /data-sd-action="generate" disabled|data-sd-saved-preview/);
+  other.click("export-annual");
+  assert.equal(other.exports.length, 0, "a stale saved source cannot be exported under the new province");
+  other.click("generate");
+  assert.deepEqual(moved.supplyDemand, movedSource, "failed reconfirmation preserves the old config and source markers");
+  assert.match(other.root.innerHTML, /供需配置保存失败/);
+  assert.doesNotMatch(other.root.innerHTML, /data-sd-saved-preview/);
+  behavior.fail = false;
+  other.setActive(project("another-project", 1));
+  other.click("generate");
+  assert.equal(other.commits.length, 0, "switching projects cannot confirm the previous project's source");
+  other.setActive(moved);
+  other.click("generate");
+  assert.equal(other.commits.length, 1, "equal values still need a real generation for a changed province");
+  assert.deepEqual(other.commits[0].flags, { changed: true, generated: true });
+  assert.deepEqual(moved.supplyDemand.config, sameConfig);
+  assert.equal(moved.supplyDemand.generatedProvince, "hebei");
+  assert.equal(moved.supplyDemand.requiresProvinceReview, undefined);
+  assert.notEqual(moved.supplyDemand.inputFingerprint, movedSource.inputFingerprint);
+  assert.deepEqual(domain.savedBoundaryErrors(moved), []);
+  assert.match(other.root.innerHTML, /data-sd-saved-preview/);
+  assert.match(other.root.innerHTML, /data-sd-generation-hint>配置未变，无需重新生成/);
+
+  const extended = project("longer-period", 1);
+  extended.supplyDemand = savedState(extended);
+  extended.forecastYears = 2;
+  const extendedBefore = clone(extended.supplyDemand), longer = fixture(extended);
+  longer.click("generate");
+  assert.equal(longer.commits.length, 0, "explicit reconfirmation does not bypass missing new-year values");
+  assert.match(longer.root.innerHTML, /供需数据生成失败，请核对以下参数/);
+  assert.match(longer.root.innerHTML, /2028年增长率须明确填写/);
+  assert.deepEqual(extended.supplyDemand, extendedBefore);
+
+  const invalid = project("same-invalid", 3);
+  const invalidConfig = domain.prepareShareConfig(invalid, completeConfig(invalid));
+  for (const key of keys) {
+    for (const year of Object.keys(invalidConfig.elements[key].growthRatesByYear)) invalidConfig.elements[key].growthRatesByYear[year] = null;
+  }
+  invalid.supplyDemand = savedState(invalid, invalidConfig);
+  const invalidBefore = clone(invalid.supplyDemand), unchanged = fixture(invalid);
+  assert.match(unchanged.root.innerHTML, /data-sd-generation-hint>请修正已保存配置中的无效参数后重新生成/);
+  unchanged.edit("base", 120001, { sdSeries: "load" });
+  unchanged.edit("base", 120000, { sdSeries: "load" });
+  unchanged.click("generate");
+  assert.equal(unchanged.commits.length, 0);
+  assert.match(unchanged.root.innerHTML, /data-sd-message>供需数据生成失败，请核对以下参数/);
+  assert.match(unchanged.root.innerHTML, /另有 \d+ 项，请补充或修正后重试/);
+  assert.doesNotMatch(unchanged.root.innerHTML, /请核对后重新导入/);
+  assert.deepEqual(invalid.supplyDemand, invalidBefore);
+}
+
 async function main() {
+  testBoundaryReview();
   const fresh = project(), initial = fixture(fresh), original = clone(fresh);
   assert.equal(initial.controller.hasUnsavedChanges(), false);
   assert.match(initial.root.innerHTML, /2027—2028年/);
@@ -454,6 +538,8 @@ async function main() {
   assert.equal(initial.controller.hasUnsavedChanges(), false, "obsolete monthly edit events cannot create a draft");
   assert.deepEqual(fresh, original);
   assert.match(initial.root.innerHTML, /data-sd-action="generate" disabled/);
+  assert.match(initial.root.innerHTML, /aria-describedby="sd-generation-hint"/);
+  assert.match(initial.root.innerHTML, /data-sd-generation-hint>填写参数或导入模板后可生成/);
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-growth-panel|sd-curve-bars|<textarea/);
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-supply-chart/, "chart appears after successful generation");
   initial.click("download-template");

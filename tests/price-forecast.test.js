@@ -265,6 +265,21 @@ const shareRun = createForecastRunForModel(shareProject, ensemble, {
 assert.equal(validateSupplyDemandRun(shareProject, shareRun).ok, true);
 assert.equal(validateSupplyDemandRun(shareProject, boundRun).ok, false, "单年曲线调整应使旧供需指纹退出生效");
 assert.deepEqual(shareRun.supplyDemandInput.configSnapshot.elements.load.curveOverridesByYear, shareConfig.elements.load.curveOverridesByYear);
+
+const alternateConfig = structuredClone(shareConfig);
+const alternateWind = alternateConfig.elements.wind;
+supplyDemand.switchGenerationMode(project, alternateWind, "capacity_hours");
+alternateWind.capacityHours.baseCapacityMw = 120;
+alternateWind.capacityHours.baseUtilizationHours = 1800;
+supplyDemand.switchGenerationMode(project, alternateWind, "energy");
+assert.notEqual(supplyDemand.fingerprint(project, alternateConfig), shareDataset.fingerprint);
+assert.equal(validateSupplyDemandRun({ ...shareProject, supplyDemand: { config: alternateConfig } }, shareRun).ok, true);
+const alteredSnapshot = { ...shareRun, supplyDemandInput: { ...shareRun.supplyDemandInput, configSnapshot: alternateConfig } };
+assert.equal(validateSupplyDemandRun(shareProject, alteredSnapshot).ok, false, "历史快照须与原始完整指纹一致");
+alternateConfig.elements.load.baseEnergyMwh += 1;
+assert.equal(validateSupplyDemandRun({ ...shareProject, supplyDemand: { config: alternateConfig } }, shareRun).ok, false);
+assert.equal(validateSupplyDemandRun({ ...shareProject, supplyDemand: { config: shareConfig, requiresProvinceReview: true } }, shareRun).ok, false);
+
 assert.throws(() => validateSupplyDemandDataset(shareProject, { config: shareConfig, dataset: { ...shareDataset,
   source: { ...shareDataset.source, curveReuse: grossDataset.source.curveReuse }
 } }), /曲线复用方式.*不一致/);

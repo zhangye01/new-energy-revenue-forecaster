@@ -2,7 +2,7 @@
 const assert = require("node:assert/strict");
 const domain = require("../src/domain/supply-demand");
 const { ELEMENTS, GENERATOR_KEYS, MONTH_DAYS, createConfig, createSeries, createCapacityHours, createCapacityHoursConfig, switchGenerationMode, prepareShareConfig, getCurve, validateShares,
-  validateConfig, fingerprint, buildAnnualSummary, buildTypicalSummary, buildDataset, csvRows } = domain;
+  validateConfig, savedBoundaryErrors, fingerprint, activeGenerationFingerprint, buildAnnualSummary, buildTypicalSummary, buildDataset, csvRows } = domain;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 const approx = (actual, expected, tolerance = 1e-6) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} != ${expected}`);
@@ -520,5 +520,36 @@ reject(unsupportedArchive, /备用发电口径仅支持版本2的风电、光伏
 const unsupportedV1Archive = clone(power);
 unsupportedV1Archive.elements.wind.alternateGeneration = { mode: "capacity_hours", growthRatesByYear: {} };
 reject(unsupportedV1Archive, /备用发电口径仅支持版本2/, longer);
+
+const recorded = { config: raw, inputFingerprint: fingerprint(project, raw) };
+assert.deepEqual(savedBoundaryErrors(project, recorded), []);
+assert.deepEqual(savedBoundaryErrors({ ...project, supplyDemand: { config: raw } }), [], "legacy saved inputs without a fingerprint remain supported");
+assert.match(savedBoundaryErrors(project, { requiresProvinceReview: true })[0], /省份已变化/);
+assert.match(savedBoundaryErrors(project, { ...recorded, generatedProvince: "zhejiang" })[0], /省份已变化/);
+assert.match(savedBoundaryErrors({ ...project, province: "zhejiang" }, recorded)[0], /省份或输入来源不一致/);
+assert.match(savedBoundaryErrors({ ...project, forecastYears: 2 }, recorded)[0], /测算周期已变化/);
+assert.match(savedBoundaryErrors(project, { ...recorded, inputFingerprint: "" })[0], /省份或输入来源不一致/);
+const carriedInputs = { ...project, id: "copy", duplicationTargetProjectId: "copy", duplicatedFromProjectIds: [project.id] };
+assert.deepEqual(savedBoundaryErrors(carriedInputs, recorded), []);
+assert.deepEqual(savedBoundaryErrors({ ...project, id: "restored", restoredFromProjectIds: [project.id] }, recorded), []);
+assert.match(savedBoundaryErrors({ ...carriedInputs, id: "unrelated" }, recorded)[0], /输入来源不一致/);
+assert.match(savedBoundaryErrors({ ...carriedInputs, province: "zhejiang" }, recorded)[0], /输入来源不一致/);
+
+assert.equal(activeGenerationFingerprint(project, raw), fingerprint(project, raw), "v1 retains its exact original fingerprint");
+assert.deepEqual(validateConfig(longer, energyBasis), []);
+assert.notEqual(fingerprint(longer, energyBasis), fingerprint(longer, energyBasisOriginal));
+assert.equal(activeGenerationFingerprint(longer, energyBasis), activeGenerationFingerprint(longer, energyBasisOriginal));
+const capacityArchiveEdit = clone(capacity);
+capacityArchiveEdit.elements.wind.baseEnergyMwh = 7000;
+assert.equal(activeGenerationFingerprint(longer, capacityArchiveEdit), activeGenerationFingerprint(longer, capacity));
+capacityArchiveEdit.elements.wind.capacityHours.baseUtilizationHours += 1;
+assert.notEqual(activeGenerationFingerprint(longer, capacityArchiveEdit), activeGenerationFingerprint(longer, capacity));
+const activeRateEdit = clone(energyBasis);
+activeRateEdit.elements.wind.growthRatesByYear[2029] += 1;
+assert.notEqual(activeGenerationFingerprint(longer, activeRateEdit), activeGenerationFingerprint(longer, energyBasis));
+const activeCurveEdit = clone(energyBasis);
+activeCurveEdit.elements.wind.monthlyWeights = oneMonth(2);
+assert.notEqual(activeGenerationFingerprint(longer, activeCurveEdit), activeGenerationFingerprint(longer, energyBasis));
+assert.equal(JSON.stringify(energyBasis), savedWithAlternate, "comparisons never rewrite the active or alternate inputs");
 
 console.log("supply demand tests passed");

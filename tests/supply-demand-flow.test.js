@@ -16,6 +16,7 @@ const instance = flow.create({ documentRef: { querySelector: () => ({}) }, getPr
 instance.render();
 assert.equal(instance.reconcile(project), false, "legacy project stays usable before configuring supply");
 assert.equal(instance.prepareSupplyDemand(project).ok, false);
+assert.deepEqual(instance.inspectSupplyDemand(project).errors, ["请先填写供需参数并生成数据。"]);
 const config = domain.createConfig(project);
 for (const element of domain.ELEMENTS) {
   const series = config.elements[element.key];
@@ -30,6 +31,7 @@ assert.equal(project.activeRunId, "legacy", "draft does not invalidate legacy ru
 assert.equal(instance.hasPendingDraft(project), true);
 assert.equal(instance.prepareSupplyDemand(project).ok, false);
 assert.equal(commit(project, { version: 1, config }, { generated: true }), true);
+assert.equal(project.supplyDemand.generatedProvince, "hebei");
 assert.equal(project.activeRunId, null);
 assert.equal(invalidated, 1);
 assert.equal(project.priceRuns.length, 1);
@@ -119,4 +121,27 @@ const validReload = copy(sourceProject);
 flow.create({}).hydrate(validReload, sourceProject);
 assert.equal(validReload.activeRunId, sourceRun.id, "intact provenance remains active on reload");
 assert.equal(roughPrice.baselineResultState(validReload, validReload.scenarios[0], validReload.resultsByScenario.baseline).current, true);
+
+project = copy(sourceProject);
+project.supplyDemand.inputFingerprint = domain.fingerprint(project, project.supplyDemand.config);
+assert.equal(instance.inspectSupplyDemand(project).ok, true);
+const preservedRecords = JSON.stringify([project.supplyDemand.config, project.priceRuns, project.roughPrice, project.resultsByScenario]);
+project.province = "zhejiang";
+assert.match(instance.inspectSupplyDemand(project).errors[0], /省份或输入来源不一致/);
+assert.equal(instance.prepareSupplyDemand(project).ok, false);
+assert.equal(instance.reconcile(project), true);
+assert.equal(project.activeRunId, null);
+assert.equal(JSON.stringify([project.supplyDemand.config, project.priceRuns, project.roughPrice, project.resultsByScenario]), preservedRecords);
+project.supplyDemand.requiresProvinceReview = true;
+const incomplete = copy(project.supplyDemand);
+incomplete.config.elements.load.baseEnergyMwh = null;
+assert.equal(commit(project, incomplete, { generated: true }), false);
+assert.equal(project.supplyDemand.requiresProvinceReview, true);
+assert.match(instance.inspectSupplyDemand(project).errors[0], /省份已变化/);
+assert.equal(commit(project, project.supplyDemand, { generated: true }), true);
+assert.equal(project.supplyDemand.generatedProvince, "zhejiang");
+assert.equal(Object.hasOwn(project.supplyDemand, "requiresProvinceReview"), false);
+assert.equal(instance.prepareSupplyDemand(project).dataset.source.province, "zhejiang");
+assert.equal(JSON.stringify([project.supplyDemand.config, project.priceRuns, project.roughPrice, project.resultsByScenario]), preservedRecords);
+
 console.log("supply-demand-flow tests passed");

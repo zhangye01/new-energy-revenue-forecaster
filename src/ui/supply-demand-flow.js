@@ -25,6 +25,8 @@
     }
 
     function validateSupplyDemandRun(project, run) {
+      const errors = domain.savedBoundaryErrors(project);
+      if (errors.length) return { ok: false, errors };
       return forecast.validateSupplyDemandRun(project, run);
     }
 
@@ -49,6 +51,9 @@
         return { ok: false, errors: ["供需输入待确认。请先保存并生成小时数据，或放弃草稿。"] };
       }
       const config = project?.supplyDemand?.config;
+      const boundaryErrors = domain.savedBoundaryErrors(project);
+      if (boundaryErrors.length) return { ok: false, errors: boundaryErrors };
+      if (project && config == null) return { ok: false, errors: ["请先填写供需参数并生成数据。"] };
       const errors = domain.validateConfig(project, config);
       if (errors.length) return { ok: false, errors };
       return { ok: true, config, fingerprint: domain.fingerprint(project, config) };
@@ -73,6 +78,8 @@
         const errors = domain.validateConfig(project, next.config);
         if (errors.length) { message(errors[0]); return false; }
         next.inputFingerprint = domain.fingerprint(project, next.config);
+        next.generatedProvince = project.province ?? null;
+        delete next.requiresProvinceReview;
       }
       project.supplyDemand = next;
       cached = null;
