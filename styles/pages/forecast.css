@@ -296,6 +296,9 @@
 .sd-growth-panel .sd-actions { align-items: end; }
 .sd-growth-panel .sd-actions input[type="number"] { max-width: 100px; }
 .sd-growth-panel .sd-file { display: inline-flex; color: var(--blue); }
+.sd-utilization-override { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+.sd-utilization-override .sd-actions input[type="number"] { width: 168px; max-width: 100%; }
+.sd-utilization-override .sd-color-muted { padding-bottom: 8px; }
 .sd-number-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px 9px; }
 .sd-color-muted { color: var(--muted); font-size: .76rem; }
 .sd-file { position: relative; display: inline-flex; align-items: center; cursor: pointer; }

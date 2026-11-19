@@ -218,6 +218,99 @@ async function testGrowthWorkbook() {
   assert.equal(cancelled.commits.length, 0);
 }
 
+function testCapacityHoursEditor() {
+  const fresh = project("capacity-hours-new", 3), freshBefore = JSON.stringify(fresh), x = fixture(fresh);
+  x.click("download-template");
+  const seeded = x.downloads.at(-1).config;
+  for (const key of ["wind", "solar", "hydro"]) {
+    assert.ok(seeded.elements[key].capacityHours, `${key} has a capacity-hours basis in a new template`);
+    x.chooseElement(key);
+    assert.match(x.root.innerHTML, new RegExp(`data-sd-input="base-capacity"[^>]*data-sd-series="${key}"`));
+    assert.match(x.root.innerHTML, new RegExp(`data-sd-input="base-utilization"[^>]*data-sd-series="${key}"`));
+    assert.doesNotMatch(x.root.innerHTML, /data-sd-input="base"|data-sd-action="use-capacity-hours"/);
+    x.openGrowth(key);
+    assert.match(x.root.innerHTML, /装机(?:增速|增长率)/);
+    assert.match(x.root.innerHTML, /data-sd-select="utilizationYear"/);
+    assertNoElementPreviews(x.root.innerHTML);
+  }
+  assert.equal(x.controller.hasUnsavedChanges(), false, "viewing a fresh capacity-hours basis does not save it");
+  assert.equal(JSON.stringify(fresh), freshBefore);
+
+  x.chooseElement("wind");
+  x.edit("base-capacity", 100, { sdSeries: "wind" });
+  x.edit("base-utilization", 2400, { sdSeries: "wind" });
+  x.openGrowth("wind");
+  x.edit("growth-rate", 10, { sdSeries: "wind", sdYear: "2028" });
+  x.edit("growth-rate", 5, { sdSeries: "wind", sdYear: "2029" });
+  x.select("utilizationYear", 2029);
+  assert.match(x.root.innerHTML, /data-sd-input="utilization-override"[^>]*placeholder="[^"]*2400/);
+  x.edit("utilization-override", 2100, { sdSeries: "wind", sdYear: "2029" });
+  x.click("download-growth-template");
+  assert.equal(x.growthDownloads.at(-1).options.seriesKey, "wind");
+  const withOverride = clone(x.growthDownloads.at(-1).config);
+  assert.deepEqual(withOverride.elements.wind.capacityHours, {
+    baseCapacityMw: 100, baseUtilizationHours: 2400, utilizationHoursByYear: { 2029: 2100 }
+  });
+  assert.deepEqual(withOverride.elements.wind.growthRatesByYear, { 2028: 10, 2029: 5 });
+  x.chooseElement("solar");
+  x.edit("base-capacity", 200, { sdSeries: "solar" });
+  x.edit("base-utilization", 1500, { sdSeries: "solar" });
+  x.openGrowth("solar");
+  x.select("utilizationYear", 2028);
+  x.edit("utilization-override", 0, { sdSeries: "solar", sdYear: "2028" });
+  x.chooseElement("wind");
+  x.openGrowth("wind");
+  x.select("utilizationYear", 2029);
+  assert.match(x.root.innerHTML, /data-sd-input="utilization-override"[^>]*value="2100"[^>]*data-sd-year="2029"/);
+  x.edit("utilization-override", "", { sdSeries: "wind", sdYear: "2029" });
+  x.click("download-template");
+  const cleared = x.downloads.at(-1).config;
+  assert.deepEqual(cleared.elements.wind.capacityHours, {
+    baseCapacityMw: 100, baseUtilizationHours: 2400, utilizationHoursByYear: {}
+  }, "blank annual hours restore inheritance without altering first-year assumptions");
+  assert.deepEqual(cleared.elements.solar.capacityHours, {
+    baseCapacityMw: 200, baseUtilizationHours: 1500, utilizationHoursByYear: { 2028: 0 }
+  }, "a zero-hour override is explicit and stays scoped to its generator and year");
+  assert.equal(JSON.stringify(fresh), freshBefore);
+  x.click("discard");
+  assert.equal(x.controller.hasUnsavedChanges(), false);
+  assert.equal(JSON.stringify(fresh), freshBefore);
+
+  const history = project("capacity-hours-legacy", 3);
+  const legacy = domain.prepareShareConfig(history, completeConfig(history));
+  legacy.elements.wind = { ...clone(legacy.elements.load), baseEnergyMwh: 50000,
+    growthRatesByYear: { 2028: 3, 2029: 4 },
+    curveOverridesByYear: { 2029: { monthlyWeights: [0, 1 / 6, ...Array(10).fill(1 / 12)] } } };
+  history.supplyDemand = savedState(history, legacy);
+  const historyBefore = JSON.stringify(history), old = fixture(history);
+  old.edit("base", 130000, { sdSeries: "load" });
+  old.chooseElement("wind");
+  assert.match(old.root.innerHTML, /value="50000" data-sd-series="wind"/);
+  assert.doesNotMatch(old.root.innerHTML, /data-sd-input="base-capacity"|data-sd-input="base-utilization"/);
+  assert.match(old.root.innerHTML, /data-sd-action="use-capacity-hours"/);
+  old.click("use-capacity-hours");
+  old.click("download-template");
+  const converted = old.downloads.at(-1).config;
+  assert.ok(converted.elements.wind.capacityHours);
+  assert.ok(Object.values(converted.elements.wind.growthRatesByYear).every((rate) => rate === null),
+    "legacy energy growth rates need explicit new capacity-growth input");
+  assert.deepEqual(converted.elements.wind.monthlyWeights, legacy.elements.wind.monthlyWeights);
+  assert.deepEqual(converted.elements.wind.hourlyWeightsByMonth, legacy.elements.wind.hourlyWeightsByMonth);
+  assert.deepEqual(converted.elements.wind.curveOverridesByYear, legacy.elements.wind.curveOverridesByYear);
+  assert.equal(converted.elements.load.baseEnergyMwh, 130000, "conversion preserves other staged edits");
+  assert.deepEqual(converted.elements.load.growthRatesByYear, legacy.elements.load.growthRatesByYear);
+  assert.equal(converted.elements.solar.capacityHours, undefined, "conversion remains scoped to the chosen legacy generator");
+  assert.equal(converted.elements.hydro.capacityHours, undefined);
+  assert.equal(JSON.stringify(history), historyBefore, "conversion never rewrites saved inputs or rough snapshots before generation");
+  old.click("discard");
+  assert.equal(old.controller.hasUnsavedChanges(), false);
+  assert.equal(old.commits.length, 0);
+  assert.equal(JSON.stringify(history), historyBefore);
+  assert.match(old.root.innerHTML, /value="50000" data-sd-series="wind"/);
+  assert.match(old.root.innerHTML, /data-sd-action="use-capacity-hours"/);
+  assert.doesNotMatch(old.root.innerHTML, /data-sd-input="base-capacity"|data-sd-input="base-utilization"/);
+}
+
 async function main() {
   const fresh = project(), initial = fixture(fresh), original = clone(fresh);
   assert.equal(initial.controller.hasUnsavedChanges(), false);
@@ -244,7 +337,7 @@ async function main() {
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-growth-panel|sd-curve-bars|<textarea/);
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-supply-chart/, "chart appears after successful generation");
   initial.click("download-template");
-  assert.deepEqual(initial.downloads[0], { target: fresh, config: undefined, options: { xlsx: initial.xlsx, year: null } });
+  assert.deepEqual(initial.downloads[0], { target: fresh, config: domain.createCapacityHoursConfig(fresh), options: { xlsx: initial.xlsx, year: null } });
 
   const pending = deferred();
   const valid = completeConfig(fresh);
@@ -442,6 +535,7 @@ async function main() {
   assert.doesNotMatch(single.root.innerHTML, /data-sd-action="growth-open"/);
   assert.doesNotMatch(single.root.innerHTML, /data-sd-action="download-growth-template"|data-sd-growth-file/);
   await testGrowthWorkbook();
+  testCapacityHoursEditor();
 
   const keyboardProject = project("keyboard-tabs"), keyboardBefore = JSON.stringify(keyboardProject);
   const keyboard = fixture(keyboardProject), focusedTabs = [];

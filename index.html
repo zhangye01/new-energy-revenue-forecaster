@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261119c">
-    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119g">
+    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119h">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261118m">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
@@ -96,7 +96,7 @@
     <script src="./src/ui/context-help.js?v=20261118d" defer></script>
     <script src="./src/domain/energy-profiles.js?v=20261113c" defer></script>
     <script src="./src/domain/app-utils.js?v=20261113c" defer></script>
-    <script src="./src/domain/supply-demand.js?v=20261118s" defer></script>
+    <script src="./src/domain/supply-demand.js?v=20261119h" defer></script>
     <script src="./src/domain/price-forecast.js?v=20261119a" defer></script>
     <script src="./src/domain/result-versions.js?v=20261118i" defer></script>
     <script src="./src/domain/revenue-rules.js?v=20261118r" defer></script>
@@ -112,9 +112,9 @@
     <script src="./src/ui/energy-template-flow.js?v=20261113c" defer></script>
     <script src="./src/ui/chart-lifecycle.js?v=20261113c" defer></script>
     <script src="./src/ui/energy-charts.js?v=20261119b" defer></script>
-    <script src="./src/ui/supply-demand-template.js?v=20261119f" defer></script>
+    <script src="./src/ui/supply-demand-template.js?v=20261119h" defer></script>
     <script src="./src/ui/supply-demand-chart.js?v=20261119g" defer></script>
-    <script src="./src/ui/supply-demand-workspace.js?v=20261119g" defer></script>
+    <script src="./src/ui/supply-demand-workspace.js?v=20261119h" defer></script>
     <script src="./src/ui/supply-demand-flow.js?v=20261118s" defer></script>
     <script src="./src/ui/forecast-results-view.js?v=20261119d" defer></script>
     <script src="./src/ui/forecast-page.js?v=20261118t" defer></script>
@@ -1826,7 +1826,7 @@
                   <div class="help-step-index">7</div>
                   <div class="help-step-body">
                     <strong>电价预测工作台</strong>
-                    <p>在“测算周期供需配置”逐个选择要素，填写首年总量，手填或导入逐年增速，再用曲线模板导入分月和分时。核对六类要素后，统一生成并预览供需数据。</p>
+                    <p>在“测算周期供需配置”逐个选择要素。风电、光伏和水电由有效装机与等效利用小时计算发电量。用曲线模板导入分月和分时，配置齐备后统一生成并预览。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
@@ -1931,7 +1931,8 @@
                 </article>
                 <article class="help-card">
                   <strong>供需输入</strong>
-                  <p>每个要素页签集中配置首年总量、逐年增速和典型年曲线。增速可手填或通过 Excel 导入。分月和分时通过 Excel 曲线模板导入，各年沿用默认曲线，也可单独调整指定年份。联络线净额正值为送出，负值为受入。</p>
+                  <p>风电、光伏和水电填写首年有效装机、年等效利用小时和逐年装机增速。年度发电量等于有效装机乘以年等效利用小时。利用小时默认沿用首年，可单独调整指定年份。历史项目沿用原电量口径，也可手动切换至装机与利用小时。</p>
+                  <p>省内负荷、联络线和非市场化出力填写首年电量及逐年增速。增速可手填或通过 Excel 导入。分月和分时使用原 Excel 曲线模板，各年可沿用默认曲线或单独调整。联络线净额正值为送出，负值为受入。</p>
                   <p>生成后统一查看供需数据。堆积面积图可按年份查看分月或典型日分时构成，点击图例可隐藏或恢复曲线。可查看年度与典型日数据，也可导出年度、典型小时和逐小时 CSV。</p>
                 </article>
               </div>

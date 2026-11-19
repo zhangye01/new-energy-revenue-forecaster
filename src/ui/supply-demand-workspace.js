@@ -24,6 +24,7 @@
   const MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
   const ERROR_LIMIT = 8;
   const EXCEL_ACCEPT = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const CAPACITY_INPUTS = Object.freeze({ "base-capacity": "baseCapacityMw", "base-utilization": "baseUtilizationHours" });
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const escape = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
@@ -68,28 +69,62 @@
     return rates.every((rate) => rate === rates[0]) ? `${rates[0]}%` : "已逐年配置";
   }
 
+  function utilizationYearLabel(year, capacityHours) {
+    return `${year}年${Object.hasOwn(capacityHours.utilizationHoursByYear || {}, year) ? " · 已调整" : ""}`;
+  }
+
+  function utilizationPlaceholder(capacityHours) {
+    const hours = capacityHours.baseUtilizationHours;
+    return Number.isFinite(hours) ? `沿用首年的 ${hours} h` : "沿用首年";
+  }
+
+  function renderUtilizationOverride(project, entry, key, label, capacityHours, disabled) {
+    const year = entry.utilizationYear;
+    const periods = years(project).slice(1).map((period) => option(period, utilizationYearLabel(period, capacityHours), year)).join("");
+    const attrs = `min="0" max="8760" placeholder="${utilizationPlaceholder(capacityHours)}" data-sd-series="${key}" data-sd-year="${year}"${disabled}`;
+    return `<div class="sd-utilization-override"><h5>单年等效利用小时</h5><div class="sd-actions">
+      <label>年份<select data-sd-select="utilizationYear"${disabled}>${periods}</select></label>
+      <label>年等效利用小时（h）${numberInput("utilization-override", capacityHours.utilizationHoursByYear?.[year], `${label}${year}年等效利用小时`, attrs)}</label>
+      <span class="sd-color-muted">留空沿用首年</span></div></div>`;
+  }
+
   function growthPanel(project, entry, key, label, series, disabled) {
     if (entry.growthSeries !== key) return "";
     const feedback = entry.staged?.imported?.seriesKey === key ? renderImportFeedback(entry) : "";
-    return `<div class="sd-growth-panel" id="sd-growth-panel" data-sd-growth-panel><div class="sd-section-head"><h5>${label} · 逐年增长率（%）</h5>
+    const capacityHours = series.capacityHours;
+    const growthLabel = capacityHours ? "装机增速" : "增长率";
+    return `<div class="sd-growth-panel" id="sd-growth-panel" data-sd-growth-panel><div class="sd-section-head"><h5>${label} · 逐年${growthLabel}（%）</h5>
       <div class="sd-actions">${button("download-growth-template", "下载增速模板", false, Boolean(disabled))}
         <label class="sd-file ghost-button"><input type="file" data-sd-growth-file accept="${EXCEL_ACCEPT}"${entry.conflict ? " disabled" : ""}><span>导入增速模板</span></label></div></div>
       ${feedback}
       <div class="sd-actions"><label>统一增速 %${numberInput("growth-fill", entry.growthFills[key], `${label}统一增速`, `min="-100"${disabled}`)}</label>${button("growth-fill", "填入空白年份", false, Boolean(disabled))}</div>
-      <div class="sd-number-grid">${years(project).slice(1).map((year) => `<label>${year}年${numberInput("growth-rate", series.growthRatesByYear[year], `${label}${year}年增长率`, `min="-100" data-sd-series="${key}" data-sd-year="${year}"${disabled}`)}</label>`).join("")}</div></div>`;
+      <div class="sd-number-grid">${years(project).slice(1).map((year) => `<label>${year}年${numberInput("growth-rate", series.growthRatesByYear[year], `${label}${year}年${growthLabel}`, `min="-100" data-sd-series="${key}" data-sd-year="${year}"${disabled}`)}</label>`).join("")}</div>
+      ${capacityHours ? renderUtilizationOverride(project, entry, key, label, capacityHours, disabled) : ""}</div>`;
   }
 
-  function renderAnnualInputs(project, entry, config, key, label, disabled) {
+  function renderAnnualInputs(project, entry, config, key, label, disabled, isGenerator) {
     const laterYears = years(project).slice(1);
     const series = getSeries(config, key);
+    const capacityHours = series.capacityHours;
     const attrs = `data-sd-series="${key}"${key === "tieLine" ? "" : ' min="0"'}${disabled}`;
     const expanded = entry.growthSeries === key;
+    const heading = capacityHours ? "装机与利用小时" : "年度电量与增速";
+    const action = capacityHours ? "逐年装机与小时" : "逐年增速";
     const edit = laterYears.length ? `<div class="sd-growth-trigger">
-      <button type="button" class="primary-button" data-sd-action="growth-open" data-sd-series="${key}" aria-expanded="${expanded}"${expanded ? ' aria-controls="sd-growth-panel"' : ""}>${expanded ? "收起" : "编辑"}逐年增速<span class="sd-growth-chevron" aria-hidden="true"></span></button>
+      <button type="button" class="primary-button" data-sd-action="growth-open" data-sd-series="${key}" aria-expanded="${expanded}"${expanded ? ' aria-controls="sd-growth-panel"' : ""}>${expanded ? "收起" : "编辑"}${action}<span class="sd-growth-chevron" aria-hidden="true"></span></button>
       <span class="sd-color-muted" data-sd-growth-for="${key}">${growthStatus(laterYears, series)}</span></div>` : "";
-    return `<section class="sd-section sd-element-annual"><div class="sd-section-head"><h4 id="sd-annual-heading">年度电量与增速</h4></div>
-      <p data-help="电量与增速" data-help-anchor="#sd-annual-heading">${project.startYear} 年填电量，后续按各年增速滚动。增速可手填或用 Excel 模板导入，空白保留原值，填 0 表示不增长。${entry.activeElement === "tieLine" ? "联络线净额正数送出、负数受入。双向分别填写非负电量。" : ""}无该项可填 0。</p>
-      <div class="sd-element-summary"><label>首年总量（${project.startYear} 年，MWh）${numberInput("base", series.baseEnergyMwh, `${label}首年总量`, attrs)}</label>${edit}</div>
+    const baseFields = capacityHours ? `
+      <label>首年有效装机（${project.startYear} 年，MW）${numberInput("base-capacity", capacityHours.baseCapacityMw, `${label}首年有效装机`, attrs)}</label>
+      <label>首年等效利用小时（h）${numberInput("base-utilization", capacityHours.baseUtilizationHours, `${label}首年等效利用小时`, `${attrs} max="8760"`)}</label>`
+      : `<label>首年总量（${project.startYear} 年，MWh）${numberInput("base", series.baseEnergyMwh, `${label}首年总量`, attrs)}</label>`;
+    const help = capacityHours
+      ? "有效装机填当年平均在运容量。年度发电量等于有效装机乘以年等效利用小时。装机按各年增速滚动，利用小时默认沿用首年。"
+      : `${project.startYear} 年填电量，后续按各年增速滚动。增速可手填或用 Excel 模板导入。${key === "tieLine" ? "联络线净额正数送出、负数受入。" : ""}无该项可填 0。`;
+    const legacySwitch = isGenerator && !capacityHours
+      ? `<div class="sd-actions"><span class="sd-color-muted">历史电量口径</span>${button("use-capacity-hours", "改用装机与利用小时", false, Boolean(disabled))}</div>` : "";
+    return `<section class="sd-section sd-element-annual"><div class="sd-section-head"><h4 id="sd-annual-heading">${heading}</h4>${legacySwitch}</div>
+      <p data-help="${heading}" data-help-anchor="#sd-annual-heading">${help}</p>
+      <div class="sd-element-summary">${baseFields}${edit}</div>
       ${growthPanel(project, entry, key, label, series, disabled)}</section>`;
   }
 
@@ -115,7 +150,7 @@
     </section>`;
   }
 
-  function renderElementEditor(project, entry, config, disabled) {
+  function renderElementEditor(project, entry, config, disabled, generatorKeys) {
     const key = selectedSeries(entry, config), mode = config.elements.tieLine.mode;
     const label = key === "tieLine" ? COLUMNS[key] : DIRECTIONAL_COLUMNS[key];
     const tabs = ELEMENT_TABS.map((element) => {
@@ -128,7 +163,7 @@
     </div>` : "";
     return `<div class="sd-element-tabs" role="tablist" aria-label="供需要素">${tabs}</div>
       <div class="sd-element-panel" role="tabpanel" id="sd-element-panel" aria-labelledby="sd-tab-${entry.activeElement}">
-        ${tieControls}${renderAnnualInputs(project, entry, config, key, label, disabled)}${renderCurves(project, entry, config, key, disabled)}
+        ${tieControls}${renderAnnualInputs(project, entry, config, key, label, disabled, generatorKeys.includes(key))}${renderCurves(project, entry, config, key, disabled)}
       </div>`;
   }
 
@@ -191,16 +226,16 @@
   function renderImportFeedback(entry) {
     const imported = entry.staged?.imported;
     if (!imported) return "";
-    const { name, year, seriesKey, changedRows, legacy } = imported;
+    const { name, year, seriesKey, capacityGrowth, changedRows, legacy } = imported;
     const growth = Boolean(seriesKey);
-    const scope = growth ? `${COLUMNS[seriesKey] || DIRECTIONAL_COLUMNS[seriesKey]}逐年增速` : year === null ? "默认典型年" : `${year} 年`;
+    const scope = growth ? `${COLUMNS[seriesKey] || DIRECTIONAL_COLUMNS[seriesKey]}${capacityGrowth ? "逐年装机增速" : "逐年增速"}` : year === null ? "默认典型年" : `${year} 年`;
     const summary = growth ? (changedRows ? `已载入 ${changedRows} 年增速变更` : "模板与当前增速一致")
       : `${changedRows ? `已载入 ${changedRows} 行曲线变更` : "模板与当前曲线一致"}${legacy ? " · 仅载入旧模板的曲线" : ""}`;
     return `<section class="sd-section" data-sd-import-preview><div class="sd-section-head"><h5>${scope}模板</h5><span class="sd-file-name">${escape(name)}</span></div>
       <span>${summary}</span></section>`;
   }
 
-  function markup(project, entry, config, savedErrors, savedDataset) {
+  function markup(project, entry, config, savedErrors, savedDataset, generatorKeys) {
     const saved = project.supplyDemand?.config, draft = project.supplyDemand?.draft;
     const status = statusLabel(entry, saved, savedErrors.length ? savedErrors : savedDataset?.errors || [], draft);
     const canGenerate = Boolean((entry.staged || draft) && !entry.loading && !entry.conflict);
@@ -212,7 +247,7 @@
     return `<div class="panel sd-workspace"><div class="sd-section-head">
       <div><h3 id="sd-workspace-heading">测算周期供需配置</h3><span class="sd-period">${periodLabel(project)} · ${project.forecastYears}年</span></div>
       <span class="sd-state" data-sd-dirty>${status}</span></div>
-      ${renderElementEditor(project, entry, config, disabled)}
+      ${renderElementEditor(project, entry, config, disabled, generatorKeys)}
       ${feedbackInEditor ? "" : renderImportFeedback(entry)}${renderNotice(entry)}
       ${entry.conflict ? '<div class="sd-alert">当前项目周期或已保存供需配置已更新。请放弃草稿后继续配置。</div>' : ""}
       <div class="sd-actions">${button("generate", "校验并生成供需数据", true, !canGenerate)}
@@ -240,7 +275,8 @@
       if (!entry || entry.projectId !== project.id) {
         entry = { projectId: project.id, staged: null, loading: null, conflict: false, message: "", errors: [],
           previewYear: project.startYear, previewMonth: 1, previewGranularity: "monthly", previewOpen: false, legendSelection: {},
-          dataset: null, chartDataset: null, activeElement: "load", tieDirection: "tieLineExport", growthSeries: null, growthFills: {}, curveYear: null };
+          dataset: null, chartDataset: null, activeElement: "load", tieDirection: "tieLineExport", growthSeries: null,
+          growthFills: {}, curveYear: null, utilizationYear: project.startYear + 1 };
         entries.set(project, entry);
       }
       const current = source(project);
@@ -251,7 +287,7 @@
 
     function templateBase(project, entry) {
       const { draft, config } = project.supplyDemand || {};
-      return (!entry.conflict && entry.staged?.config) || draft || config;
+      return (!entry.conflict && entry.staged?.config) || draft || config || domain.createCapacityHoursConfig(project);
     }
 
     function editableConfig(project, entry) {
@@ -361,12 +397,13 @@
       const projectYears = years(project);
       if (!projectYears.includes(entry.previewYear)) entry.previewYear = project.startYear;
       if (entry.curveYear !== null && !projectYears.includes(entry.curveYear)) entry.curveYear = null;
+      if (!projectYears.slice(1).includes(entry.utilizationYear)) entry.utilizationYear = projectYears[1];
       const config = editableConfig(project, entry);
       if (project.forecastYears === 1) entry.growthSeries = null;
       const saved = project.supplyDemand?.config;
       const savedErrors = saved ? domain.validateConfig(project, saved) : [];
       const savedDataset = saved && !savedErrors.length ? loadChartDataset(project, entry, saved) : null;
-      root.innerHTML = markup(project, entry, config, savedErrors, savedDataset);
+      root.innerHTML = markup(project, entry, config, savedErrors, savedDataset, domain.GENERATOR_KEYS);
       if (savedDataset?.ok) mountChart(entry, savedDataset);
       if (!bound && root.addEventListener) {
         root.addEventListener("input", onInput);
@@ -457,6 +494,9 @@
       } else if (selected === "curveYear" && !entry.loading && !entry.conflict && (value === "default" || years(project).includes(Number(value)))) {
         entry.curveYear = value === "default" ? null : Number(value);
         render();
+      } else if (selected === "utilizationYear" && !entry.loading && !entry.conflict && years(project).slice(1).includes(Number(value))) {
+        entry.utilizationYear = Number(value);
+        render();
       } else if (selected === "tieDirection" && ["tieLineExport", "tieLineImport"].includes(value)) {
         entry.tieDirection = value;
         render();
@@ -494,13 +534,20 @@
       if (discard) discard.hidden = false;
       const message = root.querySelector("[data-sd-message]");
       if (message) { message.textContent = ""; message.classList?.remove("sd-alert"); }
-      setText(`[data-sd-growth-for="${key}"]`, growthStatus(years(project).slice(1), getSeries(config, key)));
+      const series = getSeries(config, key);
+      setText(`[data-sd-growth-for="${key}"]`, growthStatus(years(project).slice(1), series));
+      if (series.capacityHours && entry.growthSeries === key) {
+        const year = entry.utilizationYear;
+        setText(`[data-sd-select="utilizationYear"] option[value="${year}"]`, utilizationYearLabel(year, series.capacityHours));
+        const hours = root.querySelector('[data-sd-input="utilization-override"]');
+        if (hours) hours.placeholder = utilizationPlaceholder(series.capacityHours);
+      }
       onDraftChange();
     }
 
     function onInput(event) {
       const context = eventContext(event), kind = event.target?.dataset?.sdInput;
-      if (!context || !["base", "growth-rate", "growth-fill"].includes(kind)) return;
+      if (!context || !(["base", "growth-rate", "growth-fill", "utilization-override"].includes(kind) || Object.hasOwn(CAPACITY_INPUTS, kind))) return;
       const { project, entry } = context;
       if (entry.loading || entry.conflict) return;
       const value = numeric(event.target.value);
@@ -510,12 +557,25 @@
       const key = event.target.dataset.sdSeries;
       if (key !== selected) return;
       if (kind === "base") {
-        if (series.baseEnergyMwh === value) return;
+        if (series.capacityHours || series.baseEnergyMwh === value) return;
         series.baseEnergyMwh = value;
+      } else if (Object.hasOwn(CAPACITY_INPUTS, kind)) {
+        const field = CAPACITY_INPUTS[kind];
+        if (!series.capacityHours || series.capacityHours[field] === value) return;
+        series.capacityHours[field] = value;
       } else {
         const year = Number(event.target.dataset.sdYear);
-        if (!years(project).slice(1).includes(year) || series.growthRatesByYear[year] === value) return;
-        series.growthRatesByYear[year] = value;
+        if (!years(project).slice(1).includes(year)) return;
+        if (kind === "utilization-override") {
+          if (!series.capacityHours || year !== entry.utilizationYear) return;
+          const overrides = series.capacityHours.utilizationHoursByYear;
+          if ((overrides[year] ?? null) === value) return;
+          if (value === null) delete overrides[year];
+          else overrides[year] = value;
+        } else {
+          if (series.growthRatesByYear[year] === value) return;
+          series.growthRatesByYear[year] = value;
+        }
       }
       stage(project, entry, config);
       updateEditor(project, entry, config, key);
@@ -563,7 +623,8 @@
         refreshDraft();
         return;
       }
-      stage(project, entry, clone(result.config), { name: file.name, ...scope,
+      const capacityGrowth = growth && Boolean(getSeries(result.config, scope.seriesKey)?.capacityHours);
+      stage(project, entry, clone(result.config), { name: file.name, ...scope, capacityGrowth,
         changedRows: result.changedRows, legacy: result.legacy === true });
       notice(entry, "模板校验通过，已载入配置草稿。");
       refreshDraft();
@@ -667,6 +728,20 @@
       refreshDraft();
     }
 
+    function useCapacityHours(project, entry) {
+      if (entry.loading || entry.conflict || !domain.GENERATOR_KEYS.includes(entry.activeElement)) return;
+      const config = editableConfig(project, entry), key = entry.activeElement, series = getSeries(config, key);
+      if (series.capacityHours) return;
+      series.capacityHours = domain.createCapacityHours();
+      series.growthRatesByYear = Object.fromEntries(years(project).slice(1).map((year) => [year, null]));
+      delete entry.growthFills[key];
+      const feedback = entry.staged?.imported;
+      stage(project, entry, config, feedback?.seriesKey === key ? null : feedback);
+      notice(entry, "已切换为装机与利用小时草稿，请填写首年参数和装机增速。");
+      refreshDraft();
+      root.querySelector?.('[data-sd-input="base-capacity"]')?.focus?.({ preventScroll: true });
+    }
+
     function discard(project, entry) {
       if (entry.loading) {
         entry.loading = null;
@@ -691,6 +766,8 @@
       const { project, entry } = context, action = control.dataset.sdAction;
       if (action === "select-element") {
         selectElement(entry, control.dataset.sdElement);
+      } else if (action === "use-capacity-hours") {
+        useCapacityHours(project, entry);
       } else if (action === "download-template" || action === "download-growth-template") {
         try {
           const codec = template();

@@ -1,7 +1,7 @@
 "use strict";
 const assert = require("node:assert/strict");
 const domain = require("../src/domain/supply-demand");
-const { ELEMENTS, MONTH_DAYS, createConfig, createSeries, prepareShareConfig, getCurve, validateShares,
+const { ELEMENTS, GENERATOR_KEYS, MONTH_DAYS, createConfig, createSeries, createCapacityHours, createCapacityHoursConfig, prepareShareConfig, getCurve, validateShares,
   validateConfig, fingerprint, buildAnnualSummary, buildTypicalSummary, buildDataset, csvRows } = domain;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sum = (values) => values.reduce((total, value) => total + value, 0);
@@ -153,6 +153,9 @@ approx(sum(largeExchangeData.hourlyByYear[2028].tieLine), 0, 0.1);
 // Explicit zero is legal with no unused curve. It is never inferred from blank.
 const zero = configured();
 assert.equal(buildDataset(project, zero).ok, true);
+assert.equal(fingerprint(project, zero), "supply-v1-a3c3cc19-fab7a09b-13702", "existing v1 energy configs retain their version binding");
+assert.equal(fingerprint(project, prepareShareConfig(project, zero)), "supply-v2-1f9e34b9-fce67b1b-13702",
+  "existing v2 energy configs retain their version binding");
 const decline = configured(); shape(decline.elements.load, 100); decline.elements.load.growthRatesByYear[2029] = -100;
 assert.deepEqual(buildDataset(project, decline).annualRows.map((row) => row.load), [100, 0, 0]);
 for (const base of [null, "", "0", false, NaN, Infinity, -1]) {
@@ -316,4 +319,114 @@ assert.equal(validateShares(oneMonth(1), 12, "分月"), "");
 assert.match(validateShares(Array(12).fill(0), 12, "分月"), /合计须为1/);
 assert.match(validateShares(Array(24).fill(null), 24, "分时"), /24个0至1/);
 assert.match(validateShares([1.01, ...Array(11).fill(0)], 12, "分月"), /0至1/);
+
+const longer = { ...project, forecastYears: 4 };
+assert.deepEqual(GENERATOR_KEYS, ["wind", "solar", "hydro"]);
+const capacityDraft = createCapacityHoursConfig(longer);
+assert.equal(capacityDraft.version, 2);
+assert.deepEqual(Object.keys(capacityDraft.elements).filter((key) => Object.hasOwn(capacityDraft.elements[key], "capacityHours")), GENERATOR_KEYS);
+assert.deepEqual(capacityDraft.elements.wind.capacityHours, createCapacityHours());
+assert.notEqual(capacityDraft.elements.wind.capacityHours.utilizationHoursByYear, capacityDraft.elements.solar.capacityHours.utilizationHoursByYear);
+assert.deepEqual(capacityDraft.elements.hydro.growthRatesByYear, { 2029: null, 2030: null, 2031: null });
+assert.equal(Object.hasOwn(prepareShareConfig(longer, configured(longer)).elements.wind, "capacityHours"), false);
+
+const power = configured(longer);
+shape(power.elements.load, 120000);
+shape(power.elements.wind, 0);
+shape(power.elements.solar, 0);
+const capacity = prepareShareConfig(longer, power);
+const { wind, solar, hydro } = capacity.elements;
+wind.capacityHours = { baseCapacityMw: 100, baseUtilizationHours: 2000, utilizationHoursByYear: { 2029: 1500, 2031: 0 } };
+wind.growthRatesByYear = { 2029: 10, 2030: 25, 2031: -50 };
+solar.capacityHours = { baseCapacityMw: 40, baseUtilizationHours: 0, utilizationHoursByYear: { 2030: 500 } };
+hydro.capacityHours = { baseCapacityMw: 0, baseUtilizationHours: 8760, utilizationHoursByYear: {} };
+const capacityBefore = JSON.stringify(capacity);
+const capacityDataset = buildDataset(longer, capacity);
+assert.equal(capacityDataset.ok, true, capacityDataset.errors.join(";"));
+const windMwh = [200000, 165000, 275000, 0];
+const solarMwh = [0, 0, 20000, 0];
+for (const [index, annual] of capacityDataset.annualRows.entries()) {
+  approx(annual.wind, windMwh[index]);
+  assert.equal(annual.solar, solarMwh[index]);
+  assert.equal(annual.hydro, 0);
+  assert.equal(annual.load, 120000);
+  const hourly = capacityDataset.hourlyByYear[annual.year];
+  assert.deepEqual(Object.keys(hourly), Object.keys(result.hourlyByYear[2028]), "hourly series contract stays the same");
+  approx(sum(hourly.wind), annual.wind);
+  approx(sum(hourly.solar), annual.solar);
+  const typical = capacityDataset.typicalRows.filter(({ year }) => year === annual.year);
+  approx(sum(typical.map((row) => row.wind * row.representedDays)), annual.wind);
+  approx(sum(typical.map((row) => row.solar * row.representedDays)), annual.solar);
+}
+assert.deepEqual(buildAnnualSummary(longer, capacity).annualRows, capacityDataset.annualRows);
+assert.equal(buildTypicalSummary(longer, capacity).typicalRows.length, 4 * 288);
+assert.equal(capacityDataset.source.version, result.source.version);
+assert.deepEqual(csvRows(capacityDataset, "annual")[0], annualCsv[0]);
+assert.equal(capacityDataset.fingerprint, fingerprint(longer, capacity));
+assert.equal(JSON.stringify(capacity), capacityBefore);
+assert.deepEqual(prepareShareConfig(longer, capacity), capacity);
+assert.notEqual(prepareShareConfig(longer, capacity).elements.wind.capacityHours, wind.capacityHours);
+
+const missingPositiveCurve = clone(capacity);
+missingPositiveCurve.elements.solar.monthlyWeights = Array(12).fill(null);
+missingPositiveCurve.elements.solar.hourlyWeightsByMonth = {};
+reject(missingPositiveCurve, /光伏出力默认分月占比/, longer);
+missingPositiveCurve.elements.solar.capacityHours.utilizationHoursByYear = {};
+assert.equal(buildDataset(longer, missingPositiveCurve).ok, true, "a feature with zero annual generation in every year may omit curves");
+const zeroInstalled = clone(capacity);
+zeroInstalled.elements.wind.growthRatesByYear[2029] = -100;
+assert.deepEqual(buildDataset(longer, zeroInstalled).annualRows.map(({ wind }) => wind), [200000, 0, 0, 0]);
+const changedHours = clone(capacity);
+changedHours.elements.wind.capacityHours.utilizationHoursByYear[2029] = 1600;
+assert.notEqual(fingerprint(longer, changedHours), capacityDataset.fingerprint);
+approx(buildDataset(longer, changedHours).annualRows[2].wind, 275000);
+
+const truncatedCapacity = prepareShareConfig({ ...longer, forecastYears: 2 }, capacity).elements.wind;
+assert.deepEqual(truncatedCapacity.capacityHours, { baseCapacityMw: 100, baseUtilizationHours: 2000, utilizationHoursByYear: { 2029: 1500 } });
+const shiftedCapacity = prepareShareConfig({ ...longer, startYear: 2029 }, capacity).elements.wind;
+assert.deepEqual(shiftedCapacity.capacityHours, { baseCapacityMw: null, baseUtilizationHours: null, utilizationHoursByYear: { 2031: 0 } });
+assert.deepEqual(shiftedCapacity.growthRatesByYear, { 2030: 25, 2031: -50, 2032: null });
+assert.equal(JSON.stringify(capacity), capacityBefore);
+
+const damaged = clone(capacity);
+damaged.elements.wind.capacityHours = { baseCapacityMw: 100, baseUtilizationHours: 2000, utilizationHoursByYear: null };
+damaged.elements.hydro.capacityHours = [];
+const damagedBefore = JSON.stringify(damaged);
+const repairable = prepareShareConfig(longer, damaged);
+assert.deepEqual(repairable.elements.wind.capacityHours, { baseCapacityMw: 100, baseUtilizationHours: 2000, utilizationHoursByYear: {} });
+assert.deepEqual(repairable.elements.hydro.capacityHours, createCapacityHours());
+assert.equal(JSON.stringify(damaged), damagedBefore);
+
+for (const [field, value, pattern] of [
+  ["baseCapacityMw", -1, /首年装机/],
+  ["baseCapacityMw", "100", /首年装机/],
+  ["baseUtilizationHours", null, /首年利用小时/],
+  ["baseUtilizationHours", 8761, /首年利用小时/],
+  ["utilizationHoursByYear", [], /逐年利用小时须按测算年份/],
+  ["utilizationHoursByYear", { 2028: 1000 }, /首年之后/],
+  ["utilizationHoursByYear", { 2032: 1000 }, /测算周期内/],
+  ["utilizationHoursByYear", { 2029: -1 }, /2029年利用小时须为0至8760/],
+  ["utilizationHoursByYear", { 2029: null }, /2029年利用小时须为0至8760/],
+  ["inferredCapacity", 10, /不支持的字段/]
+]) {
+  const invalid = clone(capacity);
+  invalid.elements.wind.capacityHours[field] = value;
+  reject(invalid, pattern, longer);
+}
+const capacityOverflow = clone(capacity);
+capacityOverflow.elements.wind.capacityHours.baseCapacityMw = 1e308;
+reject(capacityOverflow, /年度电量计算超出/, longer);
+const invalidCapacityGrowth = clone(capacity);
+invalidCapacityGrowth.elements.wind.growthRatesByYear[2029] = -101;
+reject(invalidCapacityGrowth, /装机增长率/, longer);
+const unsupportedV1 = clone(power);
+unsupportedV1.elements.wind.capacityHours = createCapacityHours();
+reject(unsupportedV1, /仅支持版本2/, longer);
+const unsupportedLoad = clone(capacity);
+unsupportedLoad.elements.load.capacityHours = createCapacityHours();
+reject(unsupportedLoad, /仅支持版本2.*风电、光伏和水电/, longer);
+const unsupportedTieDirection = clone(capacity);
+unsupportedTieDirection.elements.tieLine.import.capacityHours = createCapacityHours();
+reject(unsupportedTieDirection, /仅支持版本2.*风电、光伏和水电/, longer);
+
 console.log("supply demand tests passed");

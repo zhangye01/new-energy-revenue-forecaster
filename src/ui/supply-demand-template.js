@@ -430,12 +430,14 @@
     const years = periodYears(project);
     const editable = domain.prepareShareConfig(project, config);
     const descriptor = growthDescriptor(editable, seriesKey);
-    const rates = readSeries(editable, descriptor)?.growthRatesByYear;
+    const series = readSeries(editable, descriptor);
+    const rates = series?.growthRatesByYear;
+    const basis = series?.capacityHours ? "装机容量" : "年度电量";
     const sheet = xlsx.utils.aoa_to_sheet([
       [GROWTH_TEMPLATE_NAME, GROWTH_TEMPLATE_VERSION],
       ["起始年", years[0], "末年", years.at(-1)],
       ["供需要素", descriptor.label],
-      ["填写说明", "5 或 5% 均为增长 5%。空白沿用，填 0 更新为零。"],
+      ["填写说明", `用于${basis}增速。5 或 5% 均为增长 5%。空白沿用，填 0 更新为零。`],
       ["年份", "增长率（%）"],
       ...years.slice(1).map((year) => [year, exportValue(rates?.[year])])
     ]);

@@ -12,6 +12,8 @@
     { key: "wind", label: "风电出力" }, { key: "solar", label: "光伏出力" },
     { key: "hydro", label: "水电出力" }, { key: "nonMarket", label: "非市场化出力" }
   ].map(Object.freeze));
+  const GENERATOR_KEYS = Object.freeze(["wind", "solar", "hydro"]);
+  const CAPACITY_HOURS_FIELDS = ["baseCapacityMw", "baseUtilizationHours", "utilizationHoursByYear"];
   const VALUE_KEYS = Object.freeze([...ELEMENTS.map((item) => item.key), "residualDemand", "tieLineExport", "tieLineImport"]);
   const MAX_FORECAST_YEARS = 30;
   const SHARE_TOLERANCE = 1e-6;
@@ -39,6 +41,16 @@
     const elements = Object.fromEntries(ELEMENTS.map(({ key }) => [key, createSeries(project)]));
     elements.tieLine = { ...elements.tieLine, mode: "net", export: createSeries(project), import: createSeries(project) };
     return { version: 1, startYear: project.startYear ?? null, forecastYears: project.forecastYears ?? null, elements };
+  }
+
+  function createCapacityHours() {
+    return { baseCapacityMw: null, baseUtilizationHours: null, utilizationHoursByYear: {} };
+  }
+
+  function createCapacityHoursConfig(project) {
+    const config = prepareShareConfig(project);
+    for (const key of GENERATOR_KEYS) config.elements[key].capacityHours = createCapacityHours();
+    return config;
   }
 
   function sum(values) {
@@ -86,12 +98,33 @@
     if (overrides.length) target.curveOverridesByYear = JSON.parse(JSON.stringify(Object.fromEntries(overrides)));
   }
 
+  function carryCapacityHours(source, previous, project) {
+    const target = createCapacityHours();
+    if (previous.startYear === project.startYear) {
+      if (isNumber(source.baseCapacityMw)) target.baseCapacityMw = source.baseCapacityMw;
+      if (isNumber(source.baseUtilizationHours)) target.baseUtilizationHours = source.baseUtilizationHours;
+    }
+    if (validPeriod(previous) && validPeriod(project) && isObject(source.utilizationHoursByYear)) {
+      const hours = Object.entries(source.utilizationHoursByYear).filter(([year, value]) =>
+        subsequentYear(previous, year) && subsequentYear(project, year) && isNumber(value));
+      target.utilizationHoursByYear = Object.fromEntries(hours);
+    }
+    return target;
+  }
+
   function completeEditableSeries(project, series) {
     if (!isObject(series)) return createSeries(project);
     if (!isObject(series.growthRatesByYear)) series.growthRatesByYear = createSeries(project).growthRatesByYear;
     if (!Array.isArray(series.monthlyWeights)) series.monthlyWeights = Array(12).fill(null);
     if (!isObject(series.hourlyWeightsByMonth)) series.hourlyWeightsByMonth = {};
     return series;
+  }
+
+  function completeEditableCapacityHours(config) {
+    if (!isObject(config)) return createCapacityHours();
+    const { baseCapacityMw = null, baseUtilizationHours = null, utilizationHoursByYear } = config;
+    return { baseCapacityMw, baseUtilizationHours,
+      utilizationHoursByYear: isObject(utilizationHoursByYear) ? utilizationHoursByYear : {} };
   }
 
   // Keep saved v1 results and fingerprints as recorded. Convert weights into
@@ -103,12 +136,23 @@
     if (config.version === 2 && config.startYear === target.startYear && config.forecastYears === target.forecastYears) {
       const editable = JSON.parse(JSON.stringify(config));
       for (const { key } of ELEMENTS) editable.elements[key] = completeEditableSeries(project, editable.elements[key]);
+      for (const key of GENERATOR_KEYS) {
+        const series = editable.elements[key];
+        if (Object.hasOwn(series, "capacityHours")) series.capacityHours = completeEditableCapacityHours(series.capacityHours);
+      }
       const tie = editable.elements.tieLine;
       tie.mode = tie.mode === "bidirectional" ? "bidirectional" : "net";
       for (const direction of ["export", "import"]) tie[direction] = completeEditableSeries(project, tie[direction]);
       return editable;
     }
-    for (const { key } of ELEMENTS) carryShareSeries(target.elements[key], config.elements[key], config, project);
+    for (const { key } of ELEMENTS) {
+      const source = config.elements[key];
+      const series = target.elements[key];
+      carryShareSeries(series, source, config, project);
+      if (config.version === 2 && GENERATOR_KEYS.includes(key) && isObject(source) && Object.hasOwn(source, "capacityHours")) {
+        series.capacityHours = carryCapacityHours(completeEditableCapacityHours(source.capacityHours), config, project);
+      }
+    }
     const tie = config.elements.tieLine;
     if (tie?.mode === "bidirectional") target.elements.tieLine.mode = tie.mode;
     for (const direction of ["export", "import"]) carryShareSeries(target.elements.tieLine[direction], tie?.[direction], config, project);
@@ -131,12 +175,15 @@
   }
 
   function annualValues(project, series) {
-    const values = [series.baseEnergyMwh];
+    const { capacityHours } = series;
+    const values = [capacityHours ? capacityHours.baseCapacityMw : series.baseEnergyMwh];
     for (let index = 1; index < project.forecastYears; index += 1) {
       const rate = series.growthRatesByYear[project.startYear + index];
       values.push(values[index - 1] * (1 + rate / 100));
     }
-    return values;
+    if (!capacityHours) return values;
+    const { baseUtilizationHours, utilizationHoursByYear } = capacityHours;
+    return values.map((capacity, index) => capacity * (utilizationHoursByYear[project.startYear + index] ?? baseUtilizationHours));
   }
 
   function validateWeights(values, count, label, errors) {
@@ -154,6 +201,10 @@
   function inPeriod(project, key) {
     const year = Number(key);
     return String(year) === key && Number.isInteger(year) && year >= project.startYear && year < project.startYear + project.forecastYears;
+  }
+
+  function subsequentYear(project, key) {
+    return inPeriod(project, key) && Number(key) > project.startYear;
   }
 
   function validMonth(key) {
@@ -206,23 +257,50 @@
     }
   }
 
+  function isUtilizationHours(value) {
+    return isNumber(value) && value >= 0 && value <= 8760;
+  }
+
+  function validateCapacityHours(config, label, project, errors) {
+    if (!isObject(config)) { errors.push(`${label}须填写装机及利用小时配置。`); return false; }
+    const before = errors.length;
+    const { baseCapacityMw, baseUtilizationHours, utilizationHoursByYear } = config;
+    if (Object.keys(config).some((key) => !CAPACITY_HOURS_FIELDS.includes(key))) {
+      errors.push(`${label}装机及利用小时配置包含不支持的字段。`);
+    }
+    if (!isNumber(baseCapacityMw) || baseCapacityMw < 0) errors.push(`${label}首年装机须填写非负有限数字（MW）。`);
+    if (!isUtilizationHours(baseUtilizationHours)) errors.push(`${label}首年利用小时须为0至8760之间的有限数字。`);
+    if (!isObject(utilizationHoursByYear)) errors.push(`${label}逐年利用小时须按测算年份配置。`);
+    else {
+      for (const [year, hours] of Object.entries(utilizationHoursByYear)) {
+        if (!subsequentYear(project, year)) errors.push(`${label}${year}年利用小时须对应首年之后、测算周期内的年份。`);
+        else if (!isUtilizationHours(hours)) errors.push(`${label}${year}年利用小时须为0至8760之间的有限数字。`);
+      }
+    }
+    return errors.length === before;
+  }
+
   function validateSeries(project, series, label, signed, errors, strictShares) {
     if (!isObject(series)) { errors.push(`${label}尚未配置。`); return; }
-    const baseValid = isNumber(series.baseEnergyMwh) && (signed || series.baseEnergyMwh >= 0);
-    if (!baseValid) errors.push(`${label}首年电量须填写${signed ? "可正可负的" : "非负的"}有限数字，无该项请明确填写0。`);
+    const capacityMode = Object.hasOwn(series, "capacityHours");
+    const baseValid = capacityMode ? validateCapacityHours(series.capacityHours, label, project, errors)
+      : isNumber(series.baseEnergyMwh) && (signed || series.baseEnergyMwh >= 0);
+    if (!capacityMode && !baseValid) errors.push(`${label}首年电量须填写${signed ? "可正可负的" : "非负的"}有限数字，无该项请明确填写0。`);
     let growthValid = true;
     for (let index = 1; index < project.forecastYears; index += 1) {
       const year = project.startYear + index, value = series.growthRatesByYear?.[year];
       if (!isObject(series.growthRatesByYear) || !isNumber(value) || value < -100) {
-        errors.push(`${label}${year}年增长率须明确填写有限数字，不能低于-100%。`);
+        errors.push(`${label}${year}年${capacityMode ? "装机" : ""}增长率须明确填写有限数字，不能低于-100%。`);
         growthValid = false;
       }
     }
-    if (baseValid && growthValid && annualValues(project, series).some((value) => !Number.isFinite(value))) {
+    const annual = baseValid && growthValid ? annualValues(project, series) : [];
+    if (annual.some((value) => !Number.isFinite(value))) {
       errors.push(`${label}年度电量计算超出有限数值范围，请核对起点值与增长率。`);
     }
     if (strictShares) {
-      validateShareCurves(project, series, label, baseValid && series.baseEnergyMwh !== 0, errors);
+      const needsCurves = capacityMode ? annual.some((value) => value > 0) : baseValid && series.baseEnergyMwh !== 0;
+      validateShareCurves(project, series, label, needsCurves, errors);
       return;
     }
     // Zero remains zero under the specified multiplicative growth model. Its unused
@@ -254,6 +332,11 @@
     }
     if (!isObject(config.elements.tieLine) || !["net", "bidirectional"].includes(config.elements.tieLine.mode)) {
       return ["请选择有效的联络线配置方式（净额或双向送受）。"];
+    }
+    const hasCapacityHours = (series) => isObject(series) && Object.hasOwn(series, "capacityHours");
+    if (Object.entries(config.elements).some(([key, series]) => hasCapacityHours(series) && (config.version !== 2 || !GENERATOR_KEYS.includes(key))) ||
+        ["export", "import"].some((direction) => hasCapacityHours(config.elements.tieLine[direction]))) {
+      return ["装机及利用小时配置仅支持版本2的风电、光伏和水电。"];
     }
     const entries = activeSeries(config);
     entries.forEach(({ series, label, signed }) => validateSeries(project, series, label, signed, errors, config.version === 2));
@@ -293,8 +376,8 @@
     return `supply-v${version}-${(first >>> 0).toString(16)}-${(second >>> 0).toString(16)}-${value.length}`;
   }
 
-  function compileCurve(series, year = null) {
-    if (series.baseEnergyMwh === 0) return { monthly: Array(12).fill(0), hourly: MONTH_DAYS.map(() => Array(24).fill(0)) };
+  function compileCurve(series, required, year = null) {
+    if (!required) return { monthly: Array(12).fill(0), hourly: MONTH_DAYS.map(() => Array(24).fill(0)) };
     const { monthlyWeights, hourlyWeightsByMonth } = getCurve(series, year);
     // Strict v2 vectors may differ from 1 by tiny roundoff. Normalizing that
     // roundoff preserves conservation without changing the stored assumptions.
@@ -340,7 +423,10 @@
   function buildTemporalData(project, config, expandHours) {
     const errors = validateConfig(project, config);
     if (errors.length) return failed(errors);
-    const entries = activeSeries(config).map(({ key, series }) => ({ key, series, annual: annualValues(project, series), defaults: compileCurve(series) }));
+    const entries = activeSeries(config).map(({ key, series }) => {
+      const annual = annualValues(project, series);
+      return { key, series, annual, defaults: compileCurve(series, annual.some((value) => value !== 0)) };
+    });
     const bidirectional = config.elements.tieLine.mode === "bidirectional";
     const annualRows = annualRowsForConfig(project, config), typicalRows = [], hourlyByYear = {};
     for (let index = 0; index < project.forecastYears; index += 1) {
@@ -349,7 +435,7 @@
       const hourly = expandHours ? Object.fromEntries(VALUE_KEYS.map((key) => [key, []])) : null;
       const yearlyTypical = [];
       const curves = entries.map(({ key, series, annual: annualSeries, defaults }) => ({ key, energy: annualSeries[index],
-        ...(config.version === 2 && Object.hasOwn(series.curveOverridesByYear || {}, year) ? compileCurve(series, year) : defaults) }));
+        ...(config.version === 2 && Object.hasOwn(series.curveOverridesByYear || {}, year) ? compileCurve(series, annualSeries[index] !== 0, year) : defaults) }));
       MONTH_DAYS.forEach((days, monthIndex) => {
         const monthRows = Array.from({ length: 24 }, (_, hour) => {
           const values = Object.fromEntries(curves.map((entry) => [entry.key,
@@ -416,6 +502,6 @@
     return rows;
   }
 
-  return Object.freeze({ ELEMENTS, MONTH_DAYS, MAX_FORECAST_YEARS, createSeries, createConfig, prepareShareConfig, getCurve, validateShares,
+  return Object.freeze({ ELEMENTS, GENERATOR_KEYS, MONTH_DAYS, MAX_FORECAST_YEARS, createSeries, createConfig, createCapacityHours, createCapacityHoursConfig, prepareShareConfig, getCurve, validateShares,
     validateConfig, fingerprint, buildAnnualSummary, buildTypicalSummary, buildDataset, csvRows });
 });

@@ -267,6 +267,31 @@ async function testGrowthTemplates() {
   assert.equal(filename, "测试-供需_供需增长率模板_2027-2032_联络线送出.xlsx");
 }
 
+async function testCapacityHoursWorkbooks() {
+  const legacy = configured();
+  const editable = domain.prepareShareConfig(project, legacy);
+  const wind = editable.elements.wind;
+  wind.capacityHours = { baseCapacityMw: 10, baseUtilizationHours: 1250, utilizationHoursByYear: { 2029: 1100 } };
+  const original = JSON.stringify(editable);
+  const options = { xlsx, seriesKey: "wind" };
+  const legacyGrowth = template.buildGrowthWorkbook(project, legacy, options);
+  legacyGrowth.Sheets["逐年增长率"].B6 = { t: "n", v: 5 };
+
+  const updated = await template.readGrowthFile(project, fileFor(legacyGrowth), { ...options, baseConfig: editable });
+  assert.equal(updated.ok, true, updated.errors.join("\n"));
+  assert.deepEqual(updated.changes, [{ year: 2028, value: 5 }]);
+  assert.deepEqual(updated.config.elements.wind.capacityHours, wind.capacityHours);
+  const reexport = template.buildGrowthWorkbook(project, updated.config, options);
+  assert.match(reexport.Sheets["逐年增长率"].B4.v, /装机容量/);
+  assert.equal(reexport.Sheets["逐年增长率"].B6.v, 5);
+
+  const curves = await template.readCurveFile(project, fileFor(curveWorkbook(legacy)), { xlsx, baseConfig: updated.config });
+  assert.equal(curves.ok, true, curves.errors.join("\n"));
+  assert.equal(curves.changedRows, 0);
+  assert.deepEqual(curves.config, updated.config);
+  assert.equal(JSON.stringify(editable), original);
+}
+
 async function run() {
   const blank = template.buildWorkbook(project, undefined, { xlsx });
   assert.deepEqual(blank.SheetNames, keys);
@@ -383,6 +408,7 @@ async function run() {
   assert.equal(savedFilename, "测试-供需_供需配置模板_2027-2029.xlsx");
   await testCurveTemplates();
   await testGrowthTemplates();
+  await testCapacityHoursWorkbooks();
   console.log("supply-demand Excel template tests passed");
 }
 
