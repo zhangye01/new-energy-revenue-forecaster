@@ -50,6 +50,19 @@ assert.equal(children.find(({ type }) => type === "line").shape.x1, 80);
 assert.match(buildOption(bridge, 340).yAxis.axisLabel.formatter("交易策略", 1), /\n-6\.00$/);
 assert.deepEqual(buildOption(annual, 800).series[0].data.map(({ value }) => value), [550, -70]);
 
+const monthly = { key: "monthly-price", kind: "lines", labels: ["1月", "2月", "3月"], unit: "元/MWh",
+  series: [{ name: "现货均价", values: [-30, 80, 90] }, { name: "捕获电价", values: [-20, null, 45] }] };
+const monthlyOption = buildOption(monthly, 800);
+assert.deepEqual(monthlyOption.xAxis.data, monthly.labels);
+assert.equal(monthlyOption.legend.selectedMode, false);
+assert.equal(monthlyOption.series[1].connectNulls, false);
+assert.deepEqual(monthlyOption.series[1].data, [-20, null, 45]);
+const yearlyStorage = { key: "annual-storage", kind: "columns", labels: ["2028", "2029"], unit: "万元",
+  series: [{ name: "现货套利净收益", values: [2, -3] }, { name: "独立配储收益", values: [0, 6] }] };
+const yearlyOption = buildOption(yearlyStorage, 800);
+assert.equal(yearlyOption.yAxis.scale, false);
+assert.deepEqual(yearlyOption.series.map(({ type, data }) => [type, data]), [["bar", [2, -3]], ["bar", [0, 6]]]);
+
 const created = [];
 const echarts = {
   init(node, theme, settings) {

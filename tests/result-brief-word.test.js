@@ -44,6 +44,7 @@ const document = xlsx.CFB.read(bytes, { type: "array" });
 const part = (path) => Buffer.from(xlsx.CFB.find(document, `/${path}`).content);
 const documentXml = part("word/document.xml").toString("utf8");
 assert.match(documentXml, /w:pStyle w:val="Title"/);
+assert.match(documentXml, /<w:pgSz w:w="11906" w:h="16838"\/>/);
 assert.match(documentXml, /江苏\/沿海 &amp; 风电 &lt;储能&gt;/);
 assert.match(documentXml, /459\.72 元\/MWh/);
 assert.match(documentXml, /12,200\.73/);
@@ -62,4 +63,33 @@ assert.match(part("docProps/core.xml").toString("utf8"), /2026-11-19T08:00:00\.0
 assert.doesNotMatch(part("docProps/core.xml").toString("utf8"), /result-fixture-123/);
 assert.throws(() => buildDocx(brief, images.slice(1), options), /图表「全周期收入构成」未生成有效图片/);
 assert.throws(() => buildDocx(brief, [{ key: "price", dataUrl: "data:image/png;base64,aGVsbG8=" }], options), /图表「年度度电净价趋势」未生成有效图片/);
+
+const monthly = {
+  key: "monthly", number: 9, title: "首年配储分月表现",
+  headers: ["月份", "充电量（MWh）", "放电量（MWh）", "储能净收益（万元）", "有效循环次数"],
+  rows: Array.from({ length: 12 }, (_, index) => [`${index + 1}月`, "1,480.25", "1,302.62", "-12.53", "23.7"])
+};
+const annual = {
+  ...brief.tables[0], number: 10,
+  rows: Array.from({ length: 20 }, (_, index) => [String(2028 + index), "17,221.77"])
+};
+const extendedDoc = xlsx.CFB.read(buildDocx({ ...brief, figures: [], tables: [monthly, annual], sections: [] }, [], options), { type: "array" });
+const extendedXml = Buffer.from(xlsx.CFB.find(extendedDoc, "/word/document.xml").content).toString("utf8");
+assert.match(extendedXml, /表 9　首年配储分月表现.*表 10　年度测算结果/);
+assert.doesNotMatch(extendedXml, /<w:pageBreakBefore\/>/);
+const [monthlyXml, annualXml] = Array.from(extendedXml.matchAll(/<w:tbl>(.*?)<\/w:tbl>/g), ([, table]) => table);
+const widths = Array.from(monthlyXml.matchAll(/<w:gridCol w:w="(\d+)"\/>/g), ([, width]) => Number(width));
+assert.equal(widths.length, 5);
+assert.equal(widths.reduce((sum, width) => sum + width, 0), 10080);
+assert.ok(widths[3] > widths[0]);
+const monthlyRows = Array.from(monthlyXml.matchAll(/<w:tr>(.*?)<\/w:tr>/g), ([, row]) => row);
+assert.equal(monthlyRows.length, 13);
+assert.match(monthlyRows[0], /<w:tblHeader\/>/);
+assert.ok(monthlyRows.every((row) => row.includes("<w:cantSplit/>")));
+assert.deepEqual(monthlyRows.flatMap((row, index) => row.includes("<w:keepNext/>") ? [index] : []), [0, 1, 2, 10, 11]);
+assert.match(monthlyRows[12], /12月.*1,480\.25.*1,302\.62.*-12\.53.*23\.7/);
+const annualRows = Array.from(annualXml.matchAll(/<w:tr>(.*?)<\/w:tr>/g), ([, row]) => row);
+assert.equal(annualRows.length, 21);
+assert.ok(annualRows.slice(0, -1).every((row) => row.includes("<w:keepNext/>")));
+assert.doesNotMatch(annualRows.at(-1), /<w:keepNext\/>/);
 console.log("result brief Word tests passed");

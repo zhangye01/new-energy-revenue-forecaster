@@ -4,12 +4,14 @@
   const isCommonJs = typeof module !== "undefined" && module.exports;
   const api = factory(
     isCommonJs ? require("./result-report") : root.NE_RESULT_REPORT,
-    isCommonJs ? require("./result-versions") : root.NE_RESULT_VERSIONS
+    isCommonJs ? require("./result-versions") : root.NE_RESULT_VERSIONS,
+    isCommonJs ? require("./result-brief-operating") : root.NE_RESULT_BRIEF_OPERATING,
+    isCommonJs ? require("./result-brief-dispatch") : root.NE_RESULT_BRIEF_DISPATCH
   );
   if (isCommonJs) module.exports = api;
   root.NE_RESULT_BRIEF = api;
   if (root.window && root.window !== root) root.window.NE_RESULT_BRIEF = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (report, versions) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (report, versions, operatingExhibits, dispatchExhibits) {
   const moneyNumber = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const energyNumber = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 });
   const asMoneyWan = (value) => moneyNumber.format(value / 10000);
@@ -233,17 +235,21 @@
       .map(({ key }, index) => ({ ...items.find((item) => item.key === key), number: index + 1 }));
   }
 
-  function buildSections(rows, pricing, bridge, income, incomeDetails, storage, keyYears) {
+  function buildSections(rows, { pricing, bridge, income, incomeDetails, storage, keyYears, operating, dispatch }) {
     const first = rows[0];
     const last = rows.at(-1);
     const sections = [
+      ...operating.sections.filter(({ key }) => key === "settlement"),
       { key: "price", title: "电价表现与形成", intro: pricing.intro,
         blocks: [figureBlock("price"), ...(bridge ? [figureBlock(bridge.key)] : [])] },
+      ...operating.sections.filter(({ key }) => key !== "settlement"),
       { key: "income", title: "收入走势与构成", intro: income.intro,
         blocks: [figureBlock("annual-income"), ...(incomeDetails ? [figureBlock("income"), tableBlock("income-details")] : []),
+          ...dispatch.incomeBlocks,
           ...(keyYears ? [tableBlock("key-years")] : [])] }
     ];
-    if (storage) sections.push({ key: "storage", title: "配储收益分析", intro: storage.intro, blocks: [tableBlock("storage")] });
+    if (storage) sections.push({ key: "storage", title: "配储收益分析", intro: storage.intro,
+      blocks: [tableBlock("storage"), ...dispatch.storageBlocks] });
     sections.push({ key: "annual", title: "逐年测算明细", intro: rows.length > 1
       ? [`首年结算电量 ${asEnergy(first.energyMwh)}，末年 ${asEnergy(last.energyMwh)}。`] : [], blocks: [tableBlock("annual")] });
     return sections;
@@ -290,9 +296,13 @@
     const pricing = pricingOverview(rows, result);
     const income = buildIncomeOverview(rows, result.totalFullRevenue, items);
     const keyYears = buildKeyYears(rows, pricing.change, income);
-    const sections = buildSections(rows, pricing, bridge, income, incomeDetails, storage, keyYears);
-    const figures = [priceFigure(rows, pricing.includesSpot), bridge, buildAnnualIncomeFigure(rows), incomeDetails?.figure].filter(Boolean);
-    const tables = [incomeDetails?.table, keyYears, storage?.table, buildYearTable(rows)].filter(Boolean);
+    const saved = { ...result, annualRows: rows };
+    const operating = operatingExhibits.buildOperatingExhibits(saved);
+    const dispatch = dispatchExhibits.buildDispatchExhibits(saved);
+    const sections = buildSections(rows, { pricing, bridge, income, incomeDetails, storage, keyYears, operating, dispatch });
+    const figures = [priceFigure(rows, pricing.includesSpot), bridge, buildAnnualIncomeFigure(rows), incomeDetails?.figure,
+      ...operating.figures, ...dispatch.figures].filter(Boolean);
+    const tables = [incomeDetails?.table, keyYears, storage?.table, buildYearTable(rows), ...operating.tables, ...dispatch.tables].filter(Boolean);
     const findings = [field("电价变化", pricing.finding), field("收入表现", income.finding), ...(storage ? [field("配储收益", storage.finding)] : [])];
 
     return {

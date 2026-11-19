@@ -26,14 +26,14 @@
   const AXIS_LABEL = { color: INK, fontSize: 11 };
   const AXIS_NAME = { color: INK, fontSize: 11 };
 
-  function yearAxis(years, width, boundaryGap) {
-    const lastYearIndex = years.length - 1;
-    const every = Math.max(1, Math.ceil(lastYearIndex / (width < 550 ? 4 : 6)));
+  function categoryAxis(labels, width, boundaryGap) {
+    const lastIndex = labels.length - 1;
+    const every = Math.max(1, Math.ceil(lastIndex / (width < 550 ? 4 : 6)));
     return {
-      type: "category", boundaryGap, data: years,
+      type: "category", boundaryGap, data: labels,
       axisLabel: {
         ...AXIS_LABEL, showMinLabel: true, showMaxLabel: true, hideOverlap: true,
-        interval: (index) => index === lastYearIndex || (index % every === 0 && index <= lastYearIndex - every / 2)
+        interval: (index) => index === lastIndex || (index % every === 0 && index <= lastIndex - every / 2)
       },
       axisLine: AXIS_LINE, axisTick: { show: false }
     };
@@ -50,7 +50,7 @@
         icon: "roundRect", itemWidth: 14, itemHeight: 4, itemGap: compact ? 8 : 16,
         textStyle: { color: INK, fontSize: compact ? 10 : 12 }
       },
-      xAxis: yearAxis(figure.years, width, figure.years.length === 1),
+      xAxis: categoryAxis(figure.years, width, figure.years.length === 1),
       yAxis: {
         type: "value", scale: true, name: "元/MWh", nameTextStyle: AXIS_NAME,
         axisLabel: { ...AXIS_LABEL, formatter: (value) => NUMBER_FORMAT.format(value) },
@@ -187,7 +187,7 @@
     return {
       ...OPTIONS,
       grid: { top: 54, bottom: 38, left: 69, right: 24 },
-      xAxis: yearAxis(figure.years, width, true),
+      xAxis: categoryAxis(figure.years, width, true),
       yAxis: {
         type: "value", name: "万元", nameTextStyle: AXIS_NAME,
         axisLabel: { ...AXIS_LABEL, formatter: (value) => NUMBER_FORMAT.format(value) }, splitLine: SPLIT_LINE
@@ -199,10 +199,39 @@
     };
   }
 
+  function seriesOption(figure, width) {
+    const lines = figure.kind === "lines";
+    const compact = width < 550;
+    const hasLegend = figure.series.length > 1;
+    const xAxis = categoryAxis(figure.labels, width, !lines || figure.labels.length === 1);
+    if (width >= 450 && figure.labels.length <= 12) xAxis.axisLabel.interval = 0;
+    return {
+      ...OPTIONS,
+      color: PRICE_COLORS,
+      grid: { top: hasLegend ? 62 : 43, bottom: 32, left: compact ? 66 : 76, right: 24 },
+      legend: hasLegend ? {
+        top: 8, right: 10, selectedMode: false, itemWidth: 12, itemHeight: 8, itemGap: 10,
+        textStyle: { color: INK, fontSize: compact ? 10 : 11 }
+      } : { show: false },
+      xAxis,
+      yAxis: {
+        type: "value", scale: lines, name: figure.unit, nameTextStyle: AXIS_NAME,
+        axisLabel: { ...AXIS_LABEL, formatter: (value) => NUMBER_FORMAT.format(value) }, splitLine: SPLIT_LINE
+      },
+      series: figure.series.map((series, index) => ({
+        name: series.name, type: lines ? "line" : "bar", data: series.values, silent: true,
+        ...(lines ? { symbol: ["circle", "emptyCircle", "diamond"][index], symbolSize: 5,
+          lineStyle: { width: index ? 2 : 3, type: index ? "dashed" : "solid" }, connectNulls: false }
+          : { barMaxWidth: hasLegend ? 20 : 27 })
+      }))
+    };
+  }
+
   function buildOption(figure, width) {
     if (figure.kind === "trend") return priceOption(figure, width);
     if (figure.kind === "bridge") return bridgeOption(figure, width);
     if (figure.kind === "annual") return annualOption(figure, width);
+    if (figure.kind === "columns" || figure.kind === "lines") return seriesOption(figure, width);
     return incomeOption(figure, width);
   }
 

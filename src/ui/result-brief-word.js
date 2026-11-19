@@ -11,9 +11,9 @@
   const WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
   const DOC_RELS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
   const PACKAGE_RELS = "http://schemas.openxmlformats.org/package/2006/relationships";
-  const PAGE_WIDTH = 12240;
-  const PAGE_HEIGHT = 15840;
-  const SIDE_MARGIN = 1080;
+  const PAGE_WIDTH = 11906;
+  const PAGE_HEIGHT = 16838;
+  const SIDE_MARGIN = 913;
   const CONTENT_WIDTH = PAGE_WIDTH - 2 * SIDE_MARGIN;
   const FIGURE_WIDTH_EMU = CONTENT_WIDTH * 635;
   const REL = Object.freeze({ styles: "rId1", footer: "rId2" });
@@ -36,9 +36,9 @@
   }
 
   function paragraph(text, style = "Normal", options = {}) {
-    const { align, bold = false, lead = "", keepNext = false, pageBreakBefore = false } = options;
+    const { align, bold = false, lead = "", keepNext = false } = options;
     const runs = lead ? `${textRun(`${lead}　`, true)}${textRun(text)}` : textRun(text, bold);
-    return `<w:p><w:pPr><w:pStyle w:val="${style}"/>${keepNext ? "<w:keepNext/>" : ""}${pageBreakBefore ? "<w:pageBreakBefore/>" : ""}${align ? `<w:jc w:val="${align}"/>` : ""}</w:pPr>${runs}</w:p>`;
+    return `<w:p><w:pPr><w:pStyle w:val="${style}"/>${keepNext ? "<w:keepNext/>" : ""}${align ? `<w:jc w:val="${align}"/>` : ""}</w:pPr>${runs}</w:p>`;
   }
 
   function columnWidths(weights) {
@@ -48,19 +48,20 @@
     return widths;
   }
 
-  function table(rows, weights, options = {}) {
-    const { header = false } = options;
+  function table(rows, weights, keepTogether) {
     const widths = columnWidths(weights);
     const borders = ["top", "left", "bottom", "right", "insideH", "insideV"].map((edge) =>
       `<w:${edge} w:val="single" w:sz="4" w:color="D9D9D9"/>`).join("");
     const grid = widths.map((width) => `<w:gridCol w:w="${width}"/>`).join("");
     const body = rows.map((row, rowIndex) => {
-      const isHeader = header && rowIndex === 0;
+      const isHeader = rowIndex === 0;
+      // Keep three data rows with each end of a table when it spans pages.
+      const keepNext = rowIndex < rows.length - 1 && (keepTogether || rowIndex < 3 || rowIndex >= rows.length - 3);
       const cells = widths.map((width, index) => {
         const fill = isHeader ? "E3EDF7" : rowIndex % 2 === 0 ? "F5F8FB" : "";
         const style = isHeader ? "TableHeader" : "TableText";
-        const align = header && index > 0 ? (isHeader ? "center" : "right") : "left";
-        return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${fill ? `<w:shd w:val="clear" w:fill="${fill}"/>` : ""}<w:vAlign w:val="center"/></w:tcPr>${paragraph(row[index], style, { align, keepNext: isHeader || rowIndex === rows.length - 2 })}</w:tc>`;
+        const align = index > 0 ? (isHeader ? "center" : "right") : "left";
+        return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${fill ? `<w:shd w:val="clear" w:fill="${fill}"/>` : ""}<w:vAlign w:val="center"/></w:tcPr>${paragraph(row[index], style, { align, keepNext })}</w:tc>`;
       }).join("");
       return `<w:tr><w:trPr><w:cantSplit/>${isHeader ? "<w:tblHeader/>" : ""}</w:trPr>${cells}</w:tr>`;
     }).join("");
@@ -100,17 +101,22 @@
     return `${paragraph(`${figureLabel}　${title}`, "Heading2")}<w:p><w:pPr><w:pStyle w:val="Figure"/>${caption ? "<w:keepNext/>" : ""}<w:jc w:val="center"/></w:pPr>${imageRun}</w:p>${caption ? paragraph(caption, "Caption") : ""}`;
   }
 
-  function tableWeights(reportTable) {
-    const { key, headers } = reportTable;
-    if (key === "annual" || key === "key-years") return headers.map((header, index) => index === 0 ? 13 : Math.max(20, header.length + 11));
-    if (key === "storage" || key === "income-details") return headers.map((header, index) => index === 0 ? 34 : Math.max(20, header.length + 12));
-    return headers.map(() => 1);
+  function tableWeights({ headers, rows }) {
+    const textWidth = (value) => {
+      const text = String(value ?? "");
+      return text.length + text.replace(/[\x00-\x7f]/g, "").length;
+    };
+    return headers.map((header, index) => {
+      const longest = Math.max(textWidth(header), ...rows.map((row) => textWidth(row[index])));
+      return Math.max(11, longest + 5);
+    });
   }
 
   function reportTableXml(reportTable) {
     const note = reportTable.note ? paragraph(reportTable.note, "Caption", { keepNext: true }) : "";
+    const keepTogether = reportTable.key === "annual" && reportTable.rows.length <= 25;
     return paragraph(`表 ${reportTable.number}　${reportTable.title}`, "Heading2") + note +
-      table([reportTable.headers, ...reportTable.rows], tableWeights(reportTable), { header: true });
+      table([reportTable.headers, ...reportTable.rows], tableWeights(reportTable), keepTogether);
   }
 
   function reportSections(brief, images) {
@@ -119,14 +125,13 @@
     const figuresByKey = new Map(images.map((image) => [image.key, image]));
     const tablesByKey = new Map(tables.map((entry) => [entry.key, entry]));
     return brief.sections.map((section) => {
-      const pageBreakBefore = section.key === "annual" && tablesByKey.get("annual")?.rows.length >= 16;
       const intro = (section.intro || []).map((text, index) => paragraph(text, "Normal", { keepNext: index === 0 }));
       const blocks = section.blocks.map(({ kind, key }) => {
         if (kind === "figure" && figuresByKey.has(key)) return picture(figuresByKey.get(key));
         if (kind === "table" && tablesByKey.has(key)) return reportTableXml(tablesByKey.get(key));
         return "";
       });
-      return [paragraph(section.title, "Heading1", { pageBreakBefore }), ...intro, ...blocks].join("");
+      return [paragraph(section.title, "Heading1"), ...intro, ...blocks].join("");
     }).join("");
   }
 

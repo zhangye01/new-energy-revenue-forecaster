@@ -46,6 +46,28 @@
     </section>`;
   }
 
+  function chapterBlocks(blocks, figures, tables) {
+    const content = [];
+    for (const { kind, key } of blocks) {
+      const isFigure = kind === "figure";
+      const entries = isFigure ? figures : tables;
+      const item = entries.get(key);
+      if (!item) continue;
+      entries.delete(key);
+      content.push({ chart: isFigure && (item.kind === "columns" || item.kind === "lines"),
+        html: (isFigure ? figureHtml : tableHtml)(item) });
+    }
+    const layout = [];
+    for (let index = 0; index < content.length; index += 1) {
+      const item = content[index];
+      if (item.chart && content[index + 1]?.chart) {
+        layout.push(`<div class="result-brief-figure-pair">${item.html}${content[index + 1].html}</div>`);
+        index += 1;
+      } else layout.push(item.html);
+    }
+    return layout.join("");
+  }
+
   function chaptersHtml(brief) {
     const figures = new Map(brief.figures.map((figure) => [figure.key, figure]));
     const tables = new Map(brief.tables.map((table) => [table.key, table]));
@@ -53,13 +75,7 @@
     return brief.sections.map((section) => {
       const headingId = `result-brief-chapter-${escapeAttribute(section.key)}`;
       const intro = (section.intro || []).map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("");
-      const blocks = (section.blocks || []).map(({ kind, key }) => {
-        const entries = kind === "figure" ? figures : tables;
-        const item = entries.get(key);
-        if (!item) return "";
-        entries.delete(key);
-        return (kind === "figure" ? figureHtml : tableHtml)(item);
-      }).join("");
+      const blocks = chapterBlocks(section.blocks || [], figures, tables);
       return `<section class="result-brief-section result-brief-chapter" aria-labelledby="${headingId}">
         <h3 id="${headingId}">${escapeHtml(section.title)}</h3>
         ${intro ? `<div class="result-brief-intro">${intro}</div>` : ""}

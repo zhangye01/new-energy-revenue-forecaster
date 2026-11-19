@@ -160,6 +160,27 @@
   margin-top: 7px;
 }
 
+.result-brief-figure-pair {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+}
+
+@media (min-width: 1280px) {
+  .result-brief-figure-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .result-brief-figure-pair .result-brief-block {
+    margin-top: 0;
+  }
+
+  .result-brief-figure-pair .result-brief-chart {
+    height: 265px;
+  }
+}
+
 .result-brief-block h4 {
   color: var(--text);
   font-size: 0.94rem;
