@@ -122,7 +122,7 @@
 
   function applyResultPrimaryAction(refs, view) {
     const current = view.state === "ready" && !view.isHistorical;
-    for (const [button, primary] of [[refs.runCalcButton, !current], [refs.resultValidationButton, current]]) {
+    for (const [button, primary] of [[refs.runCalcButton, !current], [refs.resultCompareButton, current]]) {
       button?.classList?.toggle("primary-button", primary);
       button?.classList?.toggle("ghost-button", !primary);
     }

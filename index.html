@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261119c">
-    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119l">
+    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119o">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261119m">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
@@ -87,8 +87,8 @@
     </script>
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
-    <script src="./config.js?v=20261119b" defer></script>
-    <script src="./runtime.js?v=20261119m" defer></script>
+    <script src="./config.js?v=20261119o" defer></script>
+    <script src="./runtime.js?v=20261119o" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
@@ -120,7 +120,7 @@
     <script src="./src/ui/forecast-page.js?v=20261119k" defer></script>
     <script src="./src/ui/forecast-run-flow.js?v=20261119k" defer></script>
     <script src="./src/ui/project-list.js?v=20261119a" defer></script>
-    <script src="./src/ui/result-page.js?v=20261118i" defer></script>
+    <script src="./src/ui/result-page.js?v=20261119o" defer></script>
     <script src="./src/ui/result-runner.js?v=20261118f" defer></script>
     <script src="./src/ui/result-print.js?v=20261118g" defer></script>
     <script src="./src/ui/result-charts.js?v=20261119m" defer></script>
@@ -138,11 +138,11 @@
     <script src="./src/ui/theme-controller.js?v=20261113c" defer></script>
     <script src="./src/ui/shell-events.js?v=20261119m" defer></script>
     <script src="./src/ui/app-event-bindings.js?v=20261119m" defer></script>
-    <script src="./src/domain/workflow-status.js?v=20261118e" defer></script>
+    <script src="./src/domain/workflow-status.js?v=20261119o" defer></script>
     <script src="./src/domain/scenario-config.js?v=20261118h" defer></script>
-    <script src="./src/domain/rough-price.js?v=20261118p" defer></script>
+    <script src="./src/domain/rough-price.js?v=20261119o" defer></script>
     <script src="./src/ui/rough-trend-chart.js?v=20261118p" defer></script>
-    <script src="./src/ui/rough-price-workspace.js?v=20261118r" defer></script>
+    <script src="./src/ui/rough-price-workspace.js?v=20261119o" defer></script>
     <script src="./src/domain/scenario-model.js?v=20261119m" defer></script>
     <script src="./src/domain/project-settings.js?v=20261118n" defer></script>
     <script src="./src/domain/project-model.js?v=20261119a" defer></script>
@@ -152,7 +152,7 @@
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261119j" defer></script>
-    <script src="./app.js?v=20261119m" defer></script>
+    <script src="./app.js?v=20261119o" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -228,10 +228,6 @@
               <button class="nav-item" data-page="results-page">
                 <span class="nav-main"><span class="nav-icon">▣</span><span class="nav-text">基准结果总览</span></span>
                 <span class="status-dot" id="status-results-page"></span>
-              </button>
-              <button class="nav-item" data-page="validation-page">
-                <span class="nav-main"><span class="nav-icon">⇄</span><span class="nav-text">交叉验证</span></span>
-                <span class="status-dot" id="status-validation-page"></span>
               </button>
               <button class="nav-item" data-page="compare-page">
                 <span class="nav-main"><span class="nav-icon">◬</span><span class="nav-text">多方案对比分析</span></span>
@@ -1336,7 +1332,7 @@
                 <button type="button" class="ghost-button" id="export-annual-button">导出年度CSV</button>
                 <button type="button" class="ghost-button" id="export-hourly-button">导出首年8760小时 CSV</button>
                 <button type="button" class="ghost-button" id="print-report-button">打印报告</button>
-                <button type="button" class="ghost-button next-step-button" id="result-validation-button" data-jump="validation-page">进入交叉验证</button>
+                <button type="button" class="ghost-button next-step-button" id="result-compare-button" data-jump="compare-page">进入多方案对比</button>
               </div>
             </div>
 
@@ -1469,14 +1465,6 @@
             </section>
             <div class="hint" id="hourly-preview-hint">等待测算</div>
           </section>
-        </section>
-
-        <section class="page" id="validation-page">
-          <section class="panel"><div id="rough-compare-root"></div></section>
-          <div class="history-next-step-row">
-            <button type="button" class="ghost-button" data-jump="results-page">返回基准结果总览</button>
-            <button type="button" class="primary-button next-step-button" data-jump="compare-page">进入多方案对比</button>
-          </div>
         </section>
 
         <section class="page" id="compare-page">
@@ -1694,8 +1682,8 @@
                 <p>当前版本适用于产品原型演示、业务流程确认与数据准备校验。</p>
                 <p><strong>适用对象：</strong>新能源项目收益测算、方案比选、规则口径复核和演示汇报。</p>
                 <p><strong>适用项目：</strong>以风电、光伏为主，并区分陆上/海上、是否配建储能等基本属性。</p>
-                <p><strong>当前特点：</strong>支持账号隔离、项目持久化、结算电量配置、历史15分钟现货分析、项目电价粗算、现货电价预测、收益参数补充与细化、交叉验证与结果对比。</p>
-                <p><strong>推荐顺序：</strong>首页查看政策与基线 → 我的项目 → 项目创建 → 结算电量配置 → 项目电价粗算 → 历史电价分析 → 电价预测工作台 → 收益参数补充与细化 → 基准结果总览 → 交叉验证 / 多方案对比分析。</p>
+                <p><strong>当前特点：</strong>支持账号隔离、项目持久化、结算电量配置、历史15分钟现货分析、项目电价粗算、现货电价预测、收益参数补充与细化及多方案对比。</p>
+                <p><strong>推荐顺序：</strong>首页查看政策与基线 → 我的项目 → 项目创建 → 结算电量配置 → 项目电价粗算 → 历史电价分析 → 电价预测工作台 → 收益参数补充与细化 → 基准结果总览 → 多方案对比分析。</p>
               </div>
               <div class="button-inline">
                 <button class="ghost-button" type="button" data-jump="home-page">查看首页</button>
@@ -1783,7 +1771,7 @@
                   <div class="help-step-index">8</div>
                   <div class="help-step-body">
                     <strong>收益参数补充与细化、结果输出</strong>
-                    <p>自动沿用粗算已确认参数，补充默认值和未填项，必要时展开细化；保存后重算基准，再与原粗算交叉验证。</p>
+                    <p>自动沿用粗算已确认参数，补充默认值和未填项，必要时展开细化。保存参数后生成基准结果，可对比多个已完成测算的方案。</p>
                   </div>
                 </article>
               </div>
@@ -1798,7 +1786,7 @@
                 </article>
                 <article class="help-card">
                   <strong>我的项目</strong>
-                  <p>在新建项目工作区创建项目，在历史项目工作区继续编辑或复制。复制后可查看原有粗算与基准结果的对照，调整测算输入后按页面提示重新测算。</p>
+                  <p>在新建项目工作区创建项目，在历史项目工作区继续编辑或复制。副本保留已保存的粗算快照和测算结果。调整测算输入后，按页面提示重新测算。</p>
                 </article>
                 <article class="help-card">
                   <strong>项目创建</strong>
@@ -1810,7 +1798,7 @@
                 </article>
                 <article class="help-card">
                   <strong>项目电价粗算</strong>
-                  <p>交易策略采用逐年收敛。环境价值、费用及其他净收入、配储补充收益各用一个全周期度电值。生成后的趋势图和加权价可用于复核，交叉验证读取对应粗算版本。</p>
+                  <p>交易策略采用逐年收敛。环境价值、费用及其他净收入、配储补充收益各用一个全周期度电值。生成后可查看趋势图、加权价和已保存的粗算版本。</p>
                 </article>
                 <article class="help-card">
                   <strong>历史电价分析</strong>
@@ -1823,10 +1811,6 @@
                 <article class="help-card">
                   <strong>收益参数补充与细化</strong>
                   <p>核对机制电价、策略损益、环境价值、三项费用及其他净收入。导入年表后先预览，再确认并保存。配储项目还需确认往返效率及独立补充收益。</p>
-                </article>
-                <article class="help-card">
-                  <strong>交叉验证</strong>
-                  <p>对照原粗算与已保存的基准结果，查看整体及年度价差。仅切换生效曲线时，旧版对照仍可查阅，页面及导出均标为历史。</p>
                 </article>
                 <article class="help-card">
                   <strong>基准结果总览 / 多方案对比分析</strong>
@@ -1950,7 +1934,7 @@
               <div class="help-faq">
                 <details class="help-faq-item"><summary>1. 为什么导不出8760模板？</summary><p>请先进入一个项目，并完成“项目创建”页面的基础信息保存。未保存前，系统会阻止模板导出。</p></details>
                 <details class="help-faq-item"><summary>2. 为什么导入后侧边栏状态没有变绿？</summary><p>状态点按完成标准判断，不是点一下页面就完成。比如结算电量配置只有在满足页面要求后才会变为已完成。</p></details>
-                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>请先保存测算周期内各年的8760小时上网电量，生效一条完整电价曲线，并确认保存当前方案全部适用的收益参数。已保存的粗算版本用于交叉验证。</p></details>
+                <details class="help-faq-item"><summary>3. 为什么结果页不能直接测算？</summary><p>请先保存测算周期内各年的8760小时上网电量，生效一条完整电价曲线，并确认保存当前方案全部适用的收益参数。</p></details>
                 <details class="help-faq-item"><summary>4. 为什么页面刷新后输入还在？</summary><p>当前原型默认开启输入持久化，已保存的项目数据会在页面切换和刷新后自动恢复。</p></details>
               </div>
             </details>

@@ -2,13 +2,12 @@
 
 (function (root, factory) {
   const isCommonJs = typeof module !== "undefined" && module.exports;
-  const api = factory(isCommonJs ? require("../domain/result-versions") : root.NE_RESULT_VERSIONS,
-    isCommonJs ? require("../domain/revenue-rules") : root.NE_REVENUE_RULES,
+  const api = factory(isCommonJs ? require("../domain/revenue-rules") : root.NE_REVENUE_RULES,
     isCommonJs ? require("./rough-trend-chart") : root.NE_ROUGH_TREND_CHART);
   if (isCommonJs) module.exports = api;
   root.NE_ROUGH_PRICE_WORKSPACE = api;
   if (root.window && root.window !== root) root.window.NE_ROUGH_PRICE_WORKSPACE = api;
-})(typeof globalThis !== "undefined" ? globalThis : window, function (versions, revenueRules, trendChart) {
+})(typeof globalThis !== "undefined" ? globalThis : window, function (revenueRules, trendChart) {
   const states = new WeakMap();
 
   function escapeHtml(value) {
@@ -21,7 +20,6 @@
     return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value))
       ? Number(value).toFixed(digits) : "—";
   }
-  function signed(value) { return `${Number(value) > 0 ? "+" : ""}${number(value)}`; }
   function yearsFor(project) {
     return Array.from({ length: Math.min(100, Math.max(0, Number(project?.forecastYears) || 0)) },
       (_, index) => Number(project.startYear) + index);
@@ -47,7 +45,7 @@
         mechanismDurationMonths: revenueRules.mechanismDurationMonths(scenario.config?.mechanismStartYm, scenario.config?.mechanismEndYm),
         snapshotId: entry?.snapshotId || "",
         trendVisibility: entry?.trendVisibility || {},
-        threshold: entry?.threshold ?? 10, message: lockMessage, tone: "info", groupOpen: {} };
+        message: lockMessage, tone: "info", groupOpen: {} };
       state.entries.set(key, entry);
     }
     return entry;
@@ -118,20 +116,8 @@
       <div class="rough-fields">${field("environmentPrice", "环境价值", 0)}${field("feesNetPrice", "费用及其他净收入")}${project.hasStorage ? field("storagePrice", "配储补充收益") : ""}</div></fieldset>`;
   }
 
-  function snapshotSelectorHtml(snapshots, selected, key) {
-    return `<label>粗算版本<select data-rough-snapshot="${key}">${snapshots.map((snapshot) => `<option value="${escapeHtml(snapshot.id)}"${snapshot.id === selected ? " selected" : ""}>${escapeHtml(timestamp(snapshot.createdAt))} · ${escapeHtml(snapshot.id)}</option>`).join("")}</select></label>`;
-  }
-
-  function trendSvg(rows, lines, title) {
-    if (!rows.length) return "";
-    const values = rows.flatMap((row) => lines.map((line) => Number(row[line.key]))).filter(Number.isFinite);
-    if (!values.length) return "";
-    const low = Math.min(...values), high = Math.max(...values);
-    const span = Math.max(high - low, 20);
-    const x = (index) => 58 + (rows.length === 1 ? 270 : index / (rows.length - 1) * 534);
-    const y = (value) => 145 - (value - low + span * 0.1) / (span * 1.2) * 112;
-    const path = lines.map((line, index) => `<polyline class="rough-trend-line rough-trend-line-${index}" points="${rows.map((row, offset) => `${x(offset).toFixed(1)},${y(Number(row[line.key])).toFixed(1)}`).join(" ")}"/>${rows.length === 1 ? `<circle class="rough-trend-line rough-trend-line-${index}" cx="${x(0).toFixed(1)}" cy="${y(Number(rows[0][line.key])).toFixed(1)}" r="3"/>` : ""}`).join("");
-    return `<figure class="rough-trend"><figcaption>${escapeHtml(title)} <span>${lines.map((line, index) => `<i class="rough-legend rough-legend-${index}">${escapeHtml(line.label)}</i>`).join(" ")}</span></figcaption><svg viewBox="0 0 620 190" role="img" aria-label="${escapeHtml(title)}，详细数值见下方年度明细"><line x1="58" y1="154" x2="592" y2="154" class="rough-trend-axis"/><text x="5" y="37">${escapeHtml(number(high))}</text><text x="5" y="145">${escapeHtml(number(low))}</text>${path}<text x="58" y="177">${rows[0].year}</text><text x="558" y="177">${rows.at(-1).year}</text></svg></figure>`;
+  function snapshotSelectorHtml(snapshots, selected) {
+    return `<label>粗算版本<select data-rough-snapshot>${snapshots.map((snapshot) => `<option value="${escapeHtml(snapshot.id)}"${snapshot.id === selected ? " selected" : ""}>${escapeHtml(timestamp(snapshot.createdAt))} · ${escapeHtml(snapshot.id)}</option>`).join("")}</select></label>`;
   }
 
   function annualTrendHtml(visible) {
@@ -227,7 +213,7 @@
     const formula = snapshot.settlementMethod === "compact-v1"
       ? "综合结算价＝捕获电价＋机制补差＋非机制电量策略贡献＋环境价值＋配储补充收益＋费用及其他净收入。费用及其他净收入按带符号净额计入。"
       : "综合结算价＝捕获电价＋机制补差＋非机制电量策略贡献＋环境价值贡献＋配储收益－三项费用＋其他净收入。三项费用包括市场运营费、电网考核费和辅助服务费。历史明细无法核对时，费用分项留空，仍显示原结算价。";
-    return `<section class="rough-card"><div class="rough-section-head"><div><h3 id="rough-results-heading">年度粗算结果</h3><p data-help="粗算结果与计算口径" data-help-anchor="#rough-results-heading">每次生成保存独立参数快照，可选择历史版本追溯。${formula}</p></div><button type="button" class="ghost-button" data-rough-export>导出粗算 CSV</button></div>${snapshotSelectorHtml(snapshots, snapshot.id, "rough")}
+    return `<section class="rough-card"><div class="rough-section-head"><div><h3 id="rough-results-heading">年度粗算结果</h3><p data-help="粗算结果与计算口径" data-help-anchor="#rough-results-heading">每次生成保存独立参数快照，可选择历史版本追溯。${formula}</p></div><button type="button" class="ghost-button" data-rough-export>导出粗算 CSV</button></div>${snapshotSelectorHtml(snapshots, snapshot.id)}
       ${snapshotState && !snapshotState.comparable ? `<p class="rough-alert">${escapeHtml(snapshotState.message)}</p>` : snapshotState?.refined ? '<span class="rough-badge">已保留原粗算 · 收益参数已细化</span>' : ""}
       <div class="rough-metrics"><div><span>全周期电量加权均价</span><strong>${number(summary.weightedPrice)}<small> 元/MWh</small></strong>${summary.weightedPrice === null ? "<small>电量未完整录入，暂不展示</small>" : ""}</div><div><span>年度算术均价（参考）</span><strong>${number(summary.simpleAverage)}<small> 元/MWh</small></strong></div><div><span>首年 / 末年综合结算价</span><strong>${number(summary.firstPrice)} / ${number(summary.lastPrice)}</strong></div></div>
       <div class="rough-assumptions"><span>捕获率 ${number(snapshot.draft.captureRate)}%</span><span>${snapshot.config.mechanismReferenceMode === "same_type" ? `同类型补差 · 价差 ${number(snapshot.config.sameTypeSpread)} 元/MWh` : "项目捕获价补差"}</span><span id="rough-source-summary">${snapshot.draft.sourceNote ? "已记录假设来源" : "未填写假设来源"}</span>${snapshot.draft.sourceNote ? `<p data-help="假设来源" data-help-anchor="#rough-source-summary">${escapeHtml(snapshot.draft.sourceNote)}</p>` : ""}</div>
@@ -275,48 +261,6 @@
       ${sharedConfigHtml(scenario, entry, inputState)}${settlementHtml(project, settlement)}<div class="rough-actions"><button type="submit" class="primary-button">生成并保存粗算版本</button></div><div data-rough-message role="status" class="rough-message ${entry.tone === "error" ? "rough-alert" : ""}">${escapeHtml(entry.message)}</div></form>${roughResultsHtml(snapshot, snapshots, entry, snapshotState)}`;
   }
 
-  function comparisonReviewHtml(relativeDelta, threshold) {
-    return relativeDelta === null ? "参考绝对差额" : Math.abs(relativeDelta * 100) >= threshold
-      ? '<span class="rough-review">明显偏差</span>' : "与预期接近";
-  }
-
-  function comparisonSummaryHtml(comparison, threshold) {
-    const { summary, rows } = comparison;
-    const relative = summary.relativeDelta ?? summary.weightedRelativeDelta ?? null;
-    const delta = summary.delta ?? (summary.weightedFine - summary.weightedRough);
-    const flagged = rows.filter((row) => row.relativeDelta !== null && Math.abs(row.relativeDelta * 100) >= threshold);
-    const zeroBasis = rows.filter((row) => row.relativeDelta === null);
-    const overall = relative === null ? "整体粗算接近零，请结合绝对差额查看。" : Math.abs(relative * 100) >= threshold
-      ? `整体存在明显偏差，基准结果${delta >= 0 ? "高于" : "低于"}粗算预期。` : "整体与粗算预期接近。";
-    const annual = flagged.length ? `${flagged.slice(0, 6).map((row) => row.year).join("、")}${flagged.length > 6 ? " 等" : ""} 年存在明显偏差（${flagged.length} 年）。` : zeroBasis.length ? "可比较年份未见明显偏差。" : "各年度差异均在提示阈值以内。";
-    return `<strong>${overall}</strong><span>${annual}${zeroBasis.length ? `其中 ${zeroBasis.length} 年粗算接近零，请查看绝对差额。` : ""}</span>`;
-  }
-
-  function comparisonTable(rows, roughKey, fineKey, title, threshold, settlement = false) {
-    return `<section class="rough-comparison-layer"><h4>${title}</h4><div class="rough-table-wrap"><table class="rough-table" aria-label="${escapeHtml(title)}"><caption>元/MWh</caption><thead><tr><th scope="col">年份</th><th scope="col">粗算</th><th scope="col">基准结果</th><th scope="col">差额</th>${settlement ? '<th scope="col">差异率</th><th scope="col">提示</th>' : ""}</tr></thead><tbody>${rows.map((row) => `<tr><th scope="row">${row.year}</th><td>${number(row[roughKey])}</td><td>${number(row[fineKey])}</td><td>${signed(row[fineKey] - row[roughKey])}</td>${settlement ? `<td>${row.relativeDelta === null ? "粗算接近零" : `${signed(row.relativeDelta * 100)}%`}</td><td data-rough-review-delta="${row.relativeDelta ?? ""}">${comparisonReviewHtml(row.relativeDelta, threshold)}</td>` : ""}</tr>`).join("")}</tbody></table></div></section>`;
-  }
-
-  function compareHtml(project, snapshots, snapshot, entry, comparison, scenario, result) {
-    const historical = comparison?.baselineState?.current === false;
-    const exportButton = comparison?.ok ? `<button type="button" class="ghost-button" data-compare-export>导出${historical ? "历史" : ""}对照 CSV</button>` : "";
-    const head = `<section class="rough-card"><div class="rough-section-head"><div><h3 id="rough-comparison-heading">粗算与基准结果对照</h3><p data-help="交叉验证" data-help-anchor="#rough-comparison-heading">查看原先的价格预期与基准结果是否存在明显偏差。基准结果直接读取“基准结果总览”，由现货电价预测和收益参数补充与细化共同形成；原粗算保留初步假设，基准结果采用后续细化参数，差异可能来自价格预测及参数细化；一致程度不代表预测准确性。</p></div>${exportButton}</div><div class="rough-compare-controls">${snapshots.length ? snapshotSelectorHtml(snapshots, snapshot?.id, "compare") : ""}<label><span id="rough-threshold-heading">偏差提示阈值（%）</span><input type="number" data-rough-threshold min="0.1" max="1000" step="0.1" value="${escapeHtml(entry.threshold)}"></label></div><p data-help="价差与提示阈值" data-help-anchor="#rough-threshold-heading">差额＝基准结果－粗算；差异率＝差额÷粗算绝对值。达到阈值时提示明显偏差；粗算接近零时仅参考绝对差额。阈值只影响提示，不修改测算结果。</p>`;
-    if (!snapshot) return `${head}<div class="rough-empty"><p>请先保存项目电价粗算，形成一份初步价格判断。</p><button type="button" class="ghost-button" data-jump="rough-page">前往项目电价粗算</button></div></section>`;
-    if (!result) return `${head}<div class="rough-empty"><p>粗算已保存。完成现货电价预测和收益参数补充与细化，生成基准结果后即可对照。</p><button type="button" class="ghost-button" data-jump="scenario-page">前往收益参数补充与细化</button></div></section>`;
-    if (!comparison?.ok) return `${head}<p class="rough-alert">${escapeHtml((comparison?.errors || ["当前结果暂不能对照。"]).join(" "))}</p><div class="rough-actions"><button type="button" class="ghost-button" data-jump="rough-page">查看项目电价粗算</button><button type="button" class="ghost-button" data-jump="results-page">更新基准结果</button></div><p class="rough-note" data-help="比较口径">收益参数细化后重新生成基准结果，原粗算仍可对照；项目、测算期或电量口径变化时需更新粗算。</p></section>`;
-    const summary = comparison.summary;
-    const delta = summary.delta ?? (summary.weightedFine - summary.weightedRough);
-    const relative = summary.relativeDelta ?? summary.weightedRelativeDelta ?? null;
-    const trace = comparison.resultTrace || {};
-    const resultLabel = scenario?.isBaseline === false ? "方案结果" : "基准结果";
-    const sourceLine = [scenario?.name || snapshot.scenarioName || "当前方案", `${historical ? "历史" : ""}${resultLabel} ${timestamp(comparison.source?.generatedAt)}`, trace.versionId, trace.priceSourceLabel].filter(Boolean).map(escapeHtml).join(" · ");
-    return `${head}${comparison.snapshotState?.refined ? '<span class="rough-badge">原粗算预期 × 细化后基准</span>' : ""}${historical ? `<p class="rough-alert" role="status">历史对照。${escapeHtml(comparison.baselineState.message)}</p>` : ""}<div class="rough-baseline-source"><span>${sourceLine}</span><button type="button" class="text-button" data-jump="results-page">查看${resultLabel}</button></div>
-      <div class="rough-metrics"><div><span>粗算电量加权均价</span><strong>${number(summary.weightedRough)}<small> 元/MWh</small></strong></div><div><span>基准电量加权均价</span><strong>${number(summary.weightedFine)}<small> 元/MWh</small></strong></div><div><span>整体差额 / 差异率</span><strong>${signed(delta)}<small> 元/MWh</small></strong><small>${relative === null ? "粗算接近零，参考绝对差额" : `${signed(relative * 100)}%`}</small></div></div>
-      <div class="rough-comparison-summary" data-rough-comparison-summary role="status">${comparisonSummaryHtml(comparison, entry.threshold)}</div>
-      ${trendSvg(comparison.rows, [{ key: "roughSettlement", label: "粗算综合价" }, { key: "fineSettlement", label: "基准综合价" }], "综合结算电价对照趋势（元/MWh）")}
-      ${comparisonTable(comparison.rows, "roughSettlement", "fineSettlement", "年度综合结算电价", entry.threshold, true)}
-      <details class="rough-breakdown"><summary>查看现货均价与捕获电价</summary><div class="rough-comparison-grid">${comparisonTable(comparison.rows, "roughSpot", "fineSpot", "年度现货均价", entry.threshold)}${comparisonTable(comparison.rows, "roughCapture", "fineCapture", "项目捕获电价", entry.threshold)}</div></details></section>`;
-  }
-
   function csvText(rows) {
     return "\ufeff" + rows.map((row) => row.map((value) => {
       const text = String(value ?? "");
@@ -336,19 +280,6 @@
           row.mechanismAdjustment, (1 - row.mechanismRatio) * row.ltPnlPrice, row.envValue,
           row.storageSupplement, ...feeCells, row.fullRevenuePrice, row.energyMwh];
       })]);
-  }
-  function buildComparisonCsv(snapshot, source, comparison) {
-    const trace = comparison.resultTrace || versions.describeResult({ sourceContext: source });
-    return csvText([["粗算版本", snapshot.id], ["基准结果方案", source.scenarioId || snapshot.scenarioId],
-      ["基准结果生成时间", source.generatedAt || ""], ["基准预测曲线版本", source.runId || ""],
-      ["基准结果状态", comparison.baselineState?.current === false ? `历史版。${comparison.baselineState.message}` : "与当前基准结果对照"],
-      ["测算版本", trace.versionId || "旧版未编号"], ["价格来源", trace.priceSourceLabel], ["价格内容指纹", trace.priceContentFingerprint],
-      ["收益参数状态", snapshot.settlementMethod === "compact-v1" ? "独立粗算假设与基准收益参数对照"
-        : comparison.snapshotState?.refined ? "已细化；保留原粗算预期" : "沿用粗算参数"],
-      ["粗算电量加权均价", comparison.summary?.weightedRough], ["基准电量加权均价", comparison.summary?.weightedFine],
-      ["年份", "粗算现货均价", "基准现货均价", "粗算捕获价", "基准捕获价", "粗算综合结算价", "基准综合结算价", "综合价差额(基准-粗算)", "综合价差异率", "基准捕获率(%)"],
-      ...comparison.rows.map((row) => [row.year, row.roughSpot, row.fineSpot, row.roughCapture,
-        row.fineCapture, row.roughSettlement, row.fineSettlement, row.delta, row.relativeDelta, row.fineCaptureRate])]);
   }
   function downloadCsv(documentRef, filename, content) {
     const windowRef = documentRef.defaultView || globalThis;
@@ -421,16 +352,13 @@
     refresh();
   }
 
-  function bindWorkspace(options, refs, entry, draft, settlement, snapshot, comparison) {
+  function bindWorkspace(options, target, entry, draft, settlement, snapshot) {
     const { documentRef, project, scenario, domain, onChange = () => {}, onPersist = () => {}, onMessage = () => {} } = options;
     const redraw = () => renderWorkspace(options);
-    [refs.rough, refs.compare].forEach((container) => container.querySelectorAll("[data-jump]").forEach((button) => {
-      button.onclick = () => options.onNavigate?.(button.dataset.jump);
-    }));
     const message = (text, tone = "info") => {
       entry.message = text; entry.tone = tone;
-      const target = refs.rough.querySelector("[data-rough-message]");
-      if (target) { target.textContent = text; target.classList?.toggle("rough-alert", tone === "error"); }
+      const status = target.querySelector("[data-rough-message]");
+      if (status) { status.textContent = text; status.classList?.toggle("rough-alert", tone === "error"); }
       onMessage(text, tone);
     };
     const invalidMechanismPeriod = (config) => config.mechanismEnabled
@@ -451,12 +379,12 @@
       entry.groupOpen = {};
       return changed;
     };
-    bindPriceNodes(refs.rough, draft, options, redraw, message);
-    const capture = refs.rough.querySelector("[data-rough-capture]");
+    bindPriceNodes(target, draft, options, redraw, message);
+    const capture = target.querySelector("[data-rough-capture]");
     if (capture) { capture.oninput = () => { draft.captureRate = capture.value === "" ? null : Number(capture.value); }; capture.onchange = () => onPersist(); }
-    const source = refs.rough.querySelector("[data-rough-source]");
+    const source = target.querySelector("[data-rough-source]");
     if (source) { source.oninput = () => { draft.sourceNote = source.value; }; source.onchange = () => onPersist(); }
-    const settlementFields = Array.from(refs.rough.querySelectorAll("[data-rough-settlement]"));
+    const settlementFields = Array.from(target.querySelectorAll("[data-rough-settlement]"));
     settlementFields.forEach((field) => {
       field.oninput = () => {
         const key = field.dataset.roughSettlement;
@@ -466,7 +394,7 @@
       };
       field.onchange = () => onPersist();
     });
-    refs.rough.querySelectorAll("[data-shared-key]").forEach((field) => {
+    target.querySelectorAll("[data-shared-key]").forEach((field) => {
       const update = () => {
         if (scenario.locked) return;
         const { sharedKey: key } = field.dataset;
@@ -477,37 +405,37 @@
         if (key === "mechanismStartYm" || key === "mechanismEndYm") {
           const end = revenueRules.mechanismEndMonth(entry.config.mechanismStartYm, entry.mechanismDurationMonths);
           entry.config.mechanismEndYm = end;
-          const endControl = refs.rough.querySelector("#rough-mechanism-end-ym");
+          const endControl = target.querySelector("#rough-mechanism-end-ym");
           if (endControl) endControl.value = end;
         }
         entry.dirty = JSON.stringify(entry.config) !== entry.source;
-        const dirtyLabel = refs.rough.querySelector("[data-rough-dirty]");
+        const dirtyLabel = target.querySelector("[data-rough-dirty]");
         if (dirtyLabel) dirtyLabel.textContent = entry.dirty ? "有未保存调整，生成粗算时一并保存。" : "";
       };
       field.oninput = update;
       field.onchange = update;
     });
-    refs.rough.querySelectorAll("[data-rough-group]").forEach((details) => {
+    target.querySelectorAll("[data-rough-group]").forEach((details) => {
       details.ontoggle = () => { entry.groupOpen[details.dataset.roughGroup] = details.open; };
     });
-    const save = refs.rough.querySelector("[data-rough-save-shared]");
+    const save = target.querySelector("[data-rough-save-shared]");
     if (save) save.onclick = () => {
       if (scenario.locked) return message("当前方案已锁定。", "error");
       if (invalidMechanismPeriod(entry.config)) return message(periodMessage, "error");
       const errors = domain.validateRoughMechanism(entry.config);
       if (errors.length) return message(errors.join(" "), "error");
       const changed = commitShared(true);
-      message(changed ? "机制参数已保存。更新基准结果后即可交叉验证。" : "机制参数已确认，后续自动带入。", "success");
+      message(changed ? "机制参数已保存。基准结果需按新参数重新测算。" : "机制参数已确认，后续自动带入。", "success");
       onChange({ sharedChanged: changed });
     };
-    const form = refs.rough.querySelector("#rough-price-form");
+    const form = target.querySelector("#rough-price-form");
     if (form) form.onsubmit = (event) => {
       event.preventDefault();
-      if (refs.rough.querySelector("[data-rough-end-price]")?.validity?.badInput) {
+      if (target.querySelector("[data-rough-end-price]")?.validity?.badInput) {
         return message("请填写有效的末年现货均价。", "error");
       }
       const endYear = yearsFor(project).at(-1);
-      const repeatedEnd = Array.from(refs.rough.querySelectorAll('[data-rough-node][data-node-field="year"]'))
+      const repeatedEnd = Array.from(target.querySelectorAll('[data-rough-node][data-node-field="year"]'))
         .some((field) => Number(field.value) === endYear);
       if (repeatedEnd) return message("末年价格请填写在自动生成的末年节点，其他节点请选择不同年份。", "error");
       const config = scenario.locked ? scenario.config : entry.config;
@@ -526,44 +454,17 @@
       message("粗算版本已保存。明细参数可在收益参数补充与细化中核对。", "success");
       onChange({ sharedChanged: changed });
     };
-    [refs.rough, refs.compare].forEach((container) => container.querySelectorAll("[data-rough-snapshot]").forEach((select) => {
-      select.onchange = () => { entry.snapshotId = select.value; redraw(); };
-    }));
-    const threshold = refs.compare.querySelector("[data-rough-threshold]");
-    if (threshold) {
-      const updateThreshold = () => {
-        const numeric = Number(threshold.value);
-        if (!Number.isFinite(numeric) || numeric < 0.1 || numeric > 1000) return false;
-        entry.threshold = numeric;
-        refs.compare.querySelectorAll("[data-rough-review-delta]").forEach((cell) => {
-          const relativeDelta = cell.dataset.roughReviewDelta === "" ? null : Number(cell.dataset.roughReviewDelta);
-          cell.innerHTML = comparisonReviewHtml(relativeDelta, numeric);
-        });
-        const summary = refs.compare.querySelector("[data-rough-comparison-summary]");
-        if (summary && comparison?.ok) summary.innerHTML = comparisonSummaryHtml(comparison, numeric);
-        return true;
-      };
-      threshold.oninput = updateThreshold;
-      threshold.onchange = () => { if (!updateThreshold()) threshold.value = entry.threshold; };
-    }
-    const exportRough = refs.rough.querySelector("[data-rough-export]");
+    const select = target.querySelector("[data-rough-snapshot]");
+    if (select) select.onchange = () => { entry.snapshotId = select.value; redraw(); };
+    const exportRough = target.querySelector("[data-rough-export]");
     if (exportRough && snapshot) exportRough.onclick = () => downloadCsv(documentRef, `${project.name || "项目"}-粗算-${snapshot.id}.csv`, buildRoughCsv(snapshot));
-    const exportComparison = refs.compare.querySelector("[data-compare-export]");
-    if (exportComparison && snapshot && comparison?.ok) exportComparison.onclick = () => {
-      const label = comparison.baselineState?.current === false ? "历史交叉验证" : "交叉验证";
-      const version = comparison.resultTrace?.versionId ? `-${comparison.resultTrace.versionId}` : "";
-      downloadCsv(documentRef, `${project.name || "项目"}-${label}-${snapshot.id}${version}.csv`, buildComparisonCsv(snapshot, comparison.source || {}, comparison));
-    };
   }
 
   function renderWorkspace(options = {}) {
     const { documentRef, project, scenario, domain } = options;
     if (!documentRef?.querySelectorAll || !documentRef?.getElementById || options.isActive === false) return;
-    const mode = options.mode === "compare" ? "compare" : "rough";
-    const target = documentRef.getElementById(mode === "compare" ? "rough-compare-root" : "rough-price-root");
+    const target = documentRef.getElementById("rough-price-root");
     if (!target) return;
-    const inactive = { querySelector: () => null, querySelectorAll: () => [] };
-    const refs = { rough: mode === "rough" ? target : inactive, compare: mode === "compare" ? target : inactive };
     const state = getState(documentRef);
     state.disposeTrend?.();
     state.disposeTrend = null;
@@ -576,27 +477,19 @@
     if (!project.roughPrice.draftsByScenario || !Array.isArray(project.roughPrice.snapshots)) project.roughPrice = domain.sanitizeWorkspace(project.roughPrice, project);
     if (!project.roughPrice.draftsByScenario[scenario.id]) project.roughPrice.draftsByScenario[scenario.id] = domain.defaultDraft(project);
     const draft = project.roughPrice.draftsByScenario[scenario.id];
-    const settlement = mode === "rough" ? domain.getCompactSettlementDraft(project, scenario, draft.settlement, options.inputState) : null;
+    const settlement = domain.getCompactSettlementDraft(project, scenario, draft.settlement, options.inputState);
     const entry = getEntry(state, project, scenario);
     const snapshots = project.roughPrice.snapshots.filter((item) => item.scenarioId === scenario.id);
     const snapshot = snapshots.find((item) => item.id === entry.snapshotId) || snapshots[0] || null;
     entry.snapshotId = snapshot?.id || "";
     const snapshotState = snapshot ? domain.snapshotState(project, scenario, snapshot) : null;
-    const result = project.resultsByScenario?.[scenario.id];
-    const comparison = mode === "compare" && snapshot ? domain.compareBaselineResult(project, scenario, snapshot, result, options.getBaselineResultState) : null;
-    if (comparison?.ok) {
-      const run = project.priceRuns?.find((item) => item.id === result?.sourceContext?.runId);
-      comparison.resultTrace = versions.describeResult(result, run);
-    }
-    target.innerHTML = mode === "rough"
-      ? roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState, options.inputState, domain.getDefaultEndPrice, settlement)
-      : compareHtml(project, snapshots, snapshot, entry, comparison, scenario, result);
-    if (mode === "rough" && snapshot) state.disposeTrend = bindAnnualTrend(documentRef, target, snapshot, entry.trendVisibility);
-    bindWorkspace(options, refs, entry, draft, settlement, snapshot, comparison);
+    target.innerHTML = roughHtml(project, scenario, draft, snapshots, snapshot, entry, snapshotState,
+      options.inputState, domain.getDefaultEndPrice, settlement);
+    if (snapshot) state.disposeTrend = bindAnnualTrend(documentRef, target, snapshot, entry.trendVisibility);
+    bindWorkspace(options, target, entry, draft, settlement, snapshot);
   }
 
-  return Object.freeze({ renderWorkspace, escapeHtml, csvText, buildRoughCsv, buildComparisonCsv,
-    roughHtml, compareHtml, comparisonSummaryHtml,
+  return Object.freeze({ renderWorkspace, escapeHtml, csvText, buildRoughCsv, roughHtml,
     hasUnsubmittedChanges: (documentRef, projects = []) => projects.some((project) =>
       project.scenarios?.some((scenario) => states.get(documentRef)?.entries.get(`${project.id}:${scenario.id}`)?.dirty)) });
 });

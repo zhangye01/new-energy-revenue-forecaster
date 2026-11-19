@@ -27,7 +27,7 @@
 | `energy-data.js` | 电量导入模板校验、模式识别、电量状态重建、完整年份和逐年输入辅助判断 |
 | `energy-import-flow.js` | 结算电量导入后的状态更新、提示文案和下游置脏流程 |
 | `app-utils.js` | 页面主控共用的格式化、转义、日期裁剪、对象判断和基础工具函数 |
-| `rough-price.js` | 独立年度粗算、不可变快照、共用参数指纹、同口径交叉对照 |
+| `rough-price.js` | 独立年度粗算、不可变快照、共用参数指纹和基准结果有效性 |
 | `supply-demand.js` | 六类供需总量、年度增长、分月与典型日权重、双向联络线、8760展开和守恒校验 |
 | `price-forecast.js` | 三模型模拟现货电价、预测质量校核及供需输入来源留存 |
 | `revenue-rules.js` | 机制月份、交易策略收敛、环境价值、综合费用规则 |
@@ -58,7 +58,7 @@
 | `energy-template-flow.js` | 结算电量模板导出、文件导入、示例模板和省份典型曲线调用流程 |
 | `chart-lifecycle.js` | ECharts 实例存活判断、批量 resize、窗口 resize 绑定和双帧延迟刷新 |
 | `energy-charts.js` | 结算电量配置页年度小时数和典型日曲线图的 option、空态和说明文案构造 |
-| `rough-price-workspace.js` | 独立粗算页面、机制参数和简化结算假设、粗算快照与结果阶段交叉验证 |
+| `rough-price-workspace.js` | 独立粗算页面、机制参数和简化结算假设、粗算快照展示与导出 |
 | `rough-trend-chart.js` | 读取粗算快照构建年度趋势图，统一坐标轴、价格节点与年度悬停提示 |
 | `supply-demand-template.js` | 默认典型年和指定年的曲线 Excel 模板、占比校验与局部合并 |
 | `supply-demand-chart.js` | 读取已生成的供需时序，展示分月和典型日供给构成与总需求曲线 |
@@ -67,7 +67,7 @@
 | `forecast-page.js` | 后台预测提交、任务状态查询和输入版本隔离 |
 | `forecast-results-view.js` | 三种模型的回传结果和历史预测记录的只读展示 |
 | `forecast-run-flow.js` | 旧预测运行兼容和已生效价格运行可用性校验 |
-| `result-page.js` | 基准结果总览报告文案、指标卡、假设说明、明细表 HTML 和渲染状态构造 |
+| `result-page.js` | 基准结果总览报告文案、指标卡、明细表、渲染状态和进入多方案对比的操作按钮 |
 | `result-print.js` | 基准结果总览打印前展开、图表刷新和打印后恢复控制 |
 | `result-charts.js` | 基准结果总览四张 ECharts 图的 option 构造和图表 token 扩展 |
 | `scenario-form.js` | 收益参数补充与细化页表单读写和场景配置构造 |

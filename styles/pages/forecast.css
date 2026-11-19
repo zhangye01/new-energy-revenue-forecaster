@@ -1,5 +1,5 @@
-/* Forecast workbench additions: use the shared theme for all three modes. */
-#rough-price-root, #rough-compare-root { display: grid; gap: 10px; min-width: 0; }
+/* Rough price workspace */
+#rough-price-root { display: grid; gap: 10px; min-width: 0; }
 .rough-card {
   min-width: 0;
   border: 1px solid var(--line);
@@ -31,7 +31,7 @@
 .rough-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: start; }
 .rough-fields .rough-checkbox { min-height: 59px; display: flex; align-items: center; gap: 8px; flex-direction: row-reverse; justify-content: flex-end; }
 .rough-fields .rough-checkbox input { width: 18px; min-height: 18px; height: 18px; }
-.rough-parameter-group > summary, .rough-breakdown > summary { cursor: pointer; font-size: 0.88rem; font-weight: 750; color: var(--blue); }
+.rough-parameter-group > summary { cursor: pointer; font-size: 0.88rem; font-weight: 750; color: var(--blue); }
 .rough-parameter-group > summary > span:not([data-context-help]) { margin-left: 8px; color: var(--muted); font-size: 0.76rem; font-weight: 500; }
 .rough-parameter-group[open] > :not(summary) { margin-top: 12px; }
 .rough-parameter-group { border-top: 1px solid var(--line); padding-top: 10px; }
@@ -39,10 +39,6 @@
 .rough-field-state { display: block; font-size: 0.67rem; color: var(--muted); font-weight: 400; }
 .rough-field-state.is-confirmed { color: var(--green); }
 .rough-fields .rough-checkbox .rough-field-state { display: none; }
-.rough-baseline-source { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 0.78rem; }
-.rough-comparison-summary { display: grid; gap: 6px; padding: 12px; border-radius: 6px; background: var(--panel-soft); font-size: 0.82rem; line-height: 1.65; }
-.rough-comparison-summary span { color: var(--muted); }
-.rough-breakdown[open] > .rough-comparison-grid { margin-top: 12px; }
 .rough-empty .ghost-button { margin-top: 12px; }
 .rough-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .rough-actions > span { color: var(--muted); font-size: 0.77rem; }
@@ -59,14 +55,6 @@
 .rough-metrics small { color: var(--muted); font-size: 0.7rem; font-weight: 500; }
 .rough-assumptions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .rough-assumptions > span { padding: 4px 8px; border-radius: 4px; background: var(--panel-soft); color: var(--muted); font-size: 0.75rem; }
-.rough-table-wrap { min-width: 0; max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
-.rough-table { width: 100%; min-width: 0; border-collapse: collapse; white-space: nowrap; font-size: 0.76rem; font-variant-numeric: tabular-nums; }
-.rough-table caption { padding: 8px 10px; text-align: left; color: var(--muted); font-size: 0.73rem; }
-.rough-table th, .rough-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; }
-.rough-table th:first-child { text-align: left; }
-.rough-table thead th { background: var(--table-head-bg); color: var(--table-head-ink); font-weight: 700; }
-.rough-table tbody tr:last-child > * { border-bottom: 0; }
-.rough-table tbody tr:hover { background: var(--panel-soft); }
 .rough-annual-trend { min-width: 0; margin: 0; padding: 14px 14px 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
 .rough-annual-trend figcaption { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
 .rough-annual-trend-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; color: var(--ink); font-size: 0.9rem; }
@@ -106,39 +94,14 @@
 .rough-tooltip-row i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
 .rough-tooltip-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rough-tooltip-note, .rough-tooltip-driver { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); font-size: 0.76rem; }
-.rough-trend { margin: 0; padding: 10px 12px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); }
-.rough-trend figcaption { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 0.77rem; }
-.rough-trend svg { display: block; max-width: 100%; width: 100%; max-height: 245px; }
-.rough-trend text { fill: var(--muted); font-size: 11px; }
-.rough-trend-axis { stroke: var(--line-strong); stroke-width: 1; }
-.rough-trend-line { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
-.rough-trend-line-0 { stroke: var(--blue); }
-.rough-trend-line-1 { stroke: var(--orange); }
-.rough-trend-line-2 { stroke: var(--green); }
-.rough-legend { font-style: normal; font-size: 0.72rem; margin-left: 8px; }
-.rough-legend::before { content: ""; display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 4px; }
-.rough-legend-0::before { background: var(--blue); }
-.rough-legend-1::before { background: var(--orange); }
-.rough-legend-2::before { background: var(--green); }
-.rough-compare-controls { display: grid; grid-template-columns: minmax(0, 2fr) minmax(130px, 1fr); gap: 10px; }
-.rough-compare-controls label { min-width: 0; }
-.rough-compare-controls select, .rough-compare-controls input { width: 100%; min-width: 0; }
-.rough-comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
-.rough-comparison-layer { min-width: 0; }
-.rough-comparison-layer h4 { margin: 0 0 8px; font-size: 0.84rem; }
-.rough-comparison-layer .rough-table th, .rough-comparison-layer .rough-table td { padding: 7px; }
-.rough-review { color: var(--orange); font-weight: 700; }
-.rough-breakdown { border-top: 1px solid var(--line); padding-top: 12px; }
-.rough-breakdown > p { margin-top: 8px; }
 @media (max-width: 1200px) {
-  .rough-comparison-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rough-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   .rough-card { padding: 11px; }
   .rough-annual-trend { padding: 10px 8px 4px; }
   .rough-trend-toggle { min-height: 36px; padding-inline: 5px; }
-  .rough-draft-grid, .rough-metrics, .rough-compare-controls, .rough-comparison-grid { grid-template-columns: minmax(0, 1fr); }
+  .rough-draft-grid, .rough-metrics { grid-template-columns: minmax(0, 1fr); }
   .rough-section-head { flex-direction: column; }
   .rough-parameter-group > summary > span:not([data-context-help]) { display: block; margin: 5px 0 0 16px; }
   .rough-fieldset { padding: 9px; }

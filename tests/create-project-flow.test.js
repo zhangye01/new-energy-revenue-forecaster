@@ -247,7 +247,7 @@ for (const changes of [
   assert.equal(preserved.statuses["history-page"], "completed");
   assert.equal(preserved.statuses["forecast-page"], "completed", "市场价版本保留，旧配储价源是否可计算由运行前校验决定");
   if (storageEdited) {
-    for (const page of ["rough-page", "scenario-page", "results-page", "validation-page", "compare-page"]) assert.equal(preserved.statuses[page], "stale");
+    for (const page of ["rough-page", "scenario-page", "results-page", "compare-page"]) assert.equal(preserved.statuses[page], "stale");
   } else assert.equal(JSON.stringify(preserved.statuses), statusesBefore, "备注编辑不触发测算失效");
 }
 

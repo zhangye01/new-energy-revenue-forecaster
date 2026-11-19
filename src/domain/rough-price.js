@@ -417,22 +417,22 @@
 
   function snapshotState(project, scenario, snapshot) {
     if (!validSnapshot(snapshot)) {
-      return { comparable: false, refined: false, reason: "missing_snapshot", message: "请先保存项目电价粗算，再进行交叉验证。" };
+      return { comparable: false, refined: false, reason: "missing_snapshot", message: "请先保存项目电价粗算。" };
     }
     // Keep the original config in the signature so existing snapshots remain usable after
     // revenue assumptions are refined, without changing their immutable prices or inputs.
     if (!snapshotContextMatches(project, scenario, snapshot, snapshot.config)) {
-      return { comparable: false, refined: false, reason: "stale_snapshot", message: "项目、测算期或电量口径已变化，请更新项目电价粗算后再对照。" };
+      return { comparable: false, refined: false, reason: "stale_snapshot", message: "项目、测算期或电量口径已变化，请生成新的粗算版本。" };
     }
     if (!snapshot.sourceContext && project?.hasStorage) {
       return { comparable: false, refined: false, reason: "legacy_storage_context",
-        message: "历史配储边界待核对：原粗算未记录配储功率和时长，保留原快照，暂不能交叉验证。" };
+        message: "历史粗算缺少配储功率和时长记录。请核对配储信息后生成新的粗算版本。" };
     }
     const refined = snapshot.sourceContext
       ? stableStringify(snapshot.config) !== stableStringify(scenario?.config)
       : stableStringify(normalizedConfig(project, snapshot.config, legacyScenarioConfig)) !==
         stableStringify(normalizedConfig(project, scenario?.config, legacyScenarioConfig));
-    return { comparable: true, refined, reason: "", message: refined ? "收益参数已细化，保留原粗算与基准结果对照。" : "" };
+    return { comparable: true, refined, reason: "", message: refined ? "收益参数已细化，当前显示已保存的粗算结果。" : "" };
   }
 
   function invalidNumber(source, key, label, min = -Infinity, max = Infinity) {

@@ -323,7 +323,6 @@ const PAGE_COMPLETION_STANDARD_MAP = {
   "forecast-page": "项目已有可用于收益测算的有效价源。",
   "scenario-page": "当前收益参数补充与细化已保存。",
   "results-page": "当前方案已成功生成一版基准结果。",
-  "validation-page": "已有同口径的粗算与基准结果，可查看偏差。",
   "compare-page": "至少两个方案存在可对比结果。"
 };
 const PAGE_VIEW_ALIAS = {
@@ -1165,9 +1164,8 @@ function applyAppDataPayload(payload) {
   appState.activeProjectId = appState.projects.some((project) => project.id === activeProjectId)
     ? activeProjectId
     : appState.projects[0]?.id || null;
-  appState.activePage = (typeof payload.activePage === "string" && PAGE_ID_SET.has(payload.activePage))
-    ? payload.activePage
-    : "home-page";
+  const savedPage = payload.activePage === "validation-page" ? "results-page" : payload.activePage;
+  appState.activePage = PAGE_ID_SET.has(savedPage) ? savedPage : "home-page";
   appState.compareView = sanitizeCompareView(payload.compareView);
   appState.energyStep2Choice = sanitizeEnergyStep2Choice(payload.energyStep2Choice);
   appState.policyFilters = sanitizePolicyFilters(payload.policyFilters);
@@ -3062,11 +3060,10 @@ function renderForecastRuns() {
     renderedForecastResults.disposeChart?.();
     renderedForecastResults.disposeChart = null;
   }
-  if (["rough-page", "validation-page"].includes(appState.activePage)) roughPriceWorkspace.renderWorkspace({
+  if (appState.activePage === "rough-page") roughPriceWorkspace.renderWorkspace({
     documentRef: typeof document !== "undefined" ? document : null,
     project, scenario: project ? getActiveScenario(project) : null, domain: roughPrice, inputState: scenarioModel,
-    mode: appState.activePage === "validation-page" ? "compare" : "rough",
-    getBaselineResultState: getValidatedResultState, makeId, nowIso: () => new Date().toISOString(),
+    makeId, nowIso: () => new Date().toISOString(),
     onMessage: setTopMeta, onPersist: schedulePersistAppData, onNavigate: setActivePage,
     onChange: (change = {}) => { if (change.sharedChanged) markDownstreamStale(project, "scenario-page"); renderAll(); }
   });

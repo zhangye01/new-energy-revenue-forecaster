@@ -12,17 +12,20 @@ const {
 
 const template = statusMapTemplate();
 assert.equal(Object.keys(template).length, DEFAULT_WORKFLOW_PAGES.length);
+assert.equal(DEFAULT_WORKFLOW_PAGES.length, 8);
 assert.ok(Object.values(template).every((value) => value === "not_started"));
 
 const sanitized = sanitizeStatuses({
   "create-page": "completed",
   "energy-page": "invalid",
   "forecast-page": "stale",
+  "validation-page": "completed",
   "unknown-page": "completed"
 });
 assert.equal(sanitized["create-page"], "completed");
 assert.equal(sanitized["energy-page"], "not_started");
 assert.equal(sanitized["forecast-page"], "stale");
+assert.ok(!Object.hasOwn(sanitized, "validation-page"), "旧项目的交叉验证状态不计入当前进度");
 assert.equal(sanitized["unknown-page"], undefined);
 
 const reconciled = reconcileStatuses(template, {
@@ -89,11 +92,11 @@ const refined = markDownstreamStale({
   ...template,
   "rough-page": "completed",
   "results-page": "completed",
-  "validation-page": "completed"
+  "compare-page": "completed"
 }, "scenario-page");
 assert.equal(refined["rough-page"], "completed", "补充收益参数不撤销原粗算");
 assert.equal(refined["results-page"], "stale", "收益细化后基准需要重新测算");
-assert.equal(refined["validation-page"], "stale", "收益细化后对照等待新的基准");
+assert.equal(refined["compare-page"], "stale", "收益细化后对比结果需要重新核对");
 assert.equal(markDownstreamStale(refined, "energy-page")["rough-page"], "stale",
   "电量口径变化仍需更新粗算");
 

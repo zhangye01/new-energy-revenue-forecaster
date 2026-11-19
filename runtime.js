@@ -223,7 +223,7 @@ const refs = {
   storageAncillaryRevenuePrice: document.querySelector("#storage-ancillary-revenue-price"),
   storageOtherRevenuePrice: document.querySelector("#storage-other-revenue-price"),
   runCalcButton: document.querySelector("#run-calc-button"),
-  resultValidationButton: document.querySelector("#result-validation-button"),
+  resultCompareButton: document.querySelector("#result-compare-button"),
   exportAnnualButton: document.querySelector("#export-annual-button"),
   exportHourlyButton: document.querySelector("#export-hourly-button"),
   printReportButton: document.querySelector("#print-report-button"),

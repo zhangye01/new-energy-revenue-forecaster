@@ -15,7 +15,6 @@ const REQUIRED_PAGE_IDS = [
   "forecast-page",
   "scenario-page",
   "results-page",
-  "validation-page",
   "compare-page",
   "help-page",
   "settings-page"
@@ -28,7 +27,6 @@ const REQUIRED_STATUS_DOT_IDS = [
   "status-forecast-page",
   "status-scenario-page",
   "status-results-page",
-  "status-validation-page",
   "status-compare-page"
 ];
 const CRITICAL_IDS = [
@@ -63,6 +61,7 @@ const CRITICAL_IDS = [
   "result-metric-grid",
   "result-annual-stack-chart",
   "run-calc-button",
+  "result-compare-button",
   "export-annual-button",
   "export-hourly-button",
   "print-report-button",

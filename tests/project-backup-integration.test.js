@@ -71,7 +71,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
   restored.statuses["rough-page"] = "stale";
   sandbox.reconcileProjectStatuses(restored);
   assert.equal(restored.statuses["rough-page"], "completed", "restored source identities must also be recognized by navigation and project status");
-  assert.equal(restored.statuses["validation-page"], "stale", "the restored baseline must still be recalculated");
+  assert.equal(restored.statuses["results-page"], "stale", "the restored baseline must still be recalculated");
   const restoredRoughState = sandbox.NE_ROUGH_PRICE.snapshotState(restored, restoredScenario, restoredRough);
   const restoredHtml = sandbox.NE_ROUGH_PRICE_WORKSPACE.roughHtml(restored, restoredScenario, restoredRough.draft,
     restored.roughPrice.snapshots, restoredRough, { config: restoredScenario.config, groupOpen: {}, message: "" },

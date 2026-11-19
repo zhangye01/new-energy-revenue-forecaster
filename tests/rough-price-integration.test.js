@@ -110,7 +110,7 @@ const { createBrowserSandbox } = require("../scripts/module-load-smoke");
   assert.equal(sandbox.shouldAutoSyncProvinceDefaults(curveRestored), false, "前面保存的粗算参数不能被创建页默认值覆盖");
   const workflow = sandbox.buildWorkflowCompletionSnapshot(reloaded);
   assert.equal(workflow.roughCompleted, true);
-  assert.equal(workflow.validationCompleted, true);
+  assert.equal(workflow.resultsCompleted, true);
 
   const compactProject = sandbox.sanitizeProject(JSON.parse(JSON.stringify(reloaded)), 4);
   const compactScenario = compactProject.scenarios.find((item) => item.id === compactProject.activeScenarioId);
@@ -159,7 +159,6 @@ const { createBrowserSandbox } = require("../scripts/module-load-smoke");
   sandbox.NE_SCENARIO_MODEL.confirmConfig(activeScenario, ["otherNetIncome"], { project: reloaded });
   sandbox.runCalculation();
   assert.equal(reloaded.statuses["results-page"], "completed", "重新测算后恢复完成");
-  assert.equal(reloaded.statuses["validation-page"], "completed", "细化后重算基准即可完成对照，无需重做粗算");
   const refinedComparison = sandbox.NE_ROUGH_PRICE.compareBaselineResult(reloaded, activeScenario, initialRough,
     reloaded.resultsByScenario[activeScenario.id]);
   assert.equal(refinedComparison.ok, true, refinedComparison.errors.join("；"));
@@ -176,14 +175,12 @@ const { createBrowserSandbox } = require("../scripts/module-load-smoke");
   reloaded.priceRuns.push(nextRun); reloaded.activeRunId = nextRun.id;
   sandbox.markDownstreamStale(reloaded, "forecast-page"); sandbox.reconcileProjectStatuses(reloaded);
   assert.equal(reloaded.statuses["results-page"], "stale", "换生效预测后旧基准需要重算");
-  assert.equal(reloaded.statuses["validation-page"], "stale", "旧预测对照应提示需复核");
   const oldRunComparison = sandbox.NE_ROUGH_PRICE.compareBaselineResult(reloaded, activeScenario, initialRough, priorRunResult, sandbox.getValidatedResultState);
   assert.equal(oldRunComparison.ok, true, "可保留与总览同一份历史结果的对照");
   assert.equal(oldRunComparison.baselineState.reason, "stale_run");
   assert.equal(oldRunComparison.summary.weightedFine, priorRunResult.avgFullRevenuePrice);
   sandbox.runCalculation();
   assert.equal(reloaded.statuses["results-page"], "completed");
-  assert.equal(reloaded.statuses["validation-page"], "completed");
   const updatedBaseline = reloaded.resultsByScenario[activeScenario.id];
   assert.equal(updatedBaseline.sourceContext.runId, nextRun.id);
   assert.notEqual(updatedBaseline.avgFullRevenuePrice, priorRunResult.avgFullRevenuePrice);
@@ -277,5 +274,14 @@ const { createBrowserSandbox } = require("../scripts/module-load-smoke");
   assert.equal(JSON.stringify(restoredStorage.roughPrice.snapshots), storedStorageRoughJson);
   assert.equal(sandbox.NE_ROUGH_PRICE.compareBaselineResult(restoredStorage, restoredStorage.scenarios[0],
     restoredStorage.roughPrice.snapshots[0], restoredStorage.resultsByScenario[storageScenario.id]).ok, true);
+
+  const savedAppProject = JSON.parse(JSON.stringify(storageProject));
+  savedAppProject.statuses["validation-page"] = "completed";
+  assert.equal(sandbox.applyAppDataPayload({ projects: [savedAppProject], activeProjectId: storageProject.id,
+    activePage: "validation-page" }), true);
+  assert.equal(state.activePage, "results-page", "从退出的旧交叉验证页恢复时进入基准结果总览");
+  assert.equal(Object.hasOwn(state.projects[0].statuses, "validation-page"), false);
+  assert.equal(JSON.stringify(state.projects[0].roughPrice.snapshots), storedStorageRoughJson);
+  assert.equal(JSON.stringify(state.projects[0].resultsByScenario), JSON.stringify(savedAppProject.resultsByScenario));
   console.log("rough price integration tests passed");
 })().catch((error) => { console.error(error); process.exit(1); });

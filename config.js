@@ -11,7 +11,6 @@ const PAGE_TITLES = {
   "forecast-page": "电价预测工作台",
   "scenario-page": "收益参数补充与细化",
   "results-page": "基准结果总览",
-  "validation-page": "交叉验证",
   "compare-page": "多方案对比分析",
   "help-page": "帮助文档",
   "settings-page": "系统设置"
@@ -27,7 +26,6 @@ const PAGE_GROUPS = {
   "forecast-page": "分析流程",
   "scenario-page": "分析流程",
   "results-page": "结果输出",
-  "validation-page": "结果输出",
   "compare-page": "结果输出",
   "help-page": "支持中心",
   "settings-page": "支持中心"
@@ -79,11 +77,6 @@ const PAGE_HELP_TEXTS = {
     meaning: "统一查看分项收入、年度结果和首年小时明细。",
     guide: "确保已导入电量且有生效电价版本，再点击“发起测算”。"
   },
-  "validation-page": {
-    purpose: "用于比较先前的粗算预期与基准结果。",
-    meaning: "查看整体及逐年的电价偏差，识别明显差异；偏差提示表示与预期的一致程度。",
-    guide: "选择原粗算版本，对照细化后保存的基准结果；收益参数变化只需重算基准，项目、测算期或电量变化时需更新粗算。"
-  },
   "compare-page": {
     purpose: "用于多方案结果横向对比。",
     meaning: "快速识别相对基准的核心收益驱动。",
@@ -109,7 +102,6 @@ const WORKFLOW_PAGES = [
   "forecast-page",
   "scenario-page",
   "results-page",
-  "validation-page",
   "compare-page"
 ];
 
@@ -120,7 +112,6 @@ const REQUIRES_PROJECT = new Set([
   "forecast-page",
   "scenario-page",
   "results-page",
-  "validation-page",
   "compare-page"
 ]);
 
@@ -133,7 +124,6 @@ const REQUIRES_LOGIN = new Set([
   "forecast-page",
   "scenario-page",
   "results-page",
-  "validation-page",
   "compare-page"
 ]);
 
