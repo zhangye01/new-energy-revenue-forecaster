@@ -22,7 +22,7 @@
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261119c">
-    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261118t">
+    <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119e">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261118m">
     <link rel="stylesheet" href="./styles.css?v=20260610a">
     <script>
@@ -114,7 +114,7 @@
     <script src="./src/ui/energy-charts.js?v=20261119b" defer></script>
     <script src="./src/ui/supply-demand-template.js?v=20261118q" defer></script>
     <script src="./src/ui/supply-demand-chart.js?v=20261118s" defer></script>
-    <script src="./src/ui/supply-demand-workspace.js?v=20261118s" defer></script>
+    <script src="./src/ui/supply-demand-workspace.js?v=20261119e" defer></script>
     <script src="./src/ui/supply-demand-flow.js?v=20261118s" defer></script>
     <script src="./src/ui/forecast-results-view.js?v=20261119d" defer></script>
     <script src="./src/ui/forecast-page.js?v=20261118t" defer></script>
@@ -1826,7 +1826,7 @@
                   <div class="help-step-index">7</div>
                   <div class="help-step-body">
                     <strong>电价预测工作台</strong>
-                    <p>在“测算周期供需配置”填写首年电量和增长率，导入典型曲线。核对默认曲线和各年调整后，保存并生成小时输入。</p>
+                    <p>在“测算周期供需配置”逐个选择要素，填写首年总量、逐年增速，配置分月和分时曲线。核对六类要素后，统一生成小时供需数据。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
@@ -1931,7 +1931,7 @@
                 </article>
                 <article class="help-card">
                   <strong>供需输入</strong>
-                  <p>在界面填写六类供需要素的首年电量和增长率。通过 Excel 填入分月占比和各月典型日 24 小时占比，分月占比也可在界面修改。联络线净电量正值为送出，负值为受入。</p>
+                  <p>每个要素页签集中配置首年总量、逐年增速、分月占比和各月典型日 24 小时占比。展开逐年增速可核对推算的年度电量，切换要素会保留草稿。分月可在界面修改，Excel 可导入同一范围的多项曲线。联络线净额正值为送出，负值为受入。</p>
                   <p>各年默认沿用典型年曲线，也可给指定年份设置分月占比或个别月份的分时曲线。保存后可用供需堆积面积图查看分月或典型日分时构成，或导出年度、典型小时和逐小时 CSV。</p>
                 </article>
               </div>

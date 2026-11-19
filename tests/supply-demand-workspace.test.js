@@ -11,9 +11,9 @@ class Root {
   constructor() { this.innerHTML = ""; this.events = {}; }
   addEventListener(name, listener) { this.events[name] = listener; }
   contains(target) { return !target.detached; }
-  fire(name, dataset, extra = {}) {
+  fire(name, dataset, extra = {}, eventFields = {}) {
     const target = { dataset, closest() { return this.dataset.sdAction ? this : null; }, ...extra };
-    return this.events[name]?.({ target, preventDefault() {} });
+    return this.events[name]?.({ target, preventDefault() {}, ...eventFields });
   }
 }
 
@@ -82,6 +82,7 @@ function fixture(p = project(), behavior = {}) {
     setActive(value) { active = value; controller.render(); },
     upload(name, result) { return root.fire("change", { sdTemplateFile: "" }, { files: [{ name, result }] }); },
     click(action, dataset = {}) { return root.fire("click", { sdAction: action, ...dataset }); },
+    chooseElement(element) { return root.fire("click", { sdAction: "select-element", sdElement: element }); },
     edit(input, value, dataset = {}) { return root.fire("input", { sdInput: input, ...dataset }, { value: String(value) }); },
     select(key, value) { return root.fire("change", { sdSelect: key }, { value: String(value) }); },
     openSavedPreview() {
@@ -101,7 +102,16 @@ async function main() {
   assert.match(initial.root.innerHTML, /2027—2028年/);
   assert.match(initial.root.innerHTML, /data-sd-action="download-template"/);
   assert.match(initial.root.innerHTML, /<input type="file" data-sd-template-file accept="\.xlsx/);
-  assert.equal((initial.root.innerHTML.match(/data-sd-input="base"/g) || []).length, 6);
+  assert.equal((initial.root.innerHTML.match(/data-sd-input="base"/g) || []).length, 1);
+  const tabs = initial.root.innerHTML.match(/<button\b[^>]*data-sd-action="select-element"[^>]*>/g) || [];
+  assert.equal(tabs.length, 6);
+  for (const key of keys) {
+    const tab = tabs.find((tag) => tag.includes(`data-sd-element="${key}"`));
+    assert.ok(tab, `${key} has an element tab`);
+    assert.match(tab, /role="tab"/);
+    assert.match(tab, new RegExp(`aria-selected="${key === "load"}"`));
+  }
+  assert.doesNotMatch(initial.root.innerHTML, /data-sd-select="curveSeries"|data-sd-select="tieMode"/);
   assert.equal((initial.root.innerHTML.match(/data-sd-input="month-share"/g) || []).length, 12);
   assert.match(initial.root.innerHTML, /data-sd-action="generate" disabled/);
   assert.doesNotMatch(initial.root.innerHTML, /data-sd-growth-panel|sd-curve-bars|<textarea/);
@@ -123,8 +133,12 @@ async function main() {
   assert.match(initial.root.innerHTML, /data-sd-import-preview/);
   assert.match(initial.root.innerHTML, /假设&lt;&amp;&gt;\.xlsx/);
   assert.match(initial.root.innerHTML, /省内负荷 · 1月典型日分时/);
+  assert.doesNotMatch(initial.root.innerHTML, /data-sd-input="base"[^>]*data-sd-series="tieLine"/);
+  initial.chooseElement("tieLine");
   assert.match(initial.root.innerHTML, /value="-600" data-sd-series="tieLine"/);
+  assert.match(initial.root.innerHTML, /data-sd-select="tieMode"/);
   assert.doesNotMatch(initial.root.innerHTML, /联络线送出|联络线受入/, "net-mode review stays compact");
+  initial.chooseElement("load");
   assert.deepEqual(fresh, original, "validation and preview leave the project untouched");
 
   await initial.upload("坏模板.xlsx", { ok: false, errors: ["分月占比单元格 E2 缺失"] });
@@ -284,6 +298,112 @@ async function main() {
   const single = fixture(project("single", 1));
   assert.doesNotMatch(single.root.innerHTML, /data-sd-action="growth-open"/);
 
+  const keyboardProject = project("keyboard-tabs"), keyboardBefore = JSON.stringify(keyboardProject);
+  const keyboard = fixture(keyboardProject), focusedTabs = [];
+  keyboard.root.querySelector = (selector) => {
+    const match = selector.match(/data-sd-element="([^"]+)"/);
+    return match ? { focus() { focusedTabs.push(match[1]); } } : null;
+  };
+  for (const [current, key, expected] of [
+    ["load", "ArrowRight", "tieLine"], ["tieLine", "ArrowLeft", "load"],
+    ["load", "ArrowLeft", "nonMarket"], ["nonMarket", "ArrowRight", "load"],
+    ["load", "End", "nonMarket"], ["nonMarket", "Home", "load"]
+  ]) {
+    let prevented = false;
+    keyboard.root.fire("keydown", { sdAction: "select-element", sdElement: current }, {}, {
+      key, preventDefault() { prevented = true; }
+    });
+    assert.equal(prevented, true, `${key} is handled as tab navigation`);
+    const tab = (keyboard.root.innerHTML.match(/<button\b[^>]*data-sd-action="select-element"[^>]*>/g) || [])
+      .find((tag) => tag.includes(`data-sd-element="${expected}"`));
+    assert.match(tab, /aria-selected="true"/);
+    assert.equal(focusedTabs.at(-1), expected, "keyboard navigation restores focus after rendering");
+  }
+  assert.equal(keyboard.controller.hasUnsavedChanges(), false);
+  assert.equal(JSON.stringify(keyboardProject), keyboardBefore);
+
+  const byElement = project("element-drafts", 3), elementConfig = completeConfig(byElement);
+  elementConfig.elements.wind = { ...clone(elementConfig.elements.load), baseEnergyMwh: 12000 };
+  byElement.supplyDemand = savedState(byElement, elementConfig);
+  const elementBefore = JSON.stringify(byElement), elementFixture = fixture(byElement);
+  for (const key of keys) {
+    elementFixture.chooseElement(key);
+    const html = elementFixture.root.innerHTML;
+    assert.equal((html.match(/data-sd-input="base"/g) || []).length, 1, "each tab shows only its own base input");
+    assert.equal((html.match(/data-sd-input="month-share"/g) || []).length, 12);
+    assert.match(html, new RegExp(`data-sd-input="base"[^>]*data-sd-series="${key}"`));
+    const selected = (html.match(/<button\b[^>]*data-sd-action="select-element"[^>]*>/g) || []).filter((tag) => tag.includes('aria-selected="true"'));
+    assert.equal(selected.length, 1);
+    assert.match(selected[0], new RegExp(`data-sd-element="${key}"`));
+  }
+  assert.equal(elementFixture.controller.hasUnsavedChanges(), false, "tab navigation alone does not create a draft");
+  elementFixture.chooseElement("load");
+  elementFixture.edit("base", 130000, { sdSeries: "load" });
+  elementFixture.click("growth-open", { sdSeries: "load" });
+  elementFixture.edit("growth-rate", 6, { sdSeries: "load", sdYear: "2028" });
+  elementFixture.edit("growth-rate", 7, { sdSeries: "load", sdYear: "2029" });
+  assert.match(elementFixture.root.innerHTML, /data-sd-growth-total/);
+  assert.match(elementFixture.root.innerHTML, /147,446\.00/, "projected totals compound the edited annual growth rates");
+  elementFixture.select("curveYear", 2029);
+  elementFixture.select("curveMonth", 7);
+  elementFixture.edit("month-share", 0, { sdMonth: "1" });
+  elementFixture.edit("month-share", 100 / 6, { sdMonth: "2" });
+  elementFixture.chooseElement("wind");
+  assert.match(elementFixture.root.innerHTML, /value="12000" data-sd-series="wind"/);
+  assert.match(elementFixture.root.innerHTML, /<option value="2029" selected/);
+  assert.match(elementFixture.root.innerHTML, /<option value="7" selected/);
+  assert.match(elementFixture.root.innerHTML, /data-sd-curve-origin>沿用默认/);
+  elementFixture.edit("base", 20000, { sdSeries: "wind" });
+  elementFixture.click("growth-open", { sdSeries: "wind" });
+  elementFixture.edit("growth-rate", 3, { sdSeries: "wind", sdYear: "2028" });
+  elementFixture.edit("growth-rate", 4, { sdSeries: "wind", sdYear: "2029" });
+  elementFixture.edit("month-share", 100 / 6, { sdMonth: "1" });
+  elementFixture.edit("month-share", 0, { sdMonth: "2" });
+  elementFixture.chooseElement("solar");
+  elementFixture.chooseElement("load");
+  assert.match(elementFixture.root.innerHTML, /value="130000" data-sd-series="load"/);
+  assert.match(elementFixture.root.innerHTML, /data-sd-input="month-share"[^>]*value="0"[^>]*data-sd-month="1"/);
+  assert.match(elementFixture.root.innerHTML, /本年已调整 · 分月已调整/);
+  elementFixture.click("growth-open", { sdSeries: "load" });
+  assert.match(elementFixture.root.innerHTML, /value="6"[^>]*data-sd-series="load"[^>]*data-sd-year="2028"/);
+  assert.match(elementFixture.root.innerHTML, /value="7"[^>]*data-sd-series="load"[^>]*data-sd-year="2029"/);
+  elementFixture.click("download-template");
+  const elementDraft = clone(elementFixture.downloads.at(-1).config);
+  assert.equal(elementFixture.downloads.at(-1).options.year, 2029);
+  assert.equal(elementDraft.elements.load.baseEnergyMwh, 130000);
+  assert.equal(elementDraft.elements.wind.baseEnergyMwh, 20000);
+  assert.deepEqual(elementDraft.elements.load.growthRatesByYear, { 2028: 6, 2029: 7 });
+  assert.deepEqual(elementDraft.elements.wind.growthRatesByYear, { 2028: 3, 2029: 4 });
+  assert.equal(elementDraft.elements.load.curveOverridesByYear[2029].monthlyWeights[0], 0);
+  assert.equal(elementDraft.elements.wind.curveOverridesByYear[2029].monthlyWeights[1], 0);
+  assert.equal(elementDraft.elements.load.monthlyWeights[0], 1 / 12, "annual overrides retain the default curve");
+  assert.equal(JSON.stringify(byElement), elementBefore, "switching elements keeps all edits isolated until explicit generation");
+  elementFixture.chooseElement("wind");
+  assert.match(elementFixture.root.innerHTML, /value="20000" data-sd-series="wind"/);
+  assert.match(elementFixture.root.innerHTML, /data-sd-input="month-share"[^>]*value="0"[^>]*data-sd-month="2"/);
+  elementFixture.click("generate");
+  assert.deepEqual(byElement.supplyDemand.config, elementDraft, "a single commit saves both element drafts");
+
+  const liveTotalsProject = project("live-totals", 3);
+  liveTotalsProject.supplyDemand = savedState(liveTotalsProject);
+  const liveTotalsBefore = JSON.stringify(liveTotalsProject), liveRoot = new Root();
+  const totals = { 2028: { textContent: "" }, 2029: { textContent: "" } };
+  liveRoot.querySelector = (selector) => {
+    const match = selector.match(/data-sd-growth-total="(\d+)"/);
+    return match ? totals[match[1]] : null;
+  };
+  const liveController = workspace.createController({ root: liveRoot, getProject: () => liveTotalsProject, domain });
+  liveController.render();
+  liveRoot.fire("click", { sdAction: "growth-open", sdSeries: "load" });
+  liveRoot.fire("input", { sdInput: "base", sdSeries: "load" }, { value: "200000" });
+  assert.match(totals[2028].textContent, /210,000\.00/);
+  assert.match(totals[2029].textContent, /220,500\.00/);
+  liveRoot.fire("input", { sdInput: "growth-rate", sdSeries: "load", sdYear: "2028" }, { value: "10" });
+  assert.match(totals[2028].textContent, /220,000\.00/);
+  assert.match(totals[2029].textContent, /231,000\.00/, "editing a growth rate refreshes later projected totals without rerendering inputs");
+  assert.equal(JSON.stringify(liveTotalsProject), liveTotalsBefore);
+  assert.equal(liveController.hasUnsavedChanges(), true);
+
   const directional = project("directions"), directions = fixture(directional);
   const directionalConfig = completeConfig(directional);
   const tieLine = directionalConfig.elements.tieLine, netSeries = clone(tieLine);
@@ -292,8 +412,17 @@ async function main() {
   tieLine.export = { baseEnergyMwh: 800, growthRatesByYear, monthlyWeights, hourlyWeightsByMonth };
   tieLine.import = { baseEnergyMwh: 1200, growthRatesByYear, monthlyWeights, hourlyWeightsByMonth };
   await directions.upload("双向.xlsx", { ok: true, config: directionalConfig });
-  assert.match(directions.root.innerHTML, /联络线送出.*联络线受入/);
-  assert.equal((directions.root.innerHTML.match(/data-sd-input="base"/g) || []).length, 7);
+  directions.chooseElement("tieLine");
+  assert.match(directions.root.innerHTML, /<option value="tieLineExport"[^>]*>送出<\/option><option value="tieLineImport"[^>]*>受入<\/option>/);
+  assert.equal((directions.root.innerHTML.match(/data-sd-input="base"/g) || []).length, 1);
+  assert.match(directions.root.innerHTML, /data-sd-select="tieDirection"/);
+  directions.select("tieDirection", "tieLineExport");
+  assert.match(directions.root.innerHTML, /value="800" data-sd-series="tieLineExport"/);
+  directions.select("tieDirection", "tieLineImport");
+  assert.match(directions.root.innerHTML, /value="1200" data-sd-series="tieLineImport"/);
+  directions.chooseElement("load");
+  directions.chooseElement("tieLine");
+  assert.match(directions.root.innerHTML, /value="1200" data-sd-series="tieLineImport"/);
   directions.click("generate");
   const savedDirections = directions.openSavedPreview();
   assert.equal((savedDirections.match(/联络线送出/g) || []).length, 2, "both annual and typical saved views show direction");

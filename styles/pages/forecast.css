@@ -225,31 +225,74 @@
 .sd-period, .sd-preview-empty, .sd-saved-head > span, .sd-file-name { color: var(--muted); font-size: .78rem; line-height: 1.6; }
 .sd-period { display: block; margin-top: 5px; }
 .sd-state { padding: 5px 8px; border-radius: 5px; background: var(--info-bg); color: var(--blue); font-size: .75rem; white-space: nowrap; }
+.sd-element-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.sd-element-tab {
+  min-height: 38px;
+  max-width: 100%;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: .81rem;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.sd-element-tab:hover:not(:disabled) { border-color: var(--line-strong); color: var(--ink); background: var(--panel-soft); }
+.sd-element-tab[aria-selected="true"],
+.sd-element-tab[aria-selected="true"]:hover:not(:disabled) {
+  border-color: var(--blue);
+  box-shadow: inset 0 -2px 0 var(--blue);
+  background: var(--info-bg);
+  color: var(--ink);
+  font-weight: 800;
+}
+.sd-element-tab:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.sd-element-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+.sd-element-panel .sd-state { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.sd-element-heading { color: var(--ink); }
+.sd-element-annual { display: grid; gap: 10px; min-width: 0; }
+.sd-element-summary { display: flex; align-items: end; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
+.sd-element-summary label { flex: 0 1 200px; min-width: 0; font-size: .76rem; }
+.sd-element-summary input { width: 100%; min-width: 0; padding: 6px 8px; font-variant-numeric: tabular-nums; }
+.sd-element-summary button { min-height: var(--control-height-prominent); padding: 5px 9px; font-size: .76rem; }
 .sd-message { font-size: .8rem; color: var(--green); line-height: 1.65; overflow-wrap: anywhere; }
 .sd-message:empty { display: none; }
 .sd-message ul { margin: 5px 0 0; padding-left: 1.35em; }
 .sd-message p { margin: 4px 0 0; }
 .sd-alert { padding: 9px 11px; border: 1px solid var(--orange); border-radius: 6px; color: var(--orange); font-size: .8rem; line-height: 1.65; overflow-wrap: anywhere; }
 .sd-section { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-soft); }
+.sd-element-panel > .sd-section { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.sd-element-annual + .sd-section { padding-top: 12px; border-top: 1px solid var(--line); }
 .sd-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .sd-curve-controls { align-items: end; }
 .sd-actions button, .sd-actions .sd-file { padding: 7px 10px; font-size: .76rem; min-height: 32px; }
-.sd-table-wrap.sd-annual-input-wrap { max-height: none; }
-.sd-annual-input input, .sd-growth-panel input, .sd-number-grid input, .sd-edit-section select { width: 100%; min-width: 0; padding: 6px 8px; }
-.sd-annual-input input { width: clamp(88px, 22vw, 160px); text-align: right; }
-.sd-table.sd-annual-input th, .sd-table.sd-annual-input td { padding: 4px 8px; }
-.sd-annual-input th:first-child { width: 36%; }
-.sd-annual-input td:last-child { width: 130px; }
-.sd-annual-input button { min-width: 82px; padding: 5px 8px; font-size: .76rem; }
-.sd-edit-label { color: var(--muted); }
+.sd-growth-panel input, .sd-number-grid input { width: 100%; min-width: 0; padding: 6px 8px; }
+.sd-element-panel select { width: 100%; min-width: 0; padding: 6px 26px 6px 8px; }
 .sd-growth-panel { display: grid; gap: 10px; padding: 10px 0 0; border-top: 1px solid var(--line); }
 .sd-growth-panel label, .sd-inline-label, .sd-number-grid label, .sd-curve-controls label { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .76rem; }
 .sd-inline-label { grid-auto-flow: column; align-items: center; white-space: nowrap; }
 .sd-inline-label select { min-width: 105px; }
 .sd-curve-controls select { min-width: 96px; }
-.sd-curve-controls label:nth-child(2) select { min-width: 120px; }
 .sd-growth-panel .sd-actions { align-items: end; }
 .sd-growth-panel .sd-actions input { max-width: 100px; }
+.sd-growth-panel .sd-color-muted { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .sd-number-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px 9px; }
 .sd-color-muted, .sd-curve-empty, .sd-month-total, .sd-curve-chart { color: var(--muted); font-size: .76rem; }
 .sd-curve-empty { margin: 0; }
@@ -294,6 +337,9 @@
 @media (max-width: 760px) {
   .sd-workspace { gap: 12px; }
   .sd-section { padding: 10px; }
+  .sd-element-tabs { gap: 5px; }
+  .sd-element-tab { min-height: 44px; padding-inline: 8px; }
+  .sd-element-panel { gap: 10px; padding: 10px; }
   .sd-number-grid, .sd-month-total-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .sd-curve-bars, .sd-curve-axis { gap: 2px; }
   .sd-table th, .sd-table td { padding: 7px; }
