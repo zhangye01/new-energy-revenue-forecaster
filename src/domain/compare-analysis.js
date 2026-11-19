@@ -26,6 +26,7 @@
   function sanitizeCompareSensitivitySettings(settings = {}) {
     const topN = settings.topN === "all" ? "all" : Math.round(Number(settings.topN) || 8);
     return {
+      target: sensitivity.normalizeTarget(settings.target),
       rangePercent: clamp(Math.round(Number(settings.rangePercent) || 20), 5, 60),
       stepPercent: clamp(Math.round(Number(settings.stepPercent) || 5), 1, 20),
       responseScalePercent: 100,
@@ -52,7 +53,7 @@
 
   function buildCompareSensitivityFactors(project, baseline, settings = {}) {
     const ratios = sensitivityAxisLabels(settings).map((label) => Number(label.replace("%", "")) / 100);
-    return sensitivity?.buildFactors(project, baseline, ratios) || [];
+    return sensitivity.buildFactors(project, baseline, ratios, settings.target);
   }
 
   function resultComponentTotals(result, verifiedConfig) {
@@ -190,6 +191,8 @@
     const baseline = getBaselineCompareItem(available);
     const baselineFirst = getFirstAnnualRow(baseline);
     const baselineRevenueWan = baselineFirst ? baselineFirst.fullRevenue / 10000 : 0;
+    const sensitivityTarget = sensitivity.targetMetric(sensitivitySettings.target);
+    const sensitivityBaseline = sensitivity.baselineValue(baseline, sensitivityTarget.key);
     const allSensitivityFactors = buildCompareSensitivityFactors(
       project,
       baseline,
@@ -211,11 +214,13 @@
     );
     const focusScenario = available.find((item) => item.scenario.id === resolvedActiveCompareScenarioId) || baseline;
     const sensitivityNotice = allSensitivityFactors.length ? ""
-      : sensitivity?.availability(project, baseline).message || "首年暂无有响应的适用变量。";
+      : sensitivity.availability(project, baseline, sensitivityTarget.key).message || `当前参数对${sensitivityTarget.label}没有产生可显示的变化。`;
     return {
       baseline,
       baselineFirst,
       baselineRevenueWan,
+      sensitivityTarget,
+      sensitivityBaseline,
       allSensitivityFactors,
       sensitivityNotice,
       sensitivitySelection,
@@ -285,6 +290,7 @@
     applyCompareFrameSelection,
     sanitizeCompareSensitivitySettings,
     sensitivityAxisLabels,
+    sensitivityTargetMetric: sensitivity.targetMetric,
     buildCompareSensitivityFactors,
     buildCompareFrameState,
     buildCompareRenderState,

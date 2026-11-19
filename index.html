@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="./styles/pages/energy.css?v=20261119b">
     <link rel="stylesheet" href="./styles/pages/scenario.css?v=20261119m">
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261119s">
-    <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/compare.css?v=20261119t">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261119c">
     <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119o">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261119m">
@@ -88,7 +88,7 @@
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
     <script src="./config.js?v=20261119p" defer></script>
-    <script src="./runtime.js?v=20261119p" defer></script>
+    <script src="./runtime.js?v=20261119t" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
@@ -130,10 +130,10 @@
     <script src="./src/ui/result-brief-word.js?v=20261119s" defer></script>
     <script src="./src/ui/scenario-form.js?v=20261119m" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20261118e" defer></script>
-    <script src="./src/ui/compare-charts.js?v=20261118i" defer></script>
-    <script src="./src/ui/compare-page.js?v=20261119p" defer></script>
-    <script src="./src/domain/compare-sensitivity.js?v=20261118i" defer></script>
-    <script src="./src/domain/compare-analysis.js?v=20261118i" defer></script>
+    <script src="./src/ui/compare-charts.js?v=20261119t" defer></script>
+    <script src="./src/ui/compare-page.js?v=20261119t" defer></script>
+    <script src="./src/domain/compare-sensitivity.js?v=20261119t" defer></script>
+    <script src="./src/domain/compare-analysis.js?v=20261119t" defer></script>
     <script src="./src/ui/result-history.js?v=20261119p" defer></script>
     <script src="./src/domain/history-analysis.js?v=20261118n" defer></script>
     <script src="./src/ui/history-charts.js?v=20261118m" defer></script>
@@ -156,7 +156,7 @@
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261119j" defer></script>
-    <script src="./app.js?v=20261119q" defer></script>
+    <script src="./app.js?v=20261119t" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -1344,14 +1344,15 @@
               <div class="panel-head">
                 <div>
                   <h3>基准敏感性分析</h3>
-                  <p class="hint" data-help="基准敏感性分析">按实际收益规则逐点扰动参数并重算首年收入，与当前有效基准对照。比例受0—100%边界约束，不适用的变量自动排除。</p>
+                  <p class="hint" data-help="基准敏感性分析">按实际收益规则逐点扰动参数，重算所选首年指标并与当前基准对照。度电净价以扰动后的全口径收入除以对应的结算电量。比例受 0–100% 边界约束，结果会筛除对所选指标无影响的变量。</p>
                 </div>
                 <span class="hint" id="compare-baseline-label">等待基准方案结果</span>
               </div>
               <div class="compare-control-strip compare-sensitivity-toolbar" aria-label="敏感性分析统一设置">
                 <label>目标指标
-                  <select id="compare-sensitivity-target" disabled>
+                  <select id="compare-sensitivity-target">
                     <option value="first_revenue">首年全口径收入</option>
+                    <option value="first_net_price">首年度电净价</option>
                   </select>
                 </label>
                 <label>扰动范围 ±%
@@ -1379,7 +1380,7 @@
                   <div class="value" id="compare-metric-baseline-scenario">-</div>
                 </article>
                 <article class="metric-card compare-metric-card">
-                  <div class="label">基准首年总收益</div>
+                  <div class="label" id="compare-metric-baseline-revenue-label">基准首年全口径收入</div>
                   <div class="value" id="compare-metric-baseline-revenue">-</div>
                 </article>
                 <article class="metric-card compare-metric-card">
@@ -1394,7 +1395,7 @@
               <section class="compare-chart-card compare-chart-card-wide">
                 <div class="compare-chart-head">
                   <strong>敏感性排序</strong>
-                  <span id="compare-sensitivity-tornado-note">变量在 -20% 与 +20% 扰动下的首年收益变化区间</span>
+                  <span id="compare-sensitivity-tornado-note">变量在 ±20% 扰动下的首年全口径收入变化区间</span>
                 </div>
                 <div class="compare-chart compare-chart-tall" id="compare-sensitivity-tornado-chart"></div>
               </section>

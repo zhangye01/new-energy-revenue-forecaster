@@ -14,6 +14,10 @@
   if (!rules || !dispatch || !calculation) throw new Error("敏感性分析初始化失败：缺少收益测算依赖");
   const { closeAmount, hourlyRowsAreComplete } = calculation;
   const cache = new Map();
+  const TARGET_METRICS = Object.freeze({
+    first_revenue: Object.freeze({ key: "first_revenue", label: "首年全口径收入", unit: "万元" }),
+    first_net_price: Object.freeze({ key: "first_net_price", label: "首年度电净价", unit: "元/MWh" })
+  });
   const STORAGE_KEYS = ["storageArbitragePrice", "storageCapacityCompPrice", "storageAncillaryRevenuePrice", "storageOtherRevenuePrice"];
   const DISPATCH_FACTORS = new Set(["spot", "hours", "capture_spread"]);
   const MAIN_FEE_KEYS = ["marketOpFee", "gridAssessFee", "ancillaryFee"];
@@ -32,6 +36,22 @@
     ["fee", "费用", "同比调整首年计入费用的项目单价", 3],
     ["storage", "配储补充收益", "同比调整配储各项度电收益，仅适用于配储项目", 4]
   ];
+
+  function normalizeTarget(target) {
+    return typeof target === "string" && Object.hasOwn(TARGET_METRICS, target) ? target : "first_revenue";
+  }
+
+  function targetMetric(target) {
+    return TARGET_METRICS[normalizeTarget(target)];
+  }
+
+  function baselineValue(baseline, target) {
+    const first = baseline?.result?.annualRows?.[0];
+    if (normalizeTarget(target) === "first_net_price") {
+      return Number.isFinite(first?.energyMwh) && first.energyMwh > 0 && Number.isFinite(first.fullRevenuePrice) ? first.fullRevenuePrice : null;
+    }
+    return Number.isFinite(first?.fullRevenue) ? first.fullRevenue / 10000 : null;
+  }
 
   function scaleFields(source, keys, factor) {
     keys.forEach((key) => { source[key] = (Number(source[key]) || 0) * factor; });
@@ -95,14 +115,17 @@
       + energy * (storage - FEE_KEYS.reduce((sum, key) => sum + fees[key], 0) + fees.otherIncome);
   }
 
-  function availability(project, baseline) {
+  function availability(project, baseline, target) {
     const first = baseline?.result?.annualRows?.[0];
-    if (!project || !baseline?.scenario?.config || !first || !(first.energyMwh > 0) || !Number.isFinite(first.fullRevenue)) {
+    if (!project || !baseline?.scenario?.config || !first || !Number.isFinite(first.energyMwh) || first.energyMwh <= 0 || !Number.isFinite(first.fullRevenue)) {
       return { ok: false, message: "首年没有有效上网电量，暂不展示敏感性。" };
     }
     const initial = calculateAnnualRevenue(project, baseline.scenario.config, first);
     if (!closeAmount(initial, first.fullRevenue)) {
       return { ok: false, message: "首年基准结果与当前参数不一致，请重新测算后查看敏感性。" };
+    }
+    if (normalizeTarget(target) === "first_net_price" && !closeAmount(first.fullRevenuePrice, first.fullRevenue / first.energyMwh)) {
+      return { ok: false, message: "首年度电净价与基准收入、电量对账未通过，请重新测算后查看敏感性。" };
     }
     if ((project.hasStorage || first.storageDispatch) && !hourlyRowsAreComplete(project, baseline.scenario, baseline.result)) {
       return { ok: false, message: "首年配储小时明细缺失或对账未通过，请重新测算后查看敏感性。" };
@@ -119,9 +142,10 @@
     return { ...row.storageDispatch, incrementalRevenue: value.incrementalRevenue };
   }
 
-  function buildFactors(project, baseline, ratios) {
+  function buildFactors(project, baseline, ratios, target) {
     const first = baseline?.result?.annualRows?.[0];
-    if (!availability(project, baseline).ok) return [];
+    const metric = normalizeTarget(target);
+    if (!availability(project, baseline, metric).ok) return [];
     const { hourlyPreview, sourceContext } = baseline.result;
     const scheme = first.storageDispatch ? {
       powerMw: project.storagePowerMw, durationH: project.storageDurationH,
@@ -130,9 +154,10 @@
     // A repeated run ID and equal annual totals may still have different dispatch inputs.
     const dispatchInputs = scheme ? hourlyPreview.map(({ spotPrice, energyMwh }) => [spotPrice, energyMwh]) : null;
     const cacheKey = JSON.stringify([project.id, project.siteType, project.hasStorage, project.startYear,
-      baseline.scenario.config, first, sourceContext?.runId, scheme, dispatchInputs, ratios]);
+      baseline.scenario.config, first, sourceContext?.runId, scheme, dispatchInputs, ratios, metric]);
     if (cache.has(cacheKey)) return cache.get(cacheKey);
-    const base = first.fullRevenue / 10000;
+    const base = baselineValue(baseline, metric);
+    const priceTarget = metric === "first_net_price";
     const factors = FACTORS.filter(([key]) => key !== "storage" || project.hasStorage).map(([key, name, note, colorIndex]) => {
       const series = ratios.map((ratio) => {
         if (ratio === 0) return base;
@@ -140,7 +165,8 @@
         if (scheme && DISPATCH_FACTORS.has(key)) {
           changed.row.storageDispatch = perturbDispatch(changed.row, hourlyPreview, key, ratio, scheme);
         }
-        return calculateAnnualRevenue(project, changed.config, changed.row) / 10000;
+        const revenue = calculateAnnualRevenue(project, changed.config, changed.row);
+        return priceTarget ? revenue / changed.row.energyMwh : revenue / 10000;
       });
       const lowDelta = series[0] - base, highDelta = series[series.length - 1] - base;
       const description = first.storageDispatch && key === "storage"
@@ -156,5 +182,5 @@
     return factors;
   }
 
-  return Object.freeze({ buildFactors, createPerturbation, calculateAnnualRevenue, availability });
+  return Object.freeze({ buildFactors, createPerturbation, calculateAnnualRevenue, availability, baselineValue, normalizeTarget, targetMetric });
 });

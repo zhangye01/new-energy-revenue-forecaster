@@ -10,6 +10,8 @@
     root.window.NE_COMPARE_CHARTS = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : window, function () {
+  const DEFAULT_SENSITIVITY_METRIC = { label: "首年收益", unit: "万元", decimals: 1 };
+
   function asNum(value, digits = 1) {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric.toFixed(digits) : "-";
@@ -126,7 +128,8 @@
     };
   }
 
-  function buildSensitivityTornadoOption(factors, baselineRevenueWan, settings, tokens) {
+  function buildSensitivityTornadoOption(factors, baselineValue, settings, tokens, metric = DEFAULT_SENSITIVITY_METRIC) {
+    const { label, unit, decimals = unit === "万元" ? 1 : 2 } = metric;
     const rangeLabel = `${settings.rangePercent}%`;
     const displayCount = settings.topN === "all" ? factors.length : Math.min(Number(settings.topN) || 8, factors.length);
     const topFactors = factors.slice(0, displayCount).reverse();
@@ -143,13 +146,13 @@
           const lines = [`${escapeHtml(params[0].axisValue)}`];
           params.forEach((item) => {
             const value = Number(item.value || 0);
-            lines.push(`${item.marker}${escapeHtml(item.seriesName)}：${value >= 0 ? "+" : ""}${asNum(value, 2)} 万元`);
+            lines.push(`${item.marker}${escapeHtml(item.seriesName)}：${value >= 0 ? "+" : ""}${asNum(value, 2)} ${escapeHtml(unit)}`);
           });
-          lines.push(`基准首年收益：${asNum(baselineRevenueWan, 1)} 万元`);
+          lines.push(`基准${escapeHtml(label)}：${asNum(baselineValue, decimals)} ${escapeHtml(unit)}`);
           return lines.join("<br/>");
         }
       }),
-      xAxis: { ...valueAxis("相对基准变化 万元", tokens), nameLocation: "middle", nameGap: 30 },
+      xAxis: { ...valueAxis(`相对基准变化 ${unit}`, tokens), nameLocation: "middle", nameGap: 30 },
       yAxis: categoryAxis(topFactors.map((factor) => factor.name), tokens),
       series: [
         {
@@ -170,7 +173,8 @@
     };
   }
 
-  function buildSensitivityResponseOption(selected, baselineRevenueWan, axisLabels, tokens) {
+  function buildSensitivityResponseOption(selected, baselineValue, axisLabels, tokens, metric = DEFAULT_SENSITIVITY_METRIC) {
+    const { label, unit, decimals = unit === "万元" ? 1 : 2 } = metric;
     return {
       animationDuration: 340,
       grid: { top: 36, left: 56, right: 24, bottom: 44, containLabel: true },
@@ -178,11 +182,13 @@
         formatter: (params) => {
           const item = params?.[0];
           if (!item) return "";
-          return `${item.axisValue}<br/>首年收益：${asNum(Number(item.value || 0), 1)} 万元<br/>相对基准：${asNum(Number(item.value || 0) - baselineRevenueWan, 1)} 万元`;
+          const value = Number(item.value || 0);
+          const unitLabel = escapeHtml(unit);
+          return `${escapeHtml(item.axisValue)}<br/>${escapeHtml(label)}：${asNum(value, decimals)} ${unitLabel}<br/>相对基准：${asNum(value - baselineValue, decimals)} ${unitLabel}`;
         }
       }),
       xAxis: categoryAxis(axisLabels, tokens),
-      yAxis: valueAxis("万元", tokens),
+      yAxis: valueAxis(unit, tokens),
       series: [{
         name: selected.name,
         type: "line",
@@ -195,8 +201,8 @@
         markLine: {
           symbol: ["none", "none"],
           lineStyle: { type: "dashed", color: tokens.baseline },
-          label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineRevenueWan, 1)} 万元`, position: "insideEndTop" },
-          data: [{ yAxis: baselineRevenueWan }]
+          label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineValue, decimals)} ${unit}`, position: "insideEndTop" },
+          data: [{ yAxis: baselineValue }]
         }
       }]
     };

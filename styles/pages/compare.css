@@ -159,10 +159,15 @@
   padding: 0 10px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
-  background: var(--panel);
+  background-color: var(--panel);
   color: var(--text);
   font-size: 0.82rem;
   font-weight: 900;
+}
+
+.compare-sensitivity-toolbar select {
+  padding-right: 30px;
+  cursor: pointer;
 }
 
 .compare-sensitivity-toolbar label:first-child {

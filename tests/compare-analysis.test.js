@@ -12,7 +12,9 @@ const {
 } = analysis;
 
 assert.deepEqual(sanitizeCompareSensitivitySettings({ rangePercent: 99, stepPercent: 0, responseScalePercent: 10, topN: 1, selectedKeys: ["spot", "", null, "fee"] }),
-  { rangePercent: 60, stepPercent: 5, responseScalePercent: 100, topN: 3, selectedKeys: ["spot", "fee"] });
+  { target: "first_revenue", rangePercent: 60, stepPercent: 5, responseScalePercent: 100, topN: 3, selectedKeys: ["spot", "fee"] });
+assert.equal(sanitizeCompareSensitivitySettings({ target: "first_net_price" }).target, "first_net_price");
+assert.equal(sanitizeCompareSensitivitySettings({ target: "unknown" }).target, "first_revenue");
 assert.deepEqual(sensitivityAxisLabels({ rangePercent: 10, stepPercent: 5 }), ["-10%", "-5%", "0%", "+5%", "+10%"]);
 assert.equal(sensitivityAxisLabels({ rangePercent: Infinity, stepPercent: -5 }).length, 121, "非法输入使用安全边界");
 
@@ -56,11 +58,17 @@ const input = { project, available, comparePeriod: "2026-2027", activeCompareSce
 const render = buildCompareRenderState(input);
 assert.equal(render.baseline.scenario.id, "base");
 assert.equal(render.baselineRevenueWan, baseline.result.annualRows[0].fullRevenue / 10000);
+assert.equal(render.sensitivityBaseline, render.baselineRevenueWan);
 assert.equal(render.bestScenario.scenario.id, "up");
 assert.equal(render.activeCompareScenarioId, "up");
 assert.equal(render.sensitivitySelection.activeFactorKey, "fee");
 assert.deepEqual(render.sensitivityFactors.map((factor) => factor.key), ["fee"]);
 assert.ok(!render.allSensitivityFactors.some((factor) => factor.key === "storage"));
+const netPrice = buildCompareRenderState({ ...input, sensitivitySettings: { ...input.sensitivitySettings, target: "first_net_price" } });
+assert.equal(netPrice.sensitivityTarget.unit, "元/MWh");
+assert.equal(netPrice.sensitivityBaseline, baseline.result.annualRows[0].fullRevenuePrice);
+assert.equal(netPrice.sensitivityFactors[0].series[2], netPrice.sensitivityBaseline);
+assert.ok(!netPrice.allSensitivityFactors.some((factor) => factor.key === "hours"));
 const frame = buildCompareFrameState(input);
 assert.equal(frame.hasResults, true);
 assert.equal(frame.available.length, 2);

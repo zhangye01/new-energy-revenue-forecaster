@@ -25,6 +25,8 @@ function fixture(manual, offshore, negative) {
 }
 
 const ratios = [-0.6, -0.2, 0, 0.2, 0.6];
+assert.equal(sensitivity.normalizeTarget("unsupported"), "first_revenue");
+assert.equal(sensitivity.targetMetric("first_net_price").unit, "元/MWh");
 for (const manual of [false, true]) for (const offshore of [false, true]) for (const negative of [false, true]) {
   const { project, scenario, run, result } = fixture(manual, offshore, negative);
   const original = JSON.stringify({ project, scenario, run, result });
@@ -52,6 +54,36 @@ for (const manual of [false, true]) for (const offshore of [false, true]) for (c
   if (negative) assert.ok(factors.every((factor) => factor.series[2] < 0), "保留负收益零点");
   const badResult = { ...result, annualRows: [{ ...first, fullRevenue: first.fullRevenue + 100 }] };
   assert.deepEqual(sensitivity.buildFactors(project, { scenario, result: badResult }, ratios), [], "无法与保存基准对账时不展示敏感性");
+}
+
+{
+  const { project, scenario, run } = fixture(true, true, true);
+  project.energyData.hourlyByYear[2026] = project.energyData.hourlyByYear[2026].map((value) => value * 75);
+  const result = calculator.calculateScenarioResult(project, scenario, run);
+  const baseline = { scenario, result };
+  const first = result.annualRows[0];
+  const price = sensitivity.buildFactors(project, baseline, ratios, "first_net_price");
+  assert.ok(price.some(({ key }) => key === "hours"), "储能受出力与充放电限制时，电量扰动可改变度电净价");
+  assert.notStrictEqual(price, sensitivity.buildFactors(project, baseline, ratios, "first_revenue"));
+  assert.strictEqual(price, sensitivity.buildFactors(project, baseline, ratios, "first_net_price"));
+  assert.equal(sensitivity.baselineValue(baseline, "first_net_price"), first.fullRevenuePrice);
+  for (const factor of price) for (const [index, ratio] of ratios.entries()) {
+    const altered = sensitivity.createPerturbation(project, scenario, first, factor.key, ratio);
+    const changedProject = { ...project, energyData: { hourlyByYear: { 2026: project.energyData.hourlyByYear[2026]
+      .map((value) => factor.key === "hours" ? value * (1 + ratio) : value) } } };
+    const changedRun = { ...run, pricesByYear: { 2026: run.pricesByYear[2026].map((value) => factor.key === "spot" ? value * (1 + ratio)
+      : factor.key === "capture_spread" ? first.spotAvgPrice + (value - first.spotAvgPrice) * (1 + ratio) : value) } };
+    const expected = calculator.calculateScenarioResult(changedProject, { ...scenario, config: altered.config }, changedRun).annualRows[0].fullRevenuePrice;
+    assert.ok(Math.abs(factor.series[index] - expected) < 0.000001, `度电净价 ${factor.key} ${ratio} 逐点与完整测算一致`);
+    if (ratio === 0) assert.equal(factor.series[index], first.fullRevenuePrice);
+  }
+  const inconsistent = { scenario, result: { ...result, annualRows: [{ ...first, fullRevenuePrice: first.fullRevenuePrice + 100 }] } };
+  assert.match(sensitivity.availability(project, inconsistent, "first_net_price").message, /首年度电净价.*对账未通过/);
+  assert.deepEqual(sensitivity.buildFactors(project, inconsistent, ratios, "first_net_price"), []);
+  assert.equal(sensitivity.baselineValue({ result: { annualRows: [{ energyMwh: 0, fullRevenuePrice: 0 }] } }, "first_net_price"), null);
+  const proportional = fixture(false, false, false);
+  const proportionalPrice = sensitivity.buildFactors(proportional.project, proportional, ratios, "first_net_price");
+  assert.ok(!proportionalPrice.some(({ key }) => key === "hours"), "没有逐时储能非线性时，等比例改变电量不会改变度电净价");
 }
 
 const full = fixture(true, true, false);

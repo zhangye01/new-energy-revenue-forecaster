@@ -233,6 +233,7 @@ const refs = {
   compareTabButtons: Array.from(document.querySelectorAll(".compare-tab[data-compare-view]")),
   comparePanes: Array.from(document.querySelectorAll(".compare-pane[data-compare-pane]")),
   compareMetricBaselineScenario: document.querySelector("#compare-metric-baseline-scenario"),
+  compareMetricBaselineRevenueLabel: document.querySelector("#compare-metric-baseline-revenue-label"),
   compareMetricBaselineRevenue: document.querySelector("#compare-metric-baseline-revenue"),
   compareMetricSensitiveFactors: document.querySelector("#compare-metric-sensitive-factors"),
   compareMetricCompareCount: document.querySelector("#compare-metric-compare-count"),
