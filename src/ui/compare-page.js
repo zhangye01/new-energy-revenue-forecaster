@@ -64,7 +64,6 @@
       comparePeriod = "-",
       sensitivityFactors = [],
       sensitivityNotice = "",
-      sensitivitySettings = {},
       bestScenario = null,
       excludedCount = 0,
       maxGapWan = 0,
@@ -85,7 +84,7 @@
         compareScenarioLabel: available.length >= 2 ? `${available.length} 个方案已纳入对比` : "当前仅基准方案已测算"
       },
       messages: {
-        compareSensitivityMessage: sensitivityNotice || `基准：${baselineName} · ${SENSITIVITY_METRIC.label} ${baselineTargetText} · ${sensitivityFactors.length} 项变量 · 扰动 ±${sensitivitySettings.rangePercent}% / 步长 ${sensitivitySettings.stepPercent}%`,
+        compareSensitivityMessage: sensitivityNotice || `基准：${baselineName} · ${SENSITIVITY_METRIC.label} ${baselineTargetText} · ${sensitivityFactors.length} 项变量`,
         compareScenarioMessage: (available.length >= 2
           ? `${available.length} 个已测算方案 · 对照基准：${baselineName}`
           : `仅“${baselineName}”有当前有效结果，待其他方案重算后比较。`) + excludedNotice
@@ -100,8 +99,8 @@
         {
           refKey: "compareMetricSensitiveFactors",
           value: `${sensitivityFactors.length} 项`,
-          hint: strongestFactor?.sensitivity >= 0.005 ? `最高敏感：${strongestFactor.name}` : sensitivityFactors.length
-            ? "当前扰动范围内无变化" : "等待基准结果"
+          hint: strongestFactor?.sensitivity >= 0.005 ? `端点影响最大：${strongestFactor.name}` : sensitivityFactors.length
+            ? "端点变化低于显示精度" : "等待基准结果"
         },
         {
           refKey: "compareMetricBestScenario",
@@ -150,15 +149,6 @@
       const button = event.target.closest("[data-sensitivity-factor]");
       if (button) handlers.selectSensitivityFactor?.(button.dataset.sensitivityFactor || "");
     });
-    [
-      refs.compareSensitivityRange,
-      refs.compareSensitivityStep
-    ].forEach((control) => {
-      if (!control) return;
-      control.addEventListener("change", () => {
-        handlers.changeSensitivityControls?.();
-      });
-    });
     if (refs.compareScenarioFocusList) {
       refs.compareScenarioFocusList.addEventListener("click", (event) => {
         const button = event.target.closest("[data-compare-focus-scenario]");
@@ -170,14 +160,11 @@
 
   function createCompareEventHandlers(input = {}) {
     const {
-      refs = {},
-      sensitivitySettings = {},
       getCompareView = () => "",
       setCompareView = () => {},
       sanitizeCompareView = (value) => value,
       setActiveSensitivityFactorKey = () => {},
       setActiveCompareScenarioId = () => {},
-      sanitizeCompareSensitivitySettings = () => sensitivitySettings,
       renderCompare = () => {},
       queueCompareChartsResize = () => {},
       schedulePersistAppData = () => {}
@@ -195,12 +182,6 @@
         setActiveSensitivityFactorKey(key);
         renderCompare();
       },
-      changeSensitivityControls: () => {
-        sensitivitySettings.rangePercent = Number(refs.compareSensitivityRange?.value) || sensitivitySettings.rangePercent;
-        sensitivitySettings.stepPercent = Number(refs.compareSensitivityStep?.value) || sensitivitySettings.stepPercent;
-        sanitizeCompareSensitivitySettings();
-        renderCompare();
-      },
       selectScenarioFocus: (scenarioId) => {
         setActiveCompareScenarioId(scenarioId);
         renderCompare();
@@ -211,8 +192,7 @@
   function resetComparePageState(input = {}) {
     const {
       refs = {},
-      setCompareMetric = () => {},
-      syncCompareSensitivityControls = () => {}
+      setCompareMetric = () => {}
     } = input;
     setHtml(refs.compareBody, "");
     setHtml(refs.compareSensitivityBody, "");
@@ -232,7 +212,6 @@
     setText(refs.compareScenarioLabel, "等待方案结果");
     setText(refs.compareSensitivityMessage, "请先在收益参数补充与细化中完成基准方案测算，再查看敏感性分析。");
     setText(refs.compareScenarioMessage, "仅纳入当前有效且电量口径一致的结果；过期方案请重新测算。");
-    syncCompareSensitivityControls();
   }
 
   function renderCompareNoProjectState(input = {}) {
@@ -277,7 +256,10 @@
       <div class="compare-factor-help-row">
         <button class="compare-factor-button ${isActive ? "active" : ""}" type="button" aria-pressed="${isActive}" data-sensitivity-factor="${escapeHtml(factor.key)}">
           <span class="compare-factor-rank" style="--factor-color:${color}">${index + 1}</span>
-          <span class="compare-factor-main"><strong>${escapeHtml(factor.name)}</strong></span>
+          <span class="compare-factor-main">
+            <strong>${escapeHtml(factor.name)}</strong>
+            ${factor.presetLabel ? `<small>${escapeHtml(factor.presetLabel)}</small>` : ""}
+          </span>
           <span class="compare-factor-value">${asNum(factor.sensitivity, SENSITIVITY_METRIC.decimals)} ${SENSITIVITY_METRIC.unit}</span>
         </button>
         <small data-help="${escapeHtml(factor.name)}计算口径">${escapeHtml(factor.note)}</small>
@@ -352,7 +334,6 @@
       compareState = {},
       comparePeriod = "-",
       renderPlaceholder = () => {},
-      sensitivitySettings = {},
       detectTopDriver = () => "-",
       asCompactMoney = (value) => String(value),
       asNum = (value, digits = 1) => {
@@ -385,7 +366,6 @@
         comparePeriod,
         sensitivityFactors,
         sensitivityNotice: compareState.sensitivityNotice,
-        sensitivitySettings,
         bestScenario: compareState.bestScenario,
         excludedCount: compareState.excludedCount,
         maxGapWan: compareState.maxGapWan,
@@ -411,13 +391,11 @@
     const {
       refs = {},
       setCompareMetric = () => {},
-      syncCompareSensitivityControls = () => {},
       project = null,
       available = [],
       comparePeriod = "-",
       compareState = {},
       renderPlaceholder = () => {},
-      sensitivitySettings = {},
       detectTopDriver = () => "-",
       asCompactMoney = (value) => String(value),
       asNum = (value, digits = 1) => {
@@ -427,7 +405,7 @@
       renderers = {}
     } = input;
 
-    resetComparePageState({ refs, setCompareMetric, syncCompareSensitivityControls });
+    resetComparePageState({ refs, setCompareMetric });
     if (!project) {
       renderCompareNoProjectState({ refs, renderPlaceholder });
       return "no-project";
@@ -450,7 +428,6 @@
       compareState,
       comparePeriod,
       renderPlaceholder,
-      sensitivitySettings,
       detectTopDriver,
       asCompactMoney,
       asNum,

@@ -128,9 +128,8 @@
     };
   }
 
-  function buildSensitivityTornadoOption(factors, baselineValue, settings, tokens, metric = DEFAULT_SENSITIVITY_METRIC) {
+  function buildSensitivityTornadoOption(factors, baselineValue, tokens, metric = DEFAULT_SENSITIVITY_METRIC) {
     const { label, unit, decimals = 2 } = metric;
-    const rangeLabel = `${settings.rangePercent}%`;
     const topFactors = factors.slice().reverse();
     return {
       animationDuration: 340,
@@ -142,10 +141,13 @@
       tooltip: axisTooltip(tokens, {
         formatter: (params) => {
           if (!params?.length) return "";
-          const lines = [`${escapeHtml(params[0].axisValue)}`];
+          const factor = topFactors[params[0].dataIndex];
+          const lines = [escapeHtml(factor?.name ?? params[0].axisValue)];
           params.forEach((item) => {
-            const value = Number(item.value || 0);
-            lines.push(`${item.marker}${escapeHtml(item.seriesName)}：${value >= 0 ? "+" : ""}${asNum(value, 2)} ${escapeHtml(unit)}`);
+            const value = Number(item.value);
+            const input = item.seriesIndex === 1 ? factor?.highInput : factor?.lowInput;
+            const scenarioLabel = input ? `${item.seriesName}（${input}）` : item.seriesName;
+            lines.push(`${item.marker ?? ""}${escapeHtml(scenarioLabel)}：${value >= 0 ? "+" : ""}${asNum(value, decimals)} ${escapeHtml(unit)}`);
           });
           lines.push(`基准${escapeHtml(label)}：${asNum(baselineValue, decimals)} ${escapeHtml(unit)}`);
           return lines.join("<br/>");
@@ -155,14 +157,14 @@
       yAxis: categoryAxis(topFactors.map((factor) => factor.name), tokens),
       series: [
         {
-          name: `-${rangeLabel}`,
+          name: "低位扰动",
           type: "bar",
           barWidth: 12,
           itemStyle: { color: tokens.negative },
           data: topFactors.map((factor) => factor.lowDelta)
         },
         {
-          name: `+${rangeLabel}`,
+          name: "高位扰动",
           type: "bar",
           barWidth: 12,
           itemStyle: { color: tokens.primary },
@@ -172,21 +174,26 @@
     };
   }
 
-  function buildSensitivityResponseOption(selected, baselineValue, axisLabels, tokens, metric = DEFAULT_SENSITIVITY_METRIC) {
+  function buildSensitivityResponseOption(selected, baselineValue, tokens, metric = DEFAULT_SENSITIVITY_METRIC) {
     const { label, unit, decimals = 2 } = metric;
+    const { axisTitle, axisUnit, axisValues, axisLabels } = selected;
+    const inputBounds = axisValues.length > 1 ? { min: axisValues[0], max: axisValues.at(-1) } : {};
+    const horizontalAxis = valueAxis(axisTitle, tokens);
     return {
       animationDuration: 340,
-      grid: { top: 36, left: 56, right: 24, bottom: 44, containLabel: true },
+      grid: { top: 36, left: 56, right: 24, bottom: 60, containLabel: true },
       tooltip: axisTooltip(tokens, {
         formatter: (params) => {
           const item = params?.[0];
-          if (!item) return "";
-          const value = Number(item.value || 0);
+          if (!Array.isArray(item?.value)) return "";
+          const [offset, value] = item.value;
+          const pointLabel = axisLabels[item.dataIndex] ?? `${offset}${axisUnit === "%" ? "" : " "}${axisUnit}`;
+          const inputLabel = offset === 0 ? `基准（${pointLabel}）` : pointLabel;
           const unitLabel = escapeHtml(unit);
-          return `${escapeHtml(item.axisValue)}<br/>${escapeHtml(label)}：${asNum(value, decimals)} ${unitLabel}<br/>相对基准：${asNum(value - baselineValue, decimals)} ${unitLabel}`;
+          return `${escapeHtml(inputLabel)}<br/>${escapeHtml(label)}：${asNum(value, decimals)} ${unitLabel}<br/>相对基准：${asNum(value - baselineValue, decimals)} ${unitLabel}`;
         }
       }),
-      xAxis: categoryAxis(axisLabels, tokens),
+      xAxis: { ...horizontalAxis, ...inputBounds, nameLocation: "middle", nameGap: 28 },
       yAxis: valueAxis(unit, tokens),
       series: [{
         name: selected.name,
@@ -196,7 +203,7 @@
         lineStyle: { width: 3, color: tokens.primary },
         itemStyle: { color: tokens.primary },
         areaStyle: { color: `${tokens.primary}1f` },
-        data: selected.series,
+        data: axisValues.map((offset, index) => [offset, selected.series[index]]),
         markLine: {
           symbol: ["none", "none"],
           lineStyle: { type: "dashed", color: tokens.baseline },

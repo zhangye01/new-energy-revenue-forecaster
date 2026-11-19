@@ -20,11 +20,53 @@
   const DISPATCH_FACTORS = new Set(["spot", "capture_spread"]);
   const FEE_KEYS = ["marketOpFee", "gridAssessFee", "ancillaryFee", "otherFee"];
   const FACTORS = [
-    ["spot", "现货价格水平", "同比调整全周期逐时现货电价，联动捕获价、机制补差及配储套利", 0],
-    ["mechanism_price", "机制电价", "同比调整机制电价，按各年实际生效月份和机制电量重算补差", 3],
-    ["mechanism_ratio", "机制电量占比", "同比调整机制电量占比（0–100%），联动有效期内机制电量和市场化电量", 4],
-    ["capture_spread", "捕获价差", "保持各年现货均价，按比例调整同年小时价格相对均价的偏离", 2]
+    { key: "spot", name: "现货价格水平", axisTitle: "现货价格变化（元/MWh）", axisUnit: "元/MWh", range: 100, step: 25, colorIndex: 0,
+      note: "给全周期逐时现货电价加上同一个金额，联动捕获价、机制补差及配储套利" },
+    { key: "mechanism_price", name: "机制电价", axisTitle: "机制电价变化（元/MWh）", axisUnit: "元/MWh", range: 100, step: 25, colorIndex: 3,
+      note: "按金额调整机制电价，最低为 0，按各年实际生效月份和机制电量重算补差" },
+    { key: "mechanism_ratio", name: "机制电量占比", axisTitle: "机制电量占比变化（百分点）", axisUnit: "个百分点", range: 20, step: 5, colorIndex: 4,
+      note: "按百分点调整机制电量占比，限于 0% 至 100%，联动有效期内机制电量和市场化电量" },
+    { key: "capture_spread", name: "捕获价差", axisTitle: "捕获价差振幅变化（%）", axisUnit: "%", range: 40, step: 10, colorIndex: 2,
+      note: "保持各年现货均价，按比例缩放同年小时价格相对均价的偏离，联动捕获价差及配储套利" }
   ];
+  const inputNumber = new Intl.NumberFormat("zh-CN", { maximumSignificantDigits: 10 });
+
+  function formatInput(value, unit, signed = true) {
+    const sign = signed && value !== 0 ? (value < 0 ? "−" : "+") : "";
+    return `${sign}${inputNumber.format(Math.abs(value))}${unit === "%" ? "" : " "}${unit}`;
+  }
+
+  function snapBoundary(value, step) {
+    const closestPoint = Math.round(value / step) * step;
+    return Math.abs(value - closestPoint) <= 1e-10 ? closestPoint || 0 : value;
+  }
+
+  function factorAxis({ key, range, step, axisUnit }, config) {
+    let low = -range;
+    let high = range;
+    const { mechanismPrice, mechanismRatio } = config;
+    if (key === "mechanism_price" && Number.isFinite(mechanismPrice) && mechanismPrice >= 0) {
+      low = Math.max(low, -mechanismPrice);
+    }
+    if (key === "mechanism_ratio" && Number.isFinite(mechanismRatio) && mechanismRatio >= 0 && mechanismRatio <= 1) {
+      low = Math.max(low, -mechanismRatio * 100);
+      high = Math.min(high, (1 - mechanismRatio) * 100);
+    }
+    low = snapBoundary(low, step);
+    high = snapBoundary(high, step);
+    const values = [low];
+    for (let point = -range + step; point < range; point += step) {
+      if (point > low && point < high) values.push(point);
+    }
+    if (high > low) values.push(high);
+    const labels = values.map((value) => formatInput(value, axisUnit));
+    const lowInput = labels[0], highInput = labels.at(-1);
+    const rangeLabel = low === -high ? `±${formatInput(high, axisUnit, false)}` : `${lowInput} 至 ${highInput}`;
+    return {
+      axisValues: Object.freeze(values), axisLabels: Object.freeze(labels), lowInput, highInput,
+      presetLabel: `${rangeLabel} · 步长 ${formatInput(step, axisUnit, false)}`
+    };
+  }
 
   function baselineValue(baseline) {
     const result = baseline?.result;
@@ -32,17 +74,16 @@
       ? result.avgFullRevenuePrice : null;
   }
 
-  function createPerturbation(scenario, first, key, ratio) {
+  function createPerturbation(scenario, annualBase, key, offset) {
     const config = { ...scenario.config };
-    const row = { ...first };
-    const factor = 1 + ratio;
+    const row = { ...annualBase };
     if (key === "spot") {
-      row.spotAvgPrice *= factor;
-      row.capturePrice *= factor;
+      row.spotAvgPrice += offset;
+      row.capturePrice += offset;
     }
-    if (key === "capture_spread") row.capturePrice = row.spotAvgPrice + (row.capturePrice - row.spotAvgPrice) * factor;
-    if (key === "mechanism_price") config.mechanismPrice *= factor;
-    if (key === "mechanism_ratio") config.mechanismRatio = Math.max(0, Math.min(1, config.mechanismRatio * factor));
+    if (key === "capture_spread") row.capturePrice = row.spotAvgPrice + (row.capturePrice - row.spotAvgPrice) * (1 + offset / 100);
+    if (key === "mechanism_price") config.mechanismPrice = Math.max(0, config.mechanismPrice + offset);
+    if (key === "mechanism_ratio") config.mechanismRatio = Math.max(0, Math.min(1, config.mechanismRatio + offset / 100));
     return { config, row };
   }
 
@@ -184,7 +225,7 @@
     let entry = cache.get(cacheKey);
     if (!entry) {
       if (storage && !reconcileStorage(storage, result.annualRows, scheme)) return { message: TIME_SERIES_ERROR };
-      entry = { points: new Map(), sweeps: new Map() };
+      entry = { factors: null };
       if (cache.size >= 4) cache.delete(cache.keys().next().value);
       cache.set(cacheKey, entry);
     }
@@ -196,61 +237,55 @@
     return { ok: !message, message };
   }
 
-  function perturbedStorageRevenue(curve, key, scale, scheme) {
+  function perturbedStorageRevenue(curve, key, offset, scheme) {
     const { mean, generation } = curve;
     const prices = new Array(HOURS_PER_YEAR);
     if (key === "spot") {
-      for (let hour = 0; hour < prices.length; hour += 1) prices[hour] = curve.prices[hour] * scale;
+      for (let hour = 0; hour < prices.length; hour += 1) prices[hour] = curve.prices[hour] + offset;
     } else {
+      const scale = 1 + offset / 100;
       for (let hour = 0; hour < prices.length; hour += 1) prices[hour] = mean + (curve.prices[hour] - mean) * scale;
     }
     return dispatch.calculateHourlyDispatch({ prices, generationMwh: generation, ...scheme }).incrementalRevenue;
   }
 
-  function calculatePoint(project, cycle, key, ratio) {
-    const { result, scenario, scheme, storage, entry, base } = cycle;
-    const pointKey = `${key}:${ratio}`;
-    if (entry.points.has(pointKey)) return entry.points.get(pointKey);
+  function calculatePoint(project, cycle, key, offset) {
+    const { result, scenario, scheme, storage, base } = cycle;
     let storageRevenue;
     if (storage && DISPATCH_FACTORS.has(key)) {
       storageRevenue = [];
-      for (const curve of storage.curves) storageRevenue.push(perturbedStorageRevenue(curve, key, 1 + ratio, scheme));
+      for (const curve of storage.curves) storageRevenue.push(perturbedStorageRevenue(curve, key, offset, scheme));
     }
     let revenue = 0;
     for (const [index, original] of result.annualRows.entries()) {
-      const { row, config } = createPerturbation(scenario, original, key, ratio);
+      const { row, config } = createPerturbation(scenario, original, key, offset);
       if (storageRevenue) row.storageDispatch = { ...original.storageDispatch, incrementalRevenue: storageRevenue[storage.curveIndices[index]] };
       revenue += calculateAnnualRevenue(project, config, row);
     }
     const price = revenue / result.totalEnergy;
-    const value = Math.abs(price - base) < Math.max(1e-8, Math.abs(base) * 1e-12) ? base : price;
-    if (entry.points.size >= 600) entry.points.delete(entry.points.keys().next().value);
-    entry.points.set(pointKey, value);
-    return value;
+    return Math.abs(price - base) < Math.max(1e-8, Math.abs(base) * 1e-12) ? base : price;
   }
 
-  function buildFactors(project, baseline, ratios) {
-    if (!Array.isArray(ratios) || !ratios.length || !ratios.every((value) => Number.isFinite(value) && value > -1)) return [];
+  function buildFactors(project, baseline) {
     const cycle = prepareCycle(project, baseline);
     if (cycle.message) return [];
     const { result, scenario, base, entry } = cycle;
-    const sweepKey = JSON.stringify(ratios);
-    if (entry.sweeps.has(sweepKey)) return entry.sweeps.get(sweepKey);
+    if (entry.factors) return entry.factors;
     const { mechanismEnabled, mechanismRatio, mechanismStartYm, mechanismEndYm } = scenario.config;
-    const hasMechanism = mechanismEnabled && mechanismRatio > 0 && result.annualRows.some((row) =>
+    const hasActiveMonths = mechanismEnabled && result.annualRows.some((row) =>
       row.energyMwh > 0 && rules.mechanismActiveMonthsForYear(row.year, mechanismStartYm, mechanismEndYm) > 0);
-    const factors = FACTORS.map(([key, name, note, colorIndex]) => {
-      const applicable = !key.startsWith("mechanism_") || Boolean(hasMechanism);
-      const series = Object.freeze(ratios.map((ratio) => ratio === 0 || !applicable ? base : calculatePoint(project, cycle, key, ratio)));
+    const factors = FACTORS.map((factor) => {
+      const { key, name, note, colorIndex, axisTitle, axisUnit } = factor;
+      const applicable = !key.startsWith("mechanism_") || Boolean(hasActiveMonths && (key === "mechanism_ratio" || mechanismRatio > 0));
+      const axis = factorAxis(factor, scenario.config);
+      const series = Object.freeze(axis.axisValues.map((offset) => offset === 0 || !applicable ? base : calculatePoint(project, cycle, key, offset)));
       const lowDelta = series[0] - base, highDelta = series.at(-1) - base;
       return Object.freeze({ key, name, note: applicable ? note : `${note}。当前基准周期没有生效的机制电量`, colorIndex, applicable, series,
-        lowDelta, highDelta, sensitivity: Math.max(...series.map((value) => Math.abs(value - base))) });
+        axisTitle, axisUnit, ...axis, lowDelta, highDelta, sensitivity: Math.max(Math.abs(lowDelta), Math.abs(highDelta)) });
     }).sort((a, b) => b.sensitivity - a.sensitivity);
     if (!factors.every(({ series }) => series.every(Number.isFinite))) return [];
-    Object.freeze(factors);
-    if (entry.sweeps.size >= 12) entry.sweeps.delete(entry.sweeps.keys().next().value);
-    entry.sweeps.set(sweepKey, factors);
-    return factors;
+    entry.factors = Object.freeze(factors);
+    return entry.factors;
   }
 
   return Object.freeze({ buildFactors, calculateAnnualRevenue, availability, baselineValue });

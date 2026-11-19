@@ -29,7 +29,7 @@
     history: ["sanitizeHistoryAnalysis", "renderPolicyPanel", "renderHistoryPrices", "exportHistoryChartData"],
     navigation: ["setActivePage"],
     compare: [
-      "sanitizeCompareView", "sanitizeCompareSensitivitySettings",
+      "sanitizeCompareView",
       "renderCompare", "queueCompareChartsResize"
     ],
     energy: [
@@ -136,7 +136,6 @@
       refs,
       handlers: comparePage.createCompareEventHandlers({
         refs,
-        sensitivitySettings: state.compareSensitivitySettings,
         getCompareView: () => appState.compareView,
         setCompareView: (nextView) => {
           appState.compareView = nextView;
@@ -144,7 +143,6 @@
         sanitizeCompareView: actions.sanitizeCompareView,
         setActiveSensitivityFactorKey: state.setActiveSensitivityFactorKey,
         setActiveCompareScenarioId: state.setActiveCompareScenarioId,
-        sanitizeCompareSensitivitySettings: actions.sanitizeCompareSensitivitySettings,
         renderCompare: actions.renderCompare,
         queueCompareChartsResize: actions.queueCompareChartsResize,
         schedulePersistAppData: actions.schedulePersistAppData

@@ -67,8 +67,6 @@ const CRITICAL_IDS = [
   "export-hourly-button",
   "result-history-panel",
   "compare-sensitivity-factor-list",
-  "compare-sensitivity-range",
-  "compare-sensitivity-step",
   "compare-sensitivity-tornado-chart",
   "compare-sensitivity-body",
   "compare-ranking-chart",

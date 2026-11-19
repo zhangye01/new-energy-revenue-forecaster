@@ -116,8 +116,6 @@ bindAppEvents({
     }
   },
   state: {
-    compareSensitivitySettings: { range: 10 },
-    getActiveSensitivityFactorKey: () => "factor-a",
     setActiveSensitivityFactorKey: (key) => calls.push(`set-factor:${key}`),
     setActiveCompareScenarioId: (scenarioId) => calls.push(`set-scenario:${scenarioId}`)
   },
@@ -129,8 +127,6 @@ bindAppEvents({
     renderHistoryPrices: () => calls.push("render-history"),
     exportHistoryChartData: () => calls.push("export-history"),
     sanitizeCompareView: (view) => view,
-    sanitizeCompareSensitivitySettings: () => ({}),
-    renderCompareWorkspaceState: () => calls.push("render-compare-state"),
     renderCompare: () => calls.push("render-compare"),
     queueCompareChartsResize: () => calls.push("resize-compare"),
     getActiveProject: () => ({ id: "p1" }),

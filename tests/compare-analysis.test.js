@@ -7,14 +7,8 @@ const rough = require("../src/domain/rough-price");
 const {
   applyCompareFrameSelection, buildAvailableScenarioResults, buildCompareFrameState, buildCompareRenderState,
   detectTopDriver, getBaselineCompareItem, resolveActiveCompareScenarioId,
-  resultComponentTotals, sanitizeCompareSensitivitySettings, summarizeScenarioComparison,
-  sensitivityAxisLabels
+  resultComponentTotals, summarizeScenarioComparison
 } = analysis;
-
-assert.deepEqual(sanitizeCompareSensitivitySettings({ rangePercent: 99, stepPercent: 0, target: "first_revenue", topN: 1, selectedKeys: ["fee"] }),
-  { rangePercent: 60, stepPercent: 5 });
-assert.deepEqual(sensitivityAxisLabels({ rangePercent: 10, stepPercent: 5 }), ["-10%", "-5%", "0%", "+5%", "+10%"]);
-assert.equal(sensitivityAxisLabels({ rangePercent: Infinity, stepPercent: -5 }).length, 121, "非法输入使用安全边界");
 
 const project = { id: "compare-test", name: "对标测试", province: "shandong", assetType: "solar", siteType: "onshore", capacityMw: 100,
   hasStorage: false, startYear: 2026, forecastYears: 2, activeRunId: "run-1", resultsByScenario: {},
@@ -47,8 +41,7 @@ assert.ok(Math.abs(totals.primaryFees + baselinePrimaryFees) < 1e-6);
 assert.equal(totals.otherNetIncome, -baseline.result.totalEnergy);
 assert.ok(Math.abs(totals.primaryFees + totals.otherNetIncome - totals.feesAndOtherNetIncome) < 1e-6);
 
-const input = { project, available, comparePeriod: "2026-2027", activeCompareScenarioId: "missing", activeSensitivityFactorKey: "missing",
-  sensitivitySettings: { rangePercent: 20, stepPercent: 10 } };
+const input = { project, available, comparePeriod: "2026-2027", activeCompareScenarioId: "missing", activeSensitivityFactorKey: "missing" };
 const render = buildCompareRenderState(input);
 assert.equal(render.baseline.scenario.id, "base");
 assert.equal(render.sensitivityBaseline, baseline.result.avgFullRevenuePrice);
@@ -56,7 +49,9 @@ assert.equal(render.bestScenario.scenario.id, "up");
 assert.equal(render.activeCompareScenarioId, "up");
 assert.equal(render.activeSensitivityFactorKey, render.sensitivityFactors[0].key);
 assert.deepEqual(render.sensitivityFactors.map(({ key }) => key).sort(), ["capture_spread", "mechanism_price", "mechanism_ratio", "spot"]);
-assert.equal(render.sensitivityFactors[0].series[2], render.sensitivityBaseline);
+const spot = render.sensitivityFactors.find(({ key }) => key === "spot");
+assert.deepEqual(spot.axisValues, [-100, -75, -50, -25, 0, 25, 50, 75, 100]);
+assert.equal(spot.series[spot.axisValues.indexOf(0)], render.sensitivityBaseline);
 const frame = buildCompareFrameState(input);
 assert.equal(frame.hasResults, true);
 assert.equal(frame.available.length, 2);

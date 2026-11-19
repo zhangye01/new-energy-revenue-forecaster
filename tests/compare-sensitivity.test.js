@@ -6,7 +6,6 @@ const model = require("../src/domain/scenario-model");
 const analysis = require("../src/domain/compare-analysis");
 const versions = require("../src/domain/result-versions");
 
-const ratios = [-0.6, -0.2, 0, 0.2, 0.6];
 const keys = ["capture_spread", "mechanism_price", "mechanism_ratio", "spot"];
 const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-6, `${message}: ${actual} != ${expected}`);
 
@@ -33,15 +32,22 @@ function fixture(hasStorage, negative = false, repeated = false) {
   return { project, scenario, run, result: calculator.calculateScenarioResult(project, scenario, run) };
 }
 
-function oracle({ project, scenario, run }, key, ratio) {
-  const scale = 1 + ratio;
+function shiftedPrices(prices, key, offset) {
+  const mean = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+  const shifted = [];
+  for (const price of prices) {
+    shifted.push(key === "spot" ? price + offset : mean + (price - mean) * (1 + offset / 100));
+  }
+  return shifted;
+}
+
+function oracle({ project, scenario, run }, key, offset) {
   const config = { ...scenario.config };
-  if (key === "mechanism_price") config.mechanismPrice *= scale;
-  if (key === "mechanism_ratio") config.mechanismRatio = Math.min(1, Math.max(0, config.mechanismRatio * scale));
-  const pricesByYear = Object.fromEntries(Object.entries(run.pricesByYear).map(([year, prices]) => {
-    const mean = prices.reduce((sum, price) => sum + price, 0) / prices.length;
-    return [year, prices.map((price) => key === "spot" ? price * scale : key === "capture_spread" ? mean + (price - mean) * scale : price)];
-  }));
+  if (key === "mechanism_price") config.mechanismPrice = Math.max(0, config.mechanismPrice + offset);
+  if (key === "mechanism_ratio") config.mechanismRatio = Math.min(100, Math.max(0, config.mechanismRatio * 100 + offset)) / 100;
+  const pricesByYear = key === "spot" || key === "capture_spread"
+    ? Object.fromEntries(Object.entries(run.pricesByYear).map(([year, prices]) => [year, shiftedPrices(prices, key, offset)]))
+    : run.pricesByYear;
   return calculator.calculateScenarioResult(project, { ...scenario, config }, { ...run, pricesByYear }).avgFullRevenuePrice;
 }
 
@@ -50,24 +56,31 @@ for (const input of [fixture(false), fixture(true, false, true), fixture(true, t
   const before = JSON.stringify(input);
   assert.equal(result.annualRows[0].mechanismRatio, 0, "首年尚未执行机制");
   assert.ok(result.annualRows[2].mechanismRatio > 0, "后续年度执行机制");
-  const factors = sensitivity.buildFactors(project, input, ratios);
+  const factors = sensitivity.buildFactors(project, input);
   assert.deepEqual(factors.map(({ key }) => key).sort(), keys);
   assert.equal(sensitivity.baselineValue(input), result.avgFullRevenuePrice);
   assert.notEqual(result.avgFullRevenuePrice, result.annualRows[0].fullRevenuePrice);
   const simpleYearMean = result.annualRows.reduce((total, row) => total + row.fullRevenuePrice, 0) / result.annualRows.length;
   assert.ok(Math.abs(result.avgFullRevenuePrice - simpleYearMean) > 1, "以实际各年电量加权");
+  assert.deepEqual(factors.find(({ key }) => key === "spot").axisValues, [-100, -75, -50, -25, 0, 25, 50, 75, 100]);
+  assert.deepEqual(factors.find(({ key }) => key === "mechanism_ratio").axisValues, [-20, -15, -10, -5, 0, 5, 10, 15, 20]);
+  assert.deepEqual(factors.find(({ key }) => key === "capture_spread").axisValues, [-40, -30, -20, -10, 0, 10, 20, 30, 40]);
   for (const factor of factors) {
-    for (const [index, ratio] of ratios.entries()) near(factor.series[index], oracle(input, factor.key, ratio), `${factor.key} at ${ratio}`);
-    assert.equal(factor.series[2], result.avgFullRevenuePrice, "0% 使用保存的全周期基准");
+    for (const [index, offset] of factor.axisValues.entries()) near(factor.series[index], oracle(input, factor.key, offset), `${factor.key} at ${offset}`);
+    assert.equal(factor.series[factor.axisValues.indexOf(0)], result.avgFullRevenuePrice, "零扰动使用保存的全周期基准");
+    assert.equal(factor.sensitivity, Math.max(Math.abs(factor.lowDelta), Math.abs(factor.highDelta)), "排序按两端最大绝对影响");
+    assert.equal(factor.lowInput, factor.axisLabels[0]);
+    assert.equal(factor.highInput, factor.axisLabels.at(-1));
   }
+  assert.deepEqual(factors.map(({ sensitivity }) => sensitivity), factors.map(({ sensitivity }) => sensitivity).sort((a, b) => b - a));
   assert.ok(factors.find(({ key }) => key === "mechanism_price").sensitivity > 0, "后续年度机制进入扰动");
-  assert.strictEqual(sensitivity.buildFactors(project, input, ratios), factors);
+  assert.strictEqual(sensitivity.buildFactors(project, input), factors);
   assert.ok(Object.isFrozen(factors) && Object.isFrozen(factors[0].series), "缓存曲线只读");
-  assert.notStrictEqual(sensitivity.buildFactors(project, input, [-0.2, 0, 0.2]), factors, "范围变化返回相应扰动点");
+  assert.ok(Object.isFrozen(factors[0].axisValues) && Object.isFrozen(factors[0].axisLabels), "预设点与标签只读");
   const badYear = { ...result.annualRows[2], fullRevenue: result.annualRows[2].fullRevenue + 100 };
   const bad = { scenario, result: { ...result, annualRows: [...result.annualRows.slice(0, 2), badYear] } };
   assert.match(sensitivity.availability(project, bad).message, /全周期.*对账未通过/);
-  assert.deepEqual(sensitivity.buildFactors(project, bad, ratios), []);
+  assert.deepEqual(sensitivity.buildFactors(project, bad), []);
   assert.equal(JSON.stringify(input), before, "敏感性不修改原输入或结果");
 }
 
@@ -78,9 +91,9 @@ for (const input of [fixture(false), fixture(true, false, true), fixture(true, t
   const energyData = Object.freeze({ mode: "typical_curve_8760", typicalCurveSource: "typical_curve_8760",
     hourlyByYear: Object.freeze({}), annualInputByYear: Object.freeze(annualInputByYear), typicalCurveProfile: Object.freeze(profile) });
   const restoredProject = Object.freeze({ ...input.project, energyData });
-  const rebuilt = sensitivity.buildFactors(restoredProject, input, ratios);
+  const rebuilt = sensitivity.buildFactors(restoredProject, input);
   assert.equal(rebuilt.length, 4, "可在独立项目外壳中还原备份的逐时电量");
-  for (const factor of rebuilt) near(factor.series.at(-1), oracle(input, factor.key, 0.6), factor.key);
+  for (const factor of rebuilt) near(factor.series.at(-1), oracle(input, factor.key, factor.axisValues.at(-1)), factor.key);
   assert.deepEqual(energyData.hourlyByYear, {}, "原备份的逐时缓存不回填");
 }
 
@@ -88,7 +101,7 @@ for (const input of [fixture(false), fixture(true, false, true), fixture(true, t
   const input = fixture(false);
   input.scenario.config.mechanismEnabled = false;
   input.result = calculator.calculateScenarioResult(input.project, input.scenario, input.run);
-  const factors = sensitivity.buildFactors(input.project, input, ratios);
+  const factors = sensitivity.buildFactors(input.project, input);
   assert.equal(factors.length, 4);
   for (const factor of factors.filter(({ key }) => key.startsWith("mechanism_"))) {
     assert.equal(factor.applicable, false);
@@ -101,6 +114,36 @@ for (const input of [fixture(false), fixture(true, false, true), fixture(true, t
 }
 
 {
+  const input = fixture(false);
+  Object.assign(input.scenario.config, { mechanismPrice: 63, mechanismRatio: 0.97 });
+  input.result = calculator.calculateScenarioResult(input.project, input.scenario, input.run);
+  const factors = sensitivity.buildFactors(input.project, input);
+  const price = factors.find(({ key }) => key === "mechanism_price");
+  assert.deepEqual(price.axisValues, [-63, -50, -25, 0, 25, 50, 75, 100]);
+  assert.equal(price.presetLabel, "−63 元/MWh 至 +100 元/MWh · 步长 25 元/MWh");
+  near(price.series[0], oracle(input, "mechanism_price", -63), "价格下降到零");
+  const ratio = factors.find(({ key }) => key === "mechanism_ratio");
+  assert.deepEqual(ratio.axisValues.map((value) => Math.round(value * 100) / 100), [-20, -15, -10, -5, 0, 3]);
+  assert.equal(ratio.highInput, "+3 个百分点");
+  near(ratio.series.at(-1), oracle(input, "mechanism_ratio", 3), "机制电量占比最多 100%");
+}
+
+{
+  const input = fixture(false);
+  input.scenario.config.mechanismRatio = 0;
+  input.result = calculator.calculateScenarioResult(input.project, input.scenario, input.run);
+  const factors = sensitivity.buildFactors(input.project, input);
+  const price = factors.find(({ key }) => key === "mechanism_price");
+  assert.equal(price.applicable, false);
+  assert.equal(price.sensitivity, 0);
+  const ratio = factors.find(({ key }) => key === "mechanism_ratio");
+  assert.equal(ratio.applicable, true);
+  assert.deepEqual(ratio.axisValues, [0, 5, 10, 15, 20]);
+  near(ratio.series.at(-1), oracle(input, "mechanism_ratio", 20), "基准占比为零时按有效月份新增机制电量");
+  assert.ok(ratio.sensitivity > 0);
+}
+
+{
   const fixtureData = fixture(true);
   const { project, scenario, result, run } = fixtureData;
   const stored = versions.stampComputedResult(project, scenario, run, {
@@ -108,25 +151,25 @@ for (const input of [fixture(false), fixture(true, false, true), fixture(true, t
   });
   const storedBaseline = { scenario, result: stored };
   assert.ok(sensitivity.availability(project, storedBaseline).ok);
-  const saved = sensitivity.buildFactors(project, storedBaseline, ratios);
+  const saved = sensitivity.buildFactors(project, storedBaseline);
   const missingRun = { ...project, priceRuns: [] };
   assert.match(sensitivity.availability(missingRun, storedBaseline).message, /全周期逐时电量或电价缺失/);
-  assert.deepEqual(sensitivity.buildFactors(missingRun, storedBaseline, ratios), []);
-  assert.deepEqual(sensitivity.buildFactors({ ...project, activeRunId: "another-run" }, storedBaseline, ratios), []);
+  assert.deepEqual(sensitivity.buildFactors(missingRun, storedBaseline), []);
+  assert.deepEqual(sensitivity.buildFactors({ ...project, activeRunId: "another-run" }, storedBaseline), []);
   const changedRun = { ...run, pricesByYear: { ...run.pricesByYear, 2028: [...run.pricesByYear[2028]] } };
   changedRun.pricesByYear[2028][0] += 1;
-  assert.deepEqual(sensitivity.buildFactors({ ...project, priceRuns: [changedRun] }, storedBaseline, ratios), [],
+  assert.deepEqual(sensitivity.buildFactors({ ...project, priceRuns: [changedRun] }, storedBaseline), [],
     "后续年份的原始电价变更不可复用");
   const changedEnergy = { ...project, energyData: { ...project.energyData, hourlyByYear: {
     ...project.energyData.hourlyByYear, 2028: project.energyData.hourlyByYear[2028].slice(0, 8759)
   } } };
-  assert.deepEqual(sensitivity.buildFactors(changedEnergy, storedBaseline, ratios), []);
+  assert.deepEqual(sensitivity.buildFactors(changedEnergy, storedBaseline), []);
   const first = result.hourlyPreview[0];
   const corruptPreview = { scenario, result: { ...stored, hourlyPreview: [{ ...first, spotPrice: -100000 }, ...result.hourlyPreview.slice(1)] } };
   assert.equal(analysis.isResultComplete(project, scenario, corruptPreview.result), true, "仅损坏逐时不影响年度对标");
-  assert.deepEqual(sensitivity.buildFactors(project, corruptPreview, ratios), []);
+  assert.deepEqual(sensitivity.buildFactors(project, corruptPreview), []);
   assert.match(sensitivity.availability(project, corruptPreview).message, /小时明细.*对账未通过/);
-  assert.strictEqual(sensitivity.buildFactors(project, storedBaseline, ratios), saved);
+  assert.strictEqual(sensitivity.buildFactors(project, storedBaseline), saved);
 }
 
 console.log("compare sensitivity tests passed");

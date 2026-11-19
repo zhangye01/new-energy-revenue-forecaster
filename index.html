@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="./styles/pages/energy.css?v=20261119b">
     <link rel="stylesheet" href="./styles/pages/scenario.css?v=20261119m">
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261119s">
-    <link rel="stylesheet" href="./styles/pages/compare.css?v=20261119u">
+    <link rel="stylesheet" href="./styles/pages/compare.css?v=20261119v">
     <link rel="stylesheet" href="./styles/pages/history.css?v=20261119c">
     <link rel="stylesheet" href="./styles/pages/forecast.css?v=20261119o">
     <link rel="stylesheet" href="./styles/responsive.css?v=20261119u">
@@ -88,7 +88,7 @@
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
     <script src="./config.js?v=20261119p" defer></script>
-    <script src="./runtime.js?v=20261119u" defer></script>
+    <script src="./runtime.js?v=20261119v" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
     <script src="./src/ui/file-import-utils.js?v=20261113c" defer></script>
@@ -130,10 +130,10 @@
     <script src="./src/ui/result-brief-word.js?v=20261119s" defer></script>
     <script src="./src/ui/scenario-form.js?v=20261119m" defer></script>
     <script src="./src/ui/manual-scenario-flow.js?v=20261118e" defer></script>
-    <script src="./src/ui/compare-charts.js?v=20261119u" defer></script>
-    <script src="./src/ui/compare-page.js?v=20261119u" defer></script>
-    <script src="./src/domain/compare-sensitivity.js?v=20261119u" defer></script>
-    <script src="./src/domain/compare-analysis.js?v=20261119u" defer></script>
+    <script src="./src/ui/compare-charts.js?v=20261119v" defer></script>
+    <script src="./src/ui/compare-page.js?v=20261119v" defer></script>
+    <script src="./src/domain/compare-sensitivity.js?v=20261119v" defer></script>
+    <script src="./src/domain/compare-analysis.js?v=20261119v" defer></script>
     <script src="./src/ui/result-history.js?v=20261119p" defer></script>
     <script src="./src/domain/history-analysis.js?v=20261118n" defer></script>
     <script src="./src/ui/history-charts.js?v=20261118m" defer></script>
@@ -141,7 +141,7 @@
     <script src="./src/ui/history-renderer.js?v=20261119c" defer></script>
     <script src="./src/ui/theme-controller.js?v=20261113c" defer></script>
     <script src="./src/ui/shell-events.js?v=20261119p" defer></script>
-    <script src="./src/ui/app-event-bindings.js?v=20261119u" defer></script>
+    <script src="./src/ui/app-event-bindings.js?v=20261119v" defer></script>
     <script src="./src/domain/workflow-status.js?v=20261119o" defer></script>
     <script src="./src/domain/scenario-config.js?v=20261118h" defer></script>
     <script src="./src/domain/rough-price.js?v=20261119o" defer></script>
@@ -156,7 +156,7 @@
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261119j" defer></script>
-    <script src="./app.js?v=20261119u" defer></script>
+    <script src="./app.js?v=20261119v" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -1344,17 +1344,9 @@
               <div class="panel-head">
                 <div>
                   <h3>基准敏感性分析</h3>
-                  <p class="hint" data-help="基准敏感性分析">每次单独扰动一个变量，按全周期全口径收入合计除以全周期结算电量合计计算综合度电均价。机制电价与机制电量占比只影响机制生效年份，机制电量占比限制在 0% 至 100%。</p>
+                  <p class="hint" data-help="基准敏感性分析">每次只改变一个变量。每个取点都按全周期收入合计除以结算电量合计重算度电均价。龙卷风图对比各变量的两个预设端点，响应曲线展示全部预设取点。</p>
                 </div>
                 <span class="hint" id="compare-baseline-label">等待基准方案结果</span>
-              </div>
-              <div class="compare-control-strip compare-sensitivity-toolbar" aria-label="敏感性分析统一设置">
-                <label>扰动范围 ±%
-                  <input id="compare-sensitivity-range" type="number" min="5" max="60" step="5" value="20">
-                </label>
-                <label>步长 %
-                  <input id="compare-sensitivity-step" type="number" min="1" max="20" step="1" value="5">
-                </label>
               </div>
               <div class="info-box" id="compare-sensitivity-message">
                 请先在“收益参数补充与细化”完成基准方案测算，再查看敏感性分析。
@@ -1379,8 +1371,8 @@
               </div>
               <section class="compare-chart-card compare-chart-card-wide">
                 <div class="compare-chart-head">
-                  <strong>敏感性排序</strong>
-                  <span id="compare-sensitivity-tornado-note">变量在 ±20% 扰动下的全周期综合度电均价变化区间</span>
+                  <strong>敏感性龙卷风图</strong>
+                  <span>按两端最大绝对影响排序</span>
                 </div>
                 <div class="compare-chart" id="compare-sensitivity-tornado-chart"></div>
               </section>
@@ -1405,8 +1397,8 @@
                     <thead>
                       <tr>
                         <th>变量</th>
-                        <th id="compare-sensitivity-low-head">-20%影响</th>
-                        <th id="compare-sensitivity-high-head">+20%影响</th>
+                        <th>低位扰动影响</th>
+                        <th>高位扰动影响</th>
                         <th>敏感度</th>
                         <th>方向</th>
                       </tr>

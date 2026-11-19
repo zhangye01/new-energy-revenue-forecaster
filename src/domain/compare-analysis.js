@@ -19,36 +19,6 @@
 })(typeof globalThis !== "undefined" ? globalThis : window, function (sensitivity, getResultValidity, calculation, rules, versions) {
   const { annualStorageIsComplete, closeAmount, hourlyRowsAreComplete } = calculation;
 
-  function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  }
-
-  function sanitizeCompareSensitivitySettings(settings = {}) {
-    return {
-      rangePercent: clamp(Math.round(Number(settings.rangePercent) || 20), 5, 60),
-      stepPercent: clamp(Math.round(Number(settings.stepPercent) || 5), 1, 20)
-    };
-  }
-
-  function sensitivityAxisLabels(settings = {}) {
-    const safe = sanitizeCompareSensitivitySettings(settings);
-    const range = safe.rangePercent;
-    const step = safe.stepPercent;
-    const values = new Set([0, -range, range]);
-    for (let value = 0; value <= range; value += step) {
-      values.add(value);
-      values.add(-value);
-    }
-    return Array.from(values)
-      .sort((a, b) => a - b)
-      .map((value) => `${value > 0 ? "+" : ""}${value}%`);
-  }
-
-  function buildCompareSensitivityFactors(project, baseline, settings = {}) {
-    const ratios = sensitivityAxisLabels(settings).map((label) => Number(label.replace("%", "")) / 100);
-    return sensitivity.buildFactors(project, baseline, ratios);
-  }
-
   function resultComponentTotals(result, verifiedConfig) {
     const rows = result?.annualRows || [];
     const config = versions.getResultFeeConfig(result, verifiedConfig);
@@ -154,12 +124,11 @@
       available = [],
       activeCompareScenarioId = "",
       activeSensitivityFactorKey = "",
-      sensitivitySettings = {},
       includeSensitivity = true
     } = input;
     const baseline = getBaselineCompareItem(available);
     const sensitivityBaseline = sensitivity.baselineValue(baseline);
-    const sensitivityFactors = includeSensitivity ? buildCompareSensitivityFactors(project, baseline, sensitivitySettings) : [];
+    const sensitivityFactors = includeSensitivity ? sensitivity.buildFactors(project, baseline) : [];
     const resolvedFactorKey = !includeSensitivity || sensitivityFactors.some(({ key }) => key === activeSensitivityFactorKey)
       ? activeSensitivityFactorKey : sensitivityFactors[0]?.key || "";
     const { bestScenario, maxGapWan } = baseline
@@ -193,7 +162,6 @@
       comparePeriod = "-",
       activeCompareScenarioId = "",
       activeSensitivityFactorKey = "",
-      sensitivitySettings = {},
       includeSensitivity = true,
       getBaselineResultState
     } = input;
@@ -204,7 +172,6 @@
         available,
         activeCompareScenarioId,
         activeSensitivityFactorKey,
-        sensitivitySettings,
         includeSensitivity
       })
       : {};
@@ -237,9 +204,6 @@
 
   return Object.freeze({
     applyCompareFrameSelection,
-    sanitizeCompareSensitivitySettings,
-    sensitivityAxisLabels,
-    buildCompareSensitivityFactors,
     buildCompareFrameState,
     buildCompareRenderState,
     buildAvailableScenarioResults,

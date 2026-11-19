@@ -22,43 +22,53 @@ assert.equal(placeholder.graphic[0].style.text, "暂无方案结果");
 assert.equal(placeholder.xAxis.show, false);
 
 const factors = [
-  { name: "利用小时", lowDelta: -30, highDelta: 30 },
-  { name: "现货价格", lowDelta: -10, highDelta: 12 },
-  { name: "综合费用", lowDelta: 8, highDelta: -7 }
+  { name: "现货价格水平", lowDelta: -30, highDelta: 30, lowInput: "−100 元/MWh", highInput: "+100 元/MWh" },
+  { name: "机制电量占比", lowDelta: 8, highDelta: -7, lowInput: "−1.5 个百分点", highInput: "+20 个百分点" },
+  { name: "捕获价差", lowDelta: -1, highDelta: 2, lowInput: "−40%", highInput: "+40%" }
 ];
-const tornado = buildSensitivityTornadoOption(factors, 680.5, { rangePercent: 20 }, tokens);
-assert.deepEqual(tornado.yAxis.data, ["综合费用", "现货价格", "利用小时"]);
-assert.equal(tornado.series[0].name, "-20%");
-assert.equal(tornado.series[1].data[1], 12);
-assert.ok(tornado.tooltip.formatter([{ axisValue: "利用小时", marker: "●", seriesName: "+20%", value: 30 }]).includes("基准全周期综合度电均价"));
+const tornado = buildSensitivityTornadoOption(factors, 680.5, tokens);
+assert.deepEqual(tornado.yAxis.data, ["捕获价差", "机制电量占比", "现货价格水平"]);
+assert.deepEqual(tornado.series.map(({ name }) => name), ["低位扰动", "高位扰动"]);
+assert.equal(tornado.series[1].data[1], -7);
+const tornadoTip = tornado.tooltip.formatter([
+  { dataIndex: 1, seriesIndex: 0, marker: "●", seriesName: "低位扰动", value: 8 },
+  { dataIndex: 1, seriesIndex: 1, marker: "●", seriesName: "高位扰动", value: -7 }
+]);
+assert.match(tornadoTip, /机制电量占比.*低位扰动（−1\.5 个百分点）：\+8\.00 元\/MWh/);
+assert.match(tornadoTip, /高位扰动（\+20 个百分点）：-7\.00 元\/MWh.*基准全周期综合度电均价/);
 
 const response = buildSensitivityResponseOption(
-  { name: "利用小时", series: [600, 680.5, 760] },
+  { name: "机制电量占比", axisTitle: "机制电量占比调整（百分点）", axisUnit: "个百分点", axisValues: [-1.5, 0, 5, 10],
+    axisLabels: ["−1.5 个百分点", "0 个百分点", "+5 个百分点", "+10 个百分点"], series: [681, 680.5, 672, 665] },
   680.5,
-  ["-20%", "0%", "+20%"],
   tokens
 );
 assert.equal(response.series[0].smooth, false, "比例边界按真实折线展示，不作平滑外插");
-assert.deepEqual(response.xAxis.data, ["-20%", "0%", "+20%"]);
+assert.equal(response.xAxis.type, "value", "边界截断后按真实步幅定位");
+assert.equal(response.xAxis.name, "机制电量占比调整（百分点）");
+assert.deepEqual([response.xAxis.min, response.xAxis.max], [-1.5, 10]);
+assert.deepEqual(response.series[0].data, [[-1.5, 681], [0, 680.5], [5, 672], [10, 665]]);
 assert.equal(response.series[0].markLine.data[0].yAxis, 680.5);
-assert.ok(response.tooltip.formatter([{ axisValue: "+20%", value: 760 }]).includes("相对基准"));
+assert.match(response.tooltip.formatter([{ dataIndex: 1, value: [0, 680.5] }]), /基准（0 个百分点）.*相对基准：0\.00 元\/MWh/);
 
-const negativeResponse = buildSensitivityResponseOption({ name: "费用", series: [-80, -100.123456, -120] }, -100.123456, ["-20%", "0%", "+20%"], tokens);
-assert.equal(negativeResponse.series[0].data[1], -100.123456);
+const negativeResponse = buildSensitivityResponseOption({ name: "捕获价差", axisTitle: "捕获价差调整（%）", axisUnit: "%",
+  axisValues: [-20, 0, 20], axisLabels: ["−20%", "0%", "+20%"], series: [-80, -100.123456, -120] }, -100.123456, tokens);
+assert.deepEqual(negativeResponse.series[0].data[1], [0, -100.123456]);
 assert.equal(negativeResponse.series[0].markLine.data[0].yAxis, -100.123456, "基准线保留原精度和负值");
 
 const priceTarget = { label: "全周期综合度电均价", unit: "元/MWh", decimals: 2 };
-const priceTornado = buildSensitivityTornadoOption(factors, 396.257, { rangePercent: 20 }, tokens, priceTarget);
+const priceTornado = buildSensitivityTornadoOption(factors, 396.257, tokens, priceTarget);
 assert.equal(priceTornado.xAxis.name, "相对基准变化 元/MWh");
-assert.match(priceTornado.tooltip.formatter([{ axisValue: "利用小时", marker: "●", seriesName: "+20%", value: -0.053 }]),
-  /-0\.05 元\/MWh.*基准全周期综合度电均价：396\.26 元\/MWh/);
-const priceResponse = buildSensitivityResponseOption({ name: "现货价格", series: [369.25, 396.257, 421.127] },
-  396.257, ["-20%", "0%", "+20%"], tokens, priceTarget);
+assert.match(priceTornado.tooltip.formatter([{ dataIndex: 0, seriesIndex: 1, marker: "●", seriesName: "高位扰动", value: -0.053 }]),
+  /高位扰动（\+40%）：-0\.05 元\/MWh.*基准全周期综合度电均价：396\.26 元\/MWh/);
+const priceResponse = buildSensitivityResponseOption({ name: "现货价格水平", axisTitle: "现货价格水平调整（元/MWh）", axisUnit: "元/MWh",
+  axisValues: [-100, 0, 100], axisLabels: ["−100 元/MWh", "0 元/MWh", "+100 元/MWh"], series: [369.25, 396.257, 421.127] },
+396.257, tokens, priceTarget);
 assert.equal(priceResponse.yAxis.name, "元/MWh");
 assert.equal(priceResponse.series[0].markLine.data[0].yAxis, 396.257);
 assert.equal(priceResponse.series[0].markLine.label.formatter, "基准 396.26 元/MWh");
-assert.match(priceResponse.tooltip.formatter([{ axisValue: "+20%", value: 421.127 }]),
-  /全周期综合度电均价：421\.13 元\/MWh.*相对基准：24\.87 元\/MWh/);
+assert.match(priceResponse.tooltip.formatter([{ dataIndex: 2, value: [100, 421.127] }]),
+  /\+100 元\/MWh.*全周期综合度电均价：421\.13 元\/MWh.*相对基准：24\.87 元\/MWh/);
 
 const available = [
   {

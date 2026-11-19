@@ -119,49 +119,11 @@
   background: color-mix(in srgb, #3fa096 7%, var(--panel));
 }
 
-.compare-control-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.compare-control-strip span {
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--panel) 86%, var(--panel-soft));
+.compare-perturbation-input {
+  display: block;
   color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 900;
-}
-
-.compare-sensitivity-toolbar {
-  align-items: end;
-}
-
-.compare-sensitivity-toolbar label {
-  display: grid;
-  gap: 4px;
-  min-width: 126px;
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 900;
-}
-
-.compare-sensitivity-toolbar input {
-  height: 34px;
-  min-width: 0;
-  padding: 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background-color: var(--panel);
-  color: var(--text);
-  font-size: 0.82rem;
-  font-weight: 900;
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 
 .compare-factor-drill-list {
