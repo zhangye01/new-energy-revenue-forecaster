@@ -27,7 +27,7 @@
 
   function defaultStep2Actions() {
     return {
-      typicalExportText: "导出典型年8760模板",
+      typicalExportText: "下载空白8760模板",
       typicalImportText: "读取文件并导入",
       typicalImportVariant: "primary",
       provinceApplyText: "调用所选省份典型曲线",
@@ -362,10 +362,10 @@
   }
 
   function resolveModeLabel(annualInputYears, typicalCurveSource) {
-    if (annualInputYears <= 0) return "待配置";
-    if (typicalCurveSource === "province_typical_curve") return "逐年总量 + 省份典型曲线";
-    if (typicalCurveSource === "typical_curve_8760") return "逐年总量 + 典型年8760小时模板";
-    return "仅逐年总量";
+    const source = typicalCurveSource === "province_typical_curve" ? "省份典型曲线"
+      : typicalCurveSource === "typical_curve_8760" ? "典型年8760小时模板" : "";
+    if (annualInputYears <= 0) return source ? `仅${source}` : "待配置";
+    return source ? `逐年总量 + ${source}` : "仅逐年总量";
   }
 
   function buildEnergyWorkspaceViewModel(input = {}) {
@@ -468,11 +468,10 @@
 
     const annualReady = totalYears > 0 && annualInputYears === totalYears;
     const step2Actions = defaultStep2Actions();
-    if (annualReady && energyData.typicalCurveSource === "typical_curve_8760") {
-      step2Actions.typicalExportText = "重新导出模板";
+    if (hasTypicalCurve && energyData.typicalCurveSource === "typical_curve_8760") {
       step2Actions.typicalImportText = "读取文件并更新典型曲线";
       step2Actions.typicalImportVariant = "ghost";
-      step2Actions.typicalPaneMessage = "已使用导入的典型年8760曲线。";
+      step2Actions.typicalPaneMessage = annualReady ? "已使用导入的典型年8760曲线。" : "已保存导入的典型年8760曲线。";
     } else if (annualReady && energyData.typicalCurveSource === "province_typical_curve") {
       step2Actions.provinceApplyText = "重新调用当前省份曲线";
       step2Actions.provincePaneMessage = `已使用 ${labels.provinceCurveText || ""} 典型曲线。`;
@@ -482,7 +481,7 @@
     if (shouldRefreshEnergyMessage(currentMessage, BLOCKED_MESSAGE, isProjectSwitched)) {
       if (!annualInputYears) {
         message = {
-          text: "请先导入逐年总量模板。",
+          text: hasTypicalCurve ? "典型年曲线已保存，请导入逐年总量。" : "逐年总量和典型年曲线均可从现有模板直接导入。",
           tone: "info"
         };
       } else if (!annualReady) {
@@ -516,20 +515,20 @@
         annualFile: false,
         annualImport: false,
         typicalExport: false,
-        typicalFile: !annualReady,
-        typicalImport: !annualReady,
+        typicalFile: false,
+        typicalImport: false,
         provinceApply: !annualReady
       }),
       templateStatuses: {
         annual: templateStatus(
-          annualInputYears > 0 ? `已录入 ${annualInputYears}/${totalYears} 年` : (exports.annual_hours ? `已导出 ${formatExportTime(exports.annual_hours)}` : "未导出"),
+          annualInputYears > 0 ? `已录入 ${annualInputYears}/${totalYears} 年` : "待导入",
           annualReady ? "ready" : "pending",
           exports.annual_hours || ""
         ),
         typical: templateStatus(
           energyData.typicalCurveSource === "typical_curve_8760"
             ? "已导入典型年8760小时模板"
-            : (exports.typical_curve_8760 ? `已导出 ${formatExportTime(exports.typical_curve_8760)}` : "待导出"),
+            : "待导入",
           energyData.typicalCurveSource === "typical_curve_8760" ? "ready" : "pending",
           exports.typical_curve_8760 || ""
         ),
@@ -568,17 +567,17 @@
     }
     const totalYears = Number.isInteger(project.forecastYears) && project.forecastYears > 0 ? project.forecastYears : 0;
     const annualReady = totalYears > 0 && annualInputYears === totalYears;
-    if (!annualInputYears) {
-      return {
-        summary: "当前选择：待完成第一步",
-        detail: "请先导入逐年总量模板，录入测算周期内各年度总小时数，再开始第二步二选一。"
-      };
-    }
     if (!annualReady) {
-      return {
-        summary: `当前选择：待补齐逐年总量（${annualInputYears}/${totalYears}）`,
-        detail: "第二步必须在逐年总量覆盖全部测算年度后再进行。"
-      };
+      const progress = `（${annualInputYears}/${totalYears}）`;
+      if (activeChoice === "province") {
+        return {
+          summary: `调用省份曲线前请先补齐逐年总量${progress}`,
+          detail: "也可切换到上传模板，直接导入已有的典型年曲线。"
+        };
+      }
+      return project.energyData?.typicalCurveSource === "typical_curve_8760"
+        ? { summary: `典型年曲线已保存，待补逐年总量${progress}`, detail: "补齐逐年总量后，系统按已保存的曲线生成各年上网电量。" }
+        : { summary: "可直接导入典型年8760模板", detail: "已有曲线可直接上传，逐年总量补齐后生成各年上网电量。" };
     }
     if (project.energyData?.typicalCurveSource === "province_typical_curve") {
       return {
@@ -596,7 +595,7 @@
       summary: activeChoice === "province"
         ? "当前选择：准备调用所选省份典型曲线"
         : "当前选择：准备上传典型年8760小时模板",
-      detail: "第二步二选一：确认任一来源完成后，系统将据此生成测算周期内各年上网电量。"
+      detail: "选择一种典型年曲线来源后，系统按曲线拆分逐年总量。已有模板可直接导入。"
     };
   }
 
@@ -644,7 +643,7 @@
       return "当前预测周期未设定，暂无法生成结算电量配置摘要。";
     }
     if (!annualInputYears) {
-      return "待导入逐年总量模板。";
+      return hasTypicalCurve ? "典型年曲线已保存，待导入逐年总量模板。" : "待导入逐年总量模板。";
     }
     if (!hasTypicalCurve) {
       return `已录入 ${annualInputYears}/${totalYears} 年逐年总量，待选择典型曲线来源。`;

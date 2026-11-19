@@ -386,14 +386,21 @@ assert.equal(
   buildEnergyStep2ChoiceSummary({ project: { forecastYears: 3 }, createReady: false }).summary,
   "当前选择：待基础信息保存"
 );
-assert.equal(
-  buildEnergyStep2ChoiceSummary({ project: { forecastYears: 3 }, createReady: true, annualInputYears: 0 }).summary,
-  "当前选择：待完成第一步"
-);
-assert.equal(
-  buildEnergyStep2ChoiceSummary({ project: { forecastYears: 3 }, createReady: true, annualInputYears: 2 }).summary,
-  "当前选择：待补齐逐年总量（2/3）"
-);
+for (const annualInputYears of [0, 2]) {
+  const baseSummaryInput = { project: { forecastYears: 3 }, createReady: true, annualInputYears };
+  assert.match(buildEnergyStep2ChoiceSummary(baseSummaryInput).summary, /可直接导入典型年8760模板/);
+  assert.equal(
+    buildEnergyStep2ChoiceSummary({
+      ...baseSummaryInput,
+      project: { forecastYears: 3, energyData: { typicalCurveSource: "typical_curve_8760" } }
+    }).summary,
+    `典型年曲线已保存，待补逐年总量（${annualInputYears}/3）`
+  );
+  assert.equal(
+    buildEnergyStep2ChoiceSummary({ ...baseSummaryInput, activeChoice: "province" }).summary,
+    `调用省份曲线前请先补齐逐年总量（${annualInputYears}/3）`
+  );
+}
 assert.equal(
   buildEnergyStep2ChoiceSummary({
     project: { forecastYears: 3, energyData: { typicalCurveSource: "province_typical_curve" } },
@@ -456,6 +463,40 @@ const draftProject = buildEnergyWorkspaceViewModel({
 assert.equal(draftProject.projectContext.includes("基础信息尚未完成"), true);
 assert.equal(draftProject.message.text, BLOCKED_MESSAGE);
 assert.equal(draftProject.historyButton.enabled, false);
+assert.equal(draftProject.controls.typicalFile, true);
+assert.equal(draftProject.controls.typicalImport, true);
+
+for (const annualInputYears of [0, 2, 3]) {
+  for (const exports of [{}, { typical_curve_8760: "2026-06-10T00:00:00.000Z" }]) {
+    const view = buildEnergyWorkspaceViewModel({
+      project: baseProject,
+      createReady: true,
+      energyState: { energyData: baseProject.energyData, totalYears: 3, annualInputYears },
+      exports
+    });
+    assert.equal(view.controls.typicalFile, false);
+    assert.equal(view.controls.typicalImport, false);
+    assert.equal(view.controls.provinceApply, annualInputYears !== 3);
+    assert.equal(view.templateStatuses.typical.text, "待导入");
+    assert.equal(view.historyButton.enabled, false);
+  }
+}
+
+const curveWithoutAnnual = buildEnergyWorkspaceViewModel({
+  project: baseProject,
+  createReady: true,
+  energyState: {
+    energyData: { ...baseProject.energyData, typicalCurveSource: "typical_curve_8760" },
+    totalYears: 3,
+    annualInputYears: 0,
+    hasTypicalCurve: true,
+    ready: false
+  }
+});
+assert.equal(curveWithoutAnnual.controls.typicalImport, false);
+assert.equal(curveWithoutAnnual.controls.provinceApply, true);
+assert.equal(curveWithoutAnnual.templateStatuses.typical.text, "已导入典型年8760小时模板");
+assert.equal(curveWithoutAnnual.historyButton.enabled, false);
 
 const partialAnnual = buildEnergyWorkspaceViewModel({
   project: baseProject,
@@ -482,7 +523,7 @@ const partialAnnual = buildEnergyWorkspaceViewModel({
 assert.equal(partialAnnual.metrics.period, "2026-2028");
 assert.equal(partialAnnual.metrics.mode, "仅逐年总量");
 assert.equal(partialAnnual.templateStatuses.annual.text, "已录入 2/3 年");
-assert.equal(partialAnnual.controls.typicalFile, true);
+assert.equal(partialAnnual.controls.typicalFile, false);
 assert.equal(partialAnnual.message.tone, "warn");
 
 const readyProject = buildEnergyWorkspaceViewModel({

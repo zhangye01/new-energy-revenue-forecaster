@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="./styles/pages/projects.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/create.css?v=20260714d">
     <link rel="stylesheet" href="./styles/pages/help.css?v=20261019f">
-    <link rel="stylesheet" href="./styles/pages/energy.css?v=20260714d">
+    <link rel="stylesheet" href="./styles/pages/energy.css?v=20261119b">
     <link rel="stylesheet" href="./styles/pages/scenario.css?v=20261118d">
     <link rel="stylesheet" href="./styles/pages/results.css?v=20261118g">
     <link rel="stylesheet" href="./styles/pages/compare.css?v=20260714d">
@@ -87,7 +87,7 @@
     </script>
     <script src="./vendor/xlsx.full.min.js?v=20260507c"></script>
     <script src="./vendor/echarts.min.js?v=20260507c" defer></script>
-    <script src="./config.js?v=20261118t" defer></script>
+    <script src="./config.js?v=20261119b" defer></script>
     <script src="./runtime.js?v=20261118t" defer></script>
     <script src="./map-data.js?v=20260507c" defer></script>
     <script src="./src/domain/csv-utils.js?v=20261113c" defer></script>
@@ -107,11 +107,11 @@
     <script src="./src/domain/result-report.js?v=20261118i" defer></script>
     <script src="./src/ui/policy-panel.js?v=20261113c" defer></script>
     <script src="./src/ui/province-defaults.js?v=20261118h" defer></script>
-    <script src="./src/ui/energy-workspace.js?v=20261113c" defer></script>
+    <script src="./src/ui/energy-workspace.js?v=20261119b" defer></script>
     <script src="./src/ui/create-project-flow.js?v=20261118m" defer></script>
     <script src="./src/ui/energy-template-flow.js?v=20261113c" defer></script>
     <script src="./src/ui/chart-lifecycle.js?v=20261113c" defer></script>
-    <script src="./src/ui/energy-charts.js?v=20261113c" defer></script>
+    <script src="./src/ui/energy-charts.js?v=20261119b" defer></script>
     <script src="./src/ui/supply-demand-template.js?v=20261118q" defer></script>
     <script src="./src/ui/supply-demand-chart.js?v=20261118s" defer></script>
     <script src="./src/ui/supply-demand-workspace.js?v=20261118s" defer></script>
@@ -150,11 +150,11 @@
     <script src="./src/domain/project-model.js?v=20261119a" defer></script>
     <script src="./src/domain/project-display.js?v=20261113c" defer></script>
     <script src="./src/domain/energy-data.js?v=20261118b" defer></script>
-    <script src="./src/domain/energy-import-flow.js?v=20261113c" defer></script>
+    <script src="./src/domain/energy-import-flow.js?v=20261119b" defer></script>
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
     <script src="./src/ui/project-backup.js?v=20261119a" defer></script>
-    <script src="./app.js?v=20261118t" defer></script>
+    <script src="./app.js?v=20261119b" defer></script>
   </head>
   <body>
     <div class="layout">
@@ -647,22 +647,22 @@
                         <span class="context-help-glyph" aria-hidden="true">?</span>
                       </button>
                       <div class="context-help-card" id="energy-config-help" role="tooltip">
-                        <strong>配置顺序</strong>
-                        <p>第一步必须导入逐年总量模板；第二步二选一，可上传典型年8760小时模板，或直接调用所选省份典型曲线。</p>
+                        <strong>配置要求</strong>
+                        <p>逐年总量与典型年8760曲线可以按任意顺序导入，两项齐备后生成各年上网电量。也可在总量补齐后调用省份典型曲线。</p>
                       </div>
                     </div>
                   </div>
-                  <div class="energy-flow-summary" aria-label="配置顺序：第一步逐年总量必做，第二步曲线来源二选一">
-                    <span><b>1</b> 逐年总量 <small>必做</small></span>
-                    <span aria-hidden="true">→</span>
-                    <span><b>2</b> 曲线来源 <small>二选一</small></span>
+                  <div class="energy-flow-summary" aria-label="逐年总量与典型年曲线齐备后生成电量">
+                    <span>逐年总量</span>
+                    <span aria-hidden="true">+</span>
+                    <span>典型年曲线</span>
                   </div>
                 </div>
                 <div class="energy-config-list">
                   <article class="energy-config-row">
                     <div class="energy-config-row-head">
                       <div class="energy-config-title">
-                        <strong>第一步｜逐年总量模板（必做）</strong>
+                        <strong>逐年总量模板（必填）</strong>
                         <div class="context-help" data-context-help>
                           <button class="context-help-button" type="button" aria-label="查看逐年总量模板说明" aria-expanded="false" aria-controls="energy-annual-help" aria-describedby="energy-annual-help" data-context-help-button>
                             <span class="context-help-glyph" aria-hidden="true">?</span>
@@ -692,16 +692,14 @@
                   <article class="energy-config-row energy-step2-row">
                     <div class="energy-config-row-head">
                       <div class="energy-config-title">
-                        <strong>第二步｜典型年曲线来源（二选一）</strong>
+                        <strong>典型年曲线来源（二选一）</strong>
                         <div class="context-help" data-context-help>
                           <button class="context-help-button" type="button" aria-label="查看典型年曲线来源说明" aria-expanded="false" aria-controls="energy-source-help" aria-describedby="energy-source-help" data-context-help-button>
                             <span class="context-help-glyph" aria-hidden="true">?</span>
                           </button>
                           <div class="context-help-card" id="energy-source-help" role="tooltip">
                             <strong>曲线来源选择</strong>
-                            <p>逐年总量模板完整导入后，从“上传典型年8760小时模板”和“调用所选省份典型曲线”中二选一完成后续配置。</p>
-                            <p>上传典型年模板适合已有一套标准典型年曲线的项目；调用省份典型曲线适合直接采用当前省份典型曲线样本的项目。</p>
-                            <p id="energy-step2-choice-detail">完成第二步后，系统将按所选典型曲线来源生成测算周期内各年上网电量。</p>
+                            <p id="energy-step2-choice-detail">已有典型年模板可直接导入。逐年总量补齐后也可调用所选省份的曲线。</p>
                           </div>
                         </div>
                       </div>
@@ -709,7 +707,7 @@
                     <div class="energy-choice-summary">
                       <div class="energy-choice-summary-main" id="energy-step2-choice-summary">当前选择：待选择</div>
                     </div>
-                    <div class="energy-choice-tabs" role="tablist" aria-label="第二步配置方式">
+                    <div class="energy-choice-tabs" role="tablist" aria-label="典型年曲线来源">
                       <button
                         type="button"
                         class="energy-choice-card active"
@@ -748,15 +746,15 @@
                         </div>
                       </div>
                       <div class="energy-config-actions">
-                        <div class="button-inline">
-                          <button type="button" class="ghost-button" id="export-energy-typical-template-button">导出典型年8760模板</button>
-                        </div>
                         <div class="energy-file-import-row">
                           <label class="energy-file-input-wrap">
                             <span class="energy-file-input-label">上传文件</span>
                             <input id="energy-typical-file-input" type="file" accept=".csv,.txt,.xlsx,.xls,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
                           </label>
                           <button type="button" class="primary-button" id="import-energy-typical-file-button">读取文件并导入</button>
+                        </div>
+                        <div class="button-inline">
+                          <button type="button" class="ghost-button" id="export-energy-typical-template-button">下载空白8760模板</button>
                         </div>
                       </div>
                     </section>
@@ -1810,7 +1808,7 @@
                   <div class="help-step-index">4</div>
                   <div class="help-step-body">
                     <strong>结算电量配置</strong>
-                    <p>先导出并填入逐年总量模板，覆盖全部预测年份；再选择上传典型年8760小时模板或调用所选省份典型曲线，生成各年度上网电量。</p>
+                    <p>可直接导入已填的逐年总量和典型年8760小时曲线。两项齐备后生成各年上网电量。补齐逐年总量后也可改用省份典型曲线。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
@@ -1861,7 +1859,7 @@
                 </article>
                 <article class="help-card">
                   <strong>结算电量配置</strong>
-                  <p>第一步导入覆盖全部预测年份的逐年总量模板；第二步在“上传典型年8760小时模板”和“调用所选省份典型曲线”中二选一。完成后查看导入反馈、年度小时数和典型年月度曲线。</p>
+                  <p>逐年总量须覆盖全部测算年份；典型年曲线可直接导入，也可在补齐总量后调用省份曲线。完成后查看年度小时数和典型年月度曲线。</p>
                 </article>
                 <article class="help-card">
                   <strong>项目电价粗算</strong>
@@ -1904,13 +1902,13 @@
                   </thead>
                   <tbody>
                     <tr>
-                      <td>逐年总量模板（第一步，必做）</td>
+                      <td>逐年总量模板（必填）</td>
                       <td><code>year, annual_hours_h</code></td>
                       <td>覆盖全部预测年份，每个年份只能出现1次；<code>annual_hours_h</code> 必须大于0。</td>
-                      <td>确定各年度总小时数；完成后再选择典型曲线来源。</td>
+                      <td>确定各年度总小时数，并与典型年曲线组合生成逐时电量。</td>
                     </tr>
                     <tr>
-                      <td>典型年8760小时模板（第二步，二选一）</td>
+                      <td>典型年8760小时模板（曲线来源二选一）</td>
                       <td><code>hour_index, equivalent_hours_h</code></td>
                       <td>一套完整8760行；<code>hour_index</code> 为不重复的1-8760；<code>equivalent_hours_h</code> 非负且总量大于0。</td>
                       <td>上传典型年分布，按其权重拆分逐年总量；也可调用所选省份典型曲线，无需上传此模板。</td>
@@ -1930,9 +1928,8 @@
                 <article class="help-card">
                   <strong>导入建议</strong>
                   <ul class="help-list">
-                    <li>先保存项目基础信息，再导出模板。</li>
-                    <li>先导出模板，再填数，不建议手写表头。</li>
-                    <li>先完成逐年总量，再选择一种典型曲线来源；两步完成后生成各年度8760小时电量曲线。</li>
+                    <li>保存项目基础信息后，可导入已填模板或下载空白模板。</li>
+                    <li>逐年总量与典型年曲线可按任意顺序导入。补齐逐年总量后也可调用省份典型曲线。</li>
                   </ul>
                 </article>
                 <article class="help-card">

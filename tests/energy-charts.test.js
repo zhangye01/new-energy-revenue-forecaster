@@ -116,7 +116,7 @@ assert.deepEqual(chartModel.annualRows, [
   { year: 2027, annualHours: 0 }
 ]);
 assert.equal(chartModel.chartText.subtitle, "当前来源：江苏典型曲线；横轴为1-24时，图例区分1-12月。");
-assert.equal(chartModel.annualEmptyMessage, "请先导出逐年总量模板并上传结果。");
+assert.equal(chartModel.annualEmptyMessage, "导入逐年总量后展示年度小时数。");
 
 function makeChart() {
   return {

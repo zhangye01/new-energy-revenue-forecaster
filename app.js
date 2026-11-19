@@ -2968,7 +2968,6 @@ function importEnergyDataFromText(mode, csvText, sourceLabel = "") {
       normalizeEnergyMode: projectModel.normalizeEnergyMode,
       validateAndBuildEnergyData,
       alignDefaultForecastYearsToAnnualTemplate,
-      ensureProjectEnergyTemplateExports,
       ensureProjectEnergyDataState,
       hasEnergyTypicalCurve,
       rebuildProjectEnergyData,
@@ -3131,7 +3130,7 @@ function setEnergyControlState(state = {}) {
 
 function applyEnergyStep2ActionPresentation(actions = {}) {
   if (refs.exportEnergyTypicalTemplateButton) {
-    refs.exportEnergyTypicalTemplateButton.textContent = actions.typicalExportText || "导出典型年8760模板";
+    refs.exportEnergyTypicalTemplateButton.textContent = actions.typicalExportText || "下载空白8760模板";
   }
   if (refs.importEnergyTypicalFileButton) {
     refs.importEnergyTypicalFileButton.textContent = actions.typicalImportText || "读取文件并导入";

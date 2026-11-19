@@ -53,17 +53,6 @@
   white-space: nowrap;
 }
 
-.energy-flow-summary b {
-  color: var(--text);
-  font-size: 0.84rem;
-}
-
-.energy-flow-summary small {
-  color: var(--blue);
-  font-size: 0.74rem;
-  font-weight: 700;
-}
-
 .energy-config-list {
   display: grid;
   gap: 8px;
@@ -256,6 +245,10 @@
   color: #24548e;
   font-size: 0.77rem;
   font-weight: 700;
+}
+
+.energy-pane-current-note[hidden] {
+  display: none;
 }
 
 .energy-pane-current-note::before {

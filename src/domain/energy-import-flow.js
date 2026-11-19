@@ -35,10 +35,6 @@
     const periodAligned = normalizedMode === "annual_hours"
       ? services.alignDefaultForecastYearsToAnnualTemplate(project, parsed.annualInputByYear, sourceLabel)
       : false;
-    const exportMarks = services.ensureProjectEnergyTemplateExports(project);
-    if (!exportMarks[normalizedMode]) {
-      exportMarks[normalizedMode] = new Date().toISOString();
-    }
     const energyData = services.ensureProjectEnergyDataState(project);
 
     if (normalizedMode === "annual_hours") {
@@ -72,11 +68,14 @@
     if (normalizedMode === "annual_hours") {
       const annualReady = annualCount === project.forecastYears;
       const periodText = periodAligned ? `已按模板年份识别当前测算周期为 ${project.forecastYears} 年。` : "";
+      const next = allComplete
+        ? `已沿用项目保存的典型年曲线，已生成 ${completeYears}/${project.forecastYears} 年上网电量。`
+        : "请选择典型年曲线来源，可直接上传模板或调用省份曲线。";
       return {
         ok: true,
         level: annualReady ? "success" : "warn",
         message: annualReady
-          ? `逐年总量导入成功：已录入 ${annualCount}/${project.forecastYears} 年${sourceLabel ? `（来源：${sourceLabel}）` : ""}。${periodText}请继续第二步：导入典型年8760模板，或调用所选省份典型曲线。`
+          ? `逐年总量导入成功：已录入 ${annualCount}/${project.forecastYears} 年${sourceLabel ? `（来源：${sourceLabel}）` : ""}。${periodText}${next}`
           : `逐年总量部分导入成功：已录入 ${annualCount}/${project.forecastYears} 年${sourceLabel ? `（来源：${sourceLabel}）` : ""}。${periodText}请先补齐测算周期内全部年度总小时数。`
       };
     }
@@ -84,6 +83,13 @@
     const missingYears = services.listMissingEnergyYears(project, 6);
     const missingText = missingYears.length ? `；待补年份：${missingYears.join("、")}` : "";
     const curveSourceText = energyData.typicalCurveSource === "province_typical_curve" ? "所选省份典型曲线" : "典型年8760模板";
+    if (normalizedMode === "typical_curve_8760" && annualCount === 0) {
+      return {
+        ok: true,
+        level: "warn",
+        message: `典型年8760小时曲线已保存${sourceLabel ? `（来源：${sourceLabel}）` : ""}。请导入逐年总量，补齐后生成各年上网电量。`
+      };
+    }
     return {
       ok: true,
       level: allComplete ? "success" : "warn",

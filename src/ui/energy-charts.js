@@ -226,7 +226,7 @@
     if (!annualReady) {
       note = "请先完成逐年总量模板导入；完成后左图展示年度小时数。";
     } else if (!hasConfiguredTypicalCurve) {
-      note = "逐年总量已导入；第二步完成后，右图将展示生效典型年24小时曲线。";
+      note = "逐年总量已导入。保存典型年曲线后，右图将展示其日内分布。";
     }
     return { subtitle, note };
   }
@@ -270,8 +270,8 @@
       hasAnnualValues: annualValuesReady,
       typicalProfile,
       chartText,
-      annualEmptyMessage: "请先导出逐年总量模板并上传结果。",
-      typicalEmptyMessage: "第二步未完成：请导入典型年8760模板，或调用所选省份典型曲线。"
+      annualEmptyMessage: "导入逐年总量后展示年度小时数。",
+      typicalEmptyMessage: "导入典型年8760模板或调用省份典型曲线后展示日内分布。"
     };
   }
 
