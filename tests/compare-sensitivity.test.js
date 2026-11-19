@@ -7,6 +7,7 @@ const analysis = require("../src/domain/compare-analysis");
 const versions = require("../src/domain/result-versions");
 
 const keys = ["capture_spread", "mechanism_price", "mechanism_ratio", "spot"];
+const mechanismRatios = Array.from({ length: 21 }, (_, index) => index * 5);
 const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-6, `${message}: ${actual} != ${expected}`);
 
 function fixture(hasStorage, negative = false, repeated = false) {
@@ -32,23 +33,52 @@ function fixture(hasStorage, negative = false, repeated = false) {
   return { project, scenario, run, result: calculator.calculateScenarioResult(project, scenario, run) };
 }
 
-function shiftedPrices(prices, key, offset) {
-  const mean = prices.reduce((sum, price) => sum + price, 0) / prices.length;
-  const shifted = [];
-  for (const price of prices) {
-    shifted.push(key === "spot" ? price + offset : mean + (price - mean) * (1 + offset / 100));
-  }
-  return shifted;
+function cycleSpread(result) {
+  return result.annualRows.reduce((sum, row) => sum + row.spotRevenue - row.spotAvgPrice * row.energyMwh, 0) / result.totalEnergy;
 }
 
-function oracle({ project, scenario, run }, key, offset) {
+function capturePrices(project, run, result, target) {
+  const centeredByYear = {};
+  let sumSquares = 0;
+  for (const { year } of result.annualRows) {
+    const hours = project.energyData.hourlyByYear[year];
+    const hourMean = hours.reduce((sum, value) => sum + value, 0) / hours.length;
+    const centered = [];
+    for (const hour of hours) {
+      const delta = (hour - hourMean) * project.capacityMw;
+      centered.push(delta);
+      sumSquares += delta ** 2;
+    }
+    centeredByYear[year] = centered;
+  }
+  const increment = target - cycleSpread(result);
+  const perturbed = {};
+  for (const [year, prices] of Object.entries(run.pricesByYear)) {
+    const changed = new Array(prices.length);
+    for (let index = 0; index < prices.length; index += 1) {
+      changed[index] = prices[index] + increment * centeredByYear[year][index] / (sumSquares / result.totalEnergy);
+    }
+    perturbed[year] = changed;
+  }
+  return perturbed;
+}
+
+function oracle({ project, scenario, run, result }, key, offset) {
   const config = { ...scenario.config };
   if (key === "mechanism_price") config.mechanismPrice = Math.max(0, config.mechanismPrice + offset);
-  if (key === "mechanism_ratio") config.mechanismRatio = Math.min(100, Math.max(0, config.mechanismRatio * 100 + offset)) / 100;
-  const pricesByYear = key === "spot" || key === "capture_spread"
-    ? Object.fromEntries(Object.entries(run.pricesByYear).map(([year, prices]) => [year, shiftedPrices(prices, key, offset)]))
-    : run.pricesByYear;
-  return calculator.calculateScenarioResult(project, { ...scenario, config }, { ...run, pricesByYear }).avgFullRevenuePrice;
+  if (key === "mechanism_ratio") config.mechanismRatio = offset / 100;
+  let pricesByYear = run.pricesByYear;
+  if (key === "spot") pricesByYear = Object.fromEntries(Object.entries(pricesByYear).map(([year, prices]) =>
+    [year, prices.map((value) => value + offset)]));
+  if (key === "capture_spread") pricesByYear = capturePrices(project, run, result, offset);
+  const recalculated = calculator.calculateScenarioResult(project, { ...scenario, config }, { ...run, pricesByYear });
+  if (key === "capture_spread") {
+    near(cycleSpread(recalculated), offset, "达到全周期捕获价差取点值");
+    for (const [index, row] of recalculated.annualRows.entries()) {
+      near(row.spotAvgPrice, result.annualRows[index].spotAvgPrice, "保持各年现货时均价");
+    }
+  }
+  return recalculated.avgFullRevenuePrice;
 }
 
 for (const input of [fixture(false), fixture(true, false, true), fixture(true, true)]) {
@@ -63,11 +93,20 @@ for (const input of [fixture(false), fixture(true, false, true), fixture(true, t
   const simpleYearMean = result.annualRows.reduce((total, row) => total + row.fullRevenuePrice, 0) / result.annualRows.length;
   assert.ok(Math.abs(result.avgFullRevenuePrice - simpleYearMean) > 1, "以实际各年电量加权");
   assert.deepEqual(factors.find(({ key }) => key === "spot").axisValues, [-100, -75, -50, -25, 0, 25, 50, 75, 100]);
-  assert.deepEqual(factors.find(({ key }) => key === "mechanism_ratio").axisValues, [-20, -15, -10, -5, 0, 5, 10, 15, 20]);
-  assert.deepEqual(factors.find(({ key }) => key === "capture_spread").axisValues, [-40, -30, -20, -10, 0, 10, 20, 30, 40]);
+  const ratio = factors.find(({ key }) => key === "mechanism_ratio");
+  assert.deepEqual(ratio.axisValues, mechanismRatios);
+  assert.equal(ratio.lowInput, "0%");
+  assert.equal(ratio.highInput, "100%");
+  assert.equal(ratio.baselineInput, 80);
+  const capture = factors.find(({ key }) => key === "capture_spread");
+  assert.deepEqual(capture.axisValues, [-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50]);
+  near(capture.baselineInput, cycleSpread(result), "独立标记基准捕获价差");
+  assert.equal(capture.axisUnit, "元/MWh");
+  assert.notEqual(capture.series[capture.axisValues.indexOf(0)], result.avgFullRevenuePrice, "捕获价差取零仍需重算");
   for (const factor of factors) {
     for (const [index, offset] of factor.axisValues.entries()) near(factor.series[index], oracle(input, factor.key, offset), `${factor.key} at ${offset}`);
-    assert.equal(factor.series[factor.axisValues.indexOf(0)], result.avgFullRevenuePrice, "零扰动使用保存的全周期基准");
+    const baseIndex = factor.axisValues.indexOf(factor.baselineInput ?? 0);
+    if (baseIndex >= 0) assert.equal(factor.series[baseIndex], result.avgFullRevenuePrice, "基准值取点使用保存的全周期基准");
     assert.equal(factor.sensitivity, Math.max(Math.abs(factor.lowDelta), Math.abs(factor.highDelta)), "排序按两端最大绝对影响");
     assert.equal(factor.lowInput, factor.axisLabels[0]);
     assert.equal(factor.highInput, factor.axisLabels.at(-1));
@@ -99,6 +138,20 @@ for (const input of [fixture(false), fixture(true, false, true), fixture(true, t
 
 {
   const input = fixture(false);
+  for (const year of [2026, 2027, 2028]) input.project.energyData.hourlyByYear[year].fill(0.25);
+  input.result = calculator.calculateScenarioResult(input.project, input.scenario, input.run);
+  const factors = sensitivity.buildFactors(input.project, input);
+  const capture = factors.find(({ key }) => key === "capture_spread");
+  assert.equal(factors.length, 4);
+  assert.equal(capture.available, false);
+  assert.match(capture.unavailableReason, /出力缺少有效变化/);
+  assert.ok(capture.series.every((point) => point === null));
+  assert.equal(capture.lowDelta, null);
+  assert.equal(factors.find(({ key }) => key === "spot").available, true);
+}
+
+{
+  const input = fixture(false);
   input.scenario.config.mechanismEnabled = false;
   input.result = calculator.calculateScenarioResult(input.project, input.scenario, input.run);
   const factors = sensitivity.buildFactors(input.project, input);
@@ -123,9 +176,11 @@ for (const input of [fixture(false), fixture(true, false, true), fixture(true, t
   assert.equal(price.presetLabel, "−63 元/MWh 至 +100 元/MWh · 步长 25 元/MWh");
   near(price.series[0], oracle(input, "mechanism_price", -63), "价格下降到零");
   const ratio = factors.find(({ key }) => key === "mechanism_ratio");
-  assert.deepEqual(ratio.axisValues.map((value) => Math.round(value * 100) / 100), [-20, -15, -10, -5, 0, 3]);
-  assert.equal(ratio.highInput, "+3 个百分点");
-  near(ratio.series.at(-1), oracle(input, "mechanism_ratio", 3), "机制电量占比最多 100%");
+  assert.deepEqual(ratio.axisValues, mechanismRatios);
+  assert.equal(ratio.baselineInput, 97);
+  assert.ok(!ratio.axisValues.includes(ratio.baselineInput), "97% 的历史基准独立展示，取点仍保持 5 个百分点等距");
+  assert.equal(ratio.highInput, "100%");
+  near(ratio.series.at(-1), oracle(input, "mechanism_ratio", 100), "机制电量占比从 97% 扰动至 100%");
 }
 
 {
@@ -138,8 +193,9 @@ for (const input of [fixture(false), fixture(true, false, true), fixture(true, t
   assert.equal(price.sensitivity, 0);
   const ratio = factors.find(({ key }) => key === "mechanism_ratio");
   assert.equal(ratio.applicable, true);
-  assert.deepEqual(ratio.axisValues, [0, 5, 10, 15, 20]);
-  near(ratio.series.at(-1), oracle(input, "mechanism_ratio", 20), "基准占比为零时按有效月份新增机制电量");
+  assert.deepEqual(ratio.axisValues, mechanismRatios);
+  assert.equal(ratio.baselineInput, 0);
+  near(ratio.series.at(-1), oracle(input, "mechanism_ratio", 100), "基准占比为零时按有效月份新增机制电量");
   assert.ok(ratio.sensitivity > 0);
 }
 

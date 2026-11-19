@@ -144,11 +144,14 @@
           const factor = topFactors[params[0].dataIndex];
           const lines = [escapeHtml(factor?.name ?? params[0].axisValue)];
           params.forEach((item) => {
-            const value = Number(item.value);
+            const value = item.value;
             const input = item.seriesIndex === 1 ? factor?.highInput : factor?.lowInput;
             const scenarioLabel = input ? `${item.seriesName}（${input}）` : item.seriesName;
-            lines.push(`${item.marker ?? ""}${escapeHtml(scenarioLabel)}：${value >= 0 ? "+" : ""}${asNum(value, decimals)} ${escapeHtml(unit)}`);
+            const impact = Number.isFinite(value) ? `${value >= 0 ? "+" : ""}${asNum(value, decimals)} ${escapeHtml(unit)}` : "—";
+            lines.push(`${item.marker ?? ""}${escapeHtml(scenarioLabel)}：${impact}`);
           });
+          if (factor?.available === false) lines.push(escapeHtml(factor.note ?? "暂无可用结果"));
+          else if (factor?.applicable === false) lines.push("当前基准下此变量不适用");
           lines.push(`基准${escapeHtml(label)}：${asNum(baselineValue, decimals)} ${escapeHtml(unit)}`);
           return lines.join("<br/>");
         }
@@ -174,11 +177,30 @@
     };
   }
 
+  function formatSensitivityInput(value, unit) {
+    const amount = Number(value.toFixed(6));
+    return `${amount}${unit === "%" ? "" : " "}${unit}`;
+  }
+
   function buildSensitivityResponseOption(selected, baselineValue, tokens, metric = DEFAULT_SENSITIVITY_METRIC) {
     const { label, unit, decimals = 2 } = metric;
-    const { axisTitle, axisUnit, axisValues, axisLabels } = selected;
+    const { axisTitle, axisUnit, axisValues, axisLabels, baselineInput = 0, applicable = true } = selected;
     const inputBounds = axisValues.length > 1 ? { min: axisValues[0], max: axisValues.at(-1) } : {};
     const horizontalAxis = valueAxis(axisTitle, tokens);
+    const markLines = [{ yAxis: baselineValue }];
+    if (applicable && Number.isFinite(selected.baselineInput) && baselineInput >= axisValues[0] && baselineInput <= axisValues.at(-1)) {
+      markLines.push({
+        xAxis: baselineInput,
+        lineStyle: { color: tokens.axisLine },
+        label: {
+          color: tokens.axisText,
+          formatter: `基准输入 ${formatSensitivityInput(baselineInput, axisUnit)}`,
+          position: "insideEndTop",
+          rotate: 0,
+          align: baselineInput <= (axisValues[0] + axisValues.at(-1)) / 2 ? "left" : "right"
+        }
+      });
+    }
     return {
       animationDuration: 340,
       grid: { top: 36, left: 56, right: 24, bottom: 60, containLabel: true },
@@ -186,11 +208,12 @@
         formatter: (params) => {
           const item = params?.[0];
           if (!Array.isArray(item?.value)) return "";
-          const [offset, value] = item.value;
-          const pointLabel = axisLabels[item.dataIndex] ?? `${offset}${axisUnit === "%" ? "" : " "}${axisUnit}`;
-          const inputLabel = offset === 0 ? `基准（${pointLabel}）` : pointLabel;
+          const [input, value] = item.value;
+          const pointLabel = axisLabels[item.dataIndex] ?? formatSensitivityInput(input, axisUnit);
+          const inputLabel = applicable && input === baselineInput ? `基准（${pointLabel}）` : pointLabel;
           const unitLabel = escapeHtml(unit);
-          return `${escapeHtml(inputLabel)}<br/>${escapeHtml(label)}：${asNum(value, decimals)} ${unitLabel}<br/>相对基准：${asNum(value - baselineValue, decimals)} ${unitLabel}`;
+          const applicability = applicable ? "" : "<br/>当前基准下此变量不适用";
+          return `${escapeHtml(inputLabel)}<br/>${escapeHtml(label)}：${asNum(value, decimals)} ${unitLabel}<br/>相对基准：${asNum(value - baselineValue, decimals)} ${unitLabel}${applicability}`;
         }
       }),
       xAxis: { ...horizontalAxis, ...inputBounds, nameLocation: "middle", nameGap: 28 },
@@ -203,12 +226,12 @@
         lineStyle: { width: 3, color: tokens.primary },
         itemStyle: { color: tokens.primary },
         areaStyle: { color: `${tokens.primary}1f` },
-        data: axisValues.map((offset, index) => [offset, selected.series[index]]),
+        data: axisValues.map((input, index) => [input, selected.series[index]]),
         markLine: {
           symbol: ["none", "none"],
           lineStyle: { type: "dashed", color: tokens.baseline },
           label: { color: tokens.baseline, formatter: `基准 ${asNum(baselineValue, decimals)} ${unit}`, position: "insideEndTop" },
-          data: [{ yAxis: baselineValue }]
+          data: markLines
         }
       }]
     };

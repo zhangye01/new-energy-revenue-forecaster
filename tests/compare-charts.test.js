@@ -36,6 +36,22 @@ const tornadoTip = tornado.tooltip.formatter([
 ]);
 assert.match(tornadoTip, /机制电量占比.*低位扰动（−1\.5 个百分点）：\+8\.00 元\/MWh/);
 assert.match(tornadoTip, /高位扰动（\+20 个百分点）：-7\.00 元\/MWh.*基准全周期综合度电均价/);
+const missingTornado = buildSensitivityTornadoOption([{
+  name: "捕获价差", lowDelta: null, highDelta: null, lowInput: "−50 元/MWh", highInput: "+50 元/MWh",
+  available: false, note: "缺少完整逐时数据"
+}], 680.5, tokens);
+assert.deepEqual(missingTornado.series.map(({ data }) => data), [[null], [null]], "缺少测算结果时维持空值");
+assert.match(missingTornado.tooltip.formatter([
+  { dataIndex: 0, seriesIndex: 0, seriesName: "低位扰动", value: null },
+  { dataIndex: 0, seriesIndex: 1, seriesName: "高位扰动", value: null }
+]), /低位扰动（−50 元\/MWh）：—.*高位扰动（\+50 元\/MWh）：—.*缺少完整逐时数据/);
+
+const inactiveTornado = buildSensitivityTornadoOption([{
+  name: "机制电量占比", lowDelta: 0, highDelta: 0, lowInput: "0%", highInput: "100%", applicable: false
+}], 680.5, tokens);
+assert.match(inactiveTornado.tooltip.formatter([
+  { dataIndex: 0, seriesIndex: 0, seriesName: "低位扰动", value: 0 }
+]), /当前基准下此变量不适用/);
 
 const response = buildSensitivityResponseOption(
   { name: "机制电量占比", axisTitle: "机制电量占比调整（百分点）", axisUnit: "个百分点", axisValues: [-1.5, 0, 5, 10],
@@ -50,6 +66,23 @@ assert.deepEqual([response.xAxis.min, response.xAxis.max], [-1.5, 10]);
 assert.deepEqual(response.series[0].data, [[-1.5, 681], [0, 680.5], [5, 672], [10, 665]]);
 assert.equal(response.series[0].markLine.data[0].yAxis, 680.5);
 assert.match(response.tooltip.formatter([{ dataIndex: 1, value: [0, 680.5] }]), /基准（0 个百分点）.*相对基准：0\.00 元\/MWh/);
+
+const absoluteRatio = {
+  name: "机制电量占比", axisTitle: "机制电量占比（%）", axisUnit: "%",
+  axisValues: [0, 5, 10], axisLabels: ["0%", "5%", "10%"], series: [682, 680.5, 679],
+  baselineInput: 3.75
+};
+const absoluteResponse = buildSensitivityResponseOption(absoluteRatio, 680.5, tokens);
+assert.deepEqual(absoluteResponse.series[0].data, [[0, 682], [5, 680.5], [10, 679]], "基准参考线不增加额外测算点");
+assert.equal(absoluteResponse.series[0].markLine.data[1].xAxis, 3.75);
+assert.equal(absoluteResponse.series[0].markLine.data[1].label.formatter, "基准输入 3.75%");
+assert.doesNotMatch(absoluteResponse.tooltip.formatter([{ dataIndex: 0, value: [0, 682] }]), /基准（0%）/);
+const onGrid = buildSensitivityResponseOption({ ...absoluteRatio, baselineInput: 5 }, 680.5, tokens);
+assert.match(onGrid.tooltip.formatter([{ dataIndex: 1, value: [5, 680.5] }]), /基准（5%）/);
+const inactive = buildSensitivityResponseOption({ ...absoluteRatio, baselineInput: 0, applicable: false }, 680.5, tokens);
+assert.equal(inactive.series[0].markLine.data.length, 1);
+assert.doesNotMatch(inactive.tooltip.formatter([{ dataIndex: 0, value: [0, 680.5] }]), /基准（0%）/);
+assert.match(inactive.tooltip.formatter([{ dataIndex: 0, value: [0, 680.5] }]), /当前基准下此变量不适用/);
 
 const negativeResponse = buildSensitivityResponseOption({ name: "捕获价差", axisTitle: "捕获价差调整（%）", axisUnit: "%",
   axisValues: [-20, 0, 20], axisLabels: ["−20%", "0%", "+20%"], series: [-80, -100.123456, -120] }, -100.123456, tokens);

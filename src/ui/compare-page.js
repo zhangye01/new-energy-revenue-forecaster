@@ -260,7 +260,7 @@
             <strong>${escapeHtml(factor.name)}</strong>
             ${factor.presetLabel ? `<small>${escapeHtml(factor.presetLabel)}</small>` : ""}
           </span>
-          <span class="compare-factor-value">${asNum(factor.sensitivity, SENSITIVITY_METRIC.decimals)} ${SENSITIVITY_METRIC.unit}</span>
+          <span class="compare-factor-value">${factor.available === false ? "未生成" : `${asNum(factor.sensitivity, SENSITIVITY_METRIC.decimals)} ${SENSITIVITY_METRIC.unit}`}</span>
         </button>
         <small data-help="${escapeHtml(factor.name)}计算口径">${escapeHtml(factor.note)}</small>
       </div>

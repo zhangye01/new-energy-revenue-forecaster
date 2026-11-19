@@ -3375,20 +3375,29 @@ function renderSensitivityResponseChart(factors, baselineValue, target) {
   }
   activeSensitivityFactorKey = selected.key;
   if (refs.compareSensitivityResponseLabel) refs.compareSensitivityResponseLabel.textContent = selected.name;
+  if (selected.available === false) {
+    renderCompareChartPlaceholder("sensitivityResponse", refs.compareSensitivityResponseChart, selected.unavailableReason);
+    return;
+  }
   chart.setOption(compareCharts.buildSensitivityResponseOption(selected, baselineValue, tokens, target), true);
+}
+
+function formatSensitivityImpact(value, unit, signed = false) {
+  return Number.isFinite(value) ? `${signed && value > 0 ? "+" : ""}${asNum(value, 2)} ${unit}` : "—";
 }
 
 function renderSensitivityTable(factors, target) {
   if (!refs.compareSensitivityBody) return;
   refs.compareSensitivityBody.innerHTML = factors.map((factor) => {
     const change = factor.highDelta - factor.lowDelta;
-    const direction = factor.sensitivity < 0.005 ? "无变化" : Math.abs(change) < 0.005 ? "两端接近" : change > 0 ? "同向" : "反向";
+    const direction = factor.available === false ? "—" : factor.sensitivity < 0.005 ? "无变化"
+      : Math.abs(change) < 0.005 ? "两端接近" : change > 0 ? "同向" : "反向";
     return `
       <tr>
         <td>${escapeHtml(factor.name)}</td>
-        <td>${factor.lowDelta > 0 ? "+" : ""}${asNum(factor.lowDelta, 2)} ${target.unit}<small class="compare-perturbation-input">${escapeHtml(factor.lowInput)}</small></td>
-        <td>${factor.highDelta > 0 ? "+" : ""}${asNum(factor.highDelta, 2)} ${target.unit}<small class="compare-perturbation-input">${escapeHtml(factor.highInput)}</small></td>
-        <td>${asNum(factor.sensitivity, 2)} ${target.unit}</td>
+        <td>${formatSensitivityImpact(factor.lowDelta, target.unit, true)}<small class="compare-perturbation-input">${escapeHtml(factor.lowInput)}</small></td>
+        <td>${formatSensitivityImpact(factor.highDelta, target.unit, true)}<small class="compare-perturbation-input">${escapeHtml(factor.highInput)}</small></td>
+        <td>${formatSensitivityImpact(factor.sensitivity, target.unit)}</td>
         <td>${direction}</td>
       </tr>
     `;
