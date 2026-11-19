@@ -13,7 +13,10 @@
     { key: "hydro", label: "水电出力" }, { key: "nonMarket", label: "非市场化出力" }
   ].map(Object.freeze));
   const GENERATOR_KEYS = Object.freeze(["wind", "solar", "hydro"]);
+  const ENERGY_MODE = "energy";
+  const CAPACITY_MODE = "capacity_hours";
   const CAPACITY_HOURS_FIELDS = ["baseCapacityMw", "baseUtilizationHours", "utilizationHoursByYear"];
+  const ALTERNATE_GENERATION_FIELDS = ["mode", "growthRatesByYear", "capacityHours"];
   const VALUE_KEYS = Object.freeze([...ELEMENTS.map((item) => item.key), "residualDemand", "tieLineExport", "tieLineImport"]);
   const MAX_FORECAST_YEARS = 30;
   const SHARE_TOLERANCE = 1e-6;
@@ -26,13 +29,17 @@
       && project.startYear + project.forecastYears - 1 <= 9999;
   }
 
-  function createSeries(project) {
+  function blankGrowthRates(project) {
     const growthRatesByYear = {};
     if (validPeriod(project)) {
       for (let index = 1; index < project.forecastYears; index += 1) growthRatesByYear[project.startYear + index] = null;
     }
+    return growthRatesByYear;
+  }
+
+  function createSeries(project) {
     return {
-      baseEnergyMwh: null, growthRatesByYear, monthlyWeights: Array(12).fill(null),
+      baseEnergyMwh: null, growthRatesByYear: blankGrowthRates(project), monthlyWeights: Array(12).fill(null),
       hourlyWeightsByMonth: Object.fromEntries(MONTH_DAYS.map((_, index) => [index + 1, Array(24).fill(null)]))
     };
   }
@@ -51,6 +58,42 @@
     const config = prepareShareConfig(project);
     for (const key of GENERATOR_KEYS) config.elements[key].capacityHours = createCapacityHours();
     return config;
+  }
+
+  function generationMode(series) {
+    return Object.hasOwn(series, "capacityHours") ? CAPACITY_MODE : ENERGY_MODE;
+  }
+
+  function editableGenerationInputs(project, source, mode) {
+    const growthRatesByYear = isObject(source?.growthRatesByYear) ? source.growthRatesByYear : blankGrowthRates(project);
+    const inputs = { mode, growthRatesByYear };
+    if (mode === CAPACITY_MODE) inputs.capacityHours = completeEditableCapacityHours(source?.capacityHours);
+    return inputs;
+  }
+
+  function setAlternateGeneration(series, inputs) {
+    const hours = inputs?.capacityHours;
+    const hasHours = hours && (hours.baseCapacityMw != null || hours.baseUtilizationHours != null ||
+      Object.values(hours.utilizationHoursByYear).some((value) => value != null));
+    if (inputs && (hasHours || Object.values(inputs.growthRatesByYear).some((value) => value != null))) {
+      series.alternateGeneration = inputs;
+    } else {
+      delete series.alternateGeneration;
+    }
+  }
+
+  function switchGenerationMode(project, series, mode) {
+    if (!isObject(series) || (mode !== ENERGY_MODE && mode !== CAPACITY_MODE)) return false;
+    const activeMode = generationMode(series);
+    if (activeMode === mode) return false;
+    const leaving = editableGenerationInputs(project, series, activeMode);
+    const stored = series.alternateGeneration;
+    const entering = editableGenerationInputs(project, stored?.mode === mode ? stored : null, mode);
+    series.growthRatesByYear = entering.growthRatesByYear;
+    if (mode === CAPACITY_MODE) series.capacityHours = entering.capacityHours;
+    else delete series.capacityHours;
+    setAlternateGeneration(series, leaving);
+    return true;
   }
 
   function sum(values) {
@@ -80,14 +123,7 @@
   function carryShareSeries(target, source, previous, project) {
     if (!isObject(source)) return;
     if (previous.startYear === project.startYear && isNumber(source.baseEnergyMwh)) target.baseEnergyMwh = source.baseEnergyMwh;
-    if (validPeriod(previous)) {
-      const firstYear = previous.startYear;
-      const lastYear = firstYear + previous.forecastYears - 1;
-      for (const year of Object.keys(target.growthRatesByYear)) {
-        const value = source.growthRatesByYear?.[year];
-        if (Number(year) > firstYear && Number(year) <= lastYear && isNumber(value)) target.growthRatesByYear[year] = value;
-      }
-    }
+    carryGrowthRates(target.growthRatesByYear, source.growthRatesByYear, previous);
     const legacy = previous.version === 1;
     target.monthlyWeights = carryShareVector(source.monthlyWeights, 12, legacy);
     for (const month of Object.keys(target.hourlyWeightsByMonth)) {
@@ -96,6 +132,14 @@
     if (legacy || !validPeriod(project) || !isObject(source.curveOverridesByYear)) return;
     const overrides = Object.entries(source.curveOverridesByYear).filter(([year]) => inPeriod(project, year));
     if (overrides.length) target.curveOverridesByYear = JSON.parse(JSON.stringify(Object.fromEntries(overrides)));
+  }
+
+  function carryGrowthRates(target, source, previous) {
+    if (!validPeriod(previous)) return;
+    for (const year of Object.keys(target)) {
+      const value = source?.[year];
+      if (subsequentYear(previous, year) && isNumber(value)) target[year] = value;
+    }
   }
 
   function carryCapacityHours(source, previous, project) {
@@ -114,7 +158,7 @@
 
   function completeEditableSeries(project, series) {
     if (!isObject(series)) return createSeries(project);
-    if (!isObject(series.growthRatesByYear)) series.growthRatesByYear = createSeries(project).growthRatesByYear;
+    if (!isObject(series.growthRatesByYear)) series.growthRatesByYear = blankGrowthRates(project);
     if (!Array.isArray(series.monthlyWeights)) series.monthlyWeights = Array(12).fill(null);
     if (!isObject(series.hourlyWeightsByMonth)) series.hourlyWeightsByMonth = {};
     return series;
@@ -125,6 +169,22 @@
     const { baseCapacityMw = null, baseUtilizationHours = null, utilizationHoursByYear } = config;
     return { baseCapacityMw, baseUtilizationHours,
       utilizationHoursByYear: isObject(utilizationHoursByYear) ? utilizationHoursByYear : {} };
+  }
+
+  function editableAlternateGeneration(project, series) {
+    const alternate = series.alternateGeneration;
+    const mode = generationMode(series) === CAPACITY_MODE ? ENERGY_MODE : CAPACITY_MODE;
+    return isObject(alternate) && alternate.mode === mode ? editableGenerationInputs(project, alternate, mode) : null;
+  }
+
+  function carryAlternateGeneration(target, source, previous, project) {
+    const inputs = editableAlternateGeneration(project, source);
+    if (!inputs) return;
+    const rates = blankGrowthRates(project);
+    carryGrowthRates(rates, inputs.growthRatesByYear, previous);
+    inputs.growthRatesByYear = rates;
+    if (inputs.capacityHours) inputs.capacityHours = carryCapacityHours(inputs.capacityHours, previous, project);
+    setAlternateGeneration(target, inputs);
   }
 
   // Keep saved v1 results and fingerprints as recorded. Convert weights into
@@ -139,6 +199,7 @@
       for (const key of GENERATOR_KEYS) {
         const series = editable.elements[key];
         if (Object.hasOwn(series, "capacityHours")) series.capacityHours = completeEditableCapacityHours(series.capacityHours);
+        if (Object.hasOwn(series, "alternateGeneration")) setAlternateGeneration(series, editableAlternateGeneration(project, series));
       }
       const tie = editable.elements.tieLine;
       tie.mode = tie.mode === "bidirectional" ? "bidirectional" : "net";
@@ -149,8 +210,11 @@
       const source = config.elements[key];
       const series = target.elements[key];
       carryShareSeries(series, source, config, project);
-      if (config.version === 2 && GENERATOR_KEYS.includes(key) && isObject(source) && Object.hasOwn(source, "capacityHours")) {
-        series.capacityHours = carryCapacityHours(completeEditableCapacityHours(source.capacityHours), config, project);
+      if (config.version === 2 && GENERATOR_KEYS.includes(key) && isObject(source)) {
+        if (Object.hasOwn(source, "capacityHours")) {
+          series.capacityHours = carryCapacityHours(completeEditableCapacityHours(source.capacityHours), config, project);
+        }
+        carryAlternateGeneration(series, source, config, project);
       }
     }
     const tie = config.elements.tieLine;
@@ -280,8 +344,23 @@
     return errors.length === before;
   }
 
+  function validAlternateGeneration(series) {
+    const { alternateGeneration: alternate } = series;
+    const mode = generationMode(series) === CAPACITY_MODE ? ENERGY_MODE : CAPACITY_MODE;
+    if (!isObject(alternate) || alternate.mode !== mode || !isObject(alternate.growthRatesByYear) ||
+        Object.keys(alternate).some((key) => !ALTERNATE_GENERATION_FIELDS.includes(key))) return false;
+    if (!Object.hasOwn(alternate, "capacityHours")) return true;
+    const hours = alternate.capacityHours;
+    return mode === CAPACITY_MODE && isObject(hours) &&
+      Object.keys(hours).every((key) => CAPACITY_HOURS_FIELDS.includes(key)) &&
+      (!Object.hasOwn(hours, "utilizationHoursByYear") || isObject(hours.utilizationHoursByYear));
+  }
+
   function validateSeries(project, series, label, signed, errors, strictShares) {
     if (!isObject(series)) { errors.push(`${label}尚未配置。`); return; }
+    if (Object.hasOwn(series, "alternateGeneration") && !validAlternateGeneration(series)) {
+      errors.push(`${label}备用发电口径的配置结构无效。`);
+    }
     const capacityMode = Object.hasOwn(series, "capacityHours");
     const baseValid = capacityMode ? validateCapacityHours(series.capacityHours, label, project, errors)
       : isNumber(series.baseEnergyMwh) && (signed || series.baseEnergyMwh >= 0);
@@ -323,6 +402,12 @@
     return entries;
   }
 
+  function unsupportedGeneratorField(config, field) {
+    const hasField = (series) => isObject(series) && Object.hasOwn(series, field);
+    return Object.entries(config.elements).some(([key, series]) => hasField(series) && (config.version !== 2 || !GENERATOR_KEYS.includes(key))) ||
+      ["export", "import"].some((direction) => hasField(config.elements.tieLine[direction]));
+  }
+
   function validateConfig(project, config) {
     const errors = [];
     if (!validPeriod(project)) return ["请先设置有效的项目测算周期（1至30年、有效起始年份）。"];
@@ -333,10 +418,11 @@
     if (!isObject(config.elements.tieLine) || !["net", "bidirectional"].includes(config.elements.tieLine.mode)) {
       return ["请选择有效的联络线配置方式（净额或双向送受）。"];
     }
-    const hasCapacityHours = (series) => isObject(series) && Object.hasOwn(series, "capacityHours");
-    if (Object.entries(config.elements).some(([key, series]) => hasCapacityHours(series) && (config.version !== 2 || !GENERATOR_KEYS.includes(key))) ||
-        ["export", "import"].some((direction) => hasCapacityHours(config.elements.tieLine[direction]))) {
+    if (unsupportedGeneratorField(config, "capacityHours")) {
       return ["装机及利用小时配置仅支持版本2的风电、光伏和水电。"];
+    }
+    if (unsupportedGeneratorField(config, "alternateGeneration")) {
+      return ["备用发电口径仅支持版本2的风电、光伏和水电。"];
     }
     const entries = activeSeries(config);
     entries.forEach(({ series, label, signed }) => validateSeries(project, series, label, signed, errors, config.version === 2));
@@ -502,6 +588,6 @@
     return rows;
   }
 
-  return Object.freeze({ ELEMENTS, GENERATOR_KEYS, MONTH_DAYS, MAX_FORECAST_YEARS, createSeries, createConfig, createCapacityHours, createCapacityHoursConfig, prepareShareConfig, getCurve, validateShares,
+  return Object.freeze({ ELEMENTS, GENERATOR_KEYS, MONTH_DAYS, MAX_FORECAST_YEARS, createSeries, createConfig, createCapacityHours, createCapacityHoursConfig, switchGenerationMode, prepareShareConfig, getCurve, validateShares,
     validateConfig, fingerprint, buildAnnualSummary, buildTypicalSummary, buildDataset, csvRows });
 });

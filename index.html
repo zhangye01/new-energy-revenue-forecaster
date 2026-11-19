@@ -96,7 +96,7 @@
     <script src="./src/ui/context-help.js?v=20261118d" defer></script>
     <script src="./src/domain/energy-profiles.js?v=20261113c" defer></script>
     <script src="./src/domain/app-utils.js?v=20261113c" defer></script>
-    <script src="./src/domain/supply-demand.js?v=20261119h" defer></script>
+    <script src="./src/domain/supply-demand.js?v=20261119j" defer></script>
     <script src="./src/domain/price-forecast.js?v=20261119a" defer></script>
     <script src="./src/domain/result-versions.js?v=20261118i" defer></script>
     <script src="./src/domain/revenue-rules.js?v=20261118r" defer></script>
@@ -114,7 +114,7 @@
     <script src="./src/ui/energy-charts.js?v=20261119b" defer></script>
     <script src="./src/ui/supply-demand-template.js?v=20261119i" defer></script>
     <script src="./src/ui/supply-demand-chart.js?v=20261119g" defer></script>
-    <script src="./src/ui/supply-demand-workspace.js?v=20261119h" defer></script>
+    <script src="./src/ui/supply-demand-workspace.js?v=20261119j" defer></script>
     <script src="./src/ui/supply-demand-flow.js?v=20261118s" defer></script>
     <script src="./src/ui/forecast-results-view.js?v=20261119d" defer></script>
     <script src="./src/ui/forecast-page.js?v=20261118t" defer></script>
@@ -153,7 +153,7 @@
     <script src="./src/domain/energy-import-flow.js?v=20261119b" defer></script>
     <script src="./src/domain/app-storage.js?v=20261113c" defer></script>
     <script src="./src/ui/app-persistence.js?v=20261113c" defer></script>
-    <script src="./src/ui/project-backup.js?v=20261119a" defer></script>
+    <script src="./src/ui/project-backup.js?v=20261119j" defer></script>
     <script src="./app.js?v=20261119d" defer></script>
   </head>
   <body>
@@ -1826,7 +1826,7 @@
                   <div class="help-step-index">7</div>
                   <div class="help-step-body">
                     <strong>电价预测工作台</strong>
-                    <p>在“测算周期供需配置”逐个选择要素。风电、光伏和水电由有效装机与等效利用小时计算发电量。用曲线模板导入分月和分时，配置齐备后统一生成并预览。</p>
+                    <p>在“测算周期供需配置”逐个选择要素。风电、光伏和水电可按电量或装机与利用小时构建。用曲线模板导入分月和分时，配置齐备后统一生成并预览。</p>
                   </div>
                 </article>
                 <article class="help-step-card">
@@ -1931,7 +1931,7 @@
                 </article>
                 <article class="help-card">
                   <strong>供需输入</strong>
-                  <p>风电、光伏和水电填写首年有效装机、年等效利用小时和逐年装机增速。年度发电量等于有效装机乘以年等效利用小时。利用小时默认沿用首年，可单独调整指定年份。历史项目沿用原电量口径，切换后可手填装机增速或使用当前要素的装机增速模板。</p>
+                  <p>风电、光伏和水电可分别选择「电量与增速」或「装机与利用小时」。两种方式各自保留参数，共用曲线。装机方式按当年有效装机乘以等效利用小时计算发电量。利用小时默认沿用首年，可单年调整。增速模板按当前构建方式校验。</p>
                   <p>省内负荷、联络线和非市场化出力填写首年电量及逐年增速。增速可手填或通过 Excel 导入。分月和分时使用原 Excel 曲线模板，各年可沿用默认曲线或单独调整。联络线净额正值为送出，负值为受入。</p>
                   <p>生成后统一查看供需数据。堆积面积图可按年份查看分月或典型日分时构成，点击图例可隐藏或恢复曲线。可查看年度与典型日数据，也可导出年度、典型小时和逐小时 CSV。</p>
                 </article>

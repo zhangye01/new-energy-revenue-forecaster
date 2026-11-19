@@ -228,6 +228,8 @@ function testCapacityHoursEditor() {
     assert.match(x.root.innerHTML, new RegExp(`data-sd-input="base-capacity"[^>]*data-sd-series="${key}"`));
     assert.match(x.root.innerHTML, new RegExp(`data-sd-input="base-utilization"[^>]*data-sd-series="${key}"`));
     assert.doesNotMatch(x.root.innerHTML, /data-sd-input="base"|data-sd-action="use-capacity-hours"/);
+    assert.match(x.root.innerHTML, /data-sd-select="generationMode"/);
+    assert.match(x.root.innerHTML, /<option value="capacity_hours" selected/);
     x.openGrowth(key);
     assert.match(x.root.innerHTML, /装机(?:增速|增长率)/);
     assert.match(x.root.innerHTML, /data-sd-select="utilizationYear"/);
@@ -287,13 +289,16 @@ function testCapacityHoursEditor() {
   old.chooseElement("wind");
   assert.match(old.root.innerHTML, /value="50000" data-sd-series="wind"/);
   assert.doesNotMatch(old.root.innerHTML, /data-sd-input="base-capacity"|data-sd-input="base-utilization"/);
-  assert.match(old.root.innerHTML, /data-sd-action="use-capacity-hours"/);
-  old.click("use-capacity-hours");
+  assert.match(old.root.innerHTML, /data-sd-select="generationMode"/);
+  assert.match(old.root.innerHTML, /<option value="energy" selected/);
+  old.select("generationMode", "capacity_hours");
   old.click("download-template");
   const converted = old.downloads.at(-1).config;
   assert.ok(converted.elements.wind.capacityHours);
   assert.ok(Object.values(converted.elements.wind.growthRatesByYear).every((rate) => rate === null),
     "legacy energy growth rates need explicit new capacity-growth input");
+  assert.deepEqual(converted.elements.wind.alternateGeneration, { mode: "energy", growthRatesByYear: { 2028: 3, 2029: 4 } },
+    "the inactive energy growth assumptions are retained for a return switch");
   assert.deepEqual(converted.elements.wind.monthlyWeights, legacy.elements.wind.monthlyWeights);
   assert.deepEqual(converted.elements.wind.hourlyWeightsByMonth, legacy.elements.wind.hourlyWeightsByMonth);
   assert.deepEqual(converted.elements.wind.curveOverridesByYear, legacy.elements.wind.curveOverridesByYear);
@@ -307,8 +312,123 @@ function testCapacityHoursEditor() {
   assert.equal(old.commits.length, 0);
   assert.equal(JSON.stringify(history), historyBefore);
   assert.match(old.root.innerHTML, /value="50000" data-sd-series="wind"/);
-  assert.match(old.root.innerHTML, /data-sd-action="use-capacity-hours"/);
+  assert.match(old.root.innerHTML, /data-sd-select="generationMode"/);
+  assert.match(old.root.innerHTML, /<option value="energy" selected/);
   assert.doesNotMatch(old.root.innerHTML, /data-sd-input="base-capacity"|data-sd-input="base-utilization"/);
+}
+
+function testGenerationModeRoundTrip() {
+  const p = project("generation-mode-roundtrip", 3);
+  const config = domain.prepareShareConfig(p, completeConfig(p));
+  config.elements.wind = { ...clone(config.elements.load), baseEnergyMwh: 50000,
+    growthRatesByYear: { 2028: 3, 2029: 4 },
+    curveOverridesByYear: { 2029: { monthlyWeights: [0, 1 / 6, ...Array(10).fill(1 / 12)] } } };
+  p.supplyDemand = savedState(p, config);
+  const before = JSON.stringify(p), noop = fixture(p);
+  noop.chooseElement("wind");
+  noop.select("generationMode", "energy");
+  assert.equal(noop.controller.hasUnsavedChanges(), false, "reselecting the current generation mode is inert");
+  noop.select("generationMode", "capacity_hours");
+  noop.select("generationMode", "energy");
+  noop.click("generate");
+  assert.equal(noop.commits.length, 0, "an untouched roundtrip must not rewrite saved input or invalidate results");
+  assert.equal(noop.controller.hasUnsavedChanges(), false);
+  assert.equal(JSON.stringify(p), before);
+
+  const readDraft = (x) => { x.click("download-template"); return clone(x.downloads.at(-1).config); };
+  const x = fixture(p);
+  x.chooseElement("wind");
+  x.edit("base", 60000, { sdSeries: "wind" });
+  x.openGrowth("wind");
+  x.edit("growth-rate", 5, { sdSeries: "wind", sdYear: "2028" });
+  x.edit("growth-rate", 6, { sdSeries: "wind", sdYear: "2029" });
+  x.click("download-growth-template");
+  assert.equal(x.growthDownloads.at(-1).options.seriesKey, "wind");
+  assert.equal(x.growthDownloads.at(-1).config.elements.wind.capacityHours, undefined);
+  assert.deepEqual(x.growthDownloads.at(-1).config.elements.wind.growthRatesByYear, { 2028: 5, 2029: 6 });
+  x.select("generationMode", "capacity_hours");
+  x.edit("base-capacity", 100, { sdSeries: "wind" });
+  x.edit("base-utilization", 2000, { sdSeries: "wind" });
+  x.openGrowth("wind");
+  x.edit("growth-rate", 10, { sdSeries: "wind", sdYear: "2028" });
+  x.edit("growth-rate", 0, { sdSeries: "wind", sdYear: "2029" });
+  x.select("utilizationYear", 2029);
+  x.edit("utilization-override", 1800, { sdSeries: "wind", sdYear: "2029" });
+  x.click("download-growth-template");
+  const capacityTemplate = clone(x.growthDownloads.at(-1).config);
+  assert.equal(x.growthDownloads.at(-1).options.seriesKey, "wind");
+  assert.deepEqual(capacityTemplate.elements.wind.growthRatesByYear, { 2028: 10, 2029: 0 });
+  assert.deepEqual(capacityTemplate.elements.wind.alternateGeneration, { mode: "energy", growthRatesByYear: { 2028: 5, 2029: 6 } });
+  x.select("generationMode", "energy");
+  assert.match(x.root.innerHTML, /value="60000" data-sd-series="wind"/);
+  assert.doesNotMatch(x.root.innerHTML, /data-sd-input="base-capacity"|data-sd-input="utilization-override"/);
+  const energyDraft = readDraft(x);
+  assert.deepEqual(energyDraft.elements.wind.growthRatesByYear, { 2028: 5, 2029: 6 });
+  assert.deepEqual(energyDraft.elements.wind.alternateGeneration, { mode: "capacity_hours",
+    growthRatesByYear: { 2028: 10, 2029: 0 }, capacityHours: {
+      baseCapacityMw: 100, baseUtilizationHours: 2000, utilizationHoursByYear: { 2029: 1800 }
+    } });
+  x.edit("base", 62000, { sdSeries: "wind" });
+  x.select("generationMode", "capacity_hours");
+  const capacityDraft = readDraft(x);
+  assert.equal(capacityDraft.elements.wind.baseEnergyMwh, 62000, "the alternate energy base remains available across switches");
+  assert.deepEqual(capacityDraft.elements.wind.capacityHours, energyDraft.elements.wind.alternateGeneration.capacityHours);
+  assert.deepEqual(capacityDraft.elements.wind.growthRatesByYear, { 2028: 10, 2029: 0 });
+  for (const key of keys.filter((key) => key !== "wind")) assert.deepEqual(capacityDraft.elements[key], config.elements[key]);
+  for (const key of ["monthlyWeights", "hourlyWeightsByMonth", "curveOverridesByYear"]) {
+    assert.deepEqual(capacityDraft.elements.wind[key], config.elements.wind[key], "mode changes retain the shared curves");
+  }
+  assert.equal(JSON.stringify(p), before, "both mode drafts remain isolated before generation");
+  x.click("generate");
+  assert.equal(x.commits.length, 1);
+  assert.deepEqual(p.supplyDemand.config, capacityDraft);
+  const savedCapacity = JSON.stringify(p), reopened = fixture(p);
+  reopened.chooseElement("wind");
+  assert.match(reopened.root.innerHTML, /<option value="capacity_hours" selected/);
+  reopened.select("generationMode", "energy");
+  assert.match(reopened.root.innerHTML, /value="62000" data-sd-series="wind"/);
+  assert.deepEqual(readDraft(reopened).elements.wind.growthRatesByYear, { 2028: 5, 2029: 6 });
+  assert.equal(JSON.stringify(p), savedCapacity);
+  reopened.click("generate");
+  assert.equal(reopened.commits.length, 1);
+  assert.equal(p.supplyDemand.config.elements.wind.capacityHours, undefined);
+  assert.deepEqual(p.supplyDemand.config.elements.wind.alternateGeneration.capacityHours, capacityDraft.elements.wind.capacityHours);
+
+  const savedEnergy = JSON.stringify(p), again = fixture(p);
+  again.chooseElement("wind");
+  assert.match(again.root.innerHTML, /<option value="energy" selected/);
+  again.select("generationMode", "capacity_hours");
+  assert.match(again.root.innerHTML, /data-sd-input="base-capacity"[^>]*value="100"/);
+  again.edit("base-capacity", 150, { sdSeries: "wind" });
+  again.select("generationMode", "energy");
+  again.edit("base", 63000, { sdSeries: "wind" });
+  again.click("discard");
+  assert.equal(again.controller.hasUnsavedChanges(), false);
+  assert.equal(JSON.stringify(p), savedEnergy);
+  assert.match(again.root.innerHTML, /value="62000" data-sd-series="wind"/);
+  again.select("generationMode", "capacity_hours");
+  assert.match(again.root.innerHTML, /data-sd-input="base-capacity"[^>]*value="100"/,
+    "discard restores the inactive capacity assumptions as well as active energy inputs");
+  again.select("generationMode", "energy");
+  again.click("generate");
+  assert.equal(again.commits.length, 0, "roundtrips with two saved parameter sets are also no-ops");
+  assert.equal(JSON.stringify(p), savedEnergy);
+
+  const inactiveEdit = fixture(p);
+  inactiveEdit.chooseElement("wind");
+  inactiveEdit.select("generationMode", "capacity_hours");
+  inactiveEdit.edit("base-capacity", 120, { sdSeries: "wind" });
+  inactiveEdit.select("generationMode", "energy");
+  inactiveEdit.click("generate");
+  assert.equal(p.supplyDemand.config.elements.wind.capacityHours, undefined);
+  assert.equal(p.supplyDemand.config.elements.wind.baseEnergyMwh, 62000);
+  assert.equal(p.supplyDemand.config.elements.wind.alternateGeneration.capacityHours.baseCapacityMw, 120,
+    "editing the alternate mode is saved even when returning to the original active mode before generation");
+  const inactiveReopened = fixture(p);
+  inactiveReopened.chooseElement("wind");
+  inactiveReopened.select("generationMode", "capacity_hours");
+  assert.match(inactiveReopened.root.innerHTML, /data-sd-input="base-capacity"[^>]*value="120"/);
+  inactiveReopened.click("discard");
 }
 
 async function main() {
@@ -536,6 +656,7 @@ async function main() {
   assert.doesNotMatch(single.root.innerHTML, /data-sd-action="download-growth-template"|data-sd-growth-file/);
   await testGrowthWorkbook();
   testCapacityHoursEditor();
+  testGenerationModeRoundTrip();
 
   const keyboardProject = project("keyboard-tabs"), keyboardBefore = JSON.stringify(keyboardProject);
   const keyboard = fixture(keyboardProject), focusedTabs = [];

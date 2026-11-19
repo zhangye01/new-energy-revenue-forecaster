@@ -190,10 +190,15 @@ const overriddenSupply = supplyDomain.prepareShareConfig(overriddenProject, over
 overriddenSupply.elements.load.curveOverridesByYear = { 2027: {
   monthlyWeights: Array(12).fill(1 / 12), hourlyWeightsByMonth: { 7: Array(24).fill(1 / 24) }
 } };
+const backedUpWind = overriddenSupply.elements.wind;
+supplyDomain.switchGenerationMode(overriddenProject, backedUpWind, 'capacity_hours');
+backedUpWind.capacityHours = { baseCapacityMw: 12, baseUtilizationHours: 1800, utilizationHoursByYear: { 2027: 1450 } };
+backedUpWind.growthRatesByYear[2027] = 2;
+supplyDomain.switchGenerationMode(overriddenProject, backedUpWind, 'energy');
 overriddenProject.supplyDemand.config = overriddenSupply;
 const overriddenBackup = backup.buildBackup({ payload: { projects: [overriddenProject] } }, 'demo1');
 assert.deepEqual(backup.prepareRestore(overriddenBackup, [], 'demo1', () => 'unused').projects[0], overriddenProject,
-  '新版单年曲线和原基准、原粗算、原预测同时按原值恢复');
+  '新版单年曲线、两套出力参数及原有测算记录均按原值恢复');
 for (const breakStructure of [
   (load) => { load.curveOverridesByYear = []; },
   (load) => { load.curveOverridesByYear[2027] = "invalid"; },
@@ -267,6 +272,9 @@ const supplyMutations = [
   (p) => { p.supplyDemand.config.elements.load.monthlyWeights = {}; },
   (p) => { p.supplyDemand.config.elements.load.hourlyWeightsByMonth = []; },
   (p) => { p.supplyDemand.config.elements.load.hourlyWeightsByMonth[1] = {}; },
+  (p) => { p.supplyDemand.config.elements.wind.alternateGeneration = []; },
+  (p) => { p.supplyDemand.draft.elements.solar.alternateGeneration = { growthRatesByYear: [] }; },
+  (p) => { p.supplyDemand.config.elements.wind.alternateGeneration = { capacityHours: { utilizationHoursByYear: [] } }; },
   (p) => { p.supplyDemand.draft.elements.tieLine.export = []; },
   (p) => { p.priceRuns[1].supplyDemandInput = 'invalid'; },
   (p) => { p.priceRuns[1].supplyDemandInput.configSnapshot = []; },

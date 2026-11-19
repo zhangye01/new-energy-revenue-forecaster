@@ -321,6 +321,21 @@ async function testCapacityHoursWorkbooks() {
   assert.equal(legacyCurves.ok, true, legacyCurves.errors.join("\n"));
   assert.equal(legacyCurves.legacy, true);
   assert.deepEqual(legacyCurves.config, updated.config, "legacy combined workbook contributes curves without replacing capacity growth");
+
+  const switched = structuredClone(updated.config);
+  domain.switchGenerationMode(project, switched.elements.wind, "energy");
+  const savedCapacity = structuredClone(switched.elements.wind.alternateGeneration);
+  olderEnergy.B6 = { t: "n", v: 11 };
+  const updatedEnergy = await template.readGrowthFile(project, fileFor(legacyGrowth), { ...options, baseConfig: switched });
+  assert.equal(updatedEnergy.ok, true, updatedEnergy.errors.join("\n"));
+  assert.equal(updatedEnergy.config.elements.wind.growthRatesByYear[2028], 11);
+  const updatedCurves = await template.readCurveFile(project, fileFor(curveWorkbook(legacy)), { xlsx, baseConfig: updatedEnergy.config });
+  assert.equal(updatedCurves.ok, true, updatedCurves.errors.join("\n"));
+  const switchedWind = updatedCurves.config.elements.wind;
+  assert.deepEqual(switchedWind.alternateGeneration, savedCapacity);
+  domain.switchGenerationMode(project, switchedWind, "capacity_hours");
+  assert.equal(switchedWind.growthRatesByYear[2028], 5);
+  assert.equal(switchedWind.alternateGeneration.growthRatesByYear[2028], 11);
   assert.equal(JSON.stringify(editable), original);
 }
 

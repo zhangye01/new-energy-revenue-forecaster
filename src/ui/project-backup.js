@@ -111,6 +111,12 @@
   function validateSupplySeriesStructure(series, path) {
     if (!series) return;
     validateContainer(series, "growthRatesByYear", false, path);
+    const alternatePath = `${path}.alternateGeneration`;
+    validateContainer(series, "alternateGeneration", false, path);
+    const alternate = series.alternateGeneration;
+    validateContainer(alternate, "growthRatesByYear", false, alternatePath);
+    validateContainer(alternate, "capacityHours", false, alternatePath);
+    validateContainer(alternate?.capacityHours, "utilizationHoursByYear", false, `${alternatePath}.capacityHours`);
     validateSupplyCurveStructure(series, path);
     const overridesPath = `${path}.curveOverridesByYear`;
     validateContainer(series, "curveOverridesByYear", false, path);

@@ -1,7 +1,7 @@
 "use strict";
 const assert = require("node:assert/strict");
 const domain = require("../src/domain/supply-demand");
-const { ELEMENTS, GENERATOR_KEYS, MONTH_DAYS, createConfig, createSeries, createCapacityHours, createCapacityHoursConfig, prepareShareConfig, getCurve, validateShares,
+const { ELEMENTS, GENERATOR_KEYS, MONTH_DAYS, createConfig, createSeries, createCapacityHours, createCapacityHoursConfig, switchGenerationMode, prepareShareConfig, getCurve, validateShares,
   validateConfig, fingerprint, buildAnnualSummary, buildTypicalSummary, buildDataset, csvRows } = domain;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sum = (values) => values.reduce((total, value) => total + value, 0);
@@ -428,5 +428,97 @@ reject(unsupportedLoad, /仅支持版本2.*风电、光伏和水电/, longer);
 const unsupportedTieDirection = clone(capacity);
 unsupportedTieDirection.elements.tieLine.import.capacityHours = createCapacityHours();
 reject(unsupportedTieDirection, /仅支持版本2.*风电、光伏和水电/, longer);
+
+const energyBasis = prepareShareConfig(longer, power);
+const energyWind = energyBasis.elements.wind;
+energyWind.baseEnergyMwh = 8760;
+energyWind.growthRatesByYear = { 2029: 10, 2030: 0, 2031: -20 };
+const energyBasisOriginal = clone(energyBasis);
+assert.equal(switchGenerationMode(longer, energyWind, "energy"), false);
+assert.equal(switchGenerationMode(longer, energyWind, "other"), false);
+assert.equal(switchGenerationMode(longer, energyWind, "capacity_hours"), true);
+assert.equal(energyWind.baseEnergyMwh, 8760);
+assert.deepEqual(energyWind.capacityHours, createCapacityHours());
+assert.deepEqual(energyWind.growthRatesByYear, { 2029: null, 2030: null, 2031: null });
+assert.deepEqual(energyWind.alternateGeneration, { mode: "energy", growthRatesByYear: { 2029: 10, 2030: 0, 2031: -20 } });
+assert.equal(switchGenerationMode(longer, energyWind, "energy"), true);
+assert.deepEqual(energyBasis, energyBasisOriginal, "untouched alternate basis is pruned on a round trip from legacy energy");
+assert.equal(fingerprint(longer, energyBasis), fingerprint(longer, energyBasisOriginal));
+
+const fromCapacity = clone(capacity);
+const capacityWind = fromCapacity.elements.wind;
+assert.equal(switchGenerationMode(longer, capacityWind, "energy"), true);
+assert.equal(Object.hasOwn(capacityWind, "capacityHours"), false);
+assert.deepEqual(capacityWind.alternateGeneration, { mode: "capacity_hours", growthRatesByYear: wind.growthRatesByYear, capacityHours: wind.capacityHours });
+assert.equal(switchGenerationMode(longer, capacityWind, "capacity_hours"), true);
+assert.deepEqual(fromCapacity, capacity, "untouched alternate basis is pruned on a round trip from capacity");
+assert.equal(fingerprint(longer, fromCapacity), capacityDataset.fingerprint);
+
+const originalMonthly = energyWind.monthlyWeights;
+const originalHourly = energyWind.hourlyWeightsByMonth;
+const expectedLegacyAnnual = buildAnnualSummary(longer, energyBasis).annualRows;
+assert.equal(switchGenerationMode(longer, energyWind, "capacity_hours"), true);
+energyWind.capacityHours.baseCapacityMw = 20;
+energyWind.capacityHours.baseUtilizationHours = 100;
+energyWind.capacityHours.utilizationHoursByYear = { 2029: 1000, 2030: 2000, 2031: 0 };
+energyWind.growthRatesByYear = { 2029: 0, 2030: 100, 2031: -50 };
+assert.deepEqual(buildAnnualSummary(longer, energyBasis).annualRows.map(({ wind }) => wind), [2000, 20000, 80000, 0]);
+assert.equal(switchGenerationMode(longer, energyWind, "energy"), true);
+assert.deepEqual(buildAnnualSummary(longer, energyBasis).annualRows, expectedLegacyAnnual, "archiving capacity inputs does not affect active energy");
+assert.equal(energyWind.monthlyWeights, originalMonthly);
+assert.equal(energyWind.hourlyWeightsByMonth, originalHourly);
+assert.equal(energyWind.alternateGeneration.capacityHours.utilizationHoursByYear[2031], 0);
+assert.deepEqual(prepareShareConfig(longer, energyBasis), energyBasis);
+
+const savedWithAlternate = JSON.stringify(energyBasis);
+const shorterEnergyWind = prepareShareConfig({ ...longer, forecastYears: 2 }, energyBasis).elements.wind;
+assert.deepEqual(shorterEnergyWind.alternateGeneration, {
+  mode: "capacity_hours", growthRatesByYear: { 2029: 0 },
+  capacityHours: { baseCapacityMw: 20, baseUtilizationHours: 100, utilizationHoursByYear: { 2029: 1000 } }
+});
+const shiftedEnergyWind = prepareShareConfig({ ...longer, startYear: 2029 }, energyBasis).elements.wind;
+assert.equal(shiftedEnergyWind.baseEnergyMwh, null);
+assert.deepEqual(shiftedEnergyWind.alternateGeneration, {
+  mode: "capacity_hours", growthRatesByYear: { 2030: 100, 2031: -50, 2032: null },
+  capacityHours: { baseCapacityMw: null, baseUtilizationHours: null, utilizationHoursByYear: { 2030: 2000, 2031: 0 } }
+});
+assert.equal(JSON.stringify(energyBasis), savedWithAlternate);
+
+const invalidInactive = clone(energyBasis);
+const alternate = invalidInactive.elements.wind.alternateGeneration;
+alternate.growthRatesByYear = { 2030: null, 2031: -120 };
+alternate.capacityHours = { baseCapacityMw: null, baseUtilizationHours: -10, utilizationHoursByYear: { 2039: 8900 } };
+assert.deepEqual(validateConfig(longer, invalidInactive), [], "only the active basis has its values checked");
+assert.deepEqual(buildAnnualSummary(longer, invalidInactive).annualRows, expectedLegacyAnnual);
+assert.equal(switchGenerationMode(longer, invalidInactive.elements.wind, "capacity_hours"), true);
+reject(invalidInactive, /首年装机|装机增长率/, longer);
+
+const badArchiveShapes = [
+  { mode: "energy", growthRatesByYear: {} },
+  { mode: "capacity_hours", growthRatesByYear: [] },
+  { mode: "capacity_hours", growthRatesByYear: {}, baseEnergyMwh: 42 },
+  { mode: "capacity_hours", growthRatesByYear: {}, capacityHours: [] }
+];
+for (const bad of badArchiveShapes) {
+  const invalid = clone(energyBasis);
+  invalid.elements.wind.alternateGeneration = bad;
+  reject(invalid, /备用发电口径的配置结构无效/, longer);
+}
+const backupArchive = clone(energyBasis);
+backupArchive.elements.wind.alternateGeneration = { mode: "capacity_hours", growthRatesByYear: null,
+  capacityHours: { baseCapacityMw: 0, utilizationHoursByYear: null } };
+const archiveBefore = JSON.stringify(backupArchive);
+assert.deepEqual(prepareShareConfig(longer, backupArchive).elements.wind.alternateGeneration, {
+  mode: "capacity_hours", growthRatesByYear: { 2029: null, 2030: null, 2031: null },
+  capacityHours: { baseCapacityMw: 0, baseUtilizationHours: null, utilizationHoursByYear: {} }
+});
+assert.equal(JSON.stringify(backupArchive), archiveBefore);
+
+const unsupportedArchive = clone(capacity);
+unsupportedArchive.elements.tieLine.export.alternateGeneration = { mode: "capacity_hours", growthRatesByYear: {} };
+reject(unsupportedArchive, /备用发电口径仅支持版本2的风电、光伏和水电/, longer);
+const unsupportedV1Archive = clone(power);
+unsupportedV1Archive.elements.wind.alternateGeneration = { mode: "capacity_hours", growthRatesByYear: {} };
+reject(unsupportedV1Archive, /备用发电口径仅支持版本2/, longer);
 
 console.log("supply demand tests passed");
